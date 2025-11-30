@@ -182,9 +182,9 @@ const GlossaryReviewModal = ({ isOpen, onClose, onConfirm, newTerms, existingTer
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="text-sm px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 border-none outline-none cursor-pointer"
                                                 >
-                                                    <option value="male">Male</option>
-                                                    <option value="female">Female</option>
-                                                    <option value="neutral">Neutral</option>
+                                                    <option value="masculine">Masculine</option>
+                                                    <option value="feminine">Feminine</option>
+                                                    <option value="neuter">Neuter</option>
                                                     <option value="n/a">N/A</option>
                                                 </select>
                                             </div>

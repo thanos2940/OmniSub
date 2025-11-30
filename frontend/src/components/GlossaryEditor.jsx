@@ -81,7 +81,7 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
             term: '',
             translation: '',
             type: activeTab !== 'All' ? activeTab.toLowerCase() : 'other',
-            gender: 'neutral',
+            gender: 'neuter',
             description: '',
             keep_original: false,
             case_sensitive: false
@@ -324,14 +324,14 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
                                         Gender <User className="w-3 h-3" />
                                     </label>
                                     <select
-                                        value={term.gender || 'neutral'}
+                                        value={term.gender || 'neuter'}
                                         onChange={(e) => handleTermChange(index, 'gender', e.target.value)}
                                         disabled={readOnly}
                                         className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-sm disabled:bg-gray-50"
                                     >
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                        <option value="neutral">Neutral</option>
+                                        <option value="masculine">Masculine</option>
+                                        <option value="feminine">Feminine</option>
+                                        <option value="neuter">Neuter</option>
                                         <option value="n/a">N/A</option>
                                     </select>
                                 </div>

@@ -138,6 +138,11 @@ def load_episode(project_name: str, episode_name: str) -> Optional[Dict]:
 
     with open(data_file, 'r', encoding='utf-8') as f:
         result = json.load(f)
+        
+    # Handle legacy list format
+    if isinstance(result, list):
+        print(f"DEBUG: Converted legacy list format for {episode_name}")
+        result = {"data": result}
 
     metadata = load_episode_metadata(project_name, episode_name)
     if metadata:

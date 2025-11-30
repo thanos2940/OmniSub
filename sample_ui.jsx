@@ -17,9 +17,9 @@ const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height=
 // --- Initial Data Mocks ---
 const INITIAL_GLOSSARY = [
     { id: 1, term: "Winterfell", translation: "Winterfell", context: "Location", type: "location", keepOriginal: true, gender: "n/a" },
-    { id: 2, term: "Maester", translation: "Mestre", context: "Title, Male", type: "character", keepOriginal: false, gender: "male" },
-    { id: 3, term: "Direwolf", translation: "Lobo Gigante", context: "Creature", type: "creature", keepOriginal: false, gender: "male" },
-    { id: 4, term: "The Wall", translation: "A Muralha", context: "Location", type: "location", keepOriginal: false, gender: "female" },
+    { id: 2, term: "Maester", translation: "Mestre", context: "Title, Masculine", type: "character", keepOriginal: false, gender: "masculine" },
+    { id: 3, term: "Direwolf", translation: "Lobo Gigante", context: "Creature", type: "creature", keepOriginal: false, gender: "masculine" },
+    { id: 4, term: "The Wall", translation: "A Muralha", context: "Location", type: "location", keepOriginal: false, gender: "feminine" },
 ];
 
 const MOCK_FILES = [
@@ -401,9 +401,9 @@ const App = () => {
                                         onChange={(e) => updateTerm(item.id, 'gender', e.target.value)}
                                     >
                                         <option value="n/a">Gender: N/A</option>
-                                        <option value="male">Male</option>
-                                        <option value="female">Female</option>
-                                        <option value="neutral">Neutral</option>
+                                        <option value="masculine">Masculine</option>
+                                        <option value="feminine">Feminine</option>
+                                        <option value="neuter">Neuter</option>
                                     </select>
                                 </div>
 

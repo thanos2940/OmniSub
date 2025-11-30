@@ -59,11 +59,19 @@ class OmbiSubSessionManager:
         except Exception:
             pass
         
-        session = await self.session_service.create_session(
-            session_id=session_id,
-            app_name=APP_NAME,
-            user_id=DEFAULT_USER
-        )
+        try:
+            session = await self.session_service.create_session(
+                session_id=session_id,
+                app_name=APP_NAME,
+                user_id=DEFAULT_USER
+            )
+        except Exception:
+            # Session might have been created concurrently or exists but get_session failed
+            session = await self.session_service.get_session(
+                session_id=session_id,
+                app_name=APP_NAME,
+                user_id=DEFAULT_USER
+            )
         
         if initial_metadata:
             session.state.update({

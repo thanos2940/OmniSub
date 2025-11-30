@@ -7,13 +7,16 @@ Uses ADK Runner for proper session management and observability.
 
 import json
 import asyncio
+from uuid import uuid4
+from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
-from google.adk.runners import Runner
+from google.adk.runners import Runner, types as adk_types
 from .cartographer_agent import create_cartographer_agent, GlossaryOutput
 from .research_agent import create_research_agent
 from .translator_agent import create_translator_agent
 from .glossary_orchestrator import create_glossary_orchestrator
+from adk_config.session_service import get_session_service
 
 
 async def generate_glossary_adk(
@@ -48,21 +51,40 @@ Target Language: {target_language}
 
 {"Existing terms (avoid duplicates): " + ", ".join(existing_terms) if existing_terms else "No existing terms."}
 
-Analyze this subtitle text and extract glossary terms:
-
+Analyze this subtitle text, extract glossary terms, and translate them to {target_language}:
+    
 {text_sample}"""
 
     # Create appropriate agent (with or without research)
     if enable_research and show_name:
-        agent = create_glossary_orchestrator(model_name=model_name, enable_research=True)
+        agent = create_glossary_orchestrator(model_name=model_name, enable_research=True, target_language=target_language)
     else:
-        agent = create_cartographer_agent(model_name=model_name)
+        agent = create_cartographer_agent(model_name=model_name, target_language=target_language)
 
-    # Run agent
-    runner = Runner(agent=agent, app_name="OmbiSub")
+    # Run agent with unique session ID
+    session_id = f"glossary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+    session_service = get_session_service()
+    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
 
     try:
-        response = await runner.run(prompt)
+        # Create session explicitly
+        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+        
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+
+        class MockResponse:
+            def __init__(self, text):
+                self.text = text
+        response = MockResponse(response_text)
 
         # Extract structured output
         if hasattr(response, 'glossary_result'):
@@ -75,7 +97,7 @@ Analyze this subtitle text and extract glossary terms:
                         "description": term.context,
                         "category": term.category,
                         "case_sensitive": term.case_sensitive,
-                        "gender": "neutral"  # Default, can be enhanced
+                        "gender": "neuter"  # Default, can be enhanced
                     }
                     for term in glossary_output.terms
                 ]
@@ -95,6 +117,7 @@ Analyze this subtitle text and extract glossary terms:
 
     except Exception as e:
         # Return empty glossary on error
+        print(f"DEBUG: generate_glossary_adk failed: {str(e)}")
         return {"terms": []}, {"error": str(e), "prompt": prompt}
 
 
@@ -128,6 +151,7 @@ Use Google Search to find:
 2. Location names and their significance
 3. Cultural context and key terminology
 4. Official romanizations or naming conventions
+5. Overall tone and style of the show.
 
 Context from subtitles:
 {text_preview}
@@ -135,12 +159,31 @@ Context from subtitles:
 Provide findings in a clear, structured format."""
 
     agent = create_research_agent(model_name=model_name)
-    runner = Runner(agent=agent, app_name="OmbiSub")
+    session_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+    session_service = get_session_service()
+    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
 
     try:
-        response = await runner.run(prompt)
+        # Create session explicitly
+        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
 
-        research_text = response.text if hasattr(response, 'text') else str(response)
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+
+        class MockResponse:
+            def __init__(self, text):
+                self.text = text
+        response = MockResponse(response_text)
+
+        research_text = response_text
 
         # Parse research findings into structured format
         research_data = {
@@ -158,6 +201,7 @@ Provide findings in a clear, structured format."""
         return research_data, debug_info
 
     except Exception as e:
+        print(f"DEBUG: research_project_adk failed: {str(e)}")
         return {"findings": "", "error": str(e)}, {"error": str(e), "prompt": prompt}
 
 
@@ -196,11 +240,29 @@ async def translate_batch_adk(
         target_language=target_language
     )
 
-    runner = Runner(agent=agent, app_name="OmbiSub")
+    session_id = f"translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+    session_service = get_session_service()
+    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
 
     try:
-        response = await runner.run(prompt)
-        response_text = response.text if hasattr(response, 'text') else str(response)
+        # Create session explicitly
+        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+
+        class MockResponse:
+            def __init__(self, text):
+                self.text = text
+        response = MockResponse(response_text)
 
         # Parse numbered output
         translated_lines = _parse_numbered_output(response_text, len(text_lines))
@@ -215,6 +277,7 @@ async def translate_batch_adk(
 
     except Exception as e:
         # Return original lines on error
+        print(f"DEBUG: translate_batch_adk failed: {str(e)}")
         return text_lines, {"error": str(e), "prompt": prompt}
 
 
@@ -257,20 +320,45 @@ Research Data:
 
 Generate a comprehensive guide covering:
 1. Tone and formality level
-2. Character voice guidelines
-3. Cultural adaptation notes
-4. Terminology consistency rules
-5. Special handling instructions
+2. Cultural adaptation notes
+3. Terminology consistency rules
+4. Special handling instructions
 
+Do NOT provide specific examples of translations of names or terms, as there will be a glossary to handle that.
+
+The instructions should provide a solid foundation for translators to work from, and should result in high quality, consistent translations.
 Output as clear, actionable instructions for translators."""
 
     # Use a simple agent for text generation
     agent = create_research_agent(model_name=model_name)
-    runner = Runner(agent=agent, app_name="OmbiSub")
+    session_id = f"context_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+    session_service = get_session_service()
+    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
 
     try:
-        response = await runner.run(prompt)
-        response_text = response.text if hasattr(response, 'text') else str(response)
+        # Create session explicitly
+        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+
+        class MockResponse:
+            def __init__(self, text):
+                self.text = text
+        response = MockResponse(response_text)
+        
+        print(f"DEBUG: Context Agent Response Length: {len(response_text)}")
+        if not response_text:
+            print("DEBUG: Context Agent returned empty response!")
+            print(f"DEBUG: Prompt was: {prompt[:200]}...")
 
         debug_info = {
             "prompt": prompt,
@@ -281,6 +369,7 @@ Output as clear, actionable instructions for translators."""
         return response_text, debug_info
 
     except Exception as e:
+        print(f"DEBUG: enhance_context_guide_adk failed: {str(e)}")
         return "", {"prompt": prompt, "error": str(e)}
 
 

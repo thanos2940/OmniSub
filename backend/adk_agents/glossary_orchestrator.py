@@ -12,7 +12,8 @@ from .cartographer_agent import create_cartographer_agent
 
 def create_glossary_orchestrator(
     model_name: str = "gemini-flash-latest",
-    enable_research: bool = True
+    enable_research: bool = True,
+    target_language: str = "English"
 ) -> SequentialAgent:
     """
     Create orchestrator combining research and extraction agents.
@@ -24,6 +25,7 @@ def create_glossary_orchestrator(
     Args:
         model_name: Gemini model for both agents
         enable_research: Whether to include web research step
+        target_language: Target language for translations
         
     Returns:
         SequentialAgent orchestrating the glossary creation workflow
@@ -33,7 +35,7 @@ def create_glossary_orchestrator(
     if enable_research:
         agents.append(create_research_agent(model_name))
     
-    agents.append(create_cartographer_agent(model_name))
+    agents.append(create_cartographer_agent(model_name, target_language=target_language))
     
     return SequentialAgent(
         name="GlossaryOrchestrator",

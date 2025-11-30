@@ -40,7 +40,7 @@ class OmbiSubRunnerFactory:
         """
         return Runner(
             agent=agent,
-            app_name=APP_NAME,
+            app_name=f"{APP_NAME}_{session_id}",
             session_service=self.session_service,
             memory_service=self.memory_service
         )

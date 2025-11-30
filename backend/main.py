@@ -12,6 +12,7 @@ import asyncio
 from io import BytesIO
 from zipfile import ZipFile
 from datetime import datetime
+from uuid import uuid4
 from typing import List, Dict, Optional
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from adk_agents import (
     enhance_context_guide_adk
 )
 from adk_config import OmbiSubRunnerFactory, OmbiSubSessionManager
+from google.adk.runners import types as adk_types
 
 
 def get_api_key() -> Optional[str]:
@@ -573,24 +575,63 @@ async def _process_enhance_glossary(
 ):
     update_job(job_id, status="running", progress=0.0, message="Enhancing glossary...", log="Job started")
     try:
-        text_lines = await _gather_project_text(project_name, episode_names)
-        update_job(job_id, message="Analyzing text...", log=f"Gathered {len(text_lines)} lines")
+        if episode_names:
+            text_lines = await _gather_project_text(project_name, episode_names)
+            update_job(job_id, message="Analyzing text...", log=f"Gathered {len(text_lines)} lines")
+            input_text = "\n".join(text_lines[:5000])
+        else:
+            # Research mode (no files selected)
+            text_lines = []
+            enable_research = True
+            update_job(job_id, message="Researching...", log="Research mode (no files selected)")
+            input_text = ""
         
         state = await adk_session_manager.get_project_state(project_name)
         existing_terms = state.get("glossary", {}).get("terms", [])
+        target_language = state.get("target_language", "English")
         
-        orchestrator = create_glossary_orchestrator(model_name=model, enable_research=enable_research)
-        runner = adk_runner_factory.create_runner(orchestrator, f"ombisub_project_{project_name}")
+        orchestrator = create_glossary_orchestrator(
+            model_name=model, 
+            enable_research=enable_research,
+            target_language=target_language
+        )
+        session_id_unique = f"enhance_glossary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+        runner = adk_runner_factory.create_runner(orchestrator, session_id_unique)
         
-        input_text = "\n".join(text_lines[:5000])
-        prompt = f"Extract glossary terms from:\n\n{input_text}" if input_text else "Research and create glossary terms for this show."
+        # Create session explicitly
+        await adk_session_manager.session_service.create_session(
+            session_id=session_id_unique,
+            user_id="default_user",
+            app_name=f"OmbiSub_{session_id_unique}"
+        )
         
-        response = await runner.run(prompt)
+        if input_text:
+            prompt = f"Extract glossary terms from the text below and translate them to {target_language}:\n\n{input_text}"
+        else:
+            prompt = f"Research the show '{project_name}' and create a glossary. Translate all terms to {target_language}."
+        
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id_unique,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
+        
+        # Extract text from response object
+        # response_text is already the text
         
         try:
-            new_glossary = _parse_json_response(response)
-        except:
-            new_glossary = {"terms": [], "raw_output": response}
+            print(f"DEBUG: Response text type: {type(response_text)}")
+            print(f"DEBUG: Response text content: {response_text[:200]}...")
+            new_glossary = _parse_json_response(response_text)
+            print(f"DEBUG: Parsed glossary type: {type(new_glossary)}")
+        except Exception as e:
+            print(f"DEBUG: JSON parse error: {str(e)}")
+            new_glossary = {"terms": [], "raw_output": response_text}
         
         existing_names = {t.get("term", "").lower() for t in existing_terms}
         new_terms = [t for t in new_glossary.get("terms", []) if t.get("term", "").lower() not in existing_names]
@@ -621,7 +662,11 @@ async def _process_create_context(job_id: str, project_name: str, episode_names:
             update_job(job_id, status="failed", message="Project not found")
             return
         
-        text_lines = await _gather_project_text(project_name, episode_names)
+        if episode_names:
+            text_lines = await _gather_project_text(project_name, episode_names)
+        else:
+            text_lines = []
+            update_job(job_id, message="Researching...", log="Research mode (no files selected)")
 
         update_job(job_id, progress=20.0, message="Researching...", log="Running research agent")
         research_data, research_debug = await research_project_adk(
@@ -685,6 +730,10 @@ async def _process_enhance_context(job_id: str, project_name: str, model: str, w
             model_name=model
         )
         
+        print(f"DEBUG: Enhanced guide length: {len(enhanced_guide)}")
+        if not enhanced_guide:
+            print("DEBUG: Enhanced guide is empty!")
+        
         metadata["context_guide"] = enhanced_guide
         storage.save_project_metadata(project_name, metadata)
         await adk_session_manager.update_context(project_name, enhanced_guide)
@@ -712,17 +761,34 @@ async def _process_scan_episode(job_id: str, project_name: str, episode_name: st
         text_lines = extract_text_only(episode_data["data"])
         
         agent = create_cartographer_agent(model_name=model)
-        runner = adk_runner_factory.create_runner(agent, f"ombisub_project_{project_name}")
+        session_id_unique = f"scan_episode_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+        runner = adk_runner_factory.create_runner(agent, session_id_unique)
+        
+        # Create session explicitly
+        await adk_session_manager.session_service.create_session(
+            session_id=session_id_unique,
+            user_id="default_user",
+            app_name=f"OmbiSub_{session_id_unique}"
+        )
         
         update_job(job_id, progress=30.0, message="Analyzing...", log="Running extraction")
         
         prompt = f"Extract glossary terms from:\n\n{chr(10).join(text_lines[:5000])}"
-        response = await runner.run(prompt)
+        response_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id_unique,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        response_text += part.text
         
         try:
-            new_glossary = _parse_json_response(response)
+            new_glossary = _parse_json_response(response_text)
         except:
-            new_glossary = {"terms": [], "raw_output": response}
+            new_glossary = {"terms": [], "raw_output": response.text if hasattr(response, 'text') else str(response)}
         
         await adk_session_manager.update_glossary(project_name, new_glossary)
         metadata["glossary"] = new_glossary
@@ -756,7 +822,8 @@ async def _process_batch_translation(
             skip_glossary_step=not enhance_glossary_flag
         )
         
-        runner = adk_runner_factory.create_runner(pipeline, f"ombisub_project_{project_name}")
+        session_id_unique = f"batch_translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+        runner = adk_runner_factory.create_runner(pipeline, session_id_unique)
         
         results = {}
         total = len(episode_names)
@@ -780,9 +847,25 @@ async def _process_batch_translation(
                 chunk_input = "\n".join([f"{j+1}: {line}" for j, line in enumerate(chunk)])
                 prompt = f"Translate to {target_lang}:\n{chunk_input}"
                 
-                response = await runner.run(prompt)
+                # Create session explicitly
+                await adk_session_manager.session_service.create_session(
+                    session_id=session_id_unique,
+                    user_id="default_user",
+                    app_name=f"OmbiSub_{session_id_unique}"
+                )
                 
-                for line in response.split('\n'):
+                response_text = ""
+                async for event in runner.run_async(
+                    user_id="default_user",
+                    session_id=session_id_unique,
+                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+                ):
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.text:
+                                response_text += part.text
+                
+                for line in response_text.split('\n'):
                     parts = line.split(':', 1)
                     if len(parts) == 2 and parts[0].strip().isdigit():
                         local_idx = int(parts[0].strip()) - 1
