@@ -1,0 +1,1203 @@
+1
+00:00:00,500 --> 00:00:05,000
+Το Plex ζήτησε 120€ για να συνεχίσετε να βλέπετε από τις συσκευές σας.
+Το πλήρωσα εγώ το ποσό.
+
+2
+00:00:05,500 --> 00:00:10,000
+Αν χρησιμοποιείτε συχνά και μπορείτε,
+ οποιαδήποτε συμβολή θα εκτιμηθεί.
+
+3
+00:00:06,980 --> 00:00:10,560
+Did we really need to bother
+with all this, Mr. Dongsuk?
+
+4
+00:00:10,560 --> 00:00:12,740
+We could've just killed them.
+
+5
+00:00:13,450 --> 00:00:15,350
+What are you, dense?
+
+6
+00:00:15,350 --> 00:00:19,210
+We fight in there, and the spider
+wakes up? No more mana crystals.
+
+7
+00:00:19,630 --> 00:00:22,560
+I don't care if he's the
+weakest or the bleakest,
+
+8
+00:00:22,560 --> 00:00:25,810
+there's no way that wimpy piece of crap
+and a D-Rank with no raid experience
+
+9
+00:00:25,810 --> 00:00:27,420
+can take a boss down.
+
+10
+00:00:27,420 --> 00:00:32,420
+The spider eats them, it goes back to sleep,
+and then we haul out the mana crystals.
+
+11
+00:00:32,900 --> 00:00:35,180
+Should I light the place up with magic again?
+
+12
+00:00:35,180 --> 00:00:37,760
+That would also wake the spider up!
+
+13
+00:00:39,620 --> 00:00:43,630
+There were side tunnels near the ceiling.
+That's where we'll drop back down.
+
+14
+00:00:44,190 --> 00:00:47,730
+I get it. Nice plan, Mr. Dongsuk.
+
+15
+00:00:47,730 --> 00:00:49,580
+You think it'll be asleep, though?
+
+16
+00:00:49,580 --> 00:00:52,910
+If not, we'll have to take
+the boss down ourselves.
+
+17
+00:00:52,910 --> 00:00:56,960
+Though, that Yoo Jinho kid...
+You saw his gear, right?
+
+18
+00:00:56,960 --> 00:00:59,730
+The sword and shield alone must
+be worth hundreds of millions.
+
+19
+00:00:59,730 --> 00:01:03,920
+If we can't grab enough mana crystals,
+his stuff will have to do.
+
+20
+00:01:04,470 --> 00:01:07,520
+Better find out whose trust fund kid he is.
+
+21
+00:01:07,520 --> 00:01:10,200
+It'd look bad if I didn't show at the funeral.
+
+22
+00:01:10,200 --> 00:01:14,590
+Gotta say, that was a hell of a noise
+when the entrance caved in.
+
+23
+00:01:14,590 --> 00:01:17,140
+The boss has gotta be pissed.
+
+24
+00:01:17,750 --> 00:01:21,980
+Kyuhwan, do you think you could take
+that nasty bastard down yourself?
+
+25
+00:01:21,980 --> 00:01:24,750
+Not at all!
+
+26
+00:01:24,750 --> 00:01:29,190
+I'm right there with you.
+It was a pretty impressive boss.
+
+27
+00:01:31,210 --> 00:01:37,540
+Which means those two little twerps
+have absolutely no chance of surviving.
+
+28
+00:01:38,090 --> 00:01:42,240
+Hang on! You'd need to be at least B-Rank
+to take down a C-Rank boss by yourself.
+
+29
+00:01:42,240 --> 00:01:45,440
+Or an upper C-Rank, at the very minimum!
+
+30
+00:01:45,440 --> 00:01:47,140
+You've got no chance, Jinwoo...
+
+31
+00:01:48,340 --> 00:01:50,260
+Let's try and find a way out instead!
+
+32
+00:01:51,120 --> 00:01:57,970
+<i>Jinho is right. I may have reawakened
+and leveled up, but I'm still weak.</i>
+
+33
+00:01:58,900 --> 00:02:03,980
+<i>The Blue Venom-Fanged Kasaka I ran into
+in the instance dungeon was probably D-Rank,</i>
+
+34
+00:02:04,950 --> 00:02:07,820
+<i>and that golem boss was
+probably D-Rank or lower.</i>
+
+35
+00:02:09,360 --> 00:02:14,000
+<i>This boss is guaranteed to be
+a lot stronger than either of them.</i>
+
+36
+00:02:15,130 --> 00:02:20,040
+<i>But for some reason... I don't feel
+intimidated enough to give up.</i>
+
+37
+00:02:21,040 --> 00:02:25,670
+<i>I've gotten strong enough to stand
+my ground against a C-Rank boss.</i>
+
+38
+00:02:27,310 --> 00:02:29,340
+<i>I'm level 18 now.</i>
+
+39
+00:02:31,790 --> 00:02:33,590
+<i>Taking on a C-Rank boss...</i>
+
+40
+00:02:35,820 --> 00:02:37,260
+<i>is worth a shot!</i>
+
+41
+00:02:42,170 --> 00:02:44,890
+<i>We're called hunters for a reason.</i>
+
+42
+00:02:46,090 --> 00:02:48,680
+<i>And the real hunt begins now!</i>
+
+43
+00:04:28,250 --> 00:04:29,680
+Another long day, sir.
+
+44
+00:04:30,540 --> 00:04:32,960
+The government, the media,
+
+45
+00:04:32,960 --> 00:04:34,980
+organizations related to energy development...
+
+46
+00:04:34,980 --> 00:04:38,470
+These nonstop meetings
+are beginning to wear on me.
+
+47
+00:04:39,250 --> 00:04:42,910
+I was never much of a talker
+in the first place.
+
+48
+00:04:46,610 --> 00:04:49,780
+Your schedule is clear for the time being.
+
+49
+00:04:50,310 --> 00:04:54,190
+Would it be all right if I asked
+for a bit of instruction?
+
+50
+00:04:54,550 --> 00:04:57,400
+It might be the change of pace you need, too.
+
+51
+00:05:00,350 --> 00:05:02,920
+They say old soldiers fade away...
+
+52
+00:05:03,390 --> 00:05:07,480
+but I can hardly turn down a youngster
+asking for a spot of guidance.
+
+53
+00:05:16,800 --> 00:05:18,460
+<i>Its exoskeleton is so hard!</i>
+
+54
+00:05:22,150 --> 00:05:25,510
+<i>And it strikes with tremendous power!
+One false move, and I'm dead!</i>
+
+55
+00:05:32,070 --> 00:05:35,440
+The way he's moving... No way is he E-Rank!
+
+56
+00:05:35,800 --> 00:05:38,150
+Wh-What in the world is he?
+
+57
+00:05:39,730 --> 00:05:42,490
+Wait... Did he fake his ranking?
+
+58
+00:05:42,970 --> 00:05:44,750
+<i>I've heard the rumors.</i>
+
+59
+00:05:44,750 --> 00:05:49,390
+<i>Rare individuals can control their magic
+power to register with a lower ranking—</i>
+
+60
+00:05:49,390 --> 00:05:52,200
+<i>the hunters known as false rankers!</i>
+
+61
+00:05:52,860 --> 00:05:57,700
+<i>And most of them are said to be
+lunatics who kill for the fun of it!</i>
+
+62
+00:06:00,830 --> 00:06:03,650
+What am I doing here?
+
+63
+00:06:03,650 --> 00:06:05,620
+D-Dad...
+
+64
+00:06:11,260 --> 00:06:14,610
+<i>Damn! Its exterior is too tough
+for me to do any real damage!</i>
+
+65
+00:06:16,030 --> 00:06:19,650
+<i>And if my fatigue gets any higher,
+I'll start to slow down.</i>
+
+66
+00:06:20,330 --> 00:06:22,610
+<i>I need to kill it before that happens!</i>
+
+67
+00:06:23,580 --> 00:06:28,030
+<i>Paralysis and drain... This dagger's
+special abilities will be the key!</i>
+
+68
+00:06:28,450 --> 00:06:30,490
+<i>If I aim for a weak spot,
+it should get through!</i>
+
+69
+00:06:30,490 --> 00:06:31,700
+<i>There!</i>
+
+70
+00:06:37,150 --> 00:06:40,460
+<i>Acid? That's a nasty surprise!</i>
+
+71
+00:06:41,270 --> 00:06:43,130
+<i>Rock-solid armor and acidic spit...</i>
+
+72
+00:06:43,130 --> 00:06:45,680
+<i>This eight-legged freak
+is even worse than I thought.</i>
+
+73
+00:06:46,500 --> 00:06:48,890
+<i>And the longer this goes on,
+the worse off I'll be.</i>
+
+74
+00:06:49,780 --> 00:06:52,810
+<i>I need to get up close,
+regardless of the risk.</i>
+
+75
+00:06:53,410 --> 00:06:55,150
+<i>My new skill, Dash...</i>
+
+76
+00:06:55,830 --> 00:06:58,400
+<i>I can use this to get in, fast!</i>
+
+77
+00:07:11,870 --> 00:07:16,100
+<i>If one hit won't cut it, then I'll keep going!</i>
+
+78
+00:07:17,750 --> 00:07:19,590
+<i>S-So fast...</i>
+
+79
+00:07:19,900 --> 00:07:22,130
+<i>But will he have enough
+stamina to hang in there?</i>
+
+80
+00:07:22,990 --> 00:07:24,800
+<i>What is he even trying to do?</i>
+
+81
+00:07:27,180 --> 00:07:28,470
+<i>Faster...</i>
+
+82
+00:07:30,230 --> 00:07:31,880
+<i>I have to go faster!</i>
+
+83
+00:07:34,030 --> 00:07:35,810
+<i>Almost there!</i>
+
+84
+00:07:40,870 --> 00:07:41,930
+Jinwoo!
+
+85
+00:08:00,180 --> 00:08:01,290
+Jinwoo!
+
+86
+00:08:46,780 --> 00:08:51,560
+<i>It's a good thing I sat on
+those daily quest rewards.</i>
+
+87
+00:08:52,260 --> 00:08:54,480
+<i>I would've had more trouble otherwise.</i>
+
+88
+00:08:56,800 --> 00:08:58,730
+<i>I can't believe it...</i>
+
+89
+00:08:58,730 --> 00:09:01,310
+<i>He really did beat a boss by himself!</i>
+
+90
+00:09:02,590 --> 00:09:07,110
+<i>And there can be no other explanation!
+He's a false ranker!</i>
+
+91
+00:09:07,830 --> 00:09:10,540
+I wonder how much this'll go for...
+
+92
+00:09:11,070 --> 00:09:14,070
+U-Um... B-Boss?
+
+93
+00:09:14,780 --> 00:09:18,020
+Would you like me to carry
+the essence stone for you?
+
+94
+00:09:18,020 --> 00:09:20,710
+I'll handle the gear, too.
+
+95
+00:09:21,070 --> 00:09:24,650
+Here's some water.
+Please help yourself, Boss.
+
+96
+00:09:24,650 --> 00:09:26,140
+U-Uh... Sure.
+
+97
+00:09:26,780 --> 00:09:28,460
+<i>Why is he calling me that?</i>
+
+98
+00:09:28,810 --> 00:09:33,360
+You rest up, boss!
+I'll excavate the mana crystals!
+
+99
+00:09:34,810 --> 00:09:37,410
+<i>What the heck's gotten into him?</i>
+
+100
+00:09:39,560 --> 00:09:41,480
+Huh... They're alive.
+
+101
+00:10:01,670 --> 00:10:03,230
+Are you all right?
+
+102
+00:10:03,230 --> 00:10:06,210
+Yes, sir. Thank you for the lesson.
+
+103
+00:10:06,550 --> 00:10:09,560
+I should be thanking you.
+This really was just what I needed.
+
+104
+00:10:09,900 --> 00:10:11,420
+I appreciate it.
+
+105
+00:10:11,840 --> 00:10:15,610
+I'm impressed, Chairman.
+You don't seem to have lost a step.
+
+106
+00:10:15,610 --> 00:10:19,390
+No, compared to when I was on active duty...
+
+107
+00:10:20,070 --> 00:10:23,230
+You've gotten better
+at defense yourself, Jinchul.
+
+108
+00:10:23,230 --> 00:10:25,130
+It shows you've kept up your practice.
+
+109
+00:10:25,130 --> 00:10:27,140
+Training might not raise your rank,
+
+110
+00:10:27,140 --> 00:10:30,730
+but you can always hone
+your body and technique.
+
+111
+00:10:32,110 --> 00:10:34,350
+It's important to work
+on one's body and mind,
+
+112
+00:10:34,350 --> 00:10:37,190
+instead of relying solely
+on your hunter powers.
+
+113
+00:10:37,190 --> 00:10:41,060
+Especially if you regularly find yourself
+in extreme situations like dungeons.
+
+114
+00:10:41,730 --> 00:10:48,090
+It's at times like those when human nature
+can rear its ugly head.
+
+115
+00:10:48,590 --> 00:10:50,390
+Is the freaking boss dead?
+
+116
+00:10:50,390 --> 00:10:53,800
+I guess it was just an overgrown spider?
+What a joke.
+
+117
+00:10:53,800 --> 00:10:57,570
+Maybe that gear was enough
+to beat a C-Rank boss with.
+
+118
+00:10:57,570 --> 00:11:01,520
+But in the hands of a D-Rank...
+Just how weak was this thing?
+
+119
+00:11:01,520 --> 00:11:04,000
+What's the call, Mr. Dongsuk?
+
+120
+00:11:04,000 --> 00:11:05,730
+Ain't it obvious?
+
+121
+00:11:05,730 --> 00:11:07,080
+Yoo Jinho!
+
+122
+00:11:07,830 --> 00:11:11,780
+That fancy gear of yours got me curious,
+and I'm impressed!
+
+123
+00:11:12,160 --> 00:11:17,070
+Your old man's Yoo Myunghan,
+the head of Yoojin Construction, right?
+
+124
+00:11:17,960 --> 00:11:19,930
+Wh-What of it?
+
+125
+00:11:19,930 --> 00:11:21,880
+I'm giving you a chance!
+
+126
+00:11:22,370 --> 00:11:24,330
+Kill Sung Jinwoo.
+
+127
+00:11:26,050 --> 00:11:27,910
+You've figured it out by now, right?
+
+128
+00:11:27,910 --> 00:11:33,130
+We pick up wastes of space to round out our
+numbers, let them die, and keep all the loot.
+
+129
+00:11:33,130 --> 00:11:36,610
+Jinho. You're gonna be an accomplice.
+
+130
+00:11:36,610 --> 00:11:38,590
+That's the only way you're walking out alive.
+
+131
+00:11:38,590 --> 00:11:40,010
+That's...
+
+132
+00:11:40,370 --> 00:11:44,520
+<i>That trust fund kid's gear was
+enough to take down a C-Rank...</i>
+
+133
+00:11:44,520 --> 00:11:46,630
+<i>If it has special effects,
+it could be a real pain.</i>
+
+134
+00:11:47,280 --> 00:11:51,020
+Or if you'd prefer, you can both die here.
+
+135
+00:11:52,140 --> 00:11:55,210
+What's up? Why hesitate?
+
+136
+00:11:55,210 --> 00:11:58,160
+Nothing that happens here
+is ever going to get out, anyway.
+
+137
+00:11:58,160 --> 00:12:01,960
+Don't tell me a D-Rank like you
+is afraid of an E-Rank like him...
+
+138
+00:12:21,000 --> 00:12:24,680
+So you're siding with him?
+
+139
+00:12:27,910 --> 00:12:30,150
+What now, Mr. Dongsuk?
+
+140
+00:12:30,150 --> 00:12:31,970
+Deal with the weak one first.
+
+141
+00:12:32,840 --> 00:12:34,040
+Have you boys...
+
+142
+00:12:34,800 --> 00:12:38,150
+ever killed a human before?
+
+143
+00:12:42,950 --> 00:12:44,530
+<i>An urgent quest?</i>
+
+144
+00:12:45,040 --> 00:12:46,680
+<i>What the hell?</i>
+
+145
+00:12:47,410 --> 00:12:50,670
+You're gonna wanna pay attention!
+
+146
+00:12:58,290 --> 00:12:59,400
+Boss!
+
+147
+00:13:05,140 --> 00:13:06,460
+Heejin!
+
+148
+00:13:09,850 --> 00:13:11,810
+It's been a while.
+
+149
+00:13:11,810 --> 00:13:14,800
+How have things been with
+the White Tiger Guild lately?
+
+150
+00:13:14,800 --> 00:13:17,930
+Nothing special, really.
+Just the usual business.
+
+151
+00:13:17,930 --> 00:13:20,120
+What about the Hunters Guild, Gina?
+
+152
+00:13:20,120 --> 00:13:22,880
+Same for us, really. Just normal stuff.
+
+153
+00:13:23,280 --> 00:13:28,270
+You mentioned you were going to start
+A-Rank dungeon training with Ms. Cha.
+
+154
+00:13:28,270 --> 00:13:29,750
+How'd that go?
+
+155
+00:13:29,750 --> 00:13:31,420
+It was really something...
+
+156
+00:13:31,420 --> 00:13:32,920
+Something fast.
+
+157
+00:13:33,360 --> 00:13:36,640
+We were all struggling against
+an A-Rank beast...
+
+158
+00:13:41,430 --> 00:13:43,390
+But she defeated it in a flash.
+
+159
+00:13:44,390 --> 00:13:47,220
+She made it look extremely easy.
+
+160
+00:13:47,220 --> 00:13:52,180
+We were all pretty surprised,
+but Kihoon was completely bowled over.
+
+161
+00:13:53,200 --> 00:13:56,420
+He'd been hoping to become the next
+strike team captain, you see.
+
+162
+00:13:56,420 --> 00:13:58,330
+He is pretty straight-laced, yeah.
+
+163
+00:13:58,330 --> 00:14:00,510
+What about Chul in your guild?
+
+164
+00:14:00,510 --> 00:14:03,250
+He's after the same kind of position, right?
+
+165
+00:14:03,590 --> 00:14:06,140
+He's... not a bad guy or anything...
+
+166
+00:14:06,140 --> 00:14:08,980
+The fact that you said it
+like that tells us everything.
+
+167
+00:14:09,410 --> 00:14:12,870
+Well, be that as it may, we're pretty lucky.
+
+168
+00:14:12,870 --> 00:14:17,360
+The Hunters Guild and the White Tiger Guild...
+We're in the big leagues.
+
+169
+00:14:17,360 --> 00:14:18,810
+You've got a point there.
+
+170
+00:14:19,840 --> 00:14:24,310
+You hear plenty of unsavory rumors
+about a lot of places out there.
+
+171
+00:14:24,670 --> 00:14:26,250
+Like what?
+
+172
+00:14:26,760 --> 00:14:31,010
+Strike teams with suspiciously
+high fatality rates, for instance.
+
+173
+00:14:34,350 --> 00:14:37,190
+Yoo Jinho! He's dead.
+
+174
+00:14:39,030 --> 00:14:40,440
+How could you?
+
+175
+00:14:43,000 --> 00:14:45,120
+<i>How could I have forgotten?</i>
+
+176
+00:14:45,780 --> 00:14:49,030
+<i>I work in a world where survival
+of the fittest is the reality.</i>
+
+177
+00:14:49,590 --> 00:14:53,200
+<i>A world filled with violence,
+deception, and betrayal.</i>
+
+178
+00:14:54,120 --> 00:14:55,400
+<i>How could I...?</i>
+
+179
+00:14:55,880 --> 00:14:58,710
+<i>How? How? How...?</i>
+
+180
+00:14:58,710 --> 00:15:04,510
+<i>How? How? How? How? How?</i>
+
+181
+00:15:05,680 --> 00:15:08,680
+<i>That's it. I'd grown numb to it.</i>
+
+182
+00:15:09,420 --> 00:15:13,570
+<i>Carelessness. Overconfidence. Delusion.</i>
+
+183
+00:15:16,070 --> 00:15:17,440
+<i>Enemies...</i>
+
+184
+00:15:17,810 --> 00:15:21,300
+<i>The system is telling me to kill.</i>
+
+185
+00:15:22,470 --> 00:15:25,040
+<i>Does it need to keep me alive
+for some reason?</i>
+
+186
+00:15:26,590 --> 00:15:29,250
+<i>This isn't a coincidence. It's not charity.</i>
+
+187
+00:15:30,560 --> 00:15:33,400
+<i>The system wants me alive.</i>
+
+188
+00:15:37,870 --> 00:15:39,720
+<i>It wants me strong.</i>
+
+189
+00:15:40,890 --> 00:15:42,750
+Boss! Thank goodness...
+
+190
+00:15:43,030 --> 00:15:45,580
+Dude, he's alive.
+
+191
+00:15:47,470 --> 00:15:49,160
+Okay, then.
+
+192
+00:15:51,010 --> 00:15:56,400
+If the system wants to use me,
+then I'll use it, too.
+
+193
+00:15:56,980 --> 00:15:59,790
+Damn it, Kyuhwan. Don't hold back so much.
+
+194
+00:16:01,440 --> 00:16:02,970
+I'd forgotten.
+
+195
+00:16:03,400 --> 00:16:07,610
+The weak always get taken from.
+That's how it works here.
+
+196
+00:16:07,610 --> 00:16:12,030
+Hey, look! The Weakest Hunter
+of All Mankind actually gets it!
+
+197
+00:16:12,630 --> 00:16:17,320
+That means you guys understand
+how it works, too, right?
+
+198
+00:16:17,830 --> 00:16:20,280
+How what works?
+
+199
+00:16:20,280 --> 00:16:22,460
+If you're hunters...
+
+200
+00:16:23,750 --> 00:16:27,840
+then you're ready to be
+preyed on yourselves, right?
+
+201
+00:16:29,300 --> 00:16:32,010
+Let me handle this, Mr. Dongsuk.
+
+202
+00:16:32,010 --> 00:16:36,470
+Look, buddy. You clearly don't
+understand what's going on here.
+
+203
+00:16:36,900 --> 00:16:38,970
+We should be ready to be preyed on?
+
+204
+00:16:38,970 --> 00:16:42,470
+And what's a jumped-up
+E-Rank like you gonna do?
+
+205
+00:16:42,470 --> 00:16:44,690
+The Weakest Hunter of All—
+
+206
+00:16:57,130 --> 00:16:58,310
+One down.
+
+207
+00:16:58,310 --> 00:16:59,850
+J-Juntae!
+
+208
+00:16:59,850 --> 00:17:01,000
+What the hell?
+
+209
+00:17:01,000 --> 00:17:02,790
+When did he draw that weapon?
+
+210
+00:17:02,790 --> 00:17:04,960
+Where was he even hiding it?
+
+211
+00:17:04,960 --> 00:17:07,610
+<i>Overconfidence aside, Juntae was D-Rank!</i>
+
+212
+00:17:07,960 --> 00:17:10,200
+<i>How could an E-Rank manage to kill him?</i>
+
+213
+00:17:13,430 --> 00:17:15,720
+<i>I just killed someone.</i>
+
+214
+00:17:16,070 --> 00:17:17,280
+<i>A human being.</i>
+
+215
+00:17:17,930 --> 00:17:20,810
+<i>Even if I was just obeying the system,</i>
+
+216
+00:17:21,480 --> 00:17:25,480
+<i>I've... just murdered another person.</i>
+
+217
+00:17:26,570 --> 00:17:28,940
+<i>But if I hadn't done it, I would've died.</i>
+
+218
+00:17:29,850 --> 00:17:31,980
+<i>So I can't back down now.</i>
+
+219
+00:17:33,450 --> 00:17:36,580
+<i>If only the strong get to survive, then...!</i>
+
+220
+00:17:37,330 --> 00:17:39,200
+Go to hell!
+
+221
+00:17:49,590 --> 00:17:52,200
+How's an E-Rank got moves like that?
+
+222
+00:17:52,700 --> 00:17:54,310
+Son of a bitch...
+
+223
+00:17:59,310 --> 00:18:00,270
+Kyuhwan!
+
+224
+00:18:00,270 --> 00:18:01,270
+R-Right!
+
+225
+00:18:08,590 --> 00:18:09,860
+Take this!
+
+226
+00:18:18,110 --> 00:18:19,200
+He's so strong...
+
+227
+00:18:20,040 --> 00:18:24,170
+He feels stronger now than when
+he was fighting the dungeon boss.
+
+228
+00:18:24,170 --> 00:18:27,290
+H-He took my entire team apart in seconds...
+
+229
+00:18:27,790 --> 00:18:29,880
+Was he hiding his true strength?
+
+230
+00:18:29,880 --> 00:18:32,520
+You beat the boss, didn't you?
+
+231
+00:18:33,470 --> 00:18:37,470
+Well, I might be a C-Rank, too,
+but you'll find I'm nothing like them!
+
+232
+00:18:37,930 --> 00:18:39,610
+Reinforcement!
+
+233
+00:18:43,800 --> 00:18:45,910
+<i>This guy may be a monster,</i>
+
+234
+00:18:45,910 --> 00:18:50,020
+<i>but after fighting a boss and five hunters,
+he can't be at full strength.</i>
+
+235
+00:18:50,320 --> 00:18:54,320
+<i>The trick is in how fast he is,
+and in his dagger's special abilities.</i>
+
+236
+00:18:54,660 --> 00:18:57,950
+<i>But when I use the Reinforcement skill,
+my body becomes as strong as steel!</i>
+
+237
+00:18:57,950 --> 00:19:00,740
+<i>That knife of his won't affect me!</i>
+
+238
+00:19:06,090 --> 00:19:08,920
+Mr. Hwang. You're strong.
+
+239
+00:19:10,060 --> 00:19:12,700
+But I've got some bad news for you.
+
+240
+00:19:17,470 --> 00:19:21,110
+I've been leveling up this entire time.
+
+241
+00:19:22,290 --> 00:19:24,770
+<i>Wh-What just happened?</i>
+
+242
+00:19:24,770 --> 00:19:27,940
+<i>He... He smashed me into the ground?</i>
+
+243
+00:19:28,460 --> 00:19:32,150
+<i>There's no way in hell he's E-Rank!</i>
+
+244
+00:19:33,170 --> 00:19:35,250
+H-Hang on! Don't kill me!
+
+245
+00:19:35,250 --> 00:19:37,790
+You've gotta show mercy! I-I can pay you!
+
+246
+00:19:37,790 --> 00:19:41,700
+The mana crystals and essence stones...
+You can have the lot!
+
+247
+00:19:42,470 --> 00:19:45,500
+I-Is that not enough for you?
+I-In that case...
+
+248
+00:19:45,500 --> 00:19:48,170
+I'll pay you double! Double what I was—
+
+249
+00:19:47,180 --> 00:19:48,170
+Three times.
+
+250
+00:19:49,230 --> 00:19:51,940
+You tried to kill me three times...
+
+251
+00:19:52,900 --> 00:19:54,670
+and now you want mercy?
+
+252
+00:19:54,670 --> 00:19:58,760
+D-Don't do it! Y-You won't get away with this!
+
+253
+00:19:59,300 --> 00:20:04,430
+Weren't you the one who said nothing
+that happens in a dungeon ever gets out?
+
+254
+00:20:05,430 --> 00:20:09,060
+You little shit! Do you have
+any idea who my brother—
+
+255
+00:20:24,710 --> 00:20:27,710
+The boss is dead, so the dungeon's closing.
+Let's get out of here.
+
+256
+00:20:34,880 --> 00:20:37,920
+You mean to tell me that all the
+C-Rank hunters died in action,
+
+257
+00:20:37,920 --> 00:20:43,500
+and the only survivors were...
+a D-Rank and an E-Rank?
+
+258
+00:20:43,500 --> 00:20:46,350
+That's true. Well...
+
+259
+00:20:47,640 --> 00:20:48,560
+You!
+
+260
+00:20:48,560 --> 00:20:49,810
+Y-Yes?
+
+261
+00:20:49,810 --> 00:20:55,160
+Your gear... That's the Maya Company's Kalion
+Longsword! The one that just came out!
+
+262
+00:20:55,160 --> 00:20:56,780
+Oh... Yeah.
+
+263
+00:20:57,120 --> 00:20:59,620
+<i>I got rewarded for something like that, huh?</i>
+
+264
+00:20:57,510 --> 00:21:01,950
+And that's Gredos's Royal Series!
+
+265
+00:20:59,990 --> 00:21:02,510
+<i>The Murderous Intent skill...?</i>
+
+266
+00:21:03,690 --> 00:21:06,910
+<i>It can cut all abilities in half, huh?</i>
+
+267
+00:21:06,910 --> 00:21:10,080
+I see! Well, your equipment
+explains your survival.
+
+268
+00:21:10,590 --> 00:21:13,320
+You must've handled everything yourself,
+
+269
+00:21:13,320 --> 00:21:16,710
+while this E-Rank probably hid to say safe.
+
+270
+00:21:18,770 --> 00:21:22,830
+I appreciate your cooperation
+after such an ordeal.
+
+271
+00:21:22,830 --> 00:21:24,790
+That should be everything.
+
+272
+00:21:26,110 --> 00:21:27,470
+E-Excuse me...
+
+273
+00:21:28,310 --> 00:21:31,940
+B-Boss... Good work back there!
+
+274
+00:21:33,060 --> 00:21:34,160
+Right.
+
+275
+00:21:41,090 --> 00:21:42,990
+Is everything okay?
+
+276
+00:21:42,990 --> 00:21:44,020
+I was just thinking...
+
+277
+00:21:45,680 --> 00:21:49,470
+I'm glad I gave her that umbrella.

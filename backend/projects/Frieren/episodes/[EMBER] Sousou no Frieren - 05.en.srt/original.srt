@@ -1,0 +1,1388 @@
+1
+00:00:01,000 --> 00:00:02,640
+Frieren.
+
+2
+00:00:02,640 --> 00:00:06,730
+You must find Aureole
+and speak with Himmel.
+
+3
+00:00:08,450 --> 00:00:11,260
+"On the northernmost end of the continent..."
+
+4
+00:00:11,920 --> 00:00:15,900
+<i>I arrived at the place the people
+of this world call heaven:</i>
+
+5
+00:00:15,900 --> 00:00:19,820
+<i>Aureole, the land where souls rest.</i>
+
+6
+00:00:20,480 --> 00:00:23,610
+<i>Many souls gather there,</i>
+
+7
+00:00:24,020 --> 00:00:27,330
+<i>and I spoke with friends
+who once fought alongside me.</i>
+
+8
+00:00:30,710 --> 00:00:32,160
+Sorry to ask this of you.
+
+9
+00:00:32,540 --> 00:00:34,490
+It'll be a long journey.
+
+10
+00:00:35,110 --> 00:00:37,950
+It took us ten years.
+
+11
+00:00:40,060 --> 00:00:41,360
+I see.
+
+12
+00:00:41,360 --> 00:00:46,100
+We'll be following the same path Mr. Himmel's
+party took to the Demon King's castle.
+
+13
+00:00:56,990 --> 00:00:58,160
+You're right.
+
+14
+00:00:58,960 --> 00:01:01,260
+It'll be a mere ten-year adventure.
+
+15
+00:01:03,480 --> 00:01:05,510
+One one-hundredth, huh?
+
+16
+00:01:07,270 --> 00:01:11,040
+Frieren, you're not going
+to stay in the royal capital?
+
+17
+00:01:11,360 --> 00:01:13,130
+I'm going to keep traveling.
+
+18
+00:01:13,130 --> 00:01:14,540
+Alone?
+
+19
+00:01:14,540 --> 00:01:16,200
+It'll be nice and easy.
+
+20
+00:01:16,940 --> 00:01:19,300
+You're not going to take on an apprentice?
+
+21
+00:01:19,300 --> 00:01:22,280
+Traveling is better when you
+have someone to talk to.
+
+22
+00:01:22,620 --> 00:01:24,860
+It's a waste of time.
+
+23
+00:01:24,860 --> 00:01:27,780
+Even if I taught them,
+they'd die in no time.
+
+24
+00:01:30,310 --> 00:01:34,680
+Frieren, that's not how relationships work.
+
+25
+00:01:35,000 --> 00:01:36,960
+Yes, it is.
+
+26
+00:01:36,960 --> 00:01:42,050
+My adventure with you wasn't even
+one one-hundredth of my life.
+
+27
+00:01:43,260 --> 00:01:45,600
+I might've said something like that.
+
+28
+00:01:47,080 --> 00:01:49,100
+It's funny, isn't it?
+
+29
+00:01:49,550 --> 00:01:50,730
+What is?
+
+30
+00:01:51,960 --> 00:01:56,010
+That one one-hundredth changed you.
+
+31
+00:02:08,100 --> 00:02:09,500
+Well, I'll see you later.
+
+32
+00:02:10,150 --> 00:02:12,120
+See you again.
+
+33
+00:02:19,770 --> 00:02:22,670
+It's been half my life, you know.
+
+34
+00:02:24,060 --> 00:02:26,630
+The time I've spent with you.
+
+35
+00:02:28,850 --> 00:02:31,410
+It's going to be even more
+than that from now on.
+
+36
+00:02:33,570 --> 00:02:36,070
+<i>Like a fairy tale</i>
+
+37
+00:02:36,070 --> 00:02:38,480
+<i>It's a sign the story has reached its end</i>
+
+38
+00:02:38,480 --> 00:02:41,400
+<i>Like a single passage taken from</i>
+
+39
+00:02:41,400 --> 00:02:43,020
+<i>A journey that was too long</i>
+
+40
+00:02:43,020 --> 00:02:45,390
+<i>Of the evil that once cast a shadow</i>
+
+41
+00:02:45,390 --> 00:02:47,720
+<i>Across this land</i>
+
+42
+00:02:47,720 --> 00:02:50,040
+<i>And the memories of the short journey</i>
+
+43
+00:02:50,040 --> 00:02:52,490
+<i>With the hero who defeated it</i>
+
+44
+00:03:02,500 --> 00:03:04,800
+<i>The story ends</i>
+
+45
+00:03:04,800 --> 00:03:07,310
+<i>And the hero goes to sleep</i>
+
+46
+00:03:07,310 --> 00:03:10,150
+<i>Leaving this land with</i>
+
+47
+00:03:10,150 --> 00:03:11,800
+<i>Days of peace and quiet</i>
+
+48
+00:03:11,800 --> 00:03:14,310
+<i>The passage of time heartlessly</i>
+
+49
+00:03:14,310 --> 00:03:16,490
+<i>Makes people forget</i>
+
+50
+00:03:16,490 --> 00:03:19,270
+<i>Even the tracks left behind by his life</i>
+
+51
+00:03:19,270 --> 00:03:21,060
+<i>Begin to rust</i>
+
+52
+00:03:21,060 --> 00:03:22,900
+<i>Just the same</i>
+
+53
+00:03:22,900 --> 00:03:25,190
+<i>Your words and wishes and courage</i>
+
+54
+00:03:25,190 --> 00:03:28,530
+<i>Are still inside of me</i>
+
+55
+00:03:28,530 --> 00:03:30,400
+<i>And they live on</i>
+
+56
+00:03:31,230 --> 00:03:32,950
+<i>We chose the same path</i>
+
+57
+00:03:32,950 --> 00:03:35,100
+<i>That's all it was supposed to be</i>
+
+58
+00:03:35,100 --> 00:03:36,630
+<i>Why is it that at some point</i>
+
+59
+00:03:36,630 --> 00:03:40,880
+<i>I wanted to understand the reason for</i>
+
+60
+00:03:40,880 --> 00:03:42,260
+<i>The tears that fall down my cheeks</i>
+
+61
+00:03:42,260 --> 00:03:43,340
+<i>Even now</i>
+
+62
+00:03:43,340 --> 00:03:45,720
+<i>If I retrace the journey we walked together</i>
+
+63
+00:03:45,720 --> 00:03:49,270
+<i>Even though you're not there</i>
+
+64
+00:03:49,270 --> 00:03:50,920
+<i>I know I'll be able to find it</i>
+
+65
+00:04:07,170 --> 00:04:09,250
+Listen to me, Fern.
+
+66
+00:04:09,670 --> 00:04:15,090
+From now, you must listen carefully to what
+Frieren tells you and be a good girl,
+
+67
+00:04:15,850 --> 00:04:17,250
+or else...
+
+68
+00:04:18,000 --> 00:04:19,760
+Or else what?
+
+69
+00:04:19,760 --> 00:04:22,530
+I'll haunt you after I'm dead.
+
+70
+00:04:26,300 --> 00:04:31,610
+Mr. Heiter, do you mean that if I'm a bad
+girl, you'll come see me after you die?
+
+71
+00:04:36,150 --> 00:04:40,980
+You've grown into a clever girl.
+Who taught you to act like that?
+
+72
+00:04:42,170 --> 00:04:43,840
+I take it back.
+
+73
+00:04:45,770 --> 00:04:52,050
+If you're a good girl, then I might
+be willing to visit you sometimes.
+
+74
+00:04:57,100 --> 00:04:59,410
+We're almost at the village.
+
+75
+00:05:01,660 --> 00:05:03,170
+I see.
+
+76
+00:05:04,130 --> 00:05:05,020
+What?
+
+77
+00:05:05,580 --> 00:05:07,380
+Nothing.
+
+78
+00:05:26,250 --> 00:05:29,400
+You're heading to the mountain pass, right?
+
+79
+00:05:29,800 --> 00:05:31,800
+I wouldn't if I were you.
+
+80
+00:05:31,800 --> 00:05:34,650
+A bunch of people have gone missing.
+
+81
+00:05:35,210 --> 00:05:36,910
+Was it monsters?
+
+82
+00:05:37,220 --> 00:05:40,230
+Taken by ghosts, or so the rumors say.
+
+83
+00:05:40,230 --> 00:05:42,450
+Some people have seen them
+with their own eyes.
+
+84
+00:05:42,450 --> 00:05:44,130
+Could be the undead.
+
+85
+00:05:44,130 --> 00:05:46,670
+Do you know what the ghosts look like?
+
+86
+00:05:46,670 --> 00:05:48,630
+I'm afraid not.
+
+87
+00:05:48,630 --> 00:05:51,500
+But if you're curious,
+why not ask them yourselves?
+
+88
+00:06:02,290 --> 00:06:03,780
+To summarize,
+
+89
+00:06:04,520 --> 00:06:10,550
+people saw the ghosts of dead family and
+acquaintances as they appeared in life.
+
+90
+00:06:11,480 --> 00:06:14,780
+Some witnesses claimed the
+ghosts spoke to them.
+
+91
+00:06:15,870 --> 00:06:18,980
+This isn't the work of the undead.
+
+92
+00:06:18,980 --> 00:06:20,510
+It's not?
+
+93
+00:06:23,230 --> 00:06:27,400
+The undead are corpses controlled by magic,
+
+94
+00:06:27,400 --> 00:06:29,970
+like zombies or skeletons.
+
+95
+00:06:31,510 --> 00:06:34,840
+But these ghosts appeared
+as they did in life.
+
+96
+00:06:35,410 --> 00:06:37,390
+A reanimated corpse wouldn't look like that.
+
+97
+00:06:38,600 --> 00:06:42,100
+This is the work of a completely
+different type of monster.
+
+98
+00:06:43,920 --> 00:06:46,360
+You seem to have some inkling
+of what it might be.
+
+99
+00:06:47,380 --> 00:06:51,540
+It's a nasty one. We'd best
+be careful to avoid it.
+
+100
+00:06:54,950 --> 00:06:56,840
+We'll leave first thing in the morning.
+
+101
+00:06:57,630 --> 00:07:01,630
+Ms. Frieren, the villagers need help.
+
+102
+00:07:02,280 --> 00:07:04,960
+You sound like Himmel and the others.
+
+103
+00:07:05,350 --> 00:07:08,730
+Unlike you, I'm a good girl.
+
+104
+00:07:09,130 --> 00:07:12,740
+If you want to help, then I suppose we can.
+
+105
+00:07:13,540 --> 00:07:16,300
+We'll be traveling through the
+mountain pass either way.
+
+106
+00:07:31,440 --> 00:07:34,470
+This is where the villagers have
+been disappearing recently.
+
+107
+00:07:35,800 --> 00:07:40,130
+At least there are plenty of clues.
+
+108
+00:07:40,930 --> 00:07:43,770
+There are signs of magic use here.
+
+109
+00:07:44,300 --> 00:07:47,370
+Yes. What kind of magic do you think it was?
+
+110
+00:07:48,090 --> 00:07:49,720
+Illusion magic.
+
+111
+00:07:50,760 --> 00:07:54,380
+I read in a book on magical ecology
+that there's a monster
+
+112
+00:07:54,850 --> 00:07:57,660
+that uses illusions to lure prey.
+
+113
+00:07:58,230 --> 00:07:59,640
+The Einsam.
+
+114
+00:08:01,000 --> 00:08:03,180
+Even among monsters of its type,
+
+115
+00:08:03,180 --> 00:08:07,530
+it's an especially crafty and greedy
+monster that consumes only humans.
+
+116
+00:08:08,510 --> 00:08:11,650
+It shows people phantoms
+of the dead to lure them in.
+
+117
+00:08:12,250 --> 00:08:14,650
+Does that really work?
+
+118
+00:08:14,960 --> 00:08:18,870
+They're illusions of people very dear to them.
+
+119
+00:08:21,430 --> 00:08:26,670
+But the Einsam's illusions
+aren't a threat to mages.
+
+120
+00:08:27,380 --> 00:08:32,540
+They're easily dispersed by high-density
+mana such as offensive magic.
+
+121
+00:08:33,240 --> 00:08:35,930
+So we just need to shoot
+the phantoms of the dead.
+
+122
+00:08:38,300 --> 00:08:39,380
+Could you?
+
+123
+00:08:40,670 --> 00:08:41,970
+Of course.
+
+124
+00:08:42,480 --> 00:08:44,890
+After all, I know they're fake.
+
+125
+00:08:45,370 --> 00:08:49,150
+I shot a phantom of my master
+begging for her life.
+
+126
+00:08:50,680 --> 00:08:54,150
+But I was used to hearing her
+beg for her life,
+
+127
+00:08:54,150 --> 00:08:57,220
+so I didn't feel particularly
+guilty about it.
+
+128
+00:08:57,870 --> 00:09:00,790
+Either way, it doesn't feel good.
+
+129
+00:09:01,180 --> 00:09:04,680
+What does it mean that you were accustomed
+to hearing her beg for her life?
+
+130
+00:09:10,530 --> 00:09:12,510
+It's gotten misty.
+
+131
+00:09:13,440 --> 00:09:14,700
+We're close.
+
+132
+00:09:16,240 --> 00:09:18,970
+If you see a phantom,
+don't hesitate to shoot it.
+
+133
+00:09:24,050 --> 00:09:25,030
+Fern.
+
+134
+00:09:30,480 --> 00:09:33,990
+<i>There it is. A phantom of the dead.</i>
+
+135
+00:09:35,850 --> 00:09:37,230
+<i>I'm calm.</i>
+
+136
+00:09:38,610 --> 00:09:39,730
+<i>I can shoot it.</i>
+
+137
+00:09:41,710 --> 00:09:45,620
+You've become quite the mage.
+
+138
+00:09:47,560 --> 00:09:53,500
+I decided to pay you a visit
+because you've been a good girl.
+
+139
+00:09:56,770 --> 00:09:57,830
+<i>My memories...</i>
+
+140
+00:09:57,830 --> 00:10:01,530
+You were right to choose the path of a mage.
+
+141
+00:10:01,530 --> 00:10:04,950
+You've always loved magic.
+
+142
+00:10:03,800 --> 00:10:07,000
+<i>It's using my memories against me.</i>
+
+143
+00:10:04,950 --> 00:10:10,400
+You were so happy when
+I gave you that staff.
+
+144
+00:10:07,740 --> 00:10:09,730
+<i>How cruel.</i>
+
+145
+00:10:10,370 --> 00:10:12,970
+<i>One of my most cherished memories...</i>
+
+146
+00:10:10,400 --> 00:10:12,250
+You slept with it every night.
+
+147
+00:10:15,190 --> 00:10:16,170
+Fern.
+
+148
+00:10:19,750 --> 00:10:21,140
+No, huh?
+
+149
+00:10:28,980 --> 00:10:31,170
+So it's Himmel this time.
+
+150
+00:10:31,770 --> 00:10:35,540
+I assumed it'd be my master again.
+
+151
+00:10:36,790 --> 00:10:40,170
+Does this mean I've changed?
+
+152
+00:10:43,680 --> 00:10:46,690
+Frieren, shoot me.
+
+153
+00:10:47,740 --> 00:10:51,220
+Right. That's what Himmel would say.
+
+154
+00:11:13,460 --> 00:11:16,080
+Now the mountain pass is safe again.
+
+155
+00:11:17,120 --> 00:11:18,530
+Ms. Frieren...
+
+156
+00:11:19,270 --> 00:11:21,960
+That was a phantom of Mr. Heiter.
+
+157
+00:11:22,500 --> 00:11:23,950
+An impostor.
+
+158
+00:11:23,950 --> 00:11:25,130
+Yes.
+
+159
+00:11:28,780 --> 00:11:31,150
+Let's go see the real Heiter now.
+
+160
+00:11:32,220 --> 00:11:35,360
+After all, we're trying to reach Aureole.
+
+161
+00:11:37,720 --> 00:11:39,150
+You're right.
+
+162
+00:11:49,670 --> 00:11:51,240
+That's a dragon?
+
+163
+00:11:52,810 --> 00:11:54,690
+I've never seen one before.
+
+164
+00:11:55,770 --> 00:11:57,090
+Look at its nest.
+
+165
+00:11:58,610 --> 00:12:00,410
+See that grimoire?
+
+166
+00:12:00,930 --> 00:12:03,560
+It's one I've been looking for.
+
+167
+00:12:03,560 --> 00:12:05,690
+You do love your grimoires.
+
+168
+00:12:06,100 --> 00:12:08,160
+But what's it doing there?
+
+169
+00:12:08,740 --> 00:12:12,940
+Dragons use objects infused
+with magic to build their nests.
+
+170
+00:12:13,950 --> 00:12:15,350
+That's a solar dragon.
+
+171
+00:12:16,030 --> 00:12:18,930
+It's eaten numerous adventurers.
+
+172
+00:12:19,410 --> 00:12:22,400
+Either way, we should probably take it out.
+
+173
+00:12:23,740 --> 00:12:26,180
+Be careful you don't hit the nest.
+
+174
+00:12:26,180 --> 00:12:26,980
+Got it.
+
+175
+00:12:40,260 --> 00:12:43,990
+Ms. Frieren, that didn't do anything.
+
+176
+00:12:43,990 --> 00:12:46,300
+Figures. Dragons really are tough.
+
+177
+00:12:46,300 --> 00:12:48,380
+We have no choice, then. Let's run.
+
+178
+00:13:07,160 --> 00:13:09,170
+We finally lost it.
+
+179
+00:13:09,650 --> 00:13:11,680
+It's a quick flyer, too.
+
+180
+00:13:11,680 --> 00:13:13,950
+I doubt we can beat it in an aerial battle.
+
+181
+00:13:13,950 --> 00:13:18,400
+I... I thought I was going to die.
+
+182
+00:13:18,400 --> 00:13:19,700
+Let's head back.
+
+183
+00:13:20,100 --> 00:13:23,650
+If we repeat that process enough times,
+we'll beat it eventually.
+
+184
+00:13:28,250 --> 00:13:29,370
+Of course.
+
+185
+00:13:29,950 --> 00:13:34,140
+Mages don't play tag with dragons.
+
+186
+00:13:38,560 --> 00:13:40,980
+I guess we'll just have
+to take on a companion.
+
+187
+00:13:44,440 --> 00:13:45,750
+A front-liner?
+
+188
+00:13:45,750 --> 00:13:48,610
+Yeah. You're searching
+for someone, aren't you?
+
+189
+00:13:48,940 --> 00:13:54,020
+There's a warrior named Stark
+in a village near Riegel Canyon.
+
+190
+00:13:54,020 --> 00:13:57,620
+Pick him up on your way
+into the northern lands.
+
+191
+00:13:57,620 --> 00:13:59,710
+He's my apprentice.
+
+192
+00:14:00,180 --> 00:14:03,370
+Huh. Is he a good warrior?
+
+193
+00:14:14,980 --> 00:14:18,770
+It's so peaceful, it's hard to
+believe there's a dragon nearby.
+
+194
+00:14:18,770 --> 00:14:20,100
+You're right.
+
+195
+00:14:22,140 --> 00:14:27,670
+Ms. Frieren, what kind of magic
+does that grimoire contain?
+
+196
+00:14:28,260 --> 00:14:30,410
+A spell that lets you see through clothes.
+
+197
+00:14:33,490 --> 00:14:37,790
+You really do collect a lot of odd spells.
+
+198
+00:14:37,790 --> 00:14:39,450
+It's my hobby, after all.
+
+199
+00:14:40,210 --> 00:14:42,460
+But it's practical, too.
+
+200
+00:14:42,910 --> 00:14:47,730
+Depending on what you consider clothes,
+it can reveal hidden weapons—
+
+201
+00:14:46,500 --> 00:14:50,380
+Travelers, may I have a moment of your time?
+
+202
+00:14:51,370 --> 00:14:54,300
+Mr. Stark would like to meet you.
+
+203
+00:14:54,990 --> 00:14:57,210
+Well, that saves us having to look for him.
+
+204
+00:15:01,270 --> 00:15:07,470
+Three years ago, that dragon
+attacked the village.
+
+205
+00:15:14,650 --> 00:15:19,070
+That's when Mr. Stark appeared.
+
+206
+00:15:19,340 --> 00:15:23,340
+He stood his ground in front of that dragon.
+
+207
+00:15:23,340 --> 00:15:28,210
+After a long standoff, the dragon left.
+
+208
+00:15:28,210 --> 00:15:32,470
+Since then, because he's stayed here,
+
+209
+00:15:32,470 --> 00:15:37,850
+the dragon hasn't attacked,
+and we've lived in peace.
+
+210
+00:15:39,300 --> 00:15:44,250
+Then perhaps we could defeat
+the dragon with Mr. Stark's help.
+
+211
+00:15:44,760 --> 00:15:46,110
+I hope you're right.
+
+212
+00:15:48,430 --> 00:15:51,980
+Do you think I can become
+a powerful warrior like you?
+
+213
+00:15:51,980 --> 00:15:53,120
+Sure you can.
+
+214
+00:15:53,560 --> 00:15:56,360
+But a warrior's job is hardly a noble one.
+
+215
+00:15:58,680 --> 00:16:00,760
+Grandma!
+
+216
+00:16:08,530 --> 00:16:11,220
+So you're the ones who
+messed with the dragon.
+
+217
+00:16:11,910 --> 00:16:15,720
+Don't get it too worked up.
+You'll put the village in danger.
+
+218
+00:16:16,800 --> 00:16:20,470
+Dragons are far more terrifying
+than you think they are.
+
+219
+00:16:22,350 --> 00:16:25,820
+I got this scar on my forehead
+fighting a shadow dragon—
+
+220
+00:16:25,820 --> 00:16:27,970
+It's not that serious an injury.
+
+221
+00:16:30,030 --> 00:16:32,670
+Did my master put you up to this?
+
+222
+00:16:32,670 --> 00:16:33,740
+Who are you?
+
+223
+00:16:34,620 --> 00:16:36,750
+Frieren the Mage.
+
+224
+00:16:39,490 --> 00:16:41,860
+Grandma, could you give us some privacy?
+
+225
+00:16:43,240 --> 00:16:46,480
+It's all right.
+They're acquaintances of my master.
+
+226
+00:16:52,220 --> 00:16:54,840
+My master must be furious.
+
+227
+00:16:55,490 --> 00:16:57,640
+I left him without so much as a word.
+
+228
+00:16:58,270 --> 00:17:01,920
+Stark, why haven't you defeated the dragon?
+
+229
+00:17:01,920 --> 00:17:04,440
+You have no reason to remain in this village.
+
+230
+00:17:05,040 --> 00:17:07,950
+Why don't you tell me what you want first?
+
+231
+00:17:08,470 --> 00:17:11,610
+If you're here to send me back
+to my master, then forget it.
+
+232
+00:17:12,730 --> 00:17:16,300
+We want you to join us as our front-liner,
+
+233
+00:17:16,300 --> 00:17:20,030
+though before that, we'd appreciate
+your help in defeating the solar dragon.
+
+234
+00:17:20,470 --> 00:17:23,330
+I want the grimoire in its nest.
+
+235
+00:17:23,330 --> 00:17:24,170
+Why?
+
+236
+00:17:24,620 --> 00:17:27,670
+It's just a hobby. No particular reason.
+
+237
+00:17:28,040 --> 00:17:30,420
+We're talking about a solar dragon here.
+
+238
+00:17:30,420 --> 00:17:32,920
+It's not something you fight
+for no particular reason.
+
+239
+00:17:41,400 --> 00:17:42,830
+Wow!
+
+240
+00:17:44,230 --> 00:17:45,690
+You're right.
+
+241
+00:17:46,090 --> 00:17:49,730
+There was once an idiot who
+complimented the spells I collected.
+
+242
+00:17:50,460 --> 00:17:52,320
+Is that enough of a reason for you?
+
+243
+00:17:53,360 --> 00:17:56,010
+Complimented you, huh?
+
+244
+00:17:58,660 --> 00:17:59,960
+That's ridiculous.
+
+245
+00:17:59,960 --> 00:18:00,980
+Right?
+
+246
+00:18:01,930 --> 00:18:04,360
+I don't mind joining your party.
+
+247
+00:18:05,200 --> 00:18:07,660
+My master told you to take
+me with you, didn't he?
+
+248
+00:18:08,200 --> 00:18:12,070
+But I need the solar
+dragon dealt with first.
+
+249
+00:18:12,940 --> 00:18:15,200
+Honestly, I've had trouble
+defeating it alone.
+
+250
+00:18:16,400 --> 00:18:19,710
+Frieren, you can defeat it, can't you?
+
+251
+00:18:20,120 --> 00:18:23,730
+If you can keep it busy
+for thirty seconds, certainly.
+
+252
+00:18:24,340 --> 00:18:28,500
+I see. Thirty seconds, huh?
+
+253
+00:18:30,340 --> 00:18:33,060
+Do I really have to do that?
+
+254
+00:18:33,060 --> 00:18:35,470
+What is he talking about?
+
+255
+00:18:35,910 --> 00:18:38,060
+I thought so.
+
+256
+00:18:38,660 --> 00:18:41,980
+Stark, how much experience
+do you have fighting monsters?
+
+257
+00:18:42,240 --> 00:18:43,730
+Zero!
+
+258
+00:18:43,730 --> 00:18:46,500
+Help me, Frieren!
+
+259
+00:18:46,860 --> 00:18:49,740
+I confronted the dragon at first.
+
+260
+00:18:50,010 --> 00:18:53,760
+But I was so scared,
+I couldn't move a muscle!
+
+261
+00:18:54,070 --> 00:18:58,520
+It slices through houses
+like they're vegetables!
+
+262
+00:18:58,520 --> 00:19:01,770
+A human doesn't stand a chance against it!
+
+263
+00:19:02,990 --> 00:19:05,990
+I figured it spared me on a whim, but then...
+
+264
+00:19:08,640 --> 00:19:13,160
+For some reason the dragon stopped attacking
+the village, and I was treated like a hero.
+
+265
+00:19:13,160 --> 00:19:16,390
+And the villagers are such nice people!
+
+266
+00:19:16,390 --> 00:19:18,700
+You're still young. Get plenty to eat.
+
+267
+00:19:18,700 --> 00:19:21,780
+Stark, show me your new killer move!
+
+268
+00:19:22,050 --> 00:19:25,900
+I couldn't leave if I wanted to.
+
+269
+00:19:25,900 --> 00:19:30,530
+Ms. Frieren, this one is no good.
+Let's find someone else.
+
+270
+00:19:30,530 --> 00:19:33,240
+Please don't abandon me!
+
+271
+00:19:33,240 --> 00:19:38,040
+No, he can fight the dragon. I know he can.
+
+272
+00:19:38,040 --> 00:19:41,230
+He'll need more than just encouragement...
+
+273
+00:20:02,190 --> 00:20:05,500
+Stark, you have until tomorrow morning.
+
+274
+00:20:06,360 --> 00:20:07,960
+Think carefully.
+
+275
+00:20:08,310 --> 00:20:11,460
+I know you realize
+you can't keep this up.
+
+276
+00:20:25,640 --> 00:20:28,180
+You met Mr. Stark?
+
+277
+00:20:28,540 --> 00:20:30,540
+He's a nice young man, isn't he?
+
+278
+00:20:30,540 --> 00:20:35,190
+He seems to really enjoy our cooking.
+
+279
+00:20:36,050 --> 00:20:38,310
+People really love Mr. Stark.
+
+280
+00:20:38,920 --> 00:20:42,310
+Well, he seems like a kind person.
+
+281
+00:20:43,000 --> 00:20:44,190
+Kind?
+
+282
+00:20:45,040 --> 00:20:47,640
+He only seemed cowardly to me.
+
+283
+00:20:48,210 --> 00:20:50,840
+I won't deny the cowardly part.
+
+284
+00:20:50,840 --> 00:20:54,210
+But in your first battle against monsters...
+
+285
+00:20:56,020 --> 00:20:57,840
+Okay, okay. I'll forget about that.
+
+286
+00:21:01,130 --> 00:21:05,850
+Honestly, you were so meek
+and cute when you were little.
+
+287
+00:21:07,060 --> 00:21:11,280
+By the way, why doesn't the
+dragon attack this village?
+
+288
+00:21:11,280 --> 00:21:15,840
+Who knows? It could be
+mere whimsy, or perhaps...
+
+289
+00:21:18,560 --> 00:21:20,100
+What's that sound?
+
+290
+00:21:20,540 --> 00:21:22,100
+Stark, probably.
+
+291
+00:21:23,660 --> 00:21:25,600
+If you're curious, why not check on him?
+
+292
+00:21:26,050 --> 00:21:27,720
+I'm going to bed.
+
+293
+00:21:44,990 --> 00:21:47,850
+Huh. Is he a good warrior?
+
+294
+00:21:50,530 --> 00:21:58,780
+He was the only one who ran when monsters
+attacked his hometown. A coward.
+
+295
+00:22:00,550 --> 00:22:02,170
+He's like me.
+
+296
+00:22:04,440 --> 00:22:08,240
+So I taught him everything I knew.
+
+297
+00:22:09,080 --> 00:22:13,240
+Now he's someone who can fight for another.
+
+298
+00:22:14,010 --> 00:22:17,130
+I see. He's a good warrior, then.
+
+299
+00:22:38,150 --> 00:22:41,470
+So this fissure was left by your training.
+
+300
+00:22:49,980 --> 00:22:52,520
+<i>And you alright</i>
+
+301
+00:22:53,050 --> 00:22:55,040
+<i>Can you hear me</i>
+
+302
+00:22:55,830 --> 00:23:01,940
+<i>Trailing along deserted train tracks</i>
+
+303
+00:23:01,940 --> 00:23:04,270
+<i>Crying excessively</i>
+
+304
+00:23:04,830 --> 00:23:07,440
+<i>Wanting you to smile</i>
+
+305
+00:23:07,440 --> 00:23:13,480
+<i>I hold on to memories I'd like to keep fresh</i>
+
+306
+00:23:13,480 --> 00:23:17,170
+<i>There's something I'd like to tell you</i>
+
+307
+00:23:17,170 --> 00:23:19,960
+<i>With words more precious than a goodbye</i>
+
+308
+00:23:19,960 --> 00:23:25,630
+<i>Unremarkable yet special</i>
+
+309
+00:23:25,630 --> 00:23:29,150
+<i>See, things that couldn't have been</i>
+
+310
+00:23:29,150 --> 00:23:32,200
+<i>Seen if it weren't for these eyes</i>
+
+311
+00:23:32,200 --> 00:23:36,960
+<i>Why? They begin to overflow</i>
+
+312
+00:23:36,960 --> 00:23:43,060
+<i>So, if I were to be born again</i>
+
+313
+00:23:43,060 --> 00:23:48,880
+<i>I would surely choose this place once more</i>
+
+314
+00:23:48,880 --> 00:23:54,890
+<i>So, if we were to meet again</i>
+
+315
+00:23:54,890 --> 00:24:00,650
+<i>I'd never let you go, I'd choose the present</i>
+
+316
+00:24:00,650 --> 00:24:03,600
+<i>Even if no promises were made</i>
+
+317
+00:24:03,600 --> 00:24:06,520
+<i>Even if I'm lost in days of loneliness</i>
+
+318
+00:24:06,520 --> 00:24:12,720
+<i>Those tears will be alright,
+dawn will surely break</i>
+
+319
+00:24:12,720 --> 00:24:15,360
+<i>I'm whispering our lullaby</i>
+
+320
+00:24:15,360 --> 00:24:19,280
+<i>for you to come back home</i>
+
+321
+00:24:20,040 --> 00:24:22,280
+The passage of time is cruel.
+
+322
+00:24:20,560 --> 00:24:22,000
+That old hag...
+
+323
+00:24:21,170 --> 00:24:23,120
+Isn't that a bit dangerous?
+
+324
+00:24:21,930 --> 00:24:24,370
+Don't cause any trouble in this town.
+
+325
+00:24:23,350 --> 00:24:25,500
+He must've been disappointed in me.
+
+326
+00:24:24,280 --> 00:24:26,020
+We parted in anger.
+
+327
+00:24:25,020 --> 00:24:26,750
+His hands are trembling.
+
+328
+00:24:25,890 --> 00:24:27,890
+They even tremble the same way.
+
+329
+00:24:27,890 --> 00:24:30,020
+I'm Stark, the hero of this village.

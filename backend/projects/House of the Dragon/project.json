@@ -1,0 +1,15 @@
+{
+  "show_name": "House of the Dragon",
+  "target_language": "English",
+  "parent_project": "Game of Thrones",
+  "type": "show",
+  "glossary": {
+    "terms": []
+  },
+  "context_guide": "",
+  "settings": {
+    "translation_model": "gemini-flash-latest",
+    "context_model": "gemini-flash-lite-latest",
+    "glossary_model": "gemini-flash-lite-latest"
+  }
+}

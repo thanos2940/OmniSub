@@ -1,0 +1,25 @@
+{
+  "show_name": "Dune",
+  "target_language": "English",
+  "parent_project": null,
+  "type": "movie",
+  "glossary": {
+    "terms": [
+      {
+        "term": "TestTerm",
+        "translation": "TestTranslation",
+        "type": "item",
+        "gender": "neutral",
+        "description": "",
+        "keep_original": false,
+        "case_sensitive": false
+      }
+    ]
+  },
+  "context_guide": "",
+  "settings": {
+    "translation_model": "gemini-flash-latest",
+    "context_model": "gemini-flash-lite-latest",
+    "glossary_model": "gemini-flash-lite-latest"
+  }
+}

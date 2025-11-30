@@ -1,0 +1,232 @@
+{
+  "show_name": "Snow Queen 2002",
+  "target_language": "Greek",
+  "parent_project": null,
+  "type": "movie",
+  "glossary": {
+    "terms": [
+      {
+        "term": "Gerda",
+        "translation": "Γκέρντα",
+        "type": "person",
+        "gender": "female",
+        "description": "A young female character, daughter of one of the main figures (implied 'Daddy'), who seems very attached to Kai and fearful of winter.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Daddy",
+        "translation": "Μπαμπά",
+        "type": "person",
+        "gender": "male",
+        "description": "The father of Gerda.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "sultan",
+        "translation": "σουλτάνος",
+        "type": "person",
+        "gender": "male",
+        "description": "A term of address used by someone towards another, possibly indicating a person of high status or authority, or used colloquially.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Amy",
+        "translation": "Έιμι",
+        "type": "person",
+        "gender": "female",
+        "description": "A child character who gets lost during a search/storm.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Wolfgang",
+        "translation": "Βόλφγκανγκ",
+        "type": "person",
+        "gender": "male",
+        "description": "A character mentioned by name; Gerda's father, who seems strict and overworked, possibly the owner of the hotel.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Kai",
+        "translation": "Κάι",
+        "type": "person",
+        "gender": "male",
+        "description": "The main male character, employed as a Bellboy at the White Bear Hotel, who has a close relationship with Gerda.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Bellboy",
+        "translation": "μπόι",
+        "type": "person",
+        "gender": "male",
+        "description": "Kai's job title at the hotel; a servant responsible for luggage and errands.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Mr. Hahn",
+        "translation": "Κύριε Χαν",
+        "type": "person",
+        "gender": "male",
+        "description": "A guest or superior at the hotel who demands proper service from the Bellboy (Kai).",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Minna",
+        "translation": "Μίννα",
+        "type": "person",
+        "gender": "female",
+        "description": "A female character, likely a friend or confidante to Gerda, who discusses Gerda's feelings and her father.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "rose brooch",
+        "translation": "καρφίτσα με τριαντάφυλλο",
+        "type": "item",
+        "gender": "n/a",
+        "description": "A magical piece of jewelry belonging to Gerda's deceased mother, which was always warm to the touch.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "white bear hotel",
+        "translation": "ξενοδοχείο Λευκή Αρκούδα",
+        "type": "location",
+        "gender": "n/a",
+        "description": "The hotel where Kai works as a bellboy.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "snowflakes",
+        "translation": "νιφάδες χιονιού",
+        "type": "concept",
+        "gender": "n/a",
+        "description": "Referred to as being perfect, without fault, tying into the theme of the harsh beauty of winter.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "winter solstice",
+        "translation": "χειμερινό ηλιοστάσιο",
+        "type": "concept",
+        "gender": "n/a",
+        "description": "A deadline or crucial time marker before which Kai must be rescued, otherwise he will die.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "sleepy girls",
+        "translation": "υπνηλίδες",
+        "type": "concept",
+        "gender": "female",
+        "description": "A term used by the woman who rescues Gerda (implied Snow Queen or agent) to describe girls who become docile and easily manipulated when their hair is combed.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "the earth",
+        "translation": "η γη",
+        "type": "location",
+        "gender": "n/a",
+        "description": "A place mentioned by the figures in the earth (implied spirits/elementals) where the dead are, suggesting a realm below.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "the great place in the north",
+        "translation": "ο μεγάλος τόπος στον βορρά",
+        "type": "location",
+        "gender": "n/a",
+        "description": "The destination/domain of the Snow Queen.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "polar bear",
+        "translation": "πολική αρκούδα",
+        "type": "person",
+        "gender": "male",
+        "description": "A creature Kai interacts with in the north, who has established rules for interaction (fishing, sleeping).",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Chen",
+        "translation": "Τσεν",
+        "type": "person",
+        "gender": "male",
+        "description": "A 'hapless magician' rescued by Gerda who claims to be going to the Summer Princess's palace to seek employment.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Summer Princess",
+        "translation": "Πριγκίπισσα του Καλοκαιριού",
+        "type": "person",
+        "gender": "female",
+        "description": "A royal figure who hosts balls and auditions, and who Chen believes knows the way to the Snow Queen's palace.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "magic deck of cards",
+        "translation": "μαγική τράπουλα",
+        "type": "item",
+        "gender": "n/a",
+        "description": "An item Chen needs to perform a trick for the Summer Princess.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "Major Delfont Chalfont",
+        "translation": "Ταγματάρχης Ντέλφοντ Τσάλφοντ",
+        "type": "person",
+        "gender": "male",
+        "description": "An eligible bachelor attending the Summer Princess's ball, who attempts to flirt with Gerda.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "35th horse brigade",
+        "translation": "35η ταξιαρχία ιππικού",
+        "type": "concept",
+        "gender": "n/a",
+        "description": "A military unit mentioned in an anecdote by Major Chalfont.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "battle of tompkins bay",
+        "translation": "μάχη του Τομπκινς Μπέι",
+        "type": "location",
+        "gender": "n/a",
+        "description": "A battle mentioned in an anecdote by Major Chalfont.",
+        "keep_original": false,
+        "case_sensitive": false
+      },
+      {
+        "term": "circassian warriors",
+        "translation": "Κιρκάσιοι πολεμιστές",
+        "type": "person",
+        "gender": "male",
+        "description": "Adversaries mentioned in Major Chalfont's story.",
+        "keep_original": false,
+        "case_sensitive": false
+      }
+    ]
+  },
+  "context_guide": "The dialogue suggests a fairy-tale or fantasy setting, likely a direct adaptation of 'The Snow Queen'. The tone shifts from warm family concern (early scenes) to harsh employer-employee dynamics (Kai's job), romantic longing, emotional distress, and finally, a cold, almost sinister environment ruled by the Snow Queen. Vocabulary includes terms related to royalty, service industry (hotel), and magical elements. Translations should aim for a clear, slightly elevated, narrative style suitable for a classic fantasy film.",
+  "settings": {
+    "translation_model": "gemini-flash-lite-latest",
+    "context_model": "gemini-flash-lite-latest",
+    "glossary_model": "gemini-flash-lite-latest"
+  }
+}

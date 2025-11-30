@@ -1,0 +1,2034 @@
+[
+  {
+    "id": "1",
+    "timecode": "00:00:01,030 --> 00:00:03,120",
+    "original": "<i>Over ten years ago,</i>",
+    "translated": "<i>Πριν από δέκα και πλέον χρόνια,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "2",
+    "timecode": "00:00:03,430 --> 00:00:08,400",
+    "original": "<i>a series of gates linking our world\nto an alternate dimension appeared.</i>",
+    "translated": "<i>εμφανίστηκε μια σειρά από πύλες\nπου συνέδεαν τον κόσμο μας με μια άλλη διάσταση.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "3",
+    "timecode": "00:00:09,590 --> 00:00:14,560",
+    "original": "<i>The other side of each gate teemed\nwith bizarre creatures called \"magic beasts,\"</i>",
+    "translated": "<i>Η άλλη πλευρά κάθε πύλης έβριθε\nαπό παράξενα πλάσματα που ονομάζονταν «μαγικά κτήνη»,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "4",
+    "timecode": "00:00:14,560 --> 00:00:16,990",
+    "original": "<i>immune to conventional weaponry.</i>",
+    "translated": "<i>άτρωτα στα συμβατικά όπλα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "5",
+    "timecode": "00:00:16,990 --> 00:00:20,720",
+    "original": "<i>Those who have awakened the abilities\nnecessary to fight these beasts</i>",
+    "translated": "<i>Όσοι έχουν αφυπνίσει τις ικανότητες\nπου χρειάζονται για να πολεμήσουν αυτά τα κτήνη</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "6",
+    "timecode": "00:00:21,090 --> 00:00:22,750",
+    "original": "<i>are called hunters.</i>",
+    "translated": "<i>ονομάζονται κυνηγοί.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "7",
+    "timecode": "00:00:23,200 --> 00:00:26,460",
+    "original": "<i>Based on the amount of magical power\ncontained within their bodies,</i>",
+    "translated": "<i>Με βάση την ποσότητα της μαγικής δύναμης\nπου περιέχεται μέσα στα σώματά τους,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "8",
+    "timecode": "00:00:26,460 --> 00:00:33,870",
+    "original": "<i>they are ranked, in descending order,\nas S, A, B, C, D, or E-Rank.</i>",
+    "translated": "<i>κατατάσσονται, σε φθίνουσα σειρά,\nως S, A, B, C, D, ή E-Βαθμού.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "9",
+    "timecode": "00:00:34,940 --> 00:00:39,870",
+    "original": "<i>However, once these powers have awakened,\nno amount of individual effort</i>",
+    "translated": "<i>Ωστόσο, μόλις αυτές οι δυνάμεις αφυπνιστούν,\nκαμία ατομική προσπάθεια</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "10",
+    "timecode": "00:00:40,540 --> 00:00:43,610",
+    "original": "<i>can ever result in greater strength.</i>",
+    "translated": "<i>δεν μπορεί να οδηγήσει σε μεγαλύτερη δύναμη.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "11",
+    "timecode": "00:00:44,670 --> 00:00:48,730",
+    "original": "<i>The one who awoke to the weakest level\nof strength, even among the E-Ranks,</i>",
+    "translated": "<i>Αυτός που αφυπνίστηκε στο πιο αδύναμο επίπεδο\nδύναμης, ακόμα και ανάμεσα στους E-Βαθμού,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "12",
+    "timecode": "00:00:48,730 --> 00:00:50,620",
+    "original": "<i>was me, Sung Jinwoo.</i>",
+    "translated": "<i>ήμουν εγώ, ο Sung Jinwoo.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "13",
+    "timecode": "00:00:51,670 --> 00:00:56,790",
+    "original": "<i>Having become \"The Weakest Hunter of\nAll Mankind,\" I was always a hindrance,</i>",
+    "translated": "<i>Έχοντας γίνει «Ο Πιο Αδύναμος Κυνηγός\nΌλης της Ανθρωπότητας», ήμουν πάντα εμπόδιο,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "14",
+    "timecode": "00:00:56,790 --> 00:00:58,530",
+    "original": "<i>and always on the verge of death.</i>",
+    "translated": "<i>και πάντα στα πρόθυρα του θανάτου.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "15",
+    "timecode": "00:00:59,700 --> 00:01:02,430",
+    "original": "<i>There are only a handful of\nS-Rank hunters in the country.</i>",
+    "translated": "<i>Υπάρχουν μόνο μια χούφτα\nS-Βαθμού κυνηγοί στη χώρα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "16",
+    "timecode": "00:01:03,380 --> 00:01:06,130",
+    "original": "<i>I wish I could've been like them.</i>",
+    "translated": "<i>Μακάρι να μπορούσα να είμαι σαν κι αυτούς.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "17",
+    "timecode": "00:01:07,360 --> 00:01:11,550",
+    "original": "<i>And overseeing those hunters,\nas well as managing dungeon raids,</i>",
+    "translated": "<i>Και την επίβλεψη αυτών των κυνηγών,\nκαθώς και τη διαχείριση των επιδρομών στα μπουντρούμια,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "18",
+    "timecode": "00:01:11,550 --> 00:01:13,090",
+    "original": "<i>is the Hunter's Association.</i>",
+    "translated": "<i>την έχει η Ένωση Κυνηγών.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "19",
+    "timecode": "00:01:13,970 --> 00:01:18,820",
+    "original": "<i>They're unfathomably strong.\nAnd they fight together.</i>",
+    "translated": "<i>Είναι αφάνταστα δυνατοί.\nΚαι πολεμούν μαζί.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "20",
+    "timecode": "00:01:18,820 --> 00:01:22,190",
+    "original": "<i>People who help each other,\nare useful, and support each other.</i>",
+    "translated": "<i>Άνθρωποι που βοηθούν ο ένας τον άλλον,\nείναι χρήσιμοι και αλληλοϋποστηρίζονται.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "21",
+    "timecode": "00:01:22,190 --> 00:01:27,730",
+    "original": "<i>The kind of person that someone as\nhelpless and useless as I could never be.</i>",
+    "translated": "<i>Το είδος του ανθρώπου που κάποιος\nτόσο ανίσχυρος και άχρηστος όσο εγώ,\nδεν θα μπορούσε ποτέ να είναι.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "22",
+    "timecode": "00:01:29,410 --> 00:01:32,870",
+    "original": "<i>That's what I thought...\nuntil everything changed.</i>",
+    "translated": "<i>Αυτό νόμιζα...\nμέχρι που όλα άλλαξαν.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "23",
+    "timecode": "00:03:10,630 --> 00:03:12,950",
+    "original": "Hey, it's Sung!",
+    "translated": "Έι, ο Sung είναι!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "24",
+    "timecode": "00:03:13,300 --> 00:03:15,390",
+    "original": "What's up, Sung?",
+    "translated": "Τι λες, Sung;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "25",
+    "timecode": "00:03:13,650 --> 00:03:19,920",
+    "original": "<i>I'm Sung Jinwoo, and even among\nthe weakest of all ranks,</i>",
+    "translated": "<i>Είμαι ο Sung Jinwoo, και ακόμη και ανάμεσα\nστους πιο αδύναμους όλων των βαθμίδων,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "26",
+    "timecode": "00:03:15,390 --> 00:03:17,640",
+    "original": "Nice of you to come out despite\nthe chilly weather.",
+    "translated": "Καλό που ήρθες, παρόλο\nπου ο καιρός είναι ψυχρός.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "27",
+    "timecode": "00:03:20,230 --> 00:03:22,600",
+    "original": "<i>I had earned a certain nickname...</i>",
+    "translated": "<i>είχα κερδίσει ένα συγκεκριμένο παρατσούκλι...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "28",
+    "timecode": "00:03:20,230 --> 00:03:25,600",
+    "original": "His nickname is \"The Weakest\nHunter of All Mankind.\"",
+    "translated": "Το παρατσούκλι του είναι «Ο Πιο Αδύναμος\nΚυνηγός Όλης της Ανθρωπότητας».",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "29",
+    "timecode": "00:03:25,900 --> 00:03:31,280",
+    "original": "<i>But even if I was the weakest of all mankind,\nI had a family to protect.</i>",
+    "translated": "<i>Αλλά ακόμα κι αν ήμουν ο πιο αδύναμος\nόλης της ανθρωπότητας, είχα μια οικογένεια να προστατεύσω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "30",
+    "timecode": "00:03:27,810 --> 00:03:29,820",
+    "original": "Let's give it our best.",
+    "translated": "Ας δώσουμε τον καλύτερό μας εαυτό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "31",
+    "timecode": "00:03:30,360 --> 00:03:32,170",
+    "original": "Today, I'm gonna see this through!",
+    "translated": "Σήμερα, θα το δω μέχρι το τέλος!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "32",
+    "timecode": "00:03:32,170 --> 00:03:36,530",
+    "original": "<i>I needed to help beat the dungeons on the\nother side of the gates and earn a living.</i>",
+    "translated": "<i>Έπρεπε να βοηθήσω να νικήσουμε τα μπουντρούμια\nστην άλλη πλευρά των πυλών και να κερδίσω τα προς το ζην.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "33",
+    "timecode": "00:03:39,990 --> 00:03:41,160",
+    "original": "I did it!",
+    "translated": "Τα κατάφερα!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "34",
+    "timecode": "00:03:41,580 --> 00:03:43,270",
+    "original": "I finally got one.",
+    "translated": "Επιτέλους, έπιασα έναν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "35",
+    "timecode": "00:03:43,270 --> 00:03:44,300",
+    "original": "Jinwoo!",
+    "translated": "Jinwoo!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "36",
+    "timecode": "00:03:59,030 --> 00:04:00,180",
+    "original": "Jinwoo!",
+    "translated": "Jinwoo!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "37",
+    "timecode": "00:04:00,180 --> 00:04:01,510",
+    "original": "Stay back, Joohee!",
+    "translated": "Μείνε πίσω, Joohee!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "38",
+    "timecode": "00:04:08,140 --> 00:04:11,790",
+    "original": "You're going to be okay!\nI promise I'll heal you!",
+    "translated": "Θα είσαι καλά!\nΣου ορκίζομαι ότι θα σε γιατρέψω!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "39",
+    "timecode": "00:04:23,110 --> 00:04:24,330",
+    "original": "All right!",
+    "translated": "Εντάξει!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "40",
+    "timecode": "00:04:24,330 --> 00:04:26,200",
+    "original": "That's Mr. Song for you!",
+    "translated": "Αυτός είναι ο Κύριος Song!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "41",
+    "timecode": "00:04:26,200 --> 00:04:27,870",
+    "original": "Hey!",
+    "translated": "Έι!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "42",
+    "timecode": "00:04:27,870 --> 00:04:29,620",
+    "original": "Take a look at this!",
+    "translated": "Δες αυτό!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "43",
+    "timecode": "00:04:29,900 --> 00:04:33,590",
+    "original": "<i>After clearing the dungeon, further in,\nwe discovered it was a double dungeon—</i>",
+    "translated": "<i>Αφού καθαρίσαμε το μπουντρούμι, πιο μέσα,\nανακαλύψαμε ότι ήταν διπλό μπουντρούμι—</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "44",
+    "timecode": "00:04:32,460 --> 00:04:33,590",
+    "original": "I'm in!",
+    "translated": "Είμαι μέσα!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "45",
+    "timecode": "00:04:33,590 --> 00:04:34,910",
+    "original": "I say no.",
+    "translated": "Εγώ λέω όχι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "46",
+    "timecode": "00:04:33,590 --> 00:04:38,070",
+    "original": "<i>if we took on the risk, we'd have the chance\nto earn even greater rewards.</i>",
+    "translated": "<i>αν παίρναμε το ρίσκο, θα είχαμε την ευκαιρία\nνα κερδίσουμε ακόμα μεγαλύτερες ανταμοιβές.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "47",
+    "timecode": "00:04:34,910 --> 00:04:36,220",
+    "original": "No.",
+    "translated": "Όχι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "48",
+    "timecode": "00:04:36,220 --> 00:04:39,980",
+    "original": "<i>I'm the only one who can\nprovide for my family.</i>",
+    "translated": "<i>Είμαι ο μόνος που μπορεί\nνα φροντίσει την οικογένειά μου.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "49",
+    "timecode": "00:04:38,790 --> 00:04:42,140",
+    "original": "<i>We took a vote, and the majority\ndecided to keep going.</i>",
+    "translated": "<i>Ψηφίσαμε, και η πλειοψηφία\nαποφάσισε να συνεχίσουμε.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "50",
+    "timecode": "00:04:40,760 --> 00:04:41,720",
+    "original": "Let's go.",
+    "translated": "Πάμε.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "51",
+    "timecode": "00:04:49,270 --> 00:04:52,400",
+    "original": "<i>And that was a mistake.</i>",
+    "translated": "<i>Και αυτό ήταν λάθος.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "52",
+    "timecode": "00:04:54,900 --> 00:04:56,380",
+    "original": "Everybody, get down!",
+    "translated": "Όλοι κάτω!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "53",
+    "timecode": "00:05:06,980 --> 00:05:09,540",
+    "original": "<i>What is happening here?</i>",
+    "translated": "<i>Τι συμβαίνει εδώ;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "54",
+    "timecode": "00:05:10,230 --> 00:05:12,250",
+    "original": "<i>How is this possible?</i>",
+    "translated": "<i>Πώς είναι δυνατόν;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "55",
+    "timecode": "00:05:12,780 --> 00:05:15,210",
+    "original": "<i>We're trapped. We're done for.</i>",
+    "translated": "<i>Είμαστε παγιδευμένοι. Τελειώσαμε.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "56",
+    "timecode": "00:05:15,210 --> 00:05:17,670",
+    "original": "<i>We're dead. Dead.</i>",
+    "translated": "<i>Είμαστε νεκροί. Νεκροί.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "57",
+    "timecode": "00:05:21,180 --> 00:05:22,760",
+    "original": "<i>We're gonna die!</i>",
+    "translated": "<i>Θα πεθάνουμε!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "58",
+    "timecode": "00:05:28,470 --> 00:05:33,400",
+    "original": "<i>We were absolutely helpless against\nthe boss of the double dungeon.</i>",
+    "translated": "<i>Ήμασταν εντελώς ανίσχυροι απέναντι\nστο boss του διπλού μπουντρουμιού.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "59",
+    "timecode": "00:05:29,220 --> 00:05:31,810",
+    "original": "I can't... I can't do this!",
+    "translated": "Δεν μπορώ... Δεν μπορώ να το κάνω αυτό!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "60",
+    "timecode": "00:05:33,400 --> 00:05:35,830",
+    "original": "I can't die just yet!",
+    "translated": "Δεν μπορώ να πεθάνω ακόμα!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "61",
+    "timecode": "00:05:34,450 --> 00:05:38,280",
+    "original": "<i>We had no choice but to wait for death.</i>",
+    "translated": "<i>Δεν είχαμε άλλη επιλογή από το να περιμένουμε τον θάνατο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "62",
+    "timecode": "00:05:35,830 --> 00:05:38,280",
+    "original": "I wanna make it home alive!",
+    "translated": "Θέλω να γυρίσω σπίτι ζωντανός!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "63",
+    "timecode": "00:05:41,890 --> 00:05:44,450",
+    "original": "Mr. Song. Take Joohee and go.",
+    "translated": "Κύριος Song. Πάρε τη Joohee και φύγε.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "64",
+    "timecode": "00:05:45,860 --> 00:05:47,080",
+    "original": "I just said I'm going to stay—",
+    "translated": "Μόλις είπα ότι θα μείνω—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "65",
+    "timecode": "00:05:47,080 --> 00:05:49,560",
+    "original": "Then who's going to carry Joohee out?",
+    "translated": "Τότε ποιος θα βγάλει έξω τη Joohee;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "66",
+    "timecode": "00:05:49,560 --> 00:05:51,340",
+    "original": "There's no time. Hurry!",
+    "translated": "Δεν υπάρχει χρόνος. Βιάσου!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "67",
+    "timecode": "00:05:52,510 --> 00:05:54,020",
+    "original": "You can't, Jinwoo!",
+    "translated": "Δεν μπορείς, Jinwoo!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "68",
+    "timecode": "00:05:54,020 --> 00:05:55,130",
+    "original": "In that case, it should be me—",
+    "translated": "Σε αυτήν την περίπτωση, πρέπει να είμαι εγώ—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "69",
+    "timecode": "00:05:55,130 --> 00:05:57,920",
+    "original": "I promised to take you out to eat, didn't I?",
+    "translated": "Υποσχέθηκα να σε πάω για φαγητό, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "70",
+    "timecode": "00:05:58,490 --> 00:06:00,430",
+    "original": "Use this to buy yourself dinner.",
+    "translated": "Χρησιμοποίησε αυτό για να αγοράσεις το δείπνο σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "71",
+    "timecode": "00:06:00,880 --> 00:06:03,830",
+    "original": "And when I get out of here,\nI'll be along to collect the change.",
+    "translated": "Και όταν βγω από εδώ,\nθα έρθω να πάρω τα ρέστα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "72",
+    "timecode": "00:06:03,830 --> 00:06:05,340",
+    "original": "How can you even say—",
+    "translated": "Πώς μπορείς να λες—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "73",
+    "timecode": "00:06:07,750 --> 00:06:11,670",
+    "original": "I'm sorry. But it looks like\nwe really are out of time.",
+    "translated": "Συγγνώμη. Αλλά φαίνεται\nπως πραγματικά μας τελείωσε ο χρόνος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "74",
+    "timecode": "00:06:11,670 --> 00:06:12,870",
+    "original": "Please.",
+    "translated": "Σε παρακαλώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "75",
+    "timecode": "00:06:20,500 --> 00:06:23,700",
+    "original": "<i>Good. I'm the only one who has to die.</i>",
+    "translated": "<i>Καλό. Είμαι ο μόνος που πρέπει να πεθάνει.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "76",
+    "timecode": "00:06:30,900 --> 00:06:33,660",
+    "original": "I'll take at least one of you down with me...",
+    "translated": "Θα πάρω τουλάχιστον έναν από εσάς μαζί μου...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "77",
+    "timecode": "00:06:34,600 --> 00:06:36,100",
+    "original": "So bring it on!",
+    "translated": "Ελάτε, λοιπόν!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "78",
+    "timecode": "00:06:47,980 --> 00:06:50,120",
+    "original": "<i>I've always been the weakest.</i>",
+    "translated": "<i>Πάντα ήμουν ο πιο αδύναμος.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "79",
+    "timecode": "00:06:50,630 --> 00:06:52,970",
+    "original": "<i>And I've been mocked for it,\ntime and time again.</i>",
+    "translated": "<i>Και με κορόιδευαν γι' αυτό,\nξανά και ξανά.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "80",
+    "timecode": "00:06:53,430 --> 00:06:55,660",
+    "original": "<i>But I've always tried as hard as I could.</i>",
+    "translated": "<i>Αλλά πάντα προσπαθούσα όσο μπορούσα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "81",
+    "timecode": "00:06:59,980 --> 00:07:01,110",
+    "original": "<i>And now...</i>",
+    "translated": "<i>Και τώρα...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "82",
+    "timecode": "00:07:02,520 --> 00:07:03,570",
+    "original": "<i>This is bullshit.</i>",
+    "translated": "<i>Αυτό είναι μαλακίες.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "83",
+    "timecode": "00:07:04,270 --> 00:07:06,560",
+    "original": "<i>It's bullshit! This is such bullshit!</i>",
+    "translated": "<i>Είναι μαλακίες! Τι μαλακίες!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "84",
+    "timecode": "00:07:08,620 --> 00:07:11,200",
+    "original": "<i>I tried to be stronger...</i>",
+    "translated": "<i>Προσπάθησα να γίνω πιο δυνατός...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "85",
+    "timecode": "00:07:12,210 --> 00:07:14,160",
+    "original": "<i>but I couldn't.</i>",
+    "translated": "<i>αλλά δεν τα κατάφερα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "86",
+    "timecode": "00:07:18,800 --> 00:07:23,590",
+    "original": "<i>And even then,\nI gave it my all to get this far!</i>",
+    "translated": "<i>Και ακόμα κι έτσι,\nέδωσα ό,τι είχα για να φτάσω ως εδώ!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "87",
+    "timecode": "00:07:30,440 --> 00:07:34,370",
+    "original": "<i>You couldn't take any more?\nWe all felt the same way!</i>",
+    "translated": "<i>Δεν μπορούσες να αντέξεις άλλο;\nΌλοι νιώθαμε το ίδιο!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "88",
+    "timecode": "00:07:34,370 --> 00:07:37,040",
+    "original": "<i>All you were doing was\njustifying your own selfishness!</i>",
+    "translated": "<i>Το μόνο που έκανες ήταν\nνα δικαιολογείς την ιδιοτέλειά σου!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "89",
+    "timecode": "00:07:39,870 --> 00:07:42,470",
+    "original": "<i>That gratitude was purely superficial.</i>",
+    "translated": "<i>Αυτή η ευγνωμοσύνη ήταν καθαρά επιφανειακή.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "90",
+    "timecode": "00:07:42,470 --> 00:07:46,950",
+    "original": "<i>It's always the most selfish\npeople who benefit the most!</i>",
+    "translated": "<i>Πάντα οι πιο ιδιοτελείς\nείναι αυτοί που επωφελούνται περισσότερο!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "91",
+    "timecode": "00:07:47,330 --> 00:07:51,450",
+    "original": "<i>I have a family, too!\nI wanted to make it home alive, too!</i>",
+    "translated": "<i>Κι εγώ έχω οικογένεια!\nΚι εγώ ήθελα να γυρίσω σπίτι ζωντανός!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "92",
+    "timecode": "00:07:58,710 --> 00:08:01,380",
+    "original": "<i>It's good that I'm the only one\nwho has to die?</i>",
+    "translated": "<i>Είναι καλό που είμαι ο μόνος\nπου πρέπει να πεθάνει;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "93",
+    "timecode": "00:08:07,950 --> 00:08:11,120",
+    "original": "<i>How could you think that,\nyou stupid hypocrite?</i>",
+    "translated": "<i>Πώς μπορείς να το σκέφτεσαι αυτό,\nηλίθιε υποκριτή;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "94",
+    "timecode": "00:08:14,410 --> 00:08:18,140",
+    "original": "<i>No. I don't wanna die.</i>",
+    "translated": "<i>Όχι. Δεν θέλω να πεθάνω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "95",
+    "timecode": "00:08:24,400 --> 00:08:28,450",
+    "original": "<i>If... If I had one more chance...</i>",
+    "translated": "<i>Αν... Αν είχα άλλη μια ευκαιρία...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "96",
+    "timecode": "00:08:54,150 --> 00:08:58,150",
+    "original": "<i>When I woke up, I was in a hospital bed,</i>",
+    "translated": "<i>Όταν ξύπνησα, ήμουν σε ένα νοσοκομειακό κρεβάτι,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "97",
+    "timecode": "00:08:54,510 --> 00:08:55,800",
+    "original": "<i>A hospital?</i>",
+    "translated": "<i>Νοσοκομείο;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "98",
+    "timecode": "00:08:58,470 --> 00:09:04,320",
+    "original": "<i>and the limbs that I had lost were back\nlike nothing had happened.</i>",
+    "translated": "<i>και τα μέλη που είχα χάσει είχαν επιστρέψει\nσαν να μη συνέβη τίποτα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "99",
+    "timecode": "00:08:59,040 --> 00:09:00,270",
+    "original": "<i>My arm's intact.</i>",
+    "translated": "<i>Το χέρι μου είναι άθικτο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "100",
+    "timecode": "00:09:02,920 --> 00:09:04,320",
+    "original": "<i>My legs, too.</i>",
+    "translated": "<i>Τα πόδια μου, επίσης.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "101",
+    "timecode": "00:09:06,580 --> 00:09:08,510",
+    "original": "<i>And that wasn't the only strange thing.</i>",
+    "translated": "<i>Και αυτό δεν ήταν το μόνο περίεργο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "102",
+    "timecode": "00:09:09,130 --> 00:09:13,120",
+    "original": "<i>For some reason, there were these things\nlike message windows from a game</i>",
+    "translated": "<i>Για κάποιο λόγο, υπήρχαν αυτά τα πράγματα\nσαν παράθυρα μηνυμάτων από παιχνίδι</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "103",
+    "timecode": "00:09:11,890 --> 00:09:14,400",
+    "original": "But, Jinah... Can you see this?",
+    "translated": "Μα, Jinah... Μπορείς να το δεις αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "104",
+    "timecode": "00:09:13,120 --> 00:09:15,770",
+    "original": "<i>that only I could see.</i>",
+    "translated": "<i>που μόνο εγώ μπορούσα να δω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "105",
+    "timecode": "00:09:14,400 --> 00:09:15,770",
+    "original": "See what?",
+    "translated": "Να δω τι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "106",
+    "timecode": "00:09:15,770 --> 00:09:17,340",
+    "original": "Never mind. Sorry.",
+    "translated": "Άστο. Συγγνώμη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "107",
+    "timecode": "00:09:19,670 --> 00:09:22,350",
+    "original": "<i>It's been four days since\nI regained consciousness.</i>",
+    "translated": "<i>Έχουν περάσει τέσσερις μέρες αφότου\nανέκτησα τις αισθήσεις μου.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "108",
+    "timecode": "00:09:22,740 --> 00:09:24,080",
+    "original": "<i>I've figured out a few things.</i>",
+    "translated": "<i>Έχω καταλάβει μερικά πράγματα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "109",
+    "timecode": "00:09:25,010 --> 00:09:28,310",
+    "original": "<i>First, I'm not hallucinating these windows.</i>",
+    "translated": "<i>Πρώτον, δεν έχω παραισθήσεις με αυτά τα παράθυρα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "110",
+    "timecode": "00:09:29,380 --> 00:09:32,860",
+    "original": "<i>When I complete the daily quest,\nI get three types of rewards.</i>",
+    "translated": "<i>Όταν ολοκληρώνω την καθημερινή αποστολή,\nπαίρνω τρεις τύπους ανταμοιβών.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "111",
+    "timecode": "00:09:32,860 --> 00:09:34,520",
+    "original": "Full recovery.",
+    "translated": "Πλήρης ανάρρωση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "112",
+    "timecode": "00:09:35,870 --> 00:09:38,200",
+    "original": "All that exhaustion is gone in a flash.",
+    "translated": "Όλη αυτή η εξάντληση εξαφανίζεται αμέσως.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "113",
+    "timecode": "00:09:40,230 --> 00:09:42,300",
+    "original": "Next is the ability points.",
+    "translated": "Στη συνέχεια, είναι οι πόντοι ικανότητας.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "114",
+    "timecode": "00:09:42,300 --> 00:09:45,440",
+    "original": "<i>I can distribute the points\ninto whatever abilities I choose.</i>",
+    "translated": "<i>Μπορώ να κατανείμω τους πόντους\nσε όποιες ικανότητες επιλέξω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "115",
+    "timecode": "00:09:46,140 --> 00:09:47,840",
+    "original": "<i>I should probably go with strength, right?</i>",
+    "translated": "<i>Μάλλον πρέπει να επιλέξω δύναμη, έτσι;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "116",
+    "timecode": "00:09:48,920 --> 00:09:51,500",
+    "original": "<i>Upgrading my abilities makes me\nthat much more powerful.</i>",
+    "translated": "<i>Η αναβάθμιση των ικανοτήτων μου με κάνει\nπολύ πιο ισχυρό.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "117",
+    "timecode": "00:09:51,500 --> 00:09:54,570",
+    "original": "<i>I can literally tell that\nI've got more strength now.</i>",
+    "translated": "<i>Μπορώ κυριολεκτικά να καταλάβω ότι\nέχω περισσότερη δύναμη τώρα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "118",
+    "timecode": "00:09:55,920 --> 00:10:00,000",
+    "original": "<i>And my final daily quest reward...\nthe random loot box.</i>",
+    "translated": "<i>Και η τελευταία μου καθημερινή ανταμοιβή αποστολής...\nτο τυχαίο κουτί λαφύρων.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "119",
+    "timecode": "00:10:00,000 --> 00:10:01,800",
+    "original": "<i>I wonder what it'll be today?</i>",
+    "translated": "<i>Τι άραγε θα είναι σήμερα;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "120",
+    "timecode": "00:10:09,210 --> 00:10:10,350",
+    "original": "A key?",
+    "translated": "Ένα κλειδί;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "121",
+    "timecode": "00:10:13,870 --> 00:10:16,700",
+    "original": "An instance dungeon? What's that?",
+    "translated": "Ένα μπουντρούμι περίπτωσης; Τι είναι αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "122",
+    "timecode": "00:10:19,090 --> 00:10:23,270",
+    "original": "Based on what's happened so far, it'll be\nsome kind of event to help me get stronger...",
+    "translated": "Με βάση το τι έχει συμβεί μέχρι στιγμής, θα είναι\nκάποιου είδους γεγονός για να με βοηθήσει να γίνω πιο δυνατός...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "123",
+    "timecode": "00:10:37,490 --> 00:10:41,200",
+    "original": "What do I do? I'm suddenly\nfeeling less confident.",
+    "translated": "Τι να κάνω; Ξαφνικά\nνιώθω λιγότερο σίγουρος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "124",
+    "timecode": "00:10:46,750 --> 00:10:48,630",
+    "original": "Here they come! And there's three!",
+    "translated": "Έρχονται! Και είναι τρεις!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "125",
+    "timecode": "00:11:06,880 --> 00:11:07,790",
+    "original": "<i>I beat one...</i>",
+    "translated": "<i>Νίκησα έναν...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "126",
+    "timecode": "00:11:36,190 --> 00:11:38,200",
+    "original": "It doesn't look anything\nlike the station I know.",
+    "translated": "Δεν μοιάζει καθόλου\nμε τον σταθμό που ξέρω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "127",
+    "timecode": "00:11:45,010 --> 00:11:46,070",
+    "original": "<i>So fast!</i>",
+    "translated": "<i>Τόσο γρήγορα!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "128",
+    "timecode": "00:11:50,830 --> 00:11:51,820",
+    "original": "<i>The sword...</i>",
+    "translated": "<i>Το σπαθί...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "129",
+    "timecode": "00:11:57,890 --> 00:12:02,180",
+    "original": "<i>Even after all that leveling up,\nits name is still...</i>",
+    "translated": "<i>Ακόμα και μετά από όλα αυτά τα ανεβάσματα επιπέδου,\nτο όνομά του εξακολουθεί να είναι...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "130",
+    "timecode": "00:12:03,920 --> 00:12:05,000",
+    "original": "<i>orange?</i>",
+    "translated": "<i>πορτοκαλί;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "131",
+    "timecode": "00:12:07,330 --> 00:12:10,130",
+    "original": "<i>If it lands a clean hit on me, I'm dead.</i>",
+    "translated": "<i>Αν με χτυπήσει καθαρά, είμαι νεκρός.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "132",
+    "timecode": "00:12:30,400 --> 00:12:33,290",
+    "original": "<i>I thought I'd gotten a bit stronger...</i>",
+    "translated": "<i>Νόμιζα ότι είχα γίνει λίγο πιο δυνατός...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "133",
+    "timecode": "00:12:42,290 --> 00:12:45,490",
+    "original": "<i>Is it still not enough?</i>",
+    "translated": "<i>Ακόμα δεν είναι αρκετό;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "134",
+    "timecode": "00:12:46,670 --> 00:12:49,640",
+    "original": "<i>How much stronger do I need to get...</i>",
+    "translated": "<i>Πόσο πιο δυνατός πρέπει να γίνω...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "135",
+    "timecode": "00:12:50,670 --> 00:12:54,740",
+    "original": "<i>before it makes up for a life\nspent being a laughing stock?</i>",
+    "translated": "<i>πριν εξισορροπήσει μια ζωή\nπου την πέρασα ως περίγελος;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "136",
+    "timecode": "00:13:12,350 --> 00:13:13,860",
+    "original": "I've...",
+    "translated": "Πρέπει...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "137",
+    "timecode": "00:13:18,860 --> 00:13:21,930",
+    "original": "gotta get stronger!",
+    "translated": "να γίνω πιο δυνατός!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "138",
+    "timecode": "00:13:28,010 --> 00:13:29,370",
+    "original": "<i>Not yet!</i>",
+    "translated": "<i>Όχι ακόμα!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "139",
+    "timecode": "00:13:30,320 --> 00:13:34,490",
+    "original": "<i>Compared to that thing...\nCompared to the terror I felt back then...</i>",
+    "translated": "<i>Σε σύγκριση με αυτό το πράγμα...\nΣε σύγκριση με τον τρόμο που ένιωσα τότε...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "140",
+    "timecode": "00:13:35,150 --> 00:13:37,000",
+    "original": "<i>This will be easy!</i>",
+    "translated": "<i>Αυτό θα είναι εύκολο!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "141",
+    "timecode": "00:13:51,980 --> 00:13:54,940",
+    "original": "<i>I focused specifically\non increasing my strength!</i>",
+    "translated": "<i>Επικεντρώθηκα ειδικά\nστην αύξηση της δύναμής μου!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "142",
+    "timecode": "00:14:00,120 --> 00:14:01,650",
+    "original": "<i>I should be able to...</i>",
+    "translated": "<i>Θα έπρεπε να μπορώ...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "143",
+    "timecode": "00:14:05,660 --> 00:14:07,780",
+    "original": "I know that, here and now,",
+    "translated": "Ξέρω ότι, εδώ και τώρα,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "144",
+    "timecode": "00:14:09,160 --> 00:14:12,540",
+    "original": "I can kill you!",
+    "translated": "μπορώ να σε σκοτώσω!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "145",
+    "timecode": "00:14:37,150 --> 00:14:38,360",
+    "original": "Oh my gosh, did you see him?",
+    "translated": "Θεέ μου, τον είδες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "146",
+    "timecode": "00:14:37,690 --> 00:14:41,810",
+    "original": "<i>After awakening, your ability\nvalues are set and don't change.</i>",
+    "translated": "<i>Μετά την αφύπνιση, οι τιμές\nτων ικανοτήτων σου καθορίζονται και δεν αλλάζουν.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "147",
+    "timecode": "00:14:38,360 --> 00:14:40,570",
+    "original": "I sure did! You mean the E-Rank, right?",
+    "translated": "Βέβαια! Τον E-Βαθμού εννοείς, έτσι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "148",
+    "timecode": "00:14:42,310 --> 00:14:46,440",
+    "original": "<i>But for some reason...\nI'm the only person that can level up.</i>",
+    "translated": "<i>Αλλά για κάποιο λόγο...\nείμαι ο μόνος άνθρωπος που μπορεί να ανεβαίνει επίπεδο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "149",
+    "timecode": "00:14:42,630 --> 00:14:43,740",
+    "original": "Excuse me.",
+    "translated": "Με συγχωρείτε.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "150",
+    "timecode": "00:14:44,200 --> 00:14:45,910",
+    "original": "Mr. Sung Jinwoo...",
+    "translated": "Κύριος Sung Jinwoo...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "151",
+    "timecode": "00:14:47,750 --> 00:14:50,540",
+    "original": "Oh, sorry.",
+    "translated": "Ω, συγγνώμη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "152",
+    "timecode": "00:14:50,540 --> 00:14:54,480",
+    "original": "And you seem taller.\nDid the exercise help with that, too?",
+    "translated": "Και φαίνεστε ψηλότερος.\nΗ άσκηση βοήθησε και σε αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "153",
+    "timecode": "00:14:51,500 --> 00:14:54,940",
+    "original": "<i>This would help me earn\nway more money than before.</i>",
+    "translated": "<i>Αυτό θα με βοηθούσε να κερδίσω\nπολύ περισσότερα χρήματα από πριν.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "154",
+    "timecode": "00:14:54,940 --> 00:14:58,140",
+    "original": "I guess men keep growing\neven when they're adults!",
+    "translated": "Υποθέτω ότι οι άντρες συνεχίζουν να ψηλώνουν\nακόμα κι όταν είναι ενήλικες!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "155",
+    "timecode": "00:14:55,590 --> 00:14:57,220",
+    "original": "<i>Or so I thought...</i>",
+    "translated": "<i>Ή έτσι νόμιζα...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "156",
+    "timecode": "00:14:58,460 --> 00:15:01,000",
+    "original": "That said... It's not exactly easy, either.",
+    "translated": "Τούτου λεχθέντος... Δεν είναι ακριβώς εύκολο, επίσης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "157",
+    "timecode": "00:15:01,670 --> 00:15:05,350",
+    "original": "To make good money, I need to go\nthrough higher-ranked gates.",
+    "translated": "Για να βγάλω καλά χρήματα, πρέπει να περάσω\nμέσα από πύλες υψηλότερης κατάταξης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "158",
+    "timecode": "00:15:05,350 --> 00:15:10,360",
+    "original": "But no one's gonna let an\nE-Rank hunter into those.",
+    "translated": "Αλλά κανείς δεν θα αφήσει έναν\nE-Βαθμού κυνηγό να μπει σε αυτές.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "159",
+    "timecode": "00:15:11,030 --> 00:15:12,810",
+    "original": "Maybe I could get re-appraised?",
+    "translated": "Ίσως μπορούσα να επαναξιολογηθώ;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "160",
+    "timecode": "00:15:13,250 --> 00:15:16,070",
+    "original": "A higher rank could get me into better gates,",
+    "translated": "Ένας υψηλότερος βαθμός θα μπορούσε να με βάλει σε καλύτερες πύλες,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "161",
+    "timecode": "00:15:16,070 --> 00:15:18,480",
+    "original": "and maybe a bit of attention\nwill help me earn more...",
+    "translated": "και ίσως λίγη προσοχή\nνα με βοηθήσει να κερδίσω περισσότερα...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "162",
+    "timecode": "00:15:19,370 --> 00:15:23,940",
+    "original": "<i>I'd definitely stand out, though.\nRe-awakenings are rare enough.</i>",
+    "translated": "<i>Σίγουρα θα ξεχώριζα, όμως.\nΟι επανα-αφυπνίσεις είναι αρκετά σπάνιες.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "163",
+    "timecode": "00:15:24,550 --> 00:15:28,920",
+    "original": "<i>I've never heard of a hunter who could\nlevel up and keep getting stronger.</i>",
+    "translated": "<i>Δεν έχω ακούσει ποτέ για κυνηγό που να μπορεί\nνα ανεβαίνει επίπεδο και να συνεχίζει να γίνεται δυνατότερος.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "164",
+    "timecode": "00:15:29,740 --> 00:15:32,240",
+    "original": "<i>Which would probably mean even more scrutiny.</i>",
+    "translated": "<i>Κάτι που πιθανότατα θα σήμαινε ακόμη μεγαλύτερη εξέταση.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "165",
+    "timecode": "00:15:32,590 --> 00:15:36,840",
+    "original": "<i>The press would eat it up... and there's\nthe saying about the nail that sticks out.</i>",
+    "translated": "<i>Ο Τύπος θα το καταβρόχθιζε... και υπάρχει\nτο ρητό για το καρφί που εξέχει.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "166",
+    "timecode": "00:15:37,450 --> 00:15:38,740",
+    "original": "<i>I better not.</i>",
+    "translated": "<i>Καλύτερα να μην το κάνω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "167",
+    "timecode": "00:15:38,740 --> 00:15:45,000",
+    "original": "<i>Not until I can properly defend myself\nand learn what the deal is with this power.</i>",
+    "translated": "<i>Όχι μέχρι να μπορώ να υπερασπιστώ σωστά τον εαυτό μου\nκαι να μάθω τι συμβαίνει με αυτή τη δύναμη.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "168",
+    "timecode": "00:15:56,950 --> 00:15:58,020",
+    "original": "Confirm.",
+    "translated": "Επιβεβαίωση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "169",
+    "timecode": "00:15:59,830 --> 00:16:00,920",
+    "original": "Hey, there!",
+    "translated": "Χαίρετε!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "170",
+    "timecode": "00:16:04,010 --> 00:16:05,340",
+    "original": "I'm Hwang Dongsuk.",
+    "translated": "Είμαι ο Hwang Dongsuk.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "171",
+    "timecode": "00:16:05,340 --> 00:16:06,520",
+    "original": "Sung Jinwoo.",
+    "translated": "Sung Jinwoo.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "172",
+    "timecode": "00:16:06,520 --> 00:16:07,780",
+    "original": "You're E-Rank, right?",
+    "translated": "Είσαι E-Βαθμού, έτσι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "173",
+    "timecode": "00:16:07,780 --> 00:16:08,410",
+    "original": "Right.",
+    "translated": "Σωστά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "174",
+    "timecode": "00:16:08,770 --> 00:16:11,680",
+    "original": "It looks like we're here for the same reason.",
+    "translated": "Φαίνεται πως είμαστε εδώ για τον ίδιο λόγο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "175",
+    "timecode": "00:16:12,140 --> 00:16:15,270",
+    "original": "I'm Yoo Jinho. Twenty-one years old, D-Rank.",
+    "translated": "Είμαι ο Yoo Jinho. Είκοσι ενός, D-Βαθμού.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "176",
+    "timecode": "00:16:15,270 --> 00:16:17,360",
+    "original": "I'm here to meet the quota, too.",
+    "translated": "Είμαι εδώ για να συμπληρώσω την ποσόστωση, επίσης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "177",
+    "timecode": "00:16:18,790 --> 00:16:22,800",
+    "original": "<i>A D-Rank with gear like that?\nThis kid's family must be rich.</i>",
+    "translated": "<i>Ένας D-Βαθμού με τέτοιο εξοπλισμό;\nΗ οικογένεια αυτού του παιδιού πρέπει να είναι πλούσια.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "178",
+    "timecode": "00:16:23,630 --> 00:16:25,840",
+    "original": "Is this your first time in a C-Rank dungeon?",
+    "translated": "Είναι η πρώτη σου φορά σε C-Βαθμού μπουντρούμι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "179",
+    "timecode": "00:16:26,380 --> 00:16:28,840",
+    "original": "It's okay! I'll keep you safe.",
+    "translated": "Είναι εντάξει! Θα σε κρατήσω ασφαλή.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "180",
+    "timecode": "00:16:33,270 --> 00:16:34,850",
+    "original": "Let's be on our way!",
+    "translated": "Πάμε να φύγουμε!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "181",
+    "timecode": "00:16:36,300 --> 00:16:38,260",
+    "original": "Good! Now, let's wrap this up!",
+    "translated": "Καλώς! Τώρα, ας το τελειώσουμε!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "182",
+    "timecode": "00:16:38,260 --> 00:16:39,390",
+    "original": "Hell yeah!",
+    "translated": "Ω ναι!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "183",
+    "timecode": "00:16:40,630 --> 00:16:42,090",
+    "original": "<i>They're well coordinated.</i>",
+    "translated": "<i>Είναι καλά συντονισμένοι.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "184",
+    "timecode": "00:16:42,090 --> 00:16:45,350",
+    "original": "<i>It's easy to see that they've been\nworking together for a long time.</i>",
+    "translated": "<i>Είναι εύκολο να καταλάβει κανείς ότι\nσυνεργάζονται εδώ και πολύ καιρό.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "185",
+    "timecode": "00:16:45,850 --> 00:16:50,490",
+    "original": "<i>Still, it might be the lack of a healer,\nbut they're a bit rough around the edges.</i>",
+    "translated": "<i>Παρόλα αυτά, ίσως φταίει η έλλειψη θεραπευτή,\nαλλά είναι λίγο απρόσεκτοι.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "186",
+    "timecode": "00:16:50,910 --> 00:16:52,160",
+    "original": "<i>Something...</i>",
+    "translated": "<i>Κάτι...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "187",
+    "timecode": "00:16:55,360 --> 00:16:56,370",
+    "original": "<i>feels off.</i>",
+    "translated": "<i>δεν πάει καλά.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "188",
+    "timecode": "00:16:57,390 --> 00:17:01,830",
+    "original": "Kyuhwan... seal off the boss chamber.",
+    "translated": "Kyuhwan... σφράγισε την αίθουσα του boss.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "189",
+    "timecode": "00:16:58,250 --> 00:17:00,320",
+    "original": "<i>My hunch was right.</i>",
+    "translated": "<i>Η διαίσθησή μου ήταν σωστή.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "190",
+    "timecode": "00:17:00,700 --> 00:17:03,880",
+    "original": "<i>A seasoned party that needed\nextra members to meet the quota...</i>",
+    "translated": "<i>Μια έμπειρη ομάδα που χρειαζόταν\nεπιπλέον μέλη για να συμπληρώσει την ποσόστωση...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "191",
+    "timecode": "00:17:03,880 --> 00:17:05,590",
+    "original": "The entrance! But why?",
+    "translated": "Η είσοδος! Μα γιατί;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "192",
+    "timecode": "00:17:04,210 --> 00:17:05,590",
+    "original": "<i>One with no healers.</i>",
+    "translated": "<i>Μια ομάδα χωρίς θεραπευτές.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "193",
+    "timecode": "00:17:06,340 --> 00:17:11,460",
+    "original": "<i>Hwang Dongsuk had been hiring low-ranked\nhunters to meet the entrance quota,</i>",
+    "translated": "<i>Ο Hwang Dongsuk προσλάμβανε κυνηγούς\nχαμηλής κατάταξης για να συμπληρώσει την ποσόστωση εισόδου,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "194",
+    "timecode": "00:17:11,460 --> 00:17:16,340",
+    "original": "<i>and then killing them in the dungeon\nto monopolize the rewards.</i>",
+    "translated": "<i>και μετά τους σκότωνε στο μπουντρούμι\nγια να μονοπωλήσει τις ανταμοιβές.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "195",
+    "timecode": "00:17:18,230 --> 00:17:23,190",
+    "original": "<i>Their plan was to trap me and Jinho\nin the boss chamber and let us die.</i>",
+    "translated": "<i>Το σχέδιό τους ήταν να παγιδέψουν εμένα και τον Jinho\nστην αίθουσα του boss και να μας αφήσουν να πεθάνουμε.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "196",
+    "timecode": "00:17:24,210 --> 00:17:28,690",
+    "original": "<i>But because I beat the boss,\ntheir plan was in shambles.</i>",
+    "translated": "<i>Αλλά επειδή νίκησα το boss,\nτο σχέδιό τους κατέρρευσε.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "197",
+    "timecode": "00:17:29,150 --> 00:17:32,320",
+    "original": "<i>So they tried to kill us.</i>",
+    "translated": "<i>Έτσι προσπάθησαν να μας σκοτώσουν.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "198",
+    "timecode": "00:17:39,860 --> 00:17:41,160",
+    "original": "<i>Enemies...</i>",
+    "translated": "<i>Εχθροί...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "199",
+    "timecode": "00:17:41,550 --> 00:17:45,040",
+    "original": "<i>The system is telling me to kill.</i>",
+    "translated": "<i>Το Σύστημα μου λέει να σκοτώσω.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "200",
+    "timecode": "00:17:45,590 --> 00:17:48,380",
+    "original": "<i>The system wants me alive.</i>",
+    "translated": "<i>Το Σύστημα με θέλει ζωντανό.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "201",
+    "timecode": "00:17:52,930 --> 00:17:54,780",
+    "original": "<i>It wants me strong.</i>",
+    "translated": "<i>Με θέλει δυνατό.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "202",
+    "timecode": "00:17:56,640 --> 00:17:58,090",
+    "original": "I'd forgotten.",
+    "translated": "Το είχα ξεχάσει.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "203",
+    "timecode": "00:17:58,850 --> 00:18:02,880",
+    "original": "The weak always get taken from.\nThat's how it works here.",
+    "translated": "Οι αδύναμοι πάντα χάνουν.\nΈτσι λειτουργούν τα πράγματα εδώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "204",
+    "timecode": "00:18:02,880 --> 00:18:07,340",
+    "original": "Hey, look! The Weakest Hunter\nof All Mankind actually gets it!",
+    "translated": "Έι, κοίτα! Ο Πιο Αδύναμος Κυνηγός\nΌλης της Ανθρωπότητας το καταλαβαίνει τελικά!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "205",
+    "timecode": "00:18:07,830 --> 00:18:12,440",
+    "original": "That means you guys understand\nhow it works, too, right?",
+    "translated": "Αυτό σημαίνει ότι κι εσείς καταλαβαίνετε\nπώς λειτουργούν, σωστά;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "206",
+    "timecode": "00:18:13,030 --> 00:18:15,140",
+    "original": "How what works?",
+    "translated": "Τι λειτουργεί;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "207",
+    "timecode": "00:18:15,490 --> 00:18:17,520",
+    "original": "If you're hunters...",
+    "translated": "Αν είστε κυνηγοί...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "208",
+    "timecode": "00:18:19,010 --> 00:18:23,040",
+    "original": "then you're ready to be\npreyed on yourselves, right?",
+    "translated": "τότε είστε έτοιμοι να γίνετε\nκι εσείς οι ίδιοι λεία, σωστά;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "209",
+    "timecode": "00:18:24,500 --> 00:18:27,210",
+    "original": "Let me handle this, Mr. Dongsuk.",
+    "translated": "Άσε με να το χειριστώ, Κύριε Dongsuk.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "210",
+    "timecode": "00:18:27,210 --> 00:18:31,670",
+    "original": "Look, buddy. You clearly don't\nunderstand what's going on here.",
+    "translated": "Κοίτα, φίλε. Προφανώς δεν\nκαταλαβαίνεις τι συμβαίνει εδώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "211",
+    "timecode": "00:18:32,070 --> 00:18:34,150",
+    "original": "We should be ready to be preyed on?",
+    "translated": "Πρέπει να είμαστε έτοιμοι να γίνουμε λεία;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "212",
+    "timecode": "00:18:34,150 --> 00:18:37,690",
+    "original": "And what's a jumped-up\nE-Rank like you gonna do?",
+    "translated": "Και τι θα κάνει ένας\nE-Βαθμού σαν κι εσένα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "213",
+    "timecode": "00:18:37,690 --> 00:18:39,890",
+    "original": "The Weakest Hunter of All—",
+    "translated": "Ο Πιο Αδύναμος Κυνηγός Όλης—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "214",
+    "timecode": "00:18:54,350 --> 00:18:56,440",
+    "original": "<i>I just killed someone.</i>",
+    "translated": "<i>Μόλις σκότωσα κάποιον.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "215",
+    "timecode": "00:18:56,990 --> 00:18:58,300",
+    "original": "<i>A human being.</i>",
+    "translated": "<i>Ένα ανθρώπινο ον.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "216",
+    "timecode": "00:18:58,830 --> 00:19:01,730",
+    "original": "<i>Even if I was just obeying the system,</i>",
+    "translated": "<i>Ακόμα κι αν απλώς υπάκουα στο Σύστημα,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "217",
+    "timecode": "00:19:02,700 --> 00:19:06,370",
+    "original": "<i>I've... just murdered another person.</i>",
+    "translated": "<i>Μόλις... δολοφόνησα έναν άλλον άνθρωπο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "218",
+    "timecode": "00:19:07,450 --> 00:19:10,200",
+    "original": "<i>But if I hadn't done it, I would've died.</i>",
+    "translated": "<i>Αλλά αν δεν το είχα κάνει, θα είχα πεθάνει.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "219",
+    "timecode": "00:19:10,840 --> 00:19:12,890",
+    "original": "<i>So I can't back down now.</i>",
+    "translated": "<i>Οπότε δεν μπορώ να κάνω πίσω τώρα.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "220",
+    "timecode": "00:19:14,400 --> 00:19:17,470",
+    "original": "<i>If only the strong get to survive, then...!</i>",
+    "translated": "<i>Αν μόνο οι δυνατοί επιβιώνουν, τότε...!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "221",
+    "timecode": "00:19:18,630 --> 00:19:19,720",
+    "original": "Go to hell!",
+    "translated": "Πήγαινε στην κόλαση!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "222",
+    "timecode": "00:19:30,480 --> 00:19:32,940",
+    "original": "How's an E-Rank got moves like that?",
+    "translated": "Πώς ένας E-Βαθμού έχει τέτοιες κινήσεις;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "223",
+    "timecode": "00:19:33,540 --> 00:19:35,120",
+    "original": "Son of a bitch...",
+    "translated": "Σκύλε...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "224",
+    "timecode": "00:19:46,990 --> 00:19:48,250",
+    "original": "Take this!",
+    "translated": "Πάρ' το αυτό!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "225",
+    "timecode": "00:19:56,490 --> 00:19:57,590",
+    "original": "He's so strong...",
+    "translated": "Είναι τόσο δυνατός...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "226",
+    "timecode": "00:19:58,430 --> 00:20:02,560",
+    "original": "He feels stronger now than when\nhe was fighting the dungeon boss.",
+    "translated": "Τώρα νιώθω να είναι πιο δυνατός\nαπό ό,τι όταν πολεμούσε το boss του μπουντρουμιού.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "227",
+    "timecode": "00:20:02,560 --> 00:20:05,580",
+    "original": "H-He took my entire team apart in seconds...",
+    "translated": "Δ-Διέλυσε όλη την ομάδα μου σε δευτερόλεπτα...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "228",
+    "timecode": "00:20:06,170 --> 00:20:08,270",
+    "original": "Was he hiding his true strength?",
+    "translated": "Έκρυβε την αληθινή του δύναμη;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "229",
+    "timecode": "00:20:08,570 --> 00:20:10,800",
+    "original": "You beat the boss, didn't you?",
+    "translated": "Εσύ νίκησες το boss, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "230",
+    "timecode": "00:20:11,770 --> 00:20:15,860",
+    "original": "Well, I might be a C-Rank, too,\nbut you'll find I'm nothing like them!",
+    "translated": "Λοιπόν, μπορεί κι εγώ να είμαι C-Βαθμού,\nαλλά θα δεις ότι δεν μοιάζω καθόλου με αυτούς!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "231",
+    "timecode": "00:20:16,320 --> 00:20:17,700",
+    "original": "Reinforcement!",
+    "translated": "Ενίσχυση!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "232",
+    "timecode": "00:20:24,750 --> 00:20:27,580",
+    "original": "Mr. Hwang. You're strong.",
+    "translated": "Κύριε Hwang. Είσαι δυνατός.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "233",
+    "timecode": "00:20:28,710 --> 00:20:31,340",
+    "original": "But I've got some bad news for you.",
+    "translated": "Αλλά έχω άσχημα νέα για σένα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "234",
+    "timecode": "00:20:36,130 --> 00:20:39,720",
+    "original": "I've been leveling up this entire time.",
+    "translated": "Όλο αυτό τον καιρό ανέβαζα επίπεδο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "235",
+    "timecode": "00:20:41,060 --> 00:20:43,370",
+    "original": "<i>Wh-What just happened?</i>",
+    "translated": "<i>Τι—Τι μόλις συνέβη;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "236",
+    "timecode": "00:20:43,370 --> 00:20:46,560",
+    "original": "<i>He... He smashed me into the ground?</i>",
+    "translated": "<i>Αυτός... Με έσπασε στο έδαφος;</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "237",
+    "timecode": "00:20:47,160 --> 00:20:50,810",
+    "original": "<i>There's no way in hell he's E-Rank!</i>",
+    "translated": "<i>Δεν υπάρχει περίπτωση να είναι E-Βαθμού!</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "238",
+    "timecode": "00:20:51,830 --> 00:20:53,980",
+    "original": "H-Hang on! Don't kill me!",
+    "translated": "Π-Περίμενε! Μη με σκοτώσεις!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "239",
+    "timecode": "00:20:53,980 --> 00:20:56,470",
+    "original": "You've gotta show mercy! I-I can pay you!",
+    "translated": "Πρέπει να δείξεις έλεος! Μ-Μπορώ να σε πληρώσω!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "240",
+    "timecode": "00:20:56,470 --> 00:21:00,360",
+    "original": "The mana crystals and essence stones...\nYou can have the lot!",
+    "translated": "Οι κρύσταλλοι μάνα και οι πέτρες ουσίας...\nΜπορείς να τα πάρεις όλα!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "241",
+    "timecode": "00:21:01,150 --> 00:21:04,120",
+    "original": "I-Is that not enough for you?\nI-In that case...",
+    "translated": "Δ-Δεν σου είναι αρκετό;\nΣ-Σε αυτήν την περίπτωση...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "242",
+    "timecode": "00:21:04,120 --> 00:21:06,920",
+    "original": "I'll pay you double! Double what I was—",
+    "translated": "Θα σε πληρώσω διπλά! Διπλά απ' όσα—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "243",
+    "timecode": "00:21:05,810 --> 00:21:06,920",
+    "original": "Three times.",
+    "translated": "Τρεις φορές.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "244",
+    "timecode": "00:21:07,870 --> 00:21:10,580",
+    "original": "You tried to kill me three times...",
+    "translated": "Προσπάθησες να με σκοτώσεις τρεις φορές...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "245",
+    "timecode": "00:21:11,540 --> 00:21:13,330",
+    "original": "and now you want mercy?",
+    "translated": "και τώρα ζητάς έλεος;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "246",
+    "timecode": "00:21:13,330 --> 00:21:17,420",
+    "original": "D-Don't do it!\nY-You won't get away with this!",
+    "translated": "Μ-Μην το κάνεις!\nΔ-Δεν θα σου περάσει!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "247",
+    "timecode": "00:21:17,920 --> 00:21:23,090",
+    "original": "Weren't you the one who said nothing\nthat happens in a dungeon ever gets out?",
+    "translated": "Δεν ήσουν εσύ αυτός που είπε ότι τίποτα\nαπό όσα συμβαίνουν σε ένα μπουντρούμι δεν μαθεύεται;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "248",
+    "timecode": "00:21:24,100 --> 00:21:27,480",
+    "original": "You little shit! Do you have\nany idea who my brother—",
+    "translated": "Μικρό κάθαρμα! Έχεις ιδέα ποιος είναι ο αδερφός μου—",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "249",
+    "timecode": "00:21:39,010 --> 00:21:40,570",
+    "original": "<i>I've become strong.</i>",
+    "translated": "<i>Έγινα δυνατός.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "250",
+    "timecode": "00:21:41,500 --> 00:21:47,150",
+    "original": "<i>For the people I love, I'll make\nany sacrifice to get stronger.</i>",
+    "translated": "<i>Για τους ανθρώπους που αγαπώ, θα κάνω\nοποιαδήποτε θυσία για να γίνω δυνατότερος.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "251",
+    "timecode": "00:21:48,330 --> 00:21:51,660",
+    "original": "<i>Whether it's against magic beasts or humans,</i>",
+    "translated": "<i>Είτε είναι ενάντια σε μαγικά κτήνη είτε σε ανθρώπους,</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "252",
+    "timecode": "00:21:56,060 --> 00:21:58,500",
+    "original": "<i>I can't stop fighting.</i>",
+    "translated": "<i>Δεν μπορώ να σταματήσω να μάχομαι.</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "253",
+    "timecode": "00:22:02,300 --> 00:22:03,580",
+    "original": "<i>I have to keep...</i>",
+    "translated": "<i>Πρέπει να συνεχίσω...</i>",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "254",
+    "timecode": "00:22:06,770 --> 00:22:08,980",
+    "original": "<i>leveling up.</i>",
+    "translated": "<i>να ανεβάζω επίπεδο.</i>",
+    "is_edited": false,
+    "needs_review": false
+  }
+]

@@ -1,0 +1,1110 @@
+1
+00:00:00,500 --> 00:00:05,000
+Το Plex ζήτησε 120€ για να συνεχίσετε να βλέπετε από τις συσκευές σας.
+Το πλήρωσα εγώ το ποσό.
+
+2
+00:00:05,500 --> 00:00:10,000
+Αν χρησιμοποιείτε συχνά και μπορείτε,
+ οποιαδήποτε συμβολή θα εκτιμηθεί.
+
+3
+00:00:11,610 --> 00:00:12,940
+<i>If...</i>
+
+4
+00:00:23,510 --> 00:00:25,840
+<i>If I had one more chance...</i>
+
+5
+00:00:33,850 --> 00:00:35,190
+<i>A hospital?</i>
+
+6
+00:00:38,490 --> 00:00:39,480
+<i>My arm's intact.</i>
+
+7
+00:00:48,340 --> 00:00:49,560
+<i>My legs, too.</i>
+
+8
+00:00:51,930 --> 00:00:54,860
+<i>I was stabbed through the chest,
+but there's no trace of it.</i>
+
+9
+00:00:55,370 --> 00:00:57,940
+Was it just... a dream?
+
+10
+00:01:00,860 --> 00:01:03,630
+Oh, I see you're awake.
+
+11
+00:01:04,290 --> 00:01:05,480
+Excuse me...
+
+12
+00:01:07,440 --> 00:01:11,060
+I'm Woo Jinchul, manager of the
+Hunter's Association Surveillance Team.
+
+13
+00:01:11,060 --> 00:01:12,300
+I'm Kang Taeshik.
+
+14
+00:01:12,660 --> 00:01:16,020
+What's someone from
+Surveillance want with me?
+
+15
+00:01:16,530 --> 00:01:19,100
+For now, let's get your doctor in here.
+
+16
+00:02:51,970 --> 00:02:55,040
+I was unconscious for three days?
+
+17
+00:02:55,690 --> 00:02:59,110
+What about Joohee and Mr. Song?
+Are they okay?
+
+18
+00:02:59,110 --> 00:03:00,950
+Yes. Although...
+
+19
+00:03:01,910 --> 00:03:04,620
+Song Chiyul lost an arm, and as a result,
+
+20
+00:03:04,620 --> 00:03:07,230
+he may have to retire as a hunter.
+
+21
+00:03:08,470 --> 00:03:13,010
+And Lee Joohee's been traumatized.
+She's undergoing psychiatric care.
+
+22
+00:03:13,610 --> 00:03:17,760
+Given her condition, I'm not sure
+she'll continue as a hunter, either.
+
+23
+00:03:24,720 --> 00:03:30,440
+There were only six survivors of the double
+dungeon discovered on your expedition.
+
+24
+00:03:31,230 --> 00:03:34,200
+A hunter's job is always a dangerous one,
+
+25
+00:03:34,200 --> 00:03:36,630
+but it's rare to see such a tragic outcome.
+
+26
+00:03:37,610 --> 00:03:40,200
+And yet, somehow,
+
+27
+00:03:41,630 --> 00:03:47,260
+when the White Tiger Guild arrived on the
+scene after being alerted by the survivors,
+
+28
+00:03:51,560 --> 00:03:54,700
+all they found was you, Sung Jinwoo,
+collapsed on the ground.
+
+29
+00:03:54,700 --> 00:03:58,930
+There were no traces of the temple or
+the statues the survivors described.
+
+30
+00:03:58,930 --> 00:04:00,060
+But that's...
+
+31
+00:04:00,060 --> 00:04:01,720
+Unbelievable, isn't it?
+
+32
+00:04:03,690 --> 00:04:06,930
+If there had been the slightest
+inconsistency between their reports,
+
+33
+00:04:07,470 --> 00:04:10,990
+or if some of the deceased's remains
+hadn't been found on the scene,
+
+34
+00:04:10,990 --> 00:04:13,760
+it would've cast suspicion
+onto your group instead.
+
+35
+00:04:15,850 --> 00:04:16,810
+Incidentally...
+
+36
+00:04:17,660 --> 00:04:20,060
+This is just speculation on our part, but...
+
+37
+00:04:21,740 --> 00:04:23,440
+Sung Jinwoo...
+
+38
+00:04:23,440 --> 00:04:27,450
+Have you experienced a second awakening?
+
+39
+00:04:28,910 --> 00:04:31,210
+<i>A second awakening?</i>
+
+40
+00:04:33,590 --> 00:04:36,660
+<i>A hunter's power is determined upon awakening,</i>
+
+41
+00:04:36,660 --> 00:04:38,400
+<i>and it never changes from that point on.</i>
+
+42
+00:04:38,890 --> 00:04:42,490
+<i>But... on rare occasions, a hunter
+can go through a second awakening.</i>
+
+43
+00:04:43,480 --> 00:04:47,060
+<i>It lets them exceed their previous limits
+and rise to A or even S-Rank...</i>
+
+44
+00:04:47,690 --> 00:04:49,550
+<i>Maybe I could, too!</i>
+
+45
+00:04:51,340 --> 00:04:52,770
+This is a mana meter.
+
+46
+00:04:53,280 --> 00:04:55,280
+Please place your hand over it.
+
+47
+00:04:56,810 --> 00:05:01,530
+<i>If they really ran into instakill-level
+magic beasts, like the survivors said,</i>
+
+48
+00:05:01,530 --> 00:05:03,900
+<i>then there's no way a low-level hunter
+could have survived.</i>
+
+49
+00:05:04,270 --> 00:05:07,100
+<i>And for not even a trace
+to remain of said beasts</i>
+
+50
+00:05:07,100 --> 00:05:10,870
+<i>would imply the presence of an A-Rank—
+maybe even S-Rank hunter.</i>
+
+51
+00:05:11,550 --> 00:05:14,950
+<i>The most likely explanation is that
+Sung Jinwoo underwent a second awakening.</i>
+
+52
+00:05:18,610 --> 00:05:19,750
+What's it say?
+
+53
+00:05:19,750 --> 00:05:22,240
+If I've awakened again,
+what rank does it put me at now?
+
+54
+00:05:23,430 --> 00:05:27,260
+My apologies. I'm afraid we
+may have been mistaken.
+
+55
+00:05:29,430 --> 00:05:32,610
+Even E-Ranks usually manage higher than 70...
+
+56
+00:05:32,610 --> 00:05:34,430
+He's basically just a civilian.
+
+57
+00:05:35,540 --> 00:05:38,660
+<i>The dungeon has vanished
+and can't be explored again.</i>
+
+58
+00:05:39,490 --> 00:05:41,560
+<i>So how did he survive?</i>
+
+59
+00:05:42,180 --> 00:05:45,250
+Aw, man. I got my hopes up.
+
+60
+00:05:46,970 --> 00:05:50,830
+<i>And I can't help but wonder why
+they didn't ask about this thing.</i>
+
+61
+00:05:53,110 --> 00:05:56,500
+Maybe I'm the only one who can see it?
+
+62
+00:05:59,430 --> 00:06:01,430
+<i>So it's not a touch panel, then.</i>
+
+63
+00:06:16,380 --> 00:06:18,540
+<i>I remember something like this
+popping up before, too.</i>
+
+64
+00:06:20,150 --> 00:06:21,210
+Jinah?
+
+65
+00:06:23,070 --> 00:06:26,990
+You need to take better care of yourself!
+Do you know how worried I was?
+
+66
+00:06:27,440 --> 00:06:28,670
+Sorry...
+
+67
+00:06:28,670 --> 00:06:33,290
+You always end up a mess,
+even when everyone else is fine!
+
+68
+00:06:33,290 --> 00:06:35,320
+I get worried, okay?
+
+69
+00:06:35,320 --> 00:06:38,290
+<i>I can't believe I was prepared
+to leave her behind.</i>
+
+70
+00:06:35,320 --> 00:06:38,290
+You were out for three whole days this time!
+
+71
+00:06:38,650 --> 00:06:40,320
+What are you smiling about?
+
+72
+00:06:40,320 --> 00:06:44,010
+The next time something like this happens,
+I'm gonna quit school and get a job
+
+73
+00:06:44,010 --> 00:06:46,120
+so you don't have to be a hunter anymore!
+
+74
+00:06:46,120 --> 00:06:48,220
+I know, I know. I'm sorry.
+
+75
+00:06:48,220 --> 00:06:50,610
+But, Jinah... Can you see this?
+
+76
+00:06:50,990 --> 00:06:52,220
+See what?
+
+77
+00:06:52,220 --> 00:06:53,790
+Never mind. Sorry.
+
+78
+00:06:54,800 --> 00:06:59,130
+Listen... You know how sometimes in a game,
+it says you have unread notifications?
+
+79
+00:06:59,130 --> 00:07:00,560
+We're talking about games now?
+
+80
+00:07:00,560 --> 00:07:03,150
+How do you manage to read them, usually?
+
+81
+00:07:03,150 --> 00:07:05,210
+Should they be examining your head, too?
+
+82
+00:07:05,210 --> 00:07:07,900
+Jinah, you used to play games
+all the time, remember?
+
+83
+00:07:07,900 --> 00:07:11,530
+I mean, sure. You'd usually
+open your message box, right?
+
+84
+00:07:12,040 --> 00:07:14,610
+Open the message box...
+
+85
+00:07:15,710 --> 00:07:17,440
+Why bring up games all of a sudden?
+
+86
+00:07:17,440 --> 00:07:19,410
+Well, y'know, not a lot to do in a hospital.
+
+87
+00:07:20,310 --> 00:07:22,980
+<i>I remember this "Player" stuff
+being mentioned before...</i>
+
+88
+00:07:24,290 --> 00:07:27,020
+Well, you seem fine, at least.
+
+89
+00:07:27,020 --> 00:07:27,920
+I oughta go.
+
+90
+00:07:30,410 --> 00:07:32,240
+Sorry about the wait, Song-yi.
+
+91
+00:07:33,470 --> 00:07:37,210
+"This system is designed to assist
+the development of the Player."
+
+92
+00:07:37,210 --> 00:07:42,250
+"Failure to comply with the system
+may result in a penalty..."
+
+93
+00:07:42,250 --> 00:07:43,940
+"The rewards have been delivered"?
+
+94
+00:07:44,440 --> 00:07:46,750
+I don't have a clue what
+this is supposed to mean.
+
+95
+00:07:48,010 --> 00:07:50,740
+"Daily Quest: Strength Training."
+
+96
+00:07:50,740 --> 00:07:51,850
+Confirm.
+
+97
+00:07:53,420 --> 00:07:56,570
+Push-ups, sit-ups, squats, running...
+
+98
+00:07:56,970 --> 00:08:00,410
+"Failure to complete the daily quest
+will result in an appropriate penalty"?
+
+99
+00:08:01,800 --> 00:08:05,630
+What the hell?
+If this is a joke, I'm not laughing.
+
+100
+00:08:06,430 --> 00:08:09,580
+I'm hospitalized. Where am I gonna
+get that kind of stamina?
+
+101
+00:08:10,270 --> 00:08:12,110
+What in the world is going on?
+
+102
+00:08:13,900 --> 00:08:16,050
+Regarding that hunter, Sung Jinwoo...
+
+103
+00:08:16,430 --> 00:08:20,060
+It doesn't appear he's had
+a second awakening, Chairman Go.
+
+104
+00:08:20,330 --> 00:08:21,720
+<i>I see.</i>
+
+105
+00:08:21,720 --> 00:08:27,110
+<i>We're lucky this incident didn't result in a
+dungeon break, but something about it...</i>
+
+106
+00:08:27,110 --> 00:08:29,010
+<i>It leaves too many unanswered questions.</i>
+
+107
+00:08:29,010 --> 00:08:32,490
+Right. It's nothing like any previous case.
+
+108
+00:08:32,820 --> 00:08:35,610
+<i>Even allowing for how dungeons
+tend to be full of mysteries...</i>
+
+109
+00:08:36,290 --> 00:08:39,100
+<i>I think this'll need to be
+marked as a special case</i>
+
+110
+00:08:39,100 --> 00:08:41,870
+<i>and entered into the databank
+for further evaluation.</i>
+
+111
+00:08:41,870 --> 00:08:43,390
+Understood.
+
+112
+00:08:46,380 --> 00:08:48,300
+It's gonna be a long day.
+
+113
+00:08:53,050 --> 00:08:58,260
+I'd like you to participate in the next
+B-Rank raid as an instructor, Miss Cha.
+
+114
+00:08:58,590 --> 00:09:00,470
+As an instructor?
+
+115
+00:09:00,770 --> 00:09:04,710
+This raid is going to serve as a test
+and practical training for new recruits.
+
+116
+00:09:04,710 --> 00:09:05,890
+Can you handle it?
+
+117
+00:09:05,890 --> 00:09:08,940
+I have doubts about my ability as a mentor.
+
+118
+00:09:08,940 --> 00:09:12,120
+All you need to do is fight
+how you normally do.
+
+119
+00:09:12,120 --> 00:09:14,460
+Everyone will learn from your example.
+
+120
+00:09:14,460 --> 00:09:17,160
+That's just how talented you are.
+
+121
+00:09:18,960 --> 00:09:23,940
+The Hunters Guild is one of
+the five largest guilds in the country,
+
+122
+00:09:23,940 --> 00:09:26,270
+but on an international level,
+we're unremarkable.
+
+123
+00:09:26,640 --> 00:09:29,600
+And while individual ranks can't be increased,
+
+124
+00:09:29,600 --> 00:09:32,360
+our collective combat ability can be honed,
+
+125
+00:09:33,380 --> 00:09:36,180
+so that we'll be ready when the time comes.
+
+126
+00:09:43,240 --> 00:09:45,020
+Another gate?
+
+127
+00:09:47,200 --> 00:09:49,940
+In the middle of the damn road, too.
+
+128
+00:09:49,940 --> 00:09:51,700
+When are the hunters gonna show up?
+
+129
+00:09:51,700 --> 00:09:53,770
+I wish they'd take care of it already.
+
+130
+00:10:07,790 --> 00:10:09,260
+A-An earthquake?
+
+131
+00:10:20,850 --> 00:10:23,560
+A... desert? What is happening?
+
+132
+00:10:24,490 --> 00:10:27,060
+Am I dreaming? I was just in the hospital—
+
+133
+00:10:35,960 --> 00:10:37,570
+Are you... kidding me?
+
+134
+00:10:44,840 --> 00:10:45,860
+Huh?
+
+135
+00:10:46,630 --> 00:10:48,100
+Is something wrong?
+
+136
+00:10:48,100 --> 00:10:49,960
+The patient from this room...
+
+137
+00:11:08,400 --> 00:11:10,750
+How many of them are there, damn it?
+
+138
+00:11:14,070 --> 00:11:16,060
+Two more hours of this?
+
+139
+00:11:16,530 --> 00:11:17,960
+Any sign of him?
+
+140
+00:11:17,960 --> 00:11:19,240
+No. Not where I looked.
+
+141
+00:11:19,780 --> 00:11:21,900
+I think I'll check the room again.
+
+142
+00:11:21,900 --> 00:11:22,740
+Good idea.
+
+143
+00:11:23,050 --> 00:11:26,080
+I doubt he left the hospital...
+
+144
+00:11:29,450 --> 00:11:31,000
+Can't... keep running...
+
+145
+00:11:56,320 --> 00:11:59,620
+A penalty... quest?
+
+146
+00:12:03,040 --> 00:12:03,990
+Mr. Sung?
+
+147
+00:12:05,530 --> 00:12:07,730
+Mr. Sung, are you all right?
+
+148
+00:12:10,860 --> 00:12:13,450
+Yeah, I'm healing nicely.
+
+149
+00:12:13,450 --> 00:12:15,880
+I should be able to leave soon.
+
+150
+00:12:15,880 --> 00:12:16,930
+<i>That's a relief.</i>
+
+151
+00:12:16,930 --> 00:12:21,080
+<i>After all the worry you caused me,
+I'm expecting to be treated at Chagall.</i>
+
+152
+00:12:21,080 --> 00:12:23,580
+Okay, okay, sure.
+
+153
+00:12:25,290 --> 00:12:27,210
+All right, time to go.
+
+154
+00:12:29,740 --> 00:12:31,930
+You want me... for a raid?
+
+155
+00:12:31,930 --> 00:12:36,600
+<i>Yes. A D-Rank gate appeared
+in Hapjeong the other day,</i>
+
+156
+00:12:36,600 --> 00:12:39,380
+<i>and all the guilds have prior engagements.</i>
+
+157
+00:12:40,610 --> 00:12:42,920
+<i>I understand if you can't, of course.</i>
+
+158
+00:12:42,920 --> 00:12:46,430
+<i>We understand what you've
+been through, Hunter Lee.</i>
+
+159
+00:12:46,430 --> 00:12:47,500
+I'm sorry.
+
+160
+00:12:47,500 --> 00:12:49,250
+<i>No apologies necessary.</i>
+
+161
+00:12:49,580 --> 00:12:53,760
+<i>Oh, that said, I heard that
+Sung Jinwoo has woken up.</i>
+
+162
+00:12:53,760 --> 00:12:54,970
+He has?
+
+163
+00:13:02,310 --> 00:13:06,020
+<i>Jinwoo... He's okay. That's wonderful!</i>
+
+164
+00:13:09,290 --> 00:13:11,460
+Look. He's running again.
+
+165
+00:13:11,900 --> 00:13:16,110
+Honestly... He's been at it every day
+since regaining consciousness.
+
+166
+00:13:18,980 --> 00:13:20,280
+Jinwoo...
+
+167
+00:13:20,280 --> 00:13:24,250
+I know hunters are supposed to heal
+faster than normal people, but...
+
+168
+00:13:24,250 --> 00:13:26,500
+He says he's trying to get back into shape.
+
+169
+00:13:26,840 --> 00:13:29,180
+And he doesn't listen when
+we tell him to take it easy.
+
+170
+00:13:29,180 --> 00:13:30,850
+Even though he was badly
+injured just a few days ago.
+
+171
+00:13:30,850 --> 00:13:32,460
+He's a real handful.
+
+172
+00:13:34,300 --> 00:13:37,220
+<i>It's been four days since
+I regained consciousness.</i>
+
+173
+00:13:37,220 --> 00:13:38,630
+<i>I've figured out a few things.</i>
+
+174
+00:13:39,520 --> 00:13:42,800
+<i>First, I'm not hallucinating these windows.</i>
+
+175
+00:13:43,950 --> 00:13:47,400
+<i>When I complete the daily quest,
+I get three types of rewards.</i>
+
+176
+00:13:47,400 --> 00:13:49,070
+Full recovery.
+
+177
+00:13:50,470 --> 00:13:52,970
+All that exhaustion is gone in a flash.
+
+178
+00:13:54,780 --> 00:13:56,530
+Next is the ability points.
+
+179
+00:13:56,880 --> 00:13:59,970
+<i>I can distribute the points
+into whatever abilities I choose.</i>
+
+180
+00:14:00,670 --> 00:14:02,430
+<i>I should probably go with strength, right?</i>
+
+181
+00:14:03,160 --> 00:14:06,080
+<i>Upgrading my abilities makes me
+that much more powerful.</i>
+
+182
+00:14:06,080 --> 00:14:09,120
+<i>I can literally tell that
+I've got more strength now.</i>
+
+183
+00:14:09,120 --> 00:14:12,050
+<i>I've also got these skill
+and inventory screens.</i>
+
+184
+00:14:12,460 --> 00:14:16,220
+<i>My world's taken a real turn
+for the strange.</i>
+
+185
+00:14:17,400 --> 00:14:19,090
+It's like a game!
+
+186
+00:14:26,150 --> 00:14:30,160
+<i>And my final daily quest reward...
+the random loot box.</i>
+
+187
+00:14:30,160 --> 00:14:31,890
+<i>I wonder what it'll be today?</i>
+
+188
+00:14:39,540 --> 00:14:40,560
+A key?
+
+189
+00:14:43,090 --> 00:14:47,410
+I've only gotten useless stuff like
+pens and bandages so far...
+
+190
+00:14:48,500 --> 00:14:51,590
+An instance dungeon? What's that?
+
+191
+00:14:54,010 --> 00:14:58,170
+Based on what's happened so far, it'll be
+some kind of event to help me get stronger...
+
+192
+00:15:01,950 --> 00:15:04,840
+<i>And now a report on today's gate conditions.</i>
+
+193
+00:15:04,840 --> 00:15:08,850
+<i>New D-Rank gates have appeared at these locations.</i>
+
+194
+00:15:09,180 --> 00:15:13,720
+<i>The C-Rank gates in the Upper East and
+Midtown areas are currently being dealt with.</i>
+
+195
+00:15:14,280 --> 00:15:17,880
+<i>The B-Rank gate that appeared
+in the wharf district the other day</i>
+
+196
+00:15:17,880 --> 00:15:22,360
+<i>is scheduled to be raided within
+a few days by the Hunters Guild.</i>
+
+197
+00:15:22,360 --> 00:15:26,380
+<i>Expect traffic delays as a result.</i>
+
+198
+00:15:27,160 --> 00:15:28,600
+That was a really long line, huh?
+
+199
+00:15:28,600 --> 00:15:30,360
+It's supposed to be for sweets.
+
+200
+00:15:30,670 --> 00:15:33,720
+Understood. I'll head back to the office.
+
+201
+00:15:43,310 --> 00:15:44,510
+Mom!
+
+202
+00:15:44,810 --> 00:15:46,010
+Mom, wake up!
+
+203
+00:15:46,010 --> 00:15:47,430
+What happened?
+
+204
+00:15:47,430 --> 00:15:50,390
+It's Mom... She won't respond!
+
+205
+00:15:51,910 --> 00:15:53,350
+Eternal Sleep Disease?
+
+206
+00:15:53,350 --> 00:15:56,910
+It's also known as Final Rest.
+
+207
+00:15:56,910 --> 00:16:00,070
+It's a disease that came into existence
+with the appearance of the gates.
+
+208
+00:16:00,070 --> 00:16:03,320
+It affects roughly one in every
+several ten thousand people.
+
+209
+00:16:03,320 --> 00:16:08,010
+There are theories that it's caused
+by continual exposure to mana.
+
+210
+00:16:08,010 --> 00:16:11,950
+In any case, the best that modern
+medicine can provide is life support.
+
+211
+00:16:13,750 --> 00:16:15,290
+All right, kiddo!
+
+212
+00:16:15,290 --> 00:16:17,250
+Step lively now!
+
+213
+00:16:17,250 --> 00:16:18,430
+Right!
+
+214
+00:16:30,350 --> 00:16:32,140
+Congratulations.
+
+215
+00:16:32,140 --> 00:16:34,780
+You qualify to become a hunter.
+
+216
+00:16:35,650 --> 00:16:38,060
+We're looking forward to
+seeing what you can do.
+
+217
+00:16:40,070 --> 00:16:43,870
+I did it, Jinah! Now I can
+afford Mom's treatment!
+
+218
+00:16:43,870 --> 00:16:45,950
+Isn't it dangerous, though?
+
+219
+00:16:45,950 --> 00:16:48,950
+It'll be okay. Just leave it to me.
+
+220
+00:16:58,040 --> 00:16:59,470
+What're you doing?
+
+221
+00:16:59,470 --> 00:17:01,480
+Just sit in a corner and don't do anything!
+
+222
+00:17:01,480 --> 00:17:04,720
+Damned E-Rank, slowing us down...
+
+223
+00:17:07,550 --> 00:17:11,900
+And for the record, if you don't
+contribute, you don't get a cut!
+
+224
+00:17:12,930 --> 00:17:15,480
+I'm sorry for being so useless.
+
+225
+00:17:17,960 --> 00:17:20,950
+I'll put my ability points into strength.
+
+226
+00:17:31,780 --> 00:17:35,920
+<i>I've got my gear ready.
+I've taken care of everything.</i>
+
+227
+00:17:37,240 --> 00:17:39,170
+<i>And I'm confident that I can
+run away if I need to.</i>
+
+228
+00:17:39,170 --> 00:17:42,650
+<i>If things get dangerous, like last time,
+I'll get the hell out of there.</i>
+
+229
+00:18:25,700 --> 00:18:26,880
+No!
+
+230
+00:18:28,840 --> 00:18:30,700
+The exit's been sealed off?
+
+231
+00:18:37,290 --> 00:18:40,810
+<i>I see. So I'm in a separate dimension.</i>
+
+232
+00:18:41,820 --> 00:18:44,670
+<i>Instance dungeons aren't
+like the regular kind...</i>
+
+233
+00:18:45,050 --> 00:18:49,780
+<i>I've never been into one myself,
+but I bet they're like red gates.</i>
+
+234
+00:18:50,160 --> 00:18:53,870
+What a mess. I was thinking
+I could run, if I had to...
+
+235
+00:18:53,870 --> 00:18:55,900
+But that's out now.
+
+236
+00:18:57,610 --> 00:18:59,400
+"Teleportation stone"?
+
+237
+00:18:59,400 --> 00:19:03,280
+What's that? I guess I'm stuck here
+until I can clear the dungeon?
+
+238
+00:19:04,320 --> 00:19:06,920
+I couldn't even beat E-Rank beasts before.
+
+239
+00:19:06,920 --> 00:19:09,470
+And now I have to clear a dungeon by myself?
+
+240
+00:19:09,470 --> 00:19:10,760
+That's crazy...
+
+241
+00:19:12,220 --> 00:19:16,310
+Can I really beat a boss without any party?
+
+242
+00:19:17,120 --> 00:19:19,570
+Still, I don't have a choice!
+
+243
+00:19:30,230 --> 00:19:33,950
+What do I do? I'm suddenly
+feeling less confident.
+
+244
+00:19:39,490 --> 00:19:41,370
+Here they come! And there's three!
+
+245
+00:20:33,480 --> 00:20:34,580
+<i>I beat one...</i>
+
+246
+00:20:55,660 --> 00:20:58,030
+I've gotten stronger.
+
+247
+00:21:09,980 --> 00:21:11,080
+<i>A wolf.</i>
+
+248
+00:21:12,090 --> 00:21:13,480
+<i>I can sense it...</i>
+
+249
+00:21:14,850 --> 00:21:18,340
+<i>This one's way stronger than those goblins.</i>
+
+250
+00:21:21,650 --> 00:21:23,830
+<i>My legs... won't move!</i>
+
+251
+00:21:24,430 --> 00:21:26,060
+<i>Why?</i>
+
+252
+00:21:27,000 --> 00:21:28,780
+<i>Am I afraid?</i>
+
+253
+00:21:29,240 --> 00:21:31,460
+<i>I didn't think I was traumatized...</i>
+
+254
+00:21:33,510 --> 00:21:34,560
+Damn it!
+
+255
+00:21:42,330 --> 00:21:43,740
+<i>There's no healer with me!</i>
+
+256
+00:21:44,680 --> 00:21:46,580
+<i>If I get injured here, I'm done for!</i>

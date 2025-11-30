@@ -1,0 +1,1274 @@
+1
+00:00:00,500 --> 00:00:05,000
+Το Plex ζήτησε 120€ για να συνεχίσετε να βλέπετε από τις συσκευές σας.
+Το πλήρωσα εγώ το ποσό.
+
+2
+00:00:05,500 --> 00:00:10,000
+Αν χρησιμοποιείτε συχνά και μπορείτε,
+ οποιαδήποτε συμβολή θα εκτιμηθεί.
+
+3
+00:00:08,070 --> 00:00:11,350
+<i>An item that can cure all diseases, huh?</i>
+
+4
+00:00:17,960 --> 00:00:22,610
+<i>With it, maybe I could cure
+Mom's Eternal Sleep Disease.</i>
+
+5
+00:00:23,310 --> 00:00:27,340
+<i>The Elixir of Life has three ingredients...</i>
+
+6
+00:00:27,340 --> 00:00:31,890
+<i>I don't have any of them,
+but it's obvious where they are.</i>
+
+7
+00:00:32,830 --> 00:00:37,510
+<i>That said, it'd be suicide to enter
+that castle without getting stronger.</i>
+
+8
+00:00:38,100 --> 00:00:39,960
+<i>I need to level up more...</i>
+
+9
+00:00:41,360 --> 00:00:45,480
+I need to get stronger.
+
+10
+00:02:16,720 --> 00:02:19,330
+You accept, then?
+
+11
+00:02:19,330 --> 00:02:21,350
+Things have changed on my end.
+
+12
+00:02:21,350 --> 00:02:25,540
+I'm willing to join you on the nineteen
+C-Rank raids you mentioned.
+
+13
+00:02:25,850 --> 00:02:26,910
+Yes!
+
+14
+00:02:26,910 --> 00:02:28,770
+Under one condition, though.
+
+15
+00:02:28,770 --> 00:02:31,590
+Sure! Whatever you want!
+
+16
+00:02:32,780 --> 00:02:35,430
+You and I will be going in alone.
+
+17
+00:02:37,820 --> 00:02:42,470
+As in... You and I would be the only ones
+clearing the C-Rank dungeon, Boss?
+
+18
+00:02:43,050 --> 00:02:44,600
+That's right.
+
+19
+00:02:45,790 --> 00:02:51,440
+But C-Rank gates require a minimum
+of eight team members to enter.
+
+20
+00:02:52,100 --> 00:02:54,150
+So we hire people to meet the quota.
+
+21
+00:02:54,600 --> 00:02:57,620
+The same way Hwang Dongsuk did.
+
+22
+00:02:59,370 --> 00:03:02,580
+I-Isn't that... kind of risky?
+
+23
+00:03:03,070 --> 00:03:04,620
+Think about it this way...
+
+24
+00:03:05,250 --> 00:03:10,000
+If it's just the two of us, we can clear
+these nineteen raids with no casualties.
+
+25
+00:03:10,610 --> 00:03:13,540
+A strike team capable of handling
+nineteen operations with zero injuries—
+
+26
+00:03:14,330 --> 00:03:18,430
+wouldn't that be the perfect thing
+to impress your dad with?
+
+27
+00:03:18,870 --> 00:03:20,430
+I get you.
+
+28
+00:03:24,240 --> 00:03:25,940
+Let's do it, Boss!
+
+29
+00:03:25,940 --> 00:03:29,080
+I'll arrange the extra members and the gates!
+
+30
+00:04:07,500 --> 00:04:10,060
+And how can I help you?
+
+31
+00:04:11,220 --> 00:04:14,980
+Impressive. But I'd expect nothing less
+from an S-Rank hunter.
+
+32
+00:04:15,580 --> 00:04:18,980
+I was waiting for the right moment
+to approach you...
+
+33
+00:04:18,980 --> 00:04:20,950
+I hope you'll excuse the
+interruption to your training.
+
+34
+00:04:20,950 --> 00:04:23,430
+Here is my card.
+
+35
+00:04:33,090 --> 00:04:35,800
+It's been over a decade
+since the gates appeared,
+
+36
+00:04:36,470 --> 00:04:39,300
+and the world's changed at
+a dizzying pace since then.
+
+37
+00:04:40,090 --> 00:04:44,470
+Infrastructure, the economy,
+the media, even politics...
+
+38
+00:04:44,470 --> 00:04:48,020
+The dungeons have changed all those things.
+
+39
+00:04:48,700 --> 00:04:51,940
+In particular, our infrastructure,
+the foundation of everyone's lives,
+
+40
+00:04:51,940 --> 00:04:55,400
+can no longer operate without
+the resources from dungeons.
+
+41
+00:04:55,400 --> 00:05:02,870
+And hunters are the only ones capable of
+retrieving these vital resources for our world.
+
+42
+00:05:03,270 --> 00:05:06,550
+Those hunters are in turn overseen by
+
+43
+00:05:06,550 --> 00:05:10,290
+the Hunter's Association,
+a public institution.
+
+44
+00:05:12,170 --> 00:05:15,750
+The Association takes awakened
+hunters, grades them for rank,
+
+45
+00:05:15,750 --> 00:05:18,120
+registers them, and handles oversight.
+
+46
+00:05:18,630 --> 00:05:21,250
+They manage the gates
+that don't go to auction,
+
+47
+00:05:21,250 --> 00:05:23,970
+as well as deal with dungeon breaks.
+
+48
+00:05:24,630 --> 00:05:28,730
+But the Association is nothing more
+than a function of the state.
+
+49
+00:05:28,730 --> 00:05:34,380
+The vast majority of those vital resources
+from dungeons are collected by
+
+50
+00:05:34,800 --> 00:05:38,110
+the guilds: the businesses who
+hire out hunters as a service.
+
+51
+00:05:38,770 --> 00:05:43,820
+The guilds have become extremely wealthy
+from the dungeon resources they collect.
+
+52
+00:05:44,460 --> 00:05:49,250
+Among them, the Hunters Guild,
+the White Tiger Guild, the Reaper Guild,
+
+53
+00:05:49,250 --> 00:05:54,060
+the Fame Guild, and the Knights Guild
+are the largest five guilds in the country.
+
+54
+00:05:54,730 --> 00:05:58,350
+They have a functional monopoly
+on dungeon-related profits.
+
+55
+00:05:59,610 --> 00:06:03,550
+And I see no reason to sit back
+and simply let that continue.
+
+56
+00:06:03,920 --> 00:06:07,420
+Especially considering how important
+these resources are to everyday life.
+
+57
+00:06:07,420 --> 00:06:11,390
+Leaving their collection to a group
+of mercenaries is out of the question.
+
+58
+00:06:11,920 --> 00:06:17,190
+We've contributed so much to this country.
+It's our responsibility to handle this, as well.
+
+59
+00:06:19,070 --> 00:06:22,990
+And the establishment of this guild
+is crucial to our accomplishing that.
+
+60
+00:06:24,100 --> 00:06:25,660
+Y-Yes, sir.
+
+61
+00:06:28,190 --> 00:06:31,580
+<i>Even if that's true,
+there's a lot of risk involved</i>
+
+62
+00:06:31,580 --> 00:06:35,420
+<i>in recruiting an S-Rank hunter to act
+as my brother's business partner...</i>
+
+63
+00:06:35,420 --> 00:06:38,630
+<i>Which isn't the case for me.</i>
+
+64
+00:06:53,400 --> 00:06:56,690
+Looks like anything extra I do
+isn't counted anymore.
+
+65
+00:06:57,550 --> 00:07:02,690
+<i>It seems that cursed random loot box
+that was offered in the secret quest</i>
+
+66
+00:07:02,690 --> 00:07:05,470
+<i>is out of my reach now.</i>
+
+67
+00:07:06,160 --> 00:07:10,780
+<i>I had hoped for an item as valuable
+as the key to the Demon's Castle...</i>
+
+68
+00:07:11,170 --> 00:07:14,550
+<i>Wait. There's still the chance that
+the regular random loot box</i>
+
+69
+00:07:14,550 --> 00:07:19,000
+<i>could have a key to something like
+the instance dungeon from before...</i>
+
+70
+00:07:27,250 --> 00:07:28,770
+Or not.
+
+71
+00:07:32,440 --> 00:07:34,620
+<i>With my stats as high as they are now,</i>
+
+72
+00:07:34,620 --> 00:07:37,350
+<i>three points aren't enough
+to make a real change anymore.</i>
+
+73
+00:07:38,030 --> 00:07:40,740
+<i>I'd like to level up more efficiently,</i>
+
+74
+00:07:40,740 --> 00:07:43,820
+<i>but I have to wait on Jinho
+for the C-Rank dungeons.</i>
+
+75
+00:07:45,650 --> 00:07:50,090
+<i>Wait, the penalty zone!
+Maybe if I fight that centipede...</i>
+
+76
+00:07:50,540 --> 00:07:55,950
+<i>No. I might have an easier time
+running now, but beating it...?</i>
+
+77
+00:07:55,950 --> 00:07:58,770
+<i>And there's no guarantee
+I'd get any experience points.</i>
+
+78
+00:08:02,040 --> 00:08:04,560
+<i>They need hunters for a D-Rank gate?</i>
+
+79
+00:08:04,910 --> 00:08:08,170
+<i>The Hunter's Association
+is forming a strike team...</i>
+
+80
+00:08:08,540 --> 00:08:11,680
+<i>which means I wouldn't be
+able to fight on my own.</i>
+
+81
+00:08:11,970 --> 00:08:13,250
+<i>Should I say no?</i>
+
+82
+00:08:15,820 --> 00:08:17,600
+<i>But I guess it's better than nothing.</i>
+
+83
+00:08:22,210 --> 00:08:23,810
+This is frustrating.
+
+84
+00:08:34,770 --> 00:08:37,210
+I didn't stand a chance against you, Master.
+
+85
+00:08:38,810 --> 00:08:41,250
+I'm just not ready to be
+beaten yet. That's all.
+
+86
+00:08:41,710 --> 00:08:46,540
+It's a shame, though. I wish I could've
+fought you at your best...
+
+87
+00:08:46,540 --> 00:08:50,780
+Still worried about that?
+It's been months since I lost my arm.
+
+88
+00:08:54,060 --> 00:08:56,110
+An emergency summons?
+
+89
+00:08:56,450 --> 00:09:00,010
+Low-ranked hunters get a lot of calls
+for what amounts to running errands.
+
+90
+00:09:00,010 --> 00:09:02,770
+You seriously won't consider retiring, Master?
+
+91
+00:09:02,770 --> 00:09:04,250
+Retirement?
+
+92
+00:09:08,890 --> 00:09:14,330
+You've got a point. An old man with one arm
+missing might not be of much help at all.
+
+93
+00:09:14,330 --> 00:09:16,290
+That's not what I meant, sir!
+
+94
+00:09:16,290 --> 00:09:20,180
+Still, I may have lost an arm, but I survived.
+
+95
+00:09:20,180 --> 00:09:22,580
+My best years are already behind me,
+
+96
+00:09:22,580 --> 00:09:26,120
+but I'd like to spend what I have left
+contributing to society.
+
+97
+00:09:34,530 --> 00:09:36,640
+Looks like I've got my next raid.
+
+98
+00:09:37,650 --> 00:09:39,100
+Say, honey...
+
+99
+00:09:39,810 --> 00:09:43,220
+Isn't it about time you considered
+something other than hunting?
+
+100
+00:09:43,220 --> 00:09:45,230
+We're talking about this again?
+
+101
+00:09:45,230 --> 00:09:49,420
+But it's so dangerous. All those people
+died in the raid from before,
+
+102
+00:09:49,420 --> 00:09:52,930
+and you only barely survived, right?
+
+103
+00:09:53,310 --> 00:09:55,410
+Well, yeah...
+
+104
+00:09:56,350 --> 00:09:58,200
+Daddy! Up!
+
+105
+00:10:00,240 --> 00:10:03,240
+The thing is, Eunji is starting
+preschool next year,
+
+106
+00:10:03,240 --> 00:10:04,780
+and Eunha will be in middle school.
+
+107
+00:10:04,780 --> 00:10:06,230
+We need the money, don't we?
+
+108
+00:10:06,230 --> 00:10:07,750
+That might be true, but...
+
+109
+00:10:07,750 --> 00:10:13,720
+It'll be fine. The Association doesn't send
+low-ranked hunters into dangerous dungeons.
+
+110
+00:10:14,860 --> 00:10:17,680
+The other time was just an exception.
+
+111
+00:10:17,680 --> 00:10:21,410
+You're right. I'm sorry
+for making such a fuss.
+
+112
+00:10:21,410 --> 00:10:22,770
+Don't worry about it.
+
+113
+00:10:23,400 --> 00:10:24,980
+Be careful, okay?
+
+114
+00:10:25,600 --> 00:10:27,890
+You bet! I love you.
+
+115
+00:10:27,890 --> 00:10:29,010
+Daddy?
+
+116
+00:10:29,010 --> 00:10:30,730
+Yeah? What's up?
+
+117
+00:10:30,730 --> 00:10:32,910
+Daddy, are you strong?
+
+118
+00:10:32,910 --> 00:10:34,770
+You bet I am!
+
+119
+00:10:34,770 --> 00:10:38,280
+I can beat scary monsters, y'know!
+
+120
+00:10:38,280 --> 00:10:42,660
+Wow! You really are strong!
+
+121
+00:10:43,400 --> 00:10:45,480
+You've got some damn nerve.
+
+122
+00:10:48,130 --> 00:10:50,130
+What are you talking about?
+
+123
+00:10:50,130 --> 00:10:53,780
+I can't believe you stuck me with
+that interview. It was a waste of time.
+
+124
+00:10:53,780 --> 00:10:57,070
+I managed to catch it.
+You made a good impression.
+
+125
+00:10:57,070 --> 00:10:59,720
+I found your answers to be quite profound.
+
+126
+00:10:59,720 --> 00:11:01,600
+I'm not here for a bunch of empty flattery!
+
+127
+00:11:01,600 --> 00:11:05,310
+And I'm pretty sure the interview was
+meant to be for you in the first place!
+
+128
+00:11:05,310 --> 00:11:07,990
+Well, considering the offer
+made to Chairman Go
+
+129
+00:11:07,990 --> 00:11:14,270
+was for a talented hunter of great character
+who is dedicated to the job...
+
+130
+00:11:14,270 --> 00:11:17,460
+I mean, does that really sound like me?
+
+131
+00:11:17,930 --> 00:11:20,240
+Well, at least you realize
+how sketchy you are.
+
+132
+00:11:21,490 --> 00:11:25,210
+Whatever! So, what's this about, anyway?
+
+133
+00:11:25,210 --> 00:11:29,580
+There's no way you asked me to come over
+just so I could chew you out.
+
+134
+00:11:29,580 --> 00:11:34,630
+There was something
+I thought you should know...
+
+135
+00:11:35,630 --> 00:11:39,000
+Yoojin Construction are getting ready
+to launch their own guild.
+
+136
+00:11:39,000 --> 00:11:42,010
+I know. They've been trying
+to make moves in secret.
+
+137
+00:11:42,440 --> 00:11:45,130
+There's been rumors about
+headhunting at my guild.
+
+138
+00:11:45,130 --> 00:11:49,690
+I suppose if you already know,
+then I wasted your time.
+
+139
+00:11:49,690 --> 00:11:53,200
+And I already know that you knew I knew.
+
+140
+00:11:53,200 --> 00:11:55,080
+Can we please cut the crap?
+
+141
+00:11:56,440 --> 00:12:00,070
+I'll ask you one more time.
+What's this really about?
+
+142
+00:12:03,710 --> 00:12:08,330
+<i>You haven't called much lately.
+Is everything goin' okay?</i>
+
+143
+00:12:08,860 --> 00:12:09,650
+Yeah.
+
+144
+00:12:09,650 --> 00:12:11,300
+<i>How 'bout work?</i>
+
+145
+00:12:11,730 --> 00:12:14,170
+Well... fine.
+
+146
+00:12:14,170 --> 00:12:19,680
+<i>You've always been such a scaredy-cat.
+Are you really handlin' being a hunter?</i>
+
+147
+00:12:19,680 --> 00:12:24,620
+<i>You're B-Rank, right? I'm sure most folks
+would be pretty strong in that case,</i>
+
+148
+00:12:24,620 --> 00:12:27,680
+<i>but wouldn't you just be gettin' in the way?</i>
+
+149
+00:12:28,020 --> 00:12:30,390
+<i>You should come back home
+an' help out with the business.</i>
+
+150
+00:12:30,390 --> 00:12:31,810
+<i>Your Pa's worried—</i>
+
+151
+00:12:31,810 --> 00:12:33,690
+Quit trying to run my life!
+
+152
+00:12:34,500 --> 00:12:37,170
+I can make my own decisions!
+So just drop it!
+
+153
+00:12:37,170 --> 00:12:38,150
+<i>What are you—</i>
+
+154
+00:12:46,050 --> 00:12:47,660
+I'm just in the way...?
+
+155
+00:12:49,610 --> 00:12:50,620
+But...
+
+156
+00:12:54,400 --> 00:12:57,450
+I wanna try a little more.
+
+157
+00:13:29,380 --> 00:13:30,580
+Excuse me.
+
+158
+00:13:32,410 --> 00:13:35,210
+How can I help you, Hunter Cha Hae-in?
+
+159
+00:13:35,620 --> 00:13:40,370
+While I was training, I was approached
+by a scout from Yoojin Construction.
+
+160
+00:13:40,370 --> 00:13:41,680
+I thought you should know.
+
+161
+00:13:43,640 --> 00:13:50,060
+They're apparently launching a new guild
+and wanted me to join them as guild master.
+
+162
+00:13:51,080 --> 00:13:55,960
+And I assume, since you're telling me this,
+that you turned them down?
+
+163
+00:13:55,960 --> 00:13:58,790
+Right. I refused the offer.
+
+164
+00:13:59,250 --> 00:14:02,100
+That's a relief. Thank you for telling me.
+
+165
+00:14:02,100 --> 00:14:04,530
+It's nothing. I was wondering...
+
+166
+00:14:04,530 --> 00:14:08,710
+I saw President Baek on my way in.
+
+167
+00:14:08,710 --> 00:14:11,000
+What were you talking about?
+
+168
+00:14:19,380 --> 00:14:23,560
+<i>What do you think about Jeju Island?</i>
+
+169
+00:14:24,090 --> 00:14:27,940
+Jeju Island? Why do you ask?
+
+170
+00:14:27,940 --> 00:14:32,540
+Since the failed raid,
+the island has been sealed off,
+
+171
+00:14:32,540 --> 00:14:35,910
+with only occasional reconnaissance
+done from the shore.
+
+172
+00:14:35,910 --> 00:14:39,570
+And the public receives a single
+annual update about any changes.
+
+173
+00:14:40,210 --> 00:14:44,680
+People are trying to forget about the island—
+and the terror it represents.
+
+174
+00:14:45,040 --> 00:14:47,490
+Yeah, but can you blame them?
+
+175
+00:14:47,490 --> 00:14:52,470
+Except, no matter how commonplace
+gates may have become,
+
+176
+00:14:52,470 --> 00:14:55,480
+or how much I get fawned over as
+the "ultimate weapon" of humanity,
+
+177
+00:14:55,480 --> 00:14:59,590
+I can never forget about that island,
+or what happened there.
+
+178
+00:15:00,500 --> 00:15:04,840
+I intend on clearing that island
+in the near future.
+
+179
+00:15:05,490 --> 00:15:09,840
+And to do that, I need you
+and the others on the same page.
+
+180
+00:15:09,840 --> 00:15:15,360
+We must gain strength, gather allies,
+and sway public opinion.
+
+181
+00:15:15,360 --> 00:15:18,360
+That's why you arranged for the interview
+and are training new hunters.
+
+182
+00:15:25,970 --> 00:15:31,780
+Isn't there something you left
+behind on that island, as well?
+
+183
+00:15:38,790 --> 00:15:42,060
+Eunseok... Byung-go...
+
+184
+00:15:46,600 --> 00:15:49,480
+Please. I'm begging you...
+
+185
+00:15:50,970 --> 00:15:52,850
+They have to die.
+
+186
+00:15:55,650 --> 00:15:57,140
+I'm heading out.
+
+187
+00:15:57,140 --> 00:15:59,440
+It's a holiday, but you've got work again?
+
+188
+00:16:00,450 --> 00:16:02,370
+You keep busy lately.
+
+189
+00:16:03,610 --> 00:16:04,650
+I guess.
+
+190
+00:16:04,650 --> 00:16:06,020
+Hard to believe you're the same guy
+
+191
+00:16:06,020 --> 00:16:09,690
+who had to take time off to recover
+from his injuries after every gate.
+
+192
+00:16:09,690 --> 00:16:11,450
+All the training pay off?
+
+193
+00:16:11,450 --> 00:16:16,190
+Probably. In any case, I'm able
+to make a steady living now.
+
+194
+00:16:16,190 --> 00:16:17,620
+That's a good thing, right?
+
+195
+00:16:17,620 --> 00:16:19,690
+I guess it is.
+
+196
+00:16:19,690 --> 00:16:22,150
+Wait, Jinwoo! What about your stuff?
+
+197
+00:16:22,150 --> 00:16:24,540
+It'll be fine. I'm heading out.
+
+198
+00:16:24,540 --> 00:16:25,980
+Wait, hang on...
+
+199
+00:16:29,050 --> 00:16:31,760
+It's not like you're making
+a quick trip to the store.
+
+200
+00:16:34,930 --> 00:16:38,410
+<i>I didn't awaken to a physical power,
+which means my sword</i>
+
+201
+00:16:38,410 --> 00:16:40,300
+<i>is useless against magic beasts.</i>
+
+202
+00:16:41,040 --> 00:16:45,590
+<i>The martial arts I've spent decades on
+are useless inside of a dungeon.</i>
+
+203
+00:16:45,590 --> 00:16:50,590
+<i>A swordsman like myself gaining magic-focused
+powers is quite the twist of fate.</i>
+
+204
+00:16:50,590 --> 00:16:53,350
+<i>But I'm sure there's a reason for it.</i>
+
+205
+00:16:56,760 --> 00:16:58,280
+Are you...?
+
+206
+00:16:58,280 --> 00:16:59,750
+Mr. Song?
+
+207
+00:16:59,750 --> 00:17:03,350
+I wasn't sure it was you, but it is! Sung!
+
+208
+00:17:03,350 --> 00:17:04,840
+It's been a while.
+
+209
+00:17:04,840 --> 00:17:07,340
+I never thought I'd run into you
+in a place like this!
+
+210
+00:17:07,340 --> 00:17:11,900
+I must say, where'd that
+gentle-looking boy go?
+
+211
+00:17:11,900 --> 00:17:14,900
+How have you changed so much
+in just a few months?
+
+212
+00:17:15,730 --> 00:17:17,060
+Plus...
+
+213
+00:17:17,060 --> 00:17:19,520
+Didn't you lose a leg?
+
+214
+00:17:19,520 --> 00:17:23,850
+When I woke up in the hospital, it was back.
+
+215
+00:17:23,850 --> 00:17:25,270
+I see!
+
+216
+00:17:25,270 --> 00:17:30,030
+There must've been a high-ranked healer
+among the hunters who came to collect you!
+
+217
+00:17:30,850 --> 00:17:35,080
+Whatever the case, it's a relief seeing
+a young man like yourself has fully healed.
+
+218
+00:17:35,080 --> 00:17:36,770
+That's nice of you to say.
+
+219
+00:17:37,170 --> 00:17:39,140
+But, Mr. Song, your arm...
+
+220
+00:17:39,140 --> 00:17:43,740
+Too much time had passed
+since my injury, I'm afraid.
+
+221
+00:17:43,740 --> 00:17:45,530
+I don't mind, though.
+
+222
+00:17:45,530 --> 00:17:49,710
+You know, someone from the Association
+had told me you were alive.
+
+223
+00:17:49,710 --> 00:17:51,820
+It's so good to see you!
+
+224
+00:17:51,820 --> 00:17:54,260
+What are you doing here, anyway, Mr. Song?
+
+225
+00:17:54,260 --> 00:17:57,460
+Answering a summons from the Association.
+It's supposed to be urgent.
+
+226
+00:17:57,460 --> 00:17:58,970
+You, too?
+
+227
+00:18:12,690 --> 00:18:14,570
+What a coincidence.
+
+228
+00:18:15,130 --> 00:18:17,560
+This is quite the reunion.
+
+229
+00:18:20,020 --> 00:18:21,410
+Jinwoo?
+
+230
+00:18:21,760 --> 00:18:23,030
+Joohee...
+
+231
+00:18:24,160 --> 00:18:27,430
+Along with... Mr. Kim and Mr. Kang.
+
+232
+00:18:28,860 --> 00:18:30,090
+<i>It's only natural.</i>
+
+233
+00:18:30,500 --> 00:18:34,930
+<i>We sacrificed Sung in order
+to escape on that day.</i>
+
+234
+00:18:35,540 --> 00:18:41,100
+<i>And I can't blame Kim for being too ashamed
+to face me, after what he did.</i>
+
+235
+00:18:41,400 --> 00:18:46,240
+<i>That said... five survivors from
+that tragedy have been reunited.</i>
+
+236
+00:18:46,240 --> 00:18:47,310
+<i>In that case...</i>
+
+237
+00:18:47,660 --> 00:18:50,780
+It really is you, isn't it, Jinwoo?
+
+238
+00:18:50,780 --> 00:18:52,950
+You look like a whole different person!
+
+239
+00:18:52,950 --> 00:18:54,990
+Yeah. It's been a while.
+
+240
+00:18:54,990 --> 00:18:58,120
+You're so much taller,
+and your leg is healed...
+
+241
+00:18:58,550 --> 00:19:00,790
+I guess you were fine
+after I visited you, after all.
+
+242
+00:19:00,790 --> 00:19:02,380
+You visited me?
+
+243
+00:19:07,480 --> 00:19:12,090
+Nice! We got a fine little lady in this group.
+
+244
+00:19:14,190 --> 00:19:18,090
+What's up, baby? You and this guy an item?
+
+245
+00:19:18,720 --> 00:19:20,210
+You should play with us—
+
+246
+00:19:20,210 --> 00:19:21,570
+Shut your mouths.
+
+247
+00:19:24,170 --> 00:19:26,020
+This outing isn't for recreation.
+
+248
+00:19:29,030 --> 00:19:33,690
+I'll now brief our regular hunters,
+if you'd come this way.
+
+249
+00:19:34,430 --> 00:19:35,650
+What's going on here...?
+
+250
+00:19:35,650 --> 00:19:40,130
+These men are the prisoner substitute
+hunters who will be joining you today.
+
+251
+00:19:40,130 --> 00:19:44,370
+Substitute hunters? We're supposed
+to fight alongside criminals?
+
+252
+00:19:44,370 --> 00:19:47,920
+They are hunter convicts, but they're
+here to reduce their sentences
+
+253
+00:19:47,920 --> 00:19:49,980
+and are unlikely to cause trouble.
+
+254
+00:19:49,980 --> 00:19:54,510
+We're short-staffed due to a exodus
+of local hunters. I hope you'll understand.
+
+255
+00:19:54,870 --> 00:19:56,670
+What a mess...
+
+256
+00:19:57,130 --> 00:20:01,100
+You'll be accompanied by an overseer from
+the Hunter's Association, Kang Taeshik, too.
+
+257
+00:20:01,100 --> 00:20:04,050
+He's B-Rank, so even in
+the worst-case scenario,
+
+258
+00:20:04,050 --> 00:20:08,370
+he should be able to handle
+three C-Rank criminals with ease.
+
+259
+00:20:08,370 --> 00:20:10,100
+Please, rest assured.
+
+260
+00:20:10,450 --> 00:20:14,600
+I don't know if this is a good idea.
+You should sit the raid out, Joohee.
+
+261
+00:20:14,600 --> 00:20:15,820
+What about you, Jinwoo?
+
+262
+00:20:16,570 --> 00:20:17,780
+I'm going.
+
+263
+00:20:21,230 --> 00:20:23,370
+Then I am, too.
+
+264
+00:20:24,800 --> 00:20:26,080
+I understand.
+
+265
+00:20:26,730 --> 00:20:30,670
+Damn, it's good to be free.
+
+266
+00:20:30,940 --> 00:20:34,630
+We're not slaves here, man.
+Is this kinda thing allowed?
+
+267
+00:20:34,630 --> 00:20:37,170
+Shut up. You're convicts.
+
+268
+00:20:37,730 --> 00:20:41,430
+You know what happens if you act up, right?
+
+269
+00:20:44,310 --> 00:20:48,650
+I'm Kang Taeshik, an inspector with the
+Hunter's Association Surveillance Team.
+
+270
+00:20:49,610 --> 00:20:53,920
+I'll be responsible for them,
+so you can relax.
+
+271
+00:20:54,710 --> 00:20:57,930
+Who's going to take point on the raid today?
+
+272
+00:20:58,880 --> 00:21:02,460
+Sung... Do you mind if I lead?
+
+273
+00:21:02,460 --> 00:21:03,740
+No, go ahead.
+
+274
+00:21:05,680 --> 00:21:08,050
+Thank you for giving me this chance.
+
+275
+00:21:08,050 --> 00:21:09,160
+M-Mr. Song?
+
+276
+00:21:09,590 --> 00:21:13,030
+On that day, seven people died because of me.
+
+277
+00:21:13,410 --> 00:21:16,510
+The magnitude of my failure to protect
+everyone can not be understated.
+
+278
+00:21:16,510 --> 00:21:20,100
+But... six of us did survive, because of you.
+
+279
+00:21:20,100 --> 00:21:22,840
+So let me say this, as a
+representative of the others:
+
+280
+00:21:23,480 --> 00:21:25,680
+I am so grateful to you.
+
+281
+00:21:26,340 --> 00:21:28,920
+You don't have to bow, Mr. Song.
+
+282
+00:21:31,200 --> 00:21:34,720
+Is it all right with you, as well, Kim?
+
+283
+00:21:37,000 --> 00:21:38,610
+Go ahead.
+
+284
+00:21:45,280 --> 00:21:49,800
+Well, with that being the case,
+I will take point in the dungeon.
+
+285
+00:21:49,800 --> 00:21:52,670
+Understood. Let's get underway, then.
+
+286
+00:22:00,360 --> 00:22:02,130
+Off we go, now...
+
+287
+00:22:03,530 --> 00:22:05,010
+Into the dungeon.

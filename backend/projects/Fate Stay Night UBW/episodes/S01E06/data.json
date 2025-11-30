@@ -1,0 +1,2746 @@
+[
+  {
+    "id": "﻿1",
+    "timecode": "00:00:32,720 --> 00:00:33,980",
+    "original": "This is far enough.",
+    "translated": "Αυτό είναι αρκετά μακριά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "2",
+    "timecode": "00:00:37,310 --> 00:00:39,770",
+    "original": "Oh? You don't\nneed an escort, then?",
+    "translated": "Ω; Άρα δεν χρειάζεσαι συνοδεία;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "3",
+    "timecode": "00:00:40,270 --> 00:00:42,989",
+    "original": "I could do without one\nwho wants to kill me.",
+    "translated": "Μπορώ να την αποφύγω, ειδικά όταν κάποιος θέλει να με σκοτώσει.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "4",
+    "timecode": "00:00:42,990 --> 00:00:44,110",
+    "original": "You impress me.",
+    "translated": "Με εντυπωσιάζεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "5",
+    "timecode": "00:00:44,650 --> 00:00:49,370",
+    "original": "It seems you know enough\nto sense hostility, at least.",
+    "translated": "Φαίνεται πως έχεις αρκετή επίγνωση ώστε\r\nτουλάχιστον να αντιλαμβάνεσαι την εχθρότητα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "6",
+    "timecode": "00:00:49,950 --> 00:00:52,431",
+    "original": "Rin has ordered me\nto escort you peacefully,",
+    "translated": "Η Rin με διέταξε να σε συνοδεύσω ειρηνικά,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "7",
+    "timecode": "00:00:52,443 --> 00:00:54,540",
+    "original": "so I will refrain\nfrom attacking you.",
+    "translated": "οπότε θα αποφύγω να σε επιτεθώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "8",
+    "timecode": "00:01:08,210 --> 00:01:13,250",
+    "original": "In the face of absolute despair",
+    "translated": "Μπροστά στην απόλυτη απόγνωση",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "9",
+    "timecode": "00:01:13,550 --> 00:01:17,250",
+    "original": "That nearly burned\nour hearts away",
+    "translated": "Που λίγο έλειψε να κάψει τις καρδιές μας",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "10",
+    "timecode": "00:01:18,750 --> 00:01:23,800",
+    "original": "You still found the\ncourage to smile",
+    "translated": "Εσύ βρήκες το κουράγιο να χαμογελάσεις",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "11",
+    "timecode": "00:01:24,050 --> 00:01:28,600",
+    "original": "Like you accepted it all",
+    "translated": "Σαν να τα δέχτηκες όλα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "12",
+    "timecode": "00:01:29,400 --> 00:01:31,860",
+    "original": "I lost my voice",
+    "translated": "Έχασα τη φωνή μου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "13",
+    "timecode": "00:01:32,060 --> 00:01:34,480",
+    "original": "And the things I wanted to say",
+    "translated": "Και τα πράγματα που ήθελα να πω",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "14",
+    "timecode": "00:01:34,760 --> 00:01:39,730",
+    "original": "But every time I\nfell to my knees",
+    "translated": "Αλλά κάθε φορά που έπεφτα στα γόνατα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "15",
+    "timecode": "00:01:40,080 --> 00:01:44,030",
+    "original": "I stood up and kept walking",
+    "translated": "Σηκωνόμουν και συνέχιζα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "16",
+    "timecode": "00:01:44,300 --> 00:01:49,700",
+    "original": "We were looking for\nthe ideal white future",
+    "translated": "Ψάχναμε για το ιδανικό, λευκό μέλλον",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "17",
+    "timecode": "00:01:49,910 --> 00:01:54,930",
+    "original": "Our one and only hope",
+    "translated": "Τη μοναδική μας ελπίδα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "18",
+    "timecode": "00:01:55,260 --> 00:01:57,420",
+    "original": "Now I may be left with nothing",
+    "translated": "Ίσως τώρα να μου έχει μείνει το τίποτα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "19",
+    "timecode": "00:01:57,590 --> 00:02:02,840",
+    "original": "But these raging\nemotions that have",
+    "translated": "Παρά μόνο αυτά τα μανιασμένα συναισθήματα που δεν έχουν",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "20",
+    "timecode": "00:02:02,900 --> 00:02:05,940",
+    "original": "Nowhere to go",
+    "translated": "Πού να πάνε",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "21",
+    "timecode": "00:02:06,190 --> 00:02:11,190",
+    "original": "Still, I'll look for a new dawn",
+    "translated": "Ωστόσο, θα ψάξω για μια νέα αυγή",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "22",
+    "timecode": "00:02:11,570 --> 00:02:14,600",
+    "original": "With more than one right answer",
+    "translated": "Με περισσότερες από μία σωστές απαντήσεις",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "23",
+    "timecode": "00:02:14,840 --> 00:02:18,430",
+    "original": "I won't stop",
+    "translated": "Δεν θα σταματήσω",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "24",
+    "timecode": "00:02:18,730 --> 00:02:20,460",
+    "original": "Until I find it",
+    "translated": "Μέχρι να τη βρω",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "25",
+    "timecode": "00:02:28,050 --> 00:02:29,169",
+    "original": "Is that so?",
+    "translated": "Έτσι είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "26",
+    "timecode": "00:02:29,170 --> 00:02:33,049",
+    "original": "But if you want to go,\nI'm happy to take you on.",
+    "translated": "Αλλά αν θέλεις να φύγεις, είμαι ευτυχής που σε ανέχομαι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "27",
+    "timecode": "00:02:33,050 --> 00:02:36,519",
+    "original": "I may be inexperienced,\nbut I am still a mage.",
+    "translated": "Μπορεί να είμαι άπειρος, αλλά παραμένω μάγος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "28",
+    "timecode": "00:02:36,520 --> 00:02:37,870",
+    "original": "Don't be absurd.",
+    "translated": "Μην είσαι παράλογος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "29",
+    "timecode": "00:02:37,871 --> 00:02:40,270",
+    "original": "Mirage",
+    "translated": "Οφθαλμαπάτη",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "30",
+    "timecode": "00:02:40,271 --> 00:02:42,810",
+    "original": "A mage who doesn't reek of\nblood is worse than a novice.",
+    "translated": "Ένας μάγος που δεν βρωμάει αίμα είναι χειρότερος από έναν πρωτάρη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "31",
+    "timecode": "00:02:43,270 --> 00:02:46,189",
+    "original": "You're saying that I don't\nhave the smell of blood on me?",
+    "translated": "Λες ότι δεν έχω τη μυρωδιά του αίματος πάνω μου;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "32",
+    "timecode": "00:02:46,190 --> 00:02:50,989",
+    "original": "Mages are beings who become cold-blooded\nin order to achieve their goals.",
+    "translated": "Οι μάγοι είναι όντα που γίνονται ψυχροί για να πετύχουν τους στόχους τους.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "33",
+    "timecode": "00:02:50,990 --> 00:02:53,279",
+    "original": "You should follow\nTohsaka Rin's example.",
+    "translated": "Θα έπρεπε να ακολουθήσεις το παράδειγμα της Tohsaka Rin.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "34",
+    "timecode": "00:02:53,280 --> 00:02:57,830",
+    "original": "She might have a soft spot or two, but she\nhas the proper mindset, despite her age.",
+    "translated": "Μπορεί να έχει μερικές αδυναμίες, αλλά έχει την κατάλληλη\r\nνοοτροπία, παρά την ηλικία της.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "35",
+    "timecode": "00:02:58,750 --> 00:03:01,249",
+    "original": "It's fortunate for you that\nTohsaka's your Master.",
+    "translated": "Είσαι τυχερός που η Tohsaka είναι ο Αφέντης σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "36",
+    "timecode": "00:03:01,250 --> 00:03:03,920",
+    "original": "She's your best shot\nat getting the Grail.",
+    "translated": "Είναι η καλύτερη σου ευκαιρία να αποκτήσεις το Δισκοπότηρο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "37",
+    "timecode": "00:03:04,540 --> 00:03:08,210",
+    "original": "That malevolent treasure chest\nthat can grant human wishes?",
+    "translated": "Αυτό το κακόβουλο σεντούκι θησαυρού που μπορεί να εκπληρώσει ανθρώπινες ευχές;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "38",
+    "timecode": "00:03:08,710 --> 00:03:10,670",
+    "original": "I have no interest\nin such a thing.",
+    "translated": "Δεν έχω κανένα ενδιαφέρον για κάτι τέτοιο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "39",
+    "timecode": "00:03:11,680 --> 00:03:13,140",
+    "original": "No interest?",
+    "translated": "Κανένα ενδιαφέρον;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "40",
+    "timecode": "00:03:13,720 --> 00:03:16,778",
+    "original": "Don't Servants fight in\nthis war to have a wish",
+    "translated": "Οι Υπηρέτες δεν πολεμούν σε αυτόν τον πόλεμο για να εκπληρωθεί μια ευχή",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "41",
+    "timecode": "00:03:16,790 --> 00:03:19,729",
+    "original": "fulfilled that they\ncouldn't achieve in life?",
+    "translated": "που δεν μπόρεσαν να πραγματοποιήσουν όσο ζούσαν;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "42",
+    "timecode": "00:03:19,730 --> 00:03:20,980",
+    "original": "Hardly.",
+    "translated": "Σχεδόν ποτέ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "43",
+    "timecode": "00:03:21,480 --> 00:03:23,810",
+    "original": "We're summoned with\nno say in the matter.",
+    "translated": "Καλούμαστε χωρίς να έχουμε λόγο στην υπόθεση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "44",
+    "timecode": "00:03:24,400 --> 00:03:27,190",
+    "original": "We Servants have no free will.",
+    "translated": "Εμείς οι Υπηρέτες δεν έχουμε ελεύθερη βούληση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "45",
+    "timecode": "00:03:27,690 --> 00:03:32,529",
+    "original": "Your Saber is probably the only one\nwho answers the call of her own volition.",
+    "translated": "Η Ξιφομάχος σου είναι πιθανώς η μόνη που ανταποκρίνεται στο κάλεσμα με τη θέλησή της.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "46",
+    "timecode": "00:03:32,530 --> 00:03:34,529",
+    "original": "Only Saber?",
+    "translated": "Μόνο η Ξιφομάχος;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "47",
+    "timecode": "00:03:34,530 --> 00:03:35,450",
+    "original": "That's right.",
+    "translated": "Σωστά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "48",
+    "timecode": "00:03:35,451 --> 00:03:39,619",
+    "original": "Heroic Spirits are called\nforth by others' wills.",
+    "translated": "Τα Ηρωικά Πνεύματα καλούνται από τη βούληση άλλων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "49",
+    "timecode": "00:03:39,620 --> 00:03:41,709",
+    "original": "We're nothing more\nthan disposable tools.",
+    "translated": "Δεν είμαστε τίποτα περισσότερο από αναλώσιμα εργαλεία.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "50",
+    "timecode": "00:03:41,710 --> 00:03:48,460",
+    "original": "Do you honestly believe that, in our\nheart of hearts, we wish to help humans?",
+    "translated": "Πιστεύεις στ' αλήθεια ότι, βαθιά μέσα μας, θέλουμε να βοηθήσουμε τους ανθρώπους;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "51",
+    "timecode": "00:03:49,170 --> 00:03:50,590",
+    "original": "Well...",
+    "translated": "Λοιπόν...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "52",
+    "timecode": "00:03:50,960 --> 00:03:52,259",
+    "original": "Listen.",
+    "translated": "Άκου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "53",
+    "timecode": "00:03:52,260 --> 00:03:54,549",
+    "original": "Heroic Spirits are\nmere instruments...",
+    "translated": "Τα Ηρωικά Πνεύματα είναι απλά όργανα...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "54",
+    "timecode": "00:03:54,550 --> 00:03:59,470",
+    "original": "tools summoned to aid the disadvantaged and\ndisappear once their purpose is fulfilled.",
+    "translated": "εργαλεία που καλούνται για να βοηθήσουν τους μειονεκτούντες και εξαφανίζονται μόλις εκπληρωθεί ο σκοπός τους.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "55",
+    "timecode": "00:03:59,930 --> 00:04:05,100",
+    "original": "They're sweepers, stripped of their\nwill and made to serve humans forever.",
+    "translated": "Είναι εκκαθαριστές, στερημένοι από τη βούλησή τους και υποχρεωμένοι να υπηρετούν τους ανθρώπους για πάντα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "56",
+    "timecode": "00:04:05,560 --> 00:04:07,309",
+    "original": "That is what Heroic Spirits are.",
+    "translated": "Αυτό είναι το νόημα των Ηρωικών Πνευμάτων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "57",
+    "timecode": "00:04:07,310 --> 00:04:10,110",
+    "original": "So-called \"guardians\" that are\nsummoned when it's convenient.",
+    "translated": "Λεγόμενοι «φύλακες» που καλούνται όταν είναι βολικό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "58",
+    "timecode": "00:04:10,780 --> 00:04:13,359",
+    "original": "Instruments? What\nare you talking about?",
+    "translated": "Όργανα; Τι λες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "59",
+    "timecode": "00:04:13,360 --> 00:04:15,949",
+    "original": "Saber is a person.",
+    "translated": "Η Ξιφομάχος είναι άτομο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "60",
+    "timecode": "00:04:15,950 --> 00:04:18,119",
+    "original": "If she doesn't want to do\nsomething, she refuses,",
+    "translated": "Αν δεν θέλει να κάνει κάτι, αρνείται,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "61",
+    "timecode": "00:04:18,120 --> 00:04:20,990",
+    "original": "and I'm sure she can make her\nown decisions now that she's here.",
+    "translated": "και είμαι σίγουρος ότι μπορεί να πάρει τις δικές της αποφάσεις τώρα που είναι εδώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "62",
+    "timecode": "00:04:21,370 --> 00:04:22,539",
+    "original": "Possibly.",
+    "translated": "Πιθανόν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "63",
+    "timecode": "00:04:22,540 --> 00:04:25,488",
+    "original": "Being provided with a\nServant's shell in itself",
+    "translated": "Το να εφοδιάζεται κανείς με το περίβλημα ενός Υπηρέτη από μόνο του",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "64",
+    "timecode": "00:04:25,500 --> 00:04:28,460",
+    "original": "allows Heroic Spirits\nto regain their humanity.",
+    "translated": "επιτρέπει στα Ηρωικά Πνεύματα να ανακτήσουν την ανθρωπιά τους.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "65",
+    "timecode": "00:04:29,090 --> 00:04:33,169",
+    "original": "Along with old\nobsessions and regrets.",
+    "translated": "Μαζί με παλιές εμμονές και τύψεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "66",
+    "timecode": "00:04:33,170 --> 00:04:34,669",
+    "original": "Regrets?",
+    "translated": "Τύψεις;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "67",
+    "timecode": "00:04:34,670 --> 00:04:39,929",
+    "original": "Put yourself in the shoes of those\nwho died with unfinished business,",
+    "translated": "Βάλε τον εαυτό σου στη θέση όσων πέθαναν με εκκρεμότητες,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "68",
+    "timecode": "00:04:39,930 --> 00:04:44,310",
+    "original": "only to find themselves brought\nback by a human to do their bidding...",
+    "translated": "μόνο και μόνο για να τους φέρει πίσω ένας άνθρωπος ώστε να κάνουν ό,τι τους λέει...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "69",
+    "timecode": "00:04:44,850 --> 00:04:49,059",
+    "original": "all because they seek the Grail.",
+    "translated": "όλα αυτά επειδή αναζητούν το Δισκοπότηρο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "70",
+    "timecode": "00:04:49,060 --> 00:04:52,820",
+    "original": "Then why aren't you interested\nin something so powerful?",
+    "translated": "Τότε γιατί δεν σε ενδιαφέρει κάτι τόσο ισχυρό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "71",
+    "timecode": "00:04:53,190 --> 00:04:56,280",
+    "original": "I had no dream\nthat went unfulfilled.",
+    "translated": "Δεν είχα κανένα όνειρο που έμεινε ανεκπλήρωτο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "72",
+    "timecode": "00:04:57,740 --> 00:05:01,450",
+    "original": "I fulfilled my dream, died,\nand became a Heroic Spirit.",
+    "translated": "Εκπλήρωσα το όνειρό μου, πέθανα και έγινα Ηρωικό Πνεύμα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "73",
+    "timecode": "00:05:03,200 --> 00:05:05,870",
+    "original": "So I have no wish\nI want granted.",
+    "translated": "Οπότε δεν έχω καμία ευχή που θέλω να εκπληρωθεί.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "74",
+    "timecode": "00:05:11,250 --> 00:05:12,420",
+    "original": "I'm home.",
+    "translated": "Γύρισα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "75",
+    "timecode": "00:05:12,880 --> 00:05:15,049",
+    "original": "Welcome back, Senpai.",
+    "translated": "Καλώς όρισες πίσω, Shirou.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "76",
+    "timecode": "00:05:15,050 --> 00:05:17,129",
+    "original": "Hey. Welcome back, Shirou.",
+    "translated": "Γεια. Καλώς όρισες πίσω, Shirou.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "77",
+    "timecode": "00:05:17,130 --> 00:05:19,850",
+    "original": "Saber-chan was\nreally mad at you.",
+    "translated": "Η Ξιφομάχος ήταν πολύ θυμωμένη μαζί σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "78",
+    "timecode": "00:05:20,220 --> 00:05:21,220",
+    "original": "Yeah...",
+    "translated": "Ναι...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "79",
+    "timecode": "00:05:22,970 --> 00:05:24,600",
+    "original": "You know about Mitsuzuri-san?",
+    "translated": "Ξέρεις για την Mitsuzuri;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "80",
+    "timecode": "00:05:25,640 --> 00:05:27,480",
+    "original": "They found her\na little while ago.",
+    "translated": "Την βρήκαν πριν από λίγο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "81",
+    "timecode": "00:05:27,810 --> 00:05:30,059",
+    "original": "They found Mitsuzuri?",
+    "translated": "Βρήκαν τη Mitsuzuri;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "82",
+    "timecode": "00:05:30,060 --> 00:05:32,519",
+    "original": "Wait, how did you\nknow about that?",
+    "translated": "Περίμενε, πώς το έμαθες αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "83",
+    "timecode": "00:05:32,520 --> 00:05:35,490",
+    "original": "Ah, Ryuudou-kun\nasked me to tell you.",
+    "translated": "Α, ο Ryuudou μου ζήτησε να στο πω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "84",
+    "timecode": "00:05:35,860 --> 00:05:38,449",
+    "original": "He said her memory's\na bit jumbled,",
+    "translated": "Είπε ότι η μνήμη της είναι λίγο μπερδεμένη,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "85",
+    "timecode": "00:05:38,450 --> 00:05:41,660",
+    "original": "but there's no visible trauma and\nher condition isn't life-threatening.",
+    "translated": "αλλά δεν έχει ορατά τραύματα και η κατάστασή της δεν είναι απειλητική για τη ζωή της.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "86",
+    "timecode": "00:05:42,030 --> 00:05:44,329",
+    "original": "Isn't that great news, Senpai?",
+    "translated": "Δεν είναι υπέροχα νέα, Shirou;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "87",
+    "timecode": "00:05:44,330 --> 00:05:45,450",
+    "original": "Yeah.",
+    "translated": "Ναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "88",
+    "timecode": "00:05:50,000 --> 00:05:52,420",
+    "original": "Sakura, do you have a minute?",
+    "translated": "Sakura, έχεις ένα λεπτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "89",
+    "timecode": "00:05:54,000 --> 00:05:57,760",
+    "original": "It isn't safe after dark, so I want\nyou to spend the night here again.",
+    "translated": "Δεν είναι ασφαλές μετά το σκοτάδι, οπότε θέλω να μείνεις εδώ το βράδυ ξανά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "90",
+    "timecode": "00:05:58,340 --> 00:06:02,760",
+    "original": "Actually, if possible, could you\nkeep staying here for a while?",
+    "translated": "Στην πραγματικότητα, αν γίνεται, θα μπορούσες να μείνεις εδώ για λίγο ακόμα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "91",
+    "timecode": "00:06:04,600 --> 00:06:06,770",
+    "original": "Sorry. Am I putting\nyou on the spot?",
+    "translated": "Συγγνώμη. Σε φέρνω σε δύσκολη θέση;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "92",
+    "timecode": "00:06:07,980 --> 00:06:09,139",
+    "original": "Okay...",
+    "translated": "Εντάξει...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "93",
+    "timecode": "00:06:09,140 --> 00:06:12,110",
+    "original": "Um, I'll take you up\non your kind offer.",
+    "translated": "Λοιπόν, θα δεχτώ την ευγενική σου προσφορά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "94",
+    "timecode": "00:06:16,070 --> 00:06:17,070",
+    "original": "Shirou.",
+    "translated": "Shirou.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "95",
+    "timecode": "00:06:17,820 --> 00:06:20,740",
+    "original": "You gave me your word that\nyou would return before sunset.",
+    "translated": "Μου έδωσες τον λόγο σου ότι θα γύριζες πριν τη δύση του ηλίου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "96",
+    "timecode": "00:06:21,410 --> 00:06:22,819",
+    "original": "I'm sorry.",
+    "translated": "Συγγνώμη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "97",
+    "timecode": "00:06:22,820 --> 00:06:25,449",
+    "original": "You have every\nright to be angry.",
+    "translated": "Έχεις κάθε δικαίωμα να είσαι θυμωμένη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "98",
+    "timecode": "00:06:25,450 --> 00:06:29,750",
+    "original": "But before you yell at me, do you\nmind if we discuss our strategy first?",
+    "translated": "Αλλά προτού μου φωνάξεις, σε πειράζει να συζητήσουμε πρώτα τη στρατηγική μας;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "99",
+    "timecode": "00:06:33,540 --> 00:06:36,000",
+    "original": "There was a third\nMaster at school.",
+    "translated": "Υπήρχε ένας τρίτος Αφέντης στο σχολείο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "100",
+    "timecode": "00:06:36,460 --> 00:06:41,930",
+    "original": "So Tohsaka and I agreed to form\na truce until we can identify them.",
+    "translated": "Έτσι, η Tohsaka κι εγώ συμφωνήσαμε να κάνουμε ανακωχή μέχρι να τον αναγνωρίσουμε.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "101",
+    "timecode": "00:06:43,930 --> 00:06:46,849",
+    "original": "Are you opposed to\nworking with Tohsaka?",
+    "translated": "Είσαι αντίθετη στη συνεργασία με την Tohsaka;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "102",
+    "timecode": "00:06:46,850 --> 00:06:47,929",
+    "original": "No.",
+    "translated": "Όχι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "103",
+    "timecode": "00:06:47,930 --> 00:06:52,650",
+    "original": "I merely wish you had consulted me\nbefore making such an important decision.",
+    "translated": "Απλώς θα ήθελα να με είχες συμβουλευτεί πριν πάρεις μια τόσο σημαντική απόφαση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "104",
+    "timecode": "00:06:53,980 --> 00:06:56,109",
+    "original": "Oh... Sorry.",
+    "translated": "Ω... Συγγνώμη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "105",
+    "timecode": "00:06:56,110 --> 00:06:57,649",
+    "original": "Just to be clear...",
+    "translated": "Για να είμαστε σαφείς...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "106",
+    "timecode": "00:06:57,650 --> 00:07:00,183",
+    "original": "After this Master at\nyour school is defeated,",
+    "translated": "Αφότου νικηθεί αυτός ο Αφέντης στο σχολείο σου,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "107",
+    "timecode": "00:07:00,195 --> 00:07:02,570",
+    "original": "your truce with Rin\nwill be null and void.",
+    "translated": "η ανακωχή σου με τη Rin θα ακυρωθεί.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "108",
+    "timecode": "00:07:03,160 --> 00:07:04,740",
+    "original": "Is that correct?",
+    "translated": "Σωστά;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "109",
+    "timecode": "00:07:06,030 --> 00:07:07,030",
+    "original": "Yes.",
+    "translated": "Ναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "110",
+    "timecode": "00:07:07,370 --> 00:07:11,120",
+    "original": "As long as you understand\nthat, I have no objection.",
+    "translated": "Εφόσον το καταλαβαίνεις αυτό, δεν έχω καμία αντίρρηση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "111",
+    "timecode": "00:07:11,960 --> 00:07:16,040",
+    "original": "Let us work with Rin so that you\nmay gain more combat experience.",
+    "translated": "Ας συνεργαστούμε με τη Rin για να αποκτήσεις περισσότερη εμπειρία μάχης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "112",
+    "timecode": "00:07:16,880 --> 00:07:20,879",
+    "original": "Saber, you need\nthe Grail, right?",
+    "translated": "Ξιφομάχε, χρειάζεσαι το Δισκοπότηρο, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "113",
+    "timecode": "00:07:20,880 --> 00:07:21,760",
+    "original": "Yes.",
+    "translated": "Ναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "114",
+    "timecode": "00:07:21,761 --> 00:07:24,300",
+    "original": "But why do you need it?",
+    "translated": "Αλλά γιατί το χρειάζεσαι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "115",
+    "timecode": "00:07:25,550 --> 00:07:29,430",
+    "original": "Does this question have any\nbearing on our future strategy?",
+    "translated": "Έχει κάποια σχέση αυτή η ερώτηση με τη μελλοντική μας στρατηγική;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "116",
+    "timecode": "00:07:29,930 --> 00:07:31,690",
+    "original": "No, I just...",
+    "translated": "Όχι, απλώς...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "117",
+    "timecode": "00:07:32,140 --> 00:07:34,400",
+    "original": "Did something happen, Shirou?",
+    "translated": "Συνέβη κάτι, Shirou;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "118",
+    "timecode": "00:07:34,940 --> 00:07:37,070",
+    "original": "Forget it. It's nothing.",
+    "translated": "Άστο. Τίποτα δεν είναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "119",
+    "timecode": "00:07:38,570 --> 00:07:40,650",
+    "original": "I would like to\noffer a suggestion.",
+    "translated": "Θα ήθελα να προτείνω κάτι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "120",
+    "timecode": "00:07:42,150 --> 00:07:45,700",
+    "original": "Moving forward, you should build\nexperience through hands-on training.",
+    "translated": "Προχωρώντας, πρέπει να χτίσεις εμπειρία μέσα από πρακτική εξάσκηση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "121",
+    "timecode": "00:07:49,910 --> 00:07:51,750",
+    "original": "Yeah, you're right.",
+    "translated": "Ναι, έχεις δίκιο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "122",
+    "timecode": "00:07:53,460 --> 00:07:54,750",
+    "original": "Thanks in advance.",
+    "translated": "Ευχαριστώ εκ των προτέρων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "123",
+    "timecode": "00:08:01,670 --> 00:08:03,010",
+    "original": "Hey, Emiya!",
+    "translated": "Ε, Emiya!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "124",
+    "timecode": "00:08:03,680 --> 00:08:06,509",
+    "original": "Did you hear about Mitsuzuri?",
+    "translated": "Άκουσες για τη Mitsuzuri;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "125",
+    "timecode": "00:08:06,510 --> 00:08:09,430",
+    "original": "They told me at the\ndojo just this morning.",
+    "translated": "Μου το είπαν στο ντότζο μόλις σήμερα το πρωί.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "126",
+    "timecode": "00:08:09,890 --> 00:08:13,139",
+    "original": "She was found in Shinto, huh?",
+    "translated": "Βρέθηκε στο Σίντο, ε;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "127",
+    "timecode": "00:08:13,140 --> 00:08:14,979",
+    "original": "In a back alley, no less.",
+    "translated": "Μάλιστα σε μια πίσω αλάνα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "128",
+    "timecode": "00:08:14,980 --> 00:08:18,940",
+    "original": "I heard her eyes were glazed\nover and her uniform was in tatters.",
+    "translated": "Άκουσα ότι τα μάτια της ήταν θολά και η στολή της σκισμένη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "129",
+    "timecode": "00:08:19,440 --> 00:08:21,569",
+    "original": "I don't know what happened,",
+    "translated": "Δεν ξέρω τι συνέβη,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "130",
+    "timecode": "00:08:21,570 --> 00:08:25,779",
+    "original": "but how did a stuck-up girl like her\nend up ditched in an alley like that?",
+    "translated": "αλλά πώς κατέληξε ένα τόσο σνομπ κορίτσι πεταμένο σε μια τέτοια αλάνα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "131",
+    "timecode": "00:08:25,780 --> 00:08:28,489",
+    "original": "As a friend, I can't help but...",
+    "translated": "Ως φίλος, δεν μπορώ παρά...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "132",
+    "timecode": "00:08:28,490 --> 00:08:29,490",
+    "original": "Shinji!",
+    "translated": "Shinji!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "133",
+    "timecode": "00:08:30,990 --> 00:08:32,699",
+    "original": "Wow, scary.",
+    "translated": "Ουάου, τρομακτικό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "134",
+    "timecode": "00:08:32,700 --> 00:08:34,460",
+    "original": "I'm just kidding.",
+    "translated": "Πλάκα κάνω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "135",
+    "timecode": "00:08:35,000 --> 00:08:36,960",
+    "original": "It's only a rumor, right?",
+    "translated": "Είναι μόνο μια φήμη, έτσι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "136",
+    "timecode": "00:08:37,670 --> 00:08:42,590",
+    "original": "But after yesterday, she's become\npretty infamous among the first-years.",
+    "translated": "Αλλά μετά χθες, έχει γίνει αρκετά διαβόητη μεταξύ των πρωτοετών.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "137",
+    "timecode": "00:08:42,880 --> 00:08:45,630",
+    "original": "You were the last person to\nsee Mitsuzuri, weren't you?",
+    "translated": "Ήσουν ο τελευταίος που είδε τη Mitsuzuri, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "138",
+    "timecode": "00:08:46,090 --> 00:08:49,180",
+    "original": "Yeah, but all we did\nwas make idle chitchat.",
+    "translated": "Ναι, αλλά το μόνο που κάναμε ήταν να συζητάμε ασήμαντα πράγματα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "139",
+    "timecode": "00:08:51,060 --> 00:08:53,309",
+    "original": "Don't jump to conclusions, now.",
+    "translated": "Μη βγάζεις βιαστικά συμπεράσματα, τώρα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "140",
+    "timecode": "00:08:53,310 --> 00:08:57,980",
+    "original": "If you throw around false\naccusations, you'll regret it, Emiya.",
+    "translated": "Αν διαδίδεις ψεύτικες κατηγορίες, θα το μετανιώσεις, Emiya.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "141",
+    "timecode": "00:09:08,780 --> 00:09:10,450",
+    "original": "You're asking how\nto identify a Master?",
+    "translated": "Ρωτάς πώς να αναγνωρίσουμε έναν Αφέντη;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "142",
+    "timecode": "00:09:10,780 --> 00:09:14,620",
+    "original": "If you were near a\nMaster, would you know?",
+    "translated": "Αν ήσουν κοντά σε έναν Αφέντη, θα το καταλάβαινες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "143",
+    "timecode": "00:09:15,160 --> 00:09:19,499",
+    "original": "I suppose, but only if they hadn't\nmade any attempt at hiding it.",
+    "translated": "Υποθέτω πως ναι, αλλά μόνο αν δεν είχαν προσπαθήσει να το κρύψουν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "144",
+    "timecode": "00:09:19,500 --> 00:09:24,550",
+    "original": "A Master is a mage, so if you follow\ntheir mana, you can locate them.",
+    "translated": "Ένας Αφέντης είναι μάγος, οπότε αν ακολουθήσεις το mana του, μπορείς να τον εντοπίσεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "145",
+    "timecode": "00:09:25,130 --> 00:09:27,469",
+    "original": "But the most you'd\nget is suspects.",
+    "translated": "Αλλά το μόνο που θα είχες είναι ύποπτοι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "146",
+    "timecode": "00:09:27,470 --> 00:09:28,470",
+    "original": "That's all.",
+    "translated": "Αυτό είναι όλο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "147",
+    "timecode": "00:09:30,390 --> 00:09:31,390",
+    "original": "Emiya-kun?",
+    "translated": "Emiya;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "148",
+    "timecode": "00:09:33,180 --> 00:09:34,640",
+    "original": "Trace on.",
+    "translated": "Έναρξη Ιχνογράφησης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "149",
+    "timecode": "00:09:48,820 --> 00:09:50,489",
+    "original": "There really is one here.",
+    "translated": "Υπάρχει στ' αλήθεια εδώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "150",
+    "timecode": "00:09:50,490 --> 00:09:51,910",
+    "original": "I'm impressed.",
+    "translated": "Με εντυπωσιάζεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "151",
+    "timecode": "00:09:52,580 --> 00:09:54,079",
+    "original": "That's a sigil?",
+    "translated": "Αυτό είναι μαγικό σύμβολο;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "152",
+    "timecode": "00:09:54,080 --> 00:09:55,040",
+    "original": "Yeah.",
+    "translated": "Ναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "153",
+    "timecode": "00:09:55,041 --> 00:09:58,539",
+    "original": "Emiya-kun, for a guy who has no\nsensitivity to living organisms' mana,",
+    "translated": "Emiya, για κάποιον που δεν έχει ευαισθησία στο mana ζωντανών οργανισμών,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "154",
+    "timecode": "00:09:58,540 --> 00:10:00,960",
+    "original": "you're surprisingly good at\npicking up local abnormalities.",
+    "translated": "είσαι εκπληκτικά καλός στο να αντιλαμβάνεσαι τοπικές ανωμαλίες.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "155",
+    "timecode": "00:10:04,670 --> 00:10:07,090",
+    "original": "Was that a compliment?",
+    "translated": "Ήταν κομπλιμέντο αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "156",
+    "timecode": "00:10:07,720 --> 00:10:12,099",
+    "original": "You didn't think I was a\nmage either, remember?",
+    "translated": "Ούτε εσύ πίστευες ότι ήμουν μάγος, θυμάσαι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "157",
+    "timecode": "00:10:12,100 --> 00:10:14,060",
+    "original": "Why was that?",
+    "translated": "Γιατί συνέβη αυτό;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "158",
+    "timecode": "00:10:14,510 --> 00:10:17,139",
+    "original": "What? You want\nme to spell it out?",
+    "translated": "Τι; Θέλεις να στο εξηγήσω λεπτομερώς;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "159",
+    "timecode": "00:10:17,140 --> 00:10:18,480",
+    "original": "No, forget it.",
+    "translated": "Όχι, άστο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "160",
+    "timecode": "00:10:18,850 --> 00:10:20,729",
+    "original": "I can guess.",
+    "translated": "Μπορώ να μαντέψω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "161",
+    "timecode": "00:10:20,730 --> 00:10:22,229",
+    "original": "Clever boy.",
+    "translated": "Έξυπνο αγόρι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "162",
+    "timecode": "00:10:22,230 --> 00:10:24,189",
+    "original": "Anyway, that's just how it is.",
+    "translated": "Τέλος πάντων, έτσι είναι τα πράγματα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "163",
+    "timecode": "00:10:24,190 --> 00:10:30,109",
+    "original": "Mages only recognize people with\na certain level of mana as mages.",
+    "translated": "Οι μάγοι αναγνωρίζουν ως μάγους μόνο ανθρώπους με ένα συγκεκριμένο επίπεδο mana.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "164",
+    "timecode": "00:10:30,110 --> 00:10:32,700",
+    "original": "I thought it would be\nsomething like that.",
+    "translated": "Υποψιαζόμουν ότι θα ήταν κάτι τέτοιο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "165",
+    "timecode": "00:10:37,250 --> 00:10:40,419",
+    "original": "That should be most\nof the active sigils.",
+    "translated": "Αυτά θα πρέπει να είναι τα περισσότερα ενεργά μαγικά σύμβολα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "166",
+    "timecode": "00:10:40,420 --> 00:10:43,629",
+    "original": "You were able to disable\nthe magic field, then?",
+    "translated": "Ήσουν σε θέση να απενεργοποιήσεις το μαγικό πεδίο, λοιπόν;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "167",
+    "timecode": "00:10:43,630 --> 00:10:48,169",
+    "original": "The field itself is already in place,\nso all I did was weaken its potency.",
+    "translated": "Το ίδιο το πεδίο είναι ήδη σε λειτουργία, οπότε το μόνο που έκανα ήταν να αποδυναμώσω την ισχύ του.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "168",
+    "timecode": "00:10:48,170 --> 00:10:50,589",
+    "original": "Anyone who'd put\nup a field like this",
+    "translated": "Όποιος έστησε ένα τέτοιο πεδίο",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "169",
+    "timecode": "00:10:50,590 --> 00:10:53,429",
+    "original": "isn't going to stand by\nand let others interfere.",
+    "translated": "δεν θα μείνει με σταυρωμένα χέρια και να αφήσει άλλους να παρέμβουν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "170",
+    "timecode": "00:10:53,430 --> 00:10:57,430",
+    "original": "I expect they'll show\nthemselves—maybe even tomorrow.",
+    "translated": "Περιμένω να εμφανιστούν—ίσως και αύριο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "171",
+    "timecode": "00:10:58,850 --> 00:11:00,730",
+    "original": "You think so?",
+    "translated": "Έτσι νομίζεις;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "172",
+    "timecode": "00:11:06,270 --> 00:11:07,270",
+    "original": "Anyway,",
+    "translated": "Τέλος πάντων,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "173",
+    "timecode": "00:11:07,780 --> 00:11:10,490",
+    "original": "I have other business to\nsee to, so I'm heading home.",
+    "translated": "έχω άλλες δουλειές να τακτοποιήσω, οπότε πάω σπίτι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "174",
+    "timecode": "00:11:11,240 --> 00:11:14,120",
+    "original": "I need to buy some\nsupplies for tomorrow.",
+    "translated": "Πρέπει να αγοράσω μερικά εφόδια για αύριο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "175",
+    "timecode": "00:11:14,820 --> 00:11:17,659",
+    "original": "You should head\nhome early today too.",
+    "translated": "Κι εσύ πρέπει να πας νωρίς σπίτι σήμερα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "176",
+    "timecode": "00:11:17,660 --> 00:11:21,000",
+    "original": "What? Are you worried about me?",
+    "translated": "Τι; Ανησυχείς για μένα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "177",
+    "timecode": "00:11:22,290 --> 00:11:24,169",
+    "original": "Th-That's not it!",
+    "translated": "Δ-Δεν είναι αυτό!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "178",
+    "timecode": "00:11:24,170 --> 00:11:26,039",
+    "original": "We have an alliance now,",
+    "translated": "Έχουμε συμμαχία τώρα,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "179",
+    "timecode": "00:11:26,040 --> 00:11:29,339",
+    "original": "so if anything happens\nto you, it'll spoil my plans.",
+    "translated": "οπότε αν σου συμβεί κάτι, θα χαλάσει τα σχέδιά μου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "180",
+    "timecode": "00:11:29,340 --> 00:11:32,510",
+    "original": "That's all it was! I\njust said it to be clear!",
+    "translated": "Αυτό ήταν! Το είπα απλώς για να είμαι σαφής!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "181",
+    "timecode": "00:11:40,350 --> 00:11:45,520",
+    "original": "Heading home so late after\nall that tedious sigil-erasing?",
+    "translated": "Πας σπίτι τόσο αργά μετά από όλη αυτή τη βαρετή εξάλειψη μαγικών συμβόλων;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "182",
+    "timecode": "00:11:47,270 --> 00:11:48,480",
+    "original": "What did you say?",
+    "translated": "Τι είπες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "183",
+    "timecode": "00:11:48,980 --> 00:11:52,109",
+    "original": "The magic field you've been\nsystematically dismantling",
+    "translated": "Το μαγικό πεδίο που συστηματικά αποσυναρμολογούσες",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "184",
+    "timecode": "00:11:52,110 --> 00:11:54,989",
+    "original": "is an insurance policy\nI set up for myself.",
+    "translated": "είναι ένα ασφαλιστήριο συμβόλαιο που έστησα για τον εαυτό μου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "185",
+    "timecode": "00:11:54,990 --> 00:11:57,659",
+    "original": "I knew it, Shinji. You're...",
+    "translated": "Το ήξερα, Shinji. Είσαι...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "186",
+    "timecode": "00:11:57,660 --> 00:12:00,499",
+    "original": "Please don't be so stiff, Emiya.",
+    "translated": "Σε παρακαλώ, μην είσαι τόσο άκαμπτος, Emiya.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "187",
+    "timecode": "00:12:00,500 --> 00:12:05,170",
+    "original": "Just like you, I don't have any\nmana, but they're making me a Master.",
+    "translated": "Ακριβώς όπως εσύ, δεν έχω καθόλου mana, αλλά με κάνουν Αφέντη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "188",
+    "timecode": "00:12:05,670 --> 00:12:07,749",
+    "original": "So what's the\nstory with that field?",
+    "translated": "Λοιπόν, ποια είναι η ιστορία με αυτό το πεδίο;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "189",
+    "timecode": "00:12:07,750 --> 00:12:11,009",
+    "original": "I told you, it's just insurance.",
+    "translated": "Σου είπα, είναι απλώς ασφάλεια.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "190",
+    "timecode": "00:12:11,010 --> 00:12:13,510",
+    "original": "Then are you the one who\nattacked that student yesterday?",
+    "translated": "Τότε εσύ είσαι αυτός που επιτέθηκε σε εκείνη τη μαθήτρια χθες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "191",
+    "timecode": "00:12:14,380 --> 00:12:17,139",
+    "original": "I didn't have any choice there.",
+    "translated": "Δεν είχα επιλογή εκεί.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "192",
+    "timecode": "00:12:17,140 --> 00:12:19,640",
+    "original": "My Servant did it on her own.",
+    "translated": "Η Υπηρέτης μου το έκανε μόνη της.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "193",
+    "timecode": "00:12:20,520 --> 00:12:22,979",
+    "original": "Come on, you have to believe me.",
+    "translated": "Έλα τώρα, πρέπει να με πιστέψεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "194",
+    "timecode": "00:12:22,980 --> 00:12:25,770",
+    "original": "I don't want to fight anyone.",
+    "translated": "Δεν θέλω να πολεμήσω κανέναν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "195",
+    "timecode": "00:12:26,690 --> 00:12:27,980",
+    "original": "All right.",
+    "translated": "Εντάξει.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "196",
+    "timecode": "00:12:28,520 --> 00:12:29,520",
+    "original": "Wait, Emiya!",
+    "translated": "Περίμενε, Emiya!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "197",
+    "timecode": "00:12:30,110 --> 00:12:32,070",
+    "original": "Will you team up with me?",
+    "translated": "Θα συνεργαστείς μαζί μου;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "198",
+    "timecode": "00:12:32,440 --> 00:12:36,279",
+    "original": "My family, the Matous,\nwas once a lineage of mages.",
+    "translated": "Η οικογένειά μου, οι Matou, ήταν κάποτε μια γενιά μάγων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "199",
+    "timecode": "00:12:36,280 --> 00:12:37,619",
+    "original": "The Matous?",
+    "translated": "Οι Matou;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "200",
+    "timecode": "00:12:37,620 --> 00:12:42,539",
+    "original": "Well, it's no surprise that you wouldn't\nknow, since you aren't a proper mage.",
+    "translated": "Λοιπόν, δεν προκαλεί έκπληξη που δεν γνωρίζεις, αφού δεν είσαι σωστός μάγος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "201",
+    "timecode": "00:12:42,540 --> 00:12:45,290",
+    "original": "If you don't believe\nme, ask Tohsaka.",
+    "translated": "Αν δεν με πιστεύεις, ρώτα την Tohsaka.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "202",
+    "timecode": "00:12:45,790 --> 00:12:49,710",
+    "original": "Shinji, does Sakura\nknow about you?",
+    "translated": "Shinji, ξέρει η Sakura για σένα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "203",
+    "timecode": "00:12:50,170 --> 00:12:53,720",
+    "original": "Mage families only pass down\ntheir secret arts to the eldest son.",
+    "translated": "Οι οικογένειες των μάγων περνούν τις μυστικές τους τέχνες μόνο στον μεγαλύτερο γιο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "204",
+    "timecode": "00:12:54,260 --> 00:12:57,510",
+    "original": "As if anyone would teach\nmagic to that dunce of a girl.",
+    "translated": "Λες και κάποιος θα δίδασκε μαγεία σε αυτό το βλήμα το κορίτσι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "205",
+    "timecode": "00:12:58,140 --> 00:12:59,850",
+    "original": "Well? What do you say?",
+    "translated": "Λοιπόν; Τι λες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "206",
+    "timecode": "00:13:00,680 --> 00:13:04,730",
+    "original": "If you aren't going to do anything,\nwhat's the point of working together?",
+    "translated": "Αν δεν πρόκειται να κάνεις τίποτα, ποιο είναι το νόημα της συνεργασίας;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "207",
+    "timecode": "00:13:07,690 --> 00:13:10,149",
+    "original": "So teaming up's a no-go, huh?",
+    "translated": "Άρα η συνεργασία αποκλείεται, ε;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "208",
+    "timecode": "00:13:10,150 --> 00:13:15,240",
+    "original": "Emiya, don't tell me\nyou're actually in this to win.",
+    "translated": "Emiya, μη μου πεις ότι είσαι πραγματικά εδώ για να κερδίσεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "209",
+    "timecode": "00:13:17,740 --> 00:13:19,239",
+    "original": "I see.",
+    "translated": "Καταλαβαίνω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "210",
+    "timecode": "00:13:19,240 --> 00:13:21,759",
+    "original": "Well, I can hardly leave\nmy sister in the home of",
+    "translated": "Λοιπόν, δεν μπορώ να αφήσω την αδελφή μου στο σπίτι κάποιου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "211",
+    "timecode": "00:13:21,771 --> 00:13:24,199",
+    "original": "one who's taking part\nin this slaughter, can I?",
+    "translated": "που παίρνει μέρος σε αυτή τη σφαγή, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "212",
+    "timecode": "00:13:24,200 --> 00:13:25,659",
+    "original": "Fine.",
+    "translated": "Ωραία.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "213",
+    "timecode": "00:13:25,660 --> 00:13:27,960",
+    "original": "I'll tell Sakura myself.",
+    "translated": "Θα το πω στην Sakura μόνος μου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "214",
+    "timecode": "00:13:28,330 --> 00:13:32,340",
+    "original": "Okay. I'm glad you care for\nher so much as her senior.",
+    "translated": "Εντάξει. Χαίρομαι που τη νοιάζεσαι τόσο πολύ ως ανώτερός της.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "215",
+    "timecode": "00:13:32,750 --> 00:13:36,259",
+    "original": "What we discussed here is\njust between you and me, right?",
+    "translated": "Ό,τι συζητήσαμε εδώ είναι μόνο μεταξύ μας, έτσι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "216",
+    "timecode": "00:13:36,260 --> 00:13:40,550",
+    "original": "I came clean out of\nrespect for our friendship.",
+    "translated": "Ήρθα στα ίσα από σεβασμό στη φιλία μας.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "217",
+    "timecode": "00:13:41,100 --> 00:13:43,180",
+    "original": "Sure, I'll keep quiet.",
+    "translated": "Σίγουρα, θα κρατήσω το στόμα μου κλειστό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "218",
+    "timecode": "00:13:52,150 --> 00:13:53,150",
+    "original": "You're wide open!",
+    "translated": "Είσαι εντελώς ανοιχτός!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "219",
+    "timecode": "00:14:05,830 --> 00:14:07,830",
+    "original": "Okay, one more match!",
+    "translated": "Εντάξει, άλλη μία αναμέτρηση!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "220",
+    "timecode": "00:14:10,120 --> 00:14:11,329",
+    "original": "Ouch...",
+    "translated": "Άουτς...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "221",
+    "timecode": "00:14:11,330 --> 00:14:13,000",
+    "original": "Damn Saber.",
+    "translated": "Κατάρα στην Ξιφομάχο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "222",
+    "timecode": "00:14:13,500 --> 00:14:16,090",
+    "original": "When she decides to do\nsomething, she doesn't hold back.",
+    "translated": "Όταν αποφασίζει να κάνει κάτι, δεν κρατιέται.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "223",
+    "timecode": "00:14:20,470 --> 00:14:22,050",
+    "original": "Trace on.",
+    "translated": "Έναρξη Ιχνογράφησης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "224",
+    "timecode": "00:14:29,640 --> 00:14:31,900",
+    "original": "Crap. Concentrate!",
+    "translated": "Άντε γαμώτο. Συγκεντρώσου!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "225",
+    "timecode": "00:14:34,110 --> 00:14:35,110",
+    "original": "Shirou?",
+    "translated": "Shirou;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "226",
+    "timecode": "00:14:36,360 --> 00:14:38,069",
+    "original": "What is it, Saber?",
+    "translated": "Τι συμβαίνει, Ξιφομάχε;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "227",
+    "timecode": "00:14:38,070 --> 00:14:41,110",
+    "original": "Nothing. I just sensed magic.",
+    "translated": "Τίποτα. Απλώς ένιωσα μαγεία.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "228",
+    "timecode": "00:14:41,660 --> 00:14:42,949",
+    "original": "You are training?",
+    "translated": "Εξασκείσαι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "229",
+    "timecode": "00:14:42,950 --> 00:14:46,870",
+    "original": "Yeah. I do this every day.",
+    "translated": "Ναι. Το κάνω αυτό κάθε μέρα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "230",
+    "timecode": "00:14:47,370 --> 00:14:49,120",
+    "original": "May I enter?",
+    "translated": "Επιτρέπεται να μπω;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "231",
+    "timecode": "00:14:49,960 --> 00:14:51,000",
+    "original": "Sure.",
+    "translated": "Βεβαίως.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "232",
+    "timecode": "00:14:51,420 --> 00:14:55,339",
+    "original": "I heard that your magical\nspecialty is fortification.",
+    "translated": "Άκουσα ότι η μαγική σου ειδικότητα είναι η ενίσχυση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "233",
+    "timecode": "00:14:55,340 --> 00:15:00,009",
+    "original": "It's the only thing I can do, so I'm\nnot sure if \"specialty\" is the word.",
+    "translated": "Είναι το μόνο πράγμα που μπορώ να κάνω, οπότε δεν είμαι σίγουρος αν η «ειδικότητα» είναι η σωστή λέξη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "234",
+    "timecode": "00:15:00,010 --> 00:15:03,510",
+    "original": "How does one train in\nthe art of fortification?",
+    "translated": "Πώς εξασκείται κανείς στην τέχνη της ενίσχυσης;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "235",
+    "timecode": "00:15:04,050 --> 00:15:08,599",
+    "original": "Fortification isn't just about\nincreasing a thing's toughness.",
+    "translated": "Η ενίσχυση δεν αφορά μόνο την αύξηση της ανθεκτικότητας ενός αντικειμένου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "236",
+    "timecode": "00:15:08,600 --> 00:15:11,440",
+    "original": "It also includes\nincreasing its effectiveness.",
+    "translated": "Περιλαμβάνει επίσης την αύξηση της αποτελεσματικότητάς του.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "237",
+    "timecode": "00:15:12,400 --> 00:15:13,900",
+    "original": "For this rock, it's\nmaking it harder.",
+    "translated": "Για αυτόν τον βράχο, είναι το να τον κάνεις σκληρότερο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "238",
+    "timecode": "00:15:14,360 --> 00:15:17,440",
+    "original": "For that light bulb,\nit's making it brighter.",
+    "translated": "Για αυτή τη λάμπα, είναι το να την κάνεις λαμπρότερη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "239",
+    "timecode": "00:15:17,940 --> 00:15:20,359",
+    "original": "I visualize an\nobject's components",
+    "translated": "Οραματίζομαι τα δομικά στοιχεία ενός αντικειμένου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "240",
+    "timecode": "00:15:20,360 --> 00:15:24,910",
+    "original": "and pass my mana\nthrough them to fortify it.",
+    "translated": "και περνάω το mana μου μέσα από αυτά για να το ενισχύσω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "241",
+    "timecode": "00:15:25,450 --> 00:15:26,530",
+    "original": "I understand.",
+    "translated": "Καταλαβαίνω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "242",
+    "timecode": "00:15:28,540 --> 00:15:31,040",
+    "original": "I-It's better to show than tell.",
+    "translated": "Ε-Είναι καλύτερα να στο δείξω παρά να στο πω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "243",
+    "timecode": "00:15:32,080 --> 00:15:34,250",
+    "original": "I'll try it on this.",
+    "translated": "Θα το δοκιμάσω σε αυτό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "244",
+    "timecode": "00:15:34,670 --> 00:15:36,170",
+    "original": "Trace on.",
+    "translated": "Έναρξη Ιχνογράφησης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "245",
+    "timecode": "00:15:39,800 --> 00:15:42,260",
+    "original": "Tracing fundamental structure.",
+    "translated": "Ιχνογράφηση θεμελιώδους δομής.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "246",
+    "timecode": "00:15:42,800 --> 00:15:45,090",
+    "original": "Tracing auxiliary components.",
+    "translated": "Ιχνογράφηση βοηθητικών δομικών στοιχείων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "247",
+    "timecode": "00:15:45,680 --> 00:15:48,100",
+    "original": "Altering fundamental structure.",
+    "translated": "Αλλοίωση θεμελιώδους δομής.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "248",
+    "timecode": "00:15:48,810 --> 00:15:52,480",
+    "original": "Reinforcing\nauxiliary components.",
+    "translated": "Ενίσχυση βοηθητικών δομικών στοιχείων.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "249",
+    "timecode": "00:15:54,980 --> 00:15:57,360",
+    "original": "Damn, another bust.",
+    "translated": "Ανάθεμα, άλλη μια αποτυχία.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "250",
+    "timecode": "00:15:58,070 --> 00:16:00,989",
+    "original": "My success rate is\nactually pretty low.",
+    "translated": "Το ποσοστό επιτυχίας μου είναι στην πραγματικότητα αρκετά χαμηλό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "251",
+    "timecode": "00:16:00,990 --> 00:16:06,870",
+    "original": "No, I sensed just now that\nyour concentration was lacking.",
+    "translated": "Όχι, μόλις τώρα αντιλήφθηκα ότι η συγκέντρωσή σου ήταν ελλιπής.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "252",
+    "timecode": "00:16:07,580 --> 00:16:08,450",
+    "original": "Oh...",
+    "translated": "Ω...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "253",
+    "timecode": "00:16:08,451 --> 00:16:14,330",
+    "original": "No, my luck is a lot better\nwith bladed tools like this.",
+    "translated": "Όχι, η τύχη μου είναι πολύ καλύτερη με εργαλεία με λεπίδα σαν αυτό.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "254",
+    "timecode": "00:16:16,080 --> 00:16:18,920",
+    "original": "I can see that my presence\nhere is a distraction.",
+    "translated": "Βλέπω ότι η παρουσία μου εδώ σε αποσπά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "255",
+    "timecode": "00:16:19,300 --> 00:16:21,550",
+    "original": "Please try not to\npush yourself too hard.",
+    "translated": "Σε παρακαλώ προσπάθησε να μην πιέζεις πολύ τον εαυτό σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "256",
+    "timecode": "00:16:22,670 --> 00:16:24,970",
+    "original": "I won't. Goodnight.",
+    "translated": "Δεν θα το κάνω. Καληνύχτα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "257",
+    "timecode": "00:17:12,930 --> 00:17:14,100",
+    "original": "Is this...",
+    "translated": "Αυτός είναι...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "258",
+    "timecode": "00:17:15,020 --> 00:17:16,599",
+    "original": "Ryuudou Temple?",
+    "translated": "ο Ναός Ryuudou;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "259",
+    "timecode": "00:17:16,600 --> 00:17:18,350",
+    "original": "Yes, it is.",
+    "translated": "Ναι, αυτός είναι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "260",
+    "timecode": "00:17:33,950 --> 00:17:36,080",
+    "original": "Mmm... Roasted cod roe...",
+    "translated": "Μμ... Ψητός ταραμάς...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "261",
+    "timecode": "00:17:45,010 --> 00:17:46,260",
+    "original": "Shirou.",
+    "translated": "Shirou.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "262",
+    "timecode": "00:17:52,390 --> 00:17:54,639",
+    "original": "The Caster-class Servant?",
+    "translated": "Ο Υπηρέτης της κλάσης Caster;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "263",
+    "timecode": "00:17:54,640 --> 00:17:58,310",
+    "original": "Indeed I am, Master of Saber.",
+    "translated": "Όντως είμαι, Αφέντη της Ξιφομάχου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "264",
+    "timecode": "00:17:59,690 --> 00:18:01,059",
+    "original": "Do not bother.",
+    "translated": "Μην μπαίνεις στον κόπο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "265",
+    "timecode": "00:18:01,060 --> 00:18:05,939",
+    "original": "Once cast, a spell cannot be\nwashed away with the water of mana.",
+    "translated": "Μόλις γίνει η επίκληση, ένα ξόρκι δεν μπορεί να ξεπλυθεί με το νερό του mana.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "266",
+    "timecode": "00:18:05,940 --> 00:18:10,160",
+    "original": "Especially not by the flow from\nmagic circuits as feeble as yours.",
+    "translated": "Ειδικά όχι από τη ροή από μαγικά κυκλώματα τόσο αδύναμα όσο τα δικά σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "267",
+    "timecode": "00:18:10,780 --> 00:18:12,989",
+    "original": "Meaning that I was\neasy to summon here?",
+    "translated": "Σημαίνει ότι ήταν εύκολο να με καλέσεις εδώ;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "268",
+    "timecode": "00:18:12,990 --> 00:18:17,709",
+    "original": "Because, of all the Masters,\nyou are the weakest by far.",
+    "translated": "Επειδή, από όλους τους Αφέντες, είσαι μακράν ο πιο αδύναμος.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "269",
+    "timecode": "00:18:17,710 --> 00:18:19,999",
+    "original": "You're going to kill me?",
+    "translated": "Θα με σκοτώσεις;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "270",
+    "timecode": "00:18:20,000 --> 00:18:24,669",
+    "original": "Rest easy. If I killed you, I wouldn't\nbe able to drain you of mana.",
+    "translated": "Ηρέμησε. Αν σε σκότωνα, δεν θα μπορούσα να σου αποστραγγίσω το mana.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "271",
+    "timecode": "00:18:24,670 --> 00:18:28,089",
+    "original": "I did inadvertently kill a few\nbefore I had the feel for it,",
+    "translated": "Σκότωσα ακούσια μερικούς προτού εξοικειωθώ με αυτό,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "272",
+    "timecode": "00:18:28,090 --> 00:18:30,430",
+    "original": "but now, I can collect\njust the right amount.",
+    "translated": "αλλά τώρα, μπορώ να συλλέγω ακριβώς τη σωστή ποσότητα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "273",
+    "timecode": "00:18:31,140 --> 00:18:33,929",
+    "original": "You're the one behind\nthe people fainting in town?",
+    "translated": "Εσύ είσαι πίσω από τους ανθρώπους που λιποθυμούν στην πόλη;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "274",
+    "timecode": "00:18:33,930 --> 00:18:36,180",
+    "original": "Oh, you didn't know?",
+    "translated": "Α, δεν το ήξερες;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "275",
+    "timecode": "00:18:36,680 --> 00:18:40,440",
+    "original": "We Servants of the Caster class have\nthe prerogative of establishing territory.",
+    "translated": "Εμείς οι Υπηρέτες της κλάσης Caster έχουμε το προνόμιο εδαφικής εγκαθίδρυσης.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "276",
+    "timecode": "00:18:40,900 --> 00:18:45,229",
+    "original": "By building a sanctuary here,\nI've protected myself from you.",
+    "translated": "Χτίζοντας ένα καταφύγιο εδώ, έχω προστατεύσει τον εαυτό μου από εσένα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "277",
+    "timecode": "00:18:45,230 --> 00:18:46,940",
+    "original": "You can see it, can't you?",
+    "translated": "Μπορείς να το δεις, έτσι δεν είναι;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "278",
+    "timecode": "00:18:47,440 --> 00:18:51,159",
+    "original": "The mana of hundreds of\npeople stored in this soil...",
+    "translated": "Το mana εκατοντάδων ανθρώπων αποθηκευμένο σε αυτό το έδαφος...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "279",
+    "timecode": "00:18:51,160 --> 00:18:53,200",
+    "original": "The fragments of the rabble.",
+    "translated": "Τα θραύσματα του όχλου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "280",
+    "timecode": "00:18:53,530 --> 00:18:58,949",
+    "original": "Caster... You\ninvolved outsiders?",
+    "translated": "Caster... Ανάμειξες εξωτερικούς;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "281",
+    "timecode": "00:18:58,950 --> 00:19:02,169",
+    "original": "All the people in this\ntown belong to me.",
+    "translated": "Όλοι οι άνθρωποι σε αυτή την πόλη μου ανήκουν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "282",
+    "timecode": "00:19:02,170 --> 00:19:03,919",
+    "original": "Caster!",
+    "translated": "Caster!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "283",
+    "timecode": "00:19:03,920 --> 00:19:07,669",
+    "original": "Well, I think we have\ntalked for long enough.",
+    "translated": "Λοιπόν, νομίζω ότι μιλήσαμε αρκετά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "284",
+    "timecode": "00:19:07,670 --> 00:19:10,840",
+    "original": "Let's get those\nCommand Spells off you.",
+    "translated": "Ας σου αφαιρέσουμε αυτά τα Ξόρκια Εντολής.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "285",
+    "timecode": "00:19:22,190 --> 00:19:25,650",
+    "original": "A magic field that repels the\nvery concept of Heroic Spirits?",
+    "translated": "Ένα μαγικό πεδίο που απωθεί την ίδια την έννοια των Ηρωικών Πνευμάτων;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "286",
+    "timecode": "00:19:36,530 --> 00:19:37,530",
+    "original": "If I may:",
+    "translated": "Αν μου επιτρέπετε:",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "287",
+    "timecode": "00:19:37,740 --> 00:19:39,700",
+    "original": "what class of Servant are you?",
+    "translated": "τι κλάσης Υπηρέτης είστε;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "288",
+    "timecode": "00:19:40,250 --> 00:19:42,079",
+    "original": "The Assassin-class Servant,",
+    "translated": "Ο Υπηρέτης της κλάσης Assassin,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "289",
+    "timecode": "00:19:42,080 --> 00:19:44,210",
+    "original": "Sasaki Kojirou.",
+    "translated": "Sasaki Kojirou.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "290",
+    "timecode": "00:19:45,750 --> 00:19:48,959",
+    "original": "Isn't it natural to identify\noneself before combat?",
+    "translated": "Δεν είναι φυσικό να συστήνεται κανείς πριν τη μάχη;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "291",
+    "timecode": "00:19:48,960 --> 00:19:50,906",
+    "original": "If my opponent should\nidentify themselves,",
+    "translated": "Αν ο αντίπαλός μου συστηθεί,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "292",
+    "timecode": "00:19:50,918 --> 00:19:52,970",
+    "original": "I am honor-bound as\na knight to do the same.",
+    "translated": "έχω την τιμή ως ιππότης να κάνω το ίδιο.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "293",
+    "timecode": "00:19:53,510 --> 00:19:56,259",
+    "original": "Once I have done so, I\nwill make you step aside.",
+    "translated": "Μόλις το κάνω, θα σε βάλω στην άκρη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "294",
+    "timecode": "00:19:56,260 --> 00:19:58,100",
+    "original": "My name is...",
+    "translated": "Το όνομά μου είναι...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "295",
+    "timecode": "00:19:57,100 --> 00:19:58,100",
+    "original": "It matters not.",
+    "translated": "Δεν έχει σημασία.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "296",
+    "timecode": "00:20:00,520 --> 00:20:04,650",
+    "original": "My blade will tell me all I\nneed to know of my enemy.",
+    "translated": "Η λεπίδα μου θα μου πει όλα όσα χρειάζεται να ξέρω για τον εχθρό μου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "297",
+    "timecode": "00:20:05,520 --> 00:20:10,229",
+    "original": "If you wish to pass, then\nforce your way through.",
+    "translated": "Αν θες να περάσεις, τότε διάβηθι δια της βίας.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "298",
+    "timecode": "00:20:10,230 --> 00:20:13,569",
+    "original": "You want to take\nmy Command Spells?",
+    "translated": "Θέλεις να πάρεις τα Ξόρκια Εντολής μου;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "299",
+    "timecode": "00:20:13,570 --> 00:20:14,570",
+    "original": "That's right.",
+    "translated": "Σωστά.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "300",
+    "timecode": "00:20:15,320 --> 00:20:18,329",
+    "original": "I will transplant them\nonto my own Master.",
+    "translated": "Θα τα μεταμοσχεύσω στον δικό μου Αφέντη.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "301",
+    "timecode": "00:20:18,330 --> 00:20:23,210",
+    "original": "And then, he will have Saber deal\nwith that troublesome Berserker.",
+    "translated": "Και μετά, αυτός θα βάλει την Ξιφομάχο να αντιμετωπίσει αυτόν τον ενοχλητικό Παράφρονα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "302",
+    "timecode": "00:20:23,710 --> 00:20:30,170",
+    "original": "Removing Command Spells also\nrequires extracting your magic circuits.",
+    "translated": "Η αφαίρεση των Ξορκιών Εντολής απαιτεί επίσης την εξαγωγή των μαγικών κυκλωμάτων σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "303",
+    "timecode": "00:20:40,770 --> 00:20:42,889",
+    "original": "That's a good boy.",
+    "translated": "Τι καλό αγόρι.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "304",
+    "timecode": "00:20:42,890 --> 00:20:46,060",
+    "original": "I do enjoy it when you struggle.",
+    "translated": "Μου αρέσει πολύ όταν παλεύεις.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "305",
+    "timecode": "00:20:58,740 --> 00:21:01,039",
+    "original": "I expected to find\nyou long dead,",
+    "translated": "Περίμενα να σε βρω προ πολλού νεκρό,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "306",
+    "timecode": "00:21:01,040 --> 00:21:03,120",
+    "original": "but it seems you're more\ntenacious than I'd thought.",
+    "translated": "αλλά φαίνεται πως είσαι πιο επίμονος απ' όσο νόμιζα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "307",
+    "timecode": "00:21:04,330 --> 00:21:05,330",
+    "original": "You...",
+    "translated": "Εσύ...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "308",
+    "timecode": "00:21:05,660 --> 00:21:06,670",
+    "original": "Why?",
+    "translated": "Γιατί;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "309",
+    "timecode": "00:21:11,420 --> 00:21:14,170",
+    "original": "Oh, I merely happened by.",
+    "translated": "Α, απλώς έτυχε να περνάω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "310",
+    "timecode": "00:21:14,800 --> 00:21:17,090",
+    "original": "So, are you able to move now?",
+    "translated": "Λοιπόν, μπορείς να κουνηθείς τώρα;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "311",
+    "timecode": "00:21:17,550 --> 00:21:20,390",
+    "original": "My arrows should have\nsevered Caster's threads.",
+    "translated": "Τα βέλη μου θα έπρεπε να έχουν κόψει τα νήματα της Caster.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "312",
+    "timecode": "00:21:21,930 --> 00:21:24,059",
+    "original": "Yeah, I can.",
+    "translated": "Ναι, μπορώ.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "313",
+    "timecode": "00:21:24,060 --> 00:21:25,559",
+    "original": "Good to hear.",
+    "translated": "Χαίρομαι που το ακούω.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "314",
+    "timecode": "00:21:25,560 --> 00:21:29,559",
+    "original": "As much as I would like\nto say, \"Do what you want,\"",
+    "translated": "Όσο κι αν θα ήθελα να πω, «Κάνε ό,τι θέλεις»,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "315",
+    "timecode": "00:21:29,560 --> 00:21:31,940",
+    "original": "I suggest you stay\nwhere you are for now.",
+    "translated": "σου προτείνω να μείνεις εκεί που είσαι προς το παρόν.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "316",
+    "timecode": "00:21:32,400 --> 00:21:34,690",
+    "original": "If you act without thinking...",
+    "translated": "Αν ενεργήσεις χωρίς να σκεφτείς...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "317",
+    "timecode": "00:21:35,440 --> 00:21:37,110",
+    "original": "You are Archer?",
+    "translated": "Είσαι ο Archer;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "318",
+    "timecode": "00:21:38,450 --> 00:21:40,869",
+    "original": "Damn that Assassin!\nWhat is he doing?",
+    "translated": "Κατάρα σε αυτόν τον Assassin! Τι κάνει;",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "319",
+    "timecode": "00:21:40,870 --> 00:21:45,330",
+    "original": "See? She'll take\nher anger out on you.",
+    "translated": "Βλέπεις; Θα βγάλει τον θυμό της πάνω σου.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "320",
+    "timecode": "00:21:45,660 --> 00:21:48,960",
+    "original": "A woman's fury is\ndifficult to control.",
+    "translated": "Η οργή μιας γυναίκας είναι δύσκολο να ελεγχθεί.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "321",
+    "timecode": "00:21:49,790 --> 00:21:51,249",
+    "original": "Damn.",
+    "translated": "Διάολε.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "322",
+    "timecode": "00:21:51,250 --> 00:21:54,260",
+    "original": "I think things are\nabout to get a bit violent.",
+    "translated": "Νομίζω ότι τα πράγματα θα γίνουν λίγο βίαια.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "323",
+    "timecode": "00:22:10,360 --> 00:22:16,499",
+    "original": "We didn't understand anything",
+    "translated": "Δεν καταλάβαμε τίποτα",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "324",
+    "timecode": "00:22:16,500 --> 00:22:22,669",
+    "original": "My left hand groped for\nthings that vanished to my touch",
+    "translated": "Το αριστερό μου χέρι ψηλάφησε πράγματα που εξαφανίστηκαν στην αφή μου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "325",
+    "timecode": "00:22:22,670 --> 00:22:25,669",
+    "original": "A moral conflict",
+    "translated": "Μια ηθική σύγκρουση",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "326",
+    "timecode": "00:22:25,670 --> 00:22:28,470",
+    "original": "stays your hand",
+    "translated": "συγκρατεί το χέρι σου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "327",
+    "timecode": "00:22:28,720 --> 00:22:31,219",
+    "original": "and tricks you",
+    "translated": "και σε εξαπατά",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "328",
+    "timecode": "00:22:31,220 --> 00:22:33,100",
+    "original": "out of your future",
+    "translated": "από το μέλλον σου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "329",
+    "timecode": "00:22:33,350 --> 00:22:40,019",
+    "original": "I don't know how\nto protect anyone,",
+    "translated": "Δεν ξέρω πώς να προστατεύσω κανέναν,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "330",
+    "timecode": "00:22:40,020 --> 00:22:45,820",
+    "original": "and my ideals might\nwell be pointless,",
+    "translated": "και τα ιδανικά μου μπορεί κάλλιστα να είναι μάταια,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "331",
+    "timecode": "00:22:46,030 --> 00:22:54,030",
+    "original": "but I want to live my life",
+    "translated": "αλλά θέλω να ζήσω τη ζωή μου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "332",
+    "timecode": "00:22:55,030 --> 00:23:00,039",
+    "original": "The past repeats before my eyes",
+    "translated": "Το παρελθόν επαναλαμβάνεται μπροστά στα μάτια μου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "333",
+    "timecode": "00:23:00,040 --> 00:23:07,839",
+    "original": "Here I will trust the me\nthat now stands with you",
+    "translated": "Εδώ θα εμπιστευτώ τον εαυτό μου που στέκεται τώρα μαζί σου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "334",
+    "timecode": "00:23:07,840 --> 00:23:13,929",
+    "original": "Until my dream\ncrumbles and withers,",
+    "translated": "Μέχρι το όνειρό μου να θρυμματιστεί και να μαραθεί,",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "335",
+    "timecode": "00:23:13,930 --> 00:23:19,559",
+    "original": "I hope you will carve\nout paradise with me",
+    "translated": "ελπίζω να χαράξεις τον παράδεισο μαζί μου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "336",
+    "timecode": "00:23:19,560 --> 00:23:23,270",
+    "original": "Fight your fate",
+    "translated": "Πολέμησε τη μοίρα σου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "337",
+    "timecode": "00:23:26,640 --> 00:23:28,559",
+    "original": "I wouldn't want your\nhelp, even if you offered!",
+    "translated": "Δεν θα ήθελα τη βοήθειά σου, ακόμα κι αν την προσέφερες!",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "338",
+    "timecode": "00:23:28,560 --> 00:23:30,559",
+    "original": "If you're both an idiot and\na child, you're a lost cause.",
+    "translated": "Αν είσαι και ηλίθιος και παιδί, τότε είσαι χαμένη υπόθεση.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "339",
+    "timecode": "00:23:30,560 --> 00:23:34,189",
+    "original": "I shall mete out an appropriate punishment\nupon those who would call me a witch.",
+    "translated": "Θα επιβάλω την κατάλληλη τιμωρία σε όσους θα με αποκαλούσαν μάγισσα.",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "340",
+    "timecode": "00:23:34,190 --> 00:23:36,730",
+    "original": "A Servant who created a technique\non par with a Noble Phantasm...",
+    "translated": "Ένας Υπηρέτης που δημιούργησε μια τεχνική ισάξια με Πνευματικό Όπλο...",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "341",
+    "timecode": "00:23:36,731 --> 00:23:38,735",
+    "original": "The Reward for the Death Match",
+    "translated": "Η Ανταμοιβή για τον Αγώνα Θανάτου",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "342",
+    "timecode": "00:23:38,736 --> 00:23:40,990",
+    "original": "Next Time",
+    "translated": "Επόμενη Φορά",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "343",
+    "timecode": "00:23:36,730 --> 00:23:40,110",
+    "original": "Shall I break open that\nbelief with brute force?",
+    "translated": "Να ανοίξω διάπλατα αυτήν την πεποίθηση με ωμή βία;",
+    "is_edited": false,
+    "needs_review": false
+  }
+]

@@ -1,0 +1,2634 @@
+[
+  {
+    "id": "1",
+    "timecode": "00:00:01,000 --> 00:00:02,640",
+    "original": "Frieren.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "2",
+    "timecode": "00:00:02,640 --> 00:00:06,730",
+    "original": "You must find Aureole\nand speak with Himmel.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "3",
+    "timecode": "00:00:08,450 --> 00:00:11,260",
+    "original": "\"On the northernmost end of the continent...\"",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "4",
+    "timecode": "00:00:11,920 --> 00:00:15,900",
+    "original": "<i>I arrived at the place the people\nof this world call heaven:</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "5",
+    "timecode": "00:00:15,900 --> 00:00:19,820",
+    "original": "<i>Aureole, the land where souls rest.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "6",
+    "timecode": "00:00:20,480 --> 00:00:23,610",
+    "original": "<i>Many souls gather there,</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "7",
+    "timecode": "00:00:24,020 --> 00:00:27,330",
+    "original": "<i>and I spoke with friends\nwho once fought alongside me.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "8",
+    "timecode": "00:00:30,710 --> 00:00:32,160",
+    "original": "Sorry to ask this of you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "9",
+    "timecode": "00:00:32,540 --> 00:00:34,490",
+    "original": "It'll be a long journey.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "10",
+    "timecode": "00:00:35,110 --> 00:00:37,950",
+    "original": "It took us ten years.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "11",
+    "timecode": "00:00:40,060 --> 00:00:41,360",
+    "original": "I see.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "12",
+    "timecode": "00:00:41,360 --> 00:00:46,100",
+    "original": "We'll be following the same path Mr. Himmel's\nparty took to the Demon King's castle.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "13",
+    "timecode": "00:00:56,990 --> 00:00:58,160",
+    "original": "You're right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "14",
+    "timecode": "00:00:58,960 --> 00:01:01,260",
+    "original": "It'll be a mere ten-year adventure.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "15",
+    "timecode": "00:01:03,480 --> 00:01:05,510",
+    "original": "One one-hundredth, huh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "16",
+    "timecode": "00:01:07,270 --> 00:01:11,040",
+    "original": "Frieren, you're not going\nto stay in the royal capital?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "17",
+    "timecode": "00:01:11,360 --> 00:01:13,130",
+    "original": "I'm going to keep traveling.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "18",
+    "timecode": "00:01:13,130 --> 00:01:14,540",
+    "original": "Alone?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "19",
+    "timecode": "00:01:14,540 --> 00:01:16,200",
+    "original": "It'll be nice and easy.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "20",
+    "timecode": "00:01:16,940 --> 00:01:19,300",
+    "original": "You're not going to take on an apprentice?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "21",
+    "timecode": "00:01:19,300 --> 00:01:22,280",
+    "original": "Traveling is better when you\nhave someone to talk to.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "22",
+    "timecode": "00:01:22,620 --> 00:01:24,860",
+    "original": "It's a waste of time.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "23",
+    "timecode": "00:01:24,860 --> 00:01:27,780",
+    "original": "Even if I taught them,\nthey'd die in no time.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "24",
+    "timecode": "00:01:30,310 --> 00:01:34,680",
+    "original": "Frieren, that's not how relationships work.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "25",
+    "timecode": "00:01:35,000 --> 00:01:36,960",
+    "original": "Yes, it is.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "26",
+    "timecode": "00:01:36,960 --> 00:01:42,050",
+    "original": "My adventure with you wasn't even\none one-hundredth of my life.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "27",
+    "timecode": "00:01:43,260 --> 00:01:45,600",
+    "original": "I might've said something like that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "28",
+    "timecode": "00:01:47,080 --> 00:01:49,100",
+    "original": "It's funny, isn't it?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "29",
+    "timecode": "00:01:49,550 --> 00:01:50,730",
+    "original": "What is?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "30",
+    "timecode": "00:01:51,960 --> 00:01:56,010",
+    "original": "That one one-hundredth changed you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "31",
+    "timecode": "00:02:08,100 --> 00:02:09,500",
+    "original": "Well, I'll see you later.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "32",
+    "timecode": "00:02:10,150 --> 00:02:12,120",
+    "original": "See you again.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "33",
+    "timecode": "00:02:19,770 --> 00:02:22,670",
+    "original": "It's been half my life, you know.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "34",
+    "timecode": "00:02:24,060 --> 00:02:26,630",
+    "original": "The time I've spent with you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "35",
+    "timecode": "00:02:28,850 --> 00:02:31,410",
+    "original": "It's going to be even more\nthan that from now on.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "36",
+    "timecode": "00:02:33,570 --> 00:02:36,070",
+    "original": "<i>Like a fairy tale</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "37",
+    "timecode": "00:02:36,070 --> 00:02:38,480",
+    "original": "<i>It's a sign the story has reached its end</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "38",
+    "timecode": "00:02:38,480 --> 00:02:41,400",
+    "original": "<i>Like a single passage taken from</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "39",
+    "timecode": "00:02:41,400 --> 00:02:43,020",
+    "original": "<i>A journey that was too long</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "40",
+    "timecode": "00:02:43,020 --> 00:02:45,390",
+    "original": "<i>Of the evil that once cast a shadow</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "41",
+    "timecode": "00:02:45,390 --> 00:02:47,720",
+    "original": "<i>Across this land</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "42",
+    "timecode": "00:02:47,720 --> 00:02:50,040",
+    "original": "<i>And the memories of the short journey</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "43",
+    "timecode": "00:02:50,040 --> 00:02:52,490",
+    "original": "<i>With the hero who defeated it</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "44",
+    "timecode": "00:03:02,500 --> 00:03:04,800",
+    "original": "<i>The story ends</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "45",
+    "timecode": "00:03:04,800 --> 00:03:07,310",
+    "original": "<i>And the hero goes to sleep</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "46",
+    "timecode": "00:03:07,310 --> 00:03:10,150",
+    "original": "<i>Leaving this land with</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "47",
+    "timecode": "00:03:10,150 --> 00:03:11,800",
+    "original": "<i>Days of peace and quiet</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "48",
+    "timecode": "00:03:11,800 --> 00:03:14,310",
+    "original": "<i>The passage of time heartlessly</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "49",
+    "timecode": "00:03:14,310 --> 00:03:16,490",
+    "original": "<i>Makes people forget</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "50",
+    "timecode": "00:03:16,490 --> 00:03:19,270",
+    "original": "<i>Even the tracks left behind by his life</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "51",
+    "timecode": "00:03:19,270 --> 00:03:21,060",
+    "original": "<i>Begin to rust</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "52",
+    "timecode": "00:03:21,060 --> 00:03:22,900",
+    "original": "<i>Just the same</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "53",
+    "timecode": "00:03:22,900 --> 00:03:25,190",
+    "original": "<i>Your words and wishes and courage</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "54",
+    "timecode": "00:03:25,190 --> 00:03:28,530",
+    "original": "<i>Are still inside of me</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "55",
+    "timecode": "00:03:28,530 --> 00:03:30,400",
+    "original": "<i>And they live on</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "56",
+    "timecode": "00:03:31,230 --> 00:03:32,950",
+    "original": "<i>We chose the same path</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "57",
+    "timecode": "00:03:32,950 --> 00:03:35,100",
+    "original": "<i>That's all it was supposed to be</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "58",
+    "timecode": "00:03:35,100 --> 00:03:36,630",
+    "original": "<i>Why is it that at some point</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "59",
+    "timecode": "00:03:36,630 --> 00:03:40,880",
+    "original": "<i>I wanted to understand the reason for</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "60",
+    "timecode": "00:03:40,880 --> 00:03:42,260",
+    "original": "<i>The tears that fall down my cheeks</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "61",
+    "timecode": "00:03:42,260 --> 00:03:43,340",
+    "original": "<i>Even now</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "62",
+    "timecode": "00:03:43,340 --> 00:03:45,720",
+    "original": "<i>If I retrace the journey we walked together</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "63",
+    "timecode": "00:03:45,720 --> 00:03:49,270",
+    "original": "<i>Even though you're not there</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "64",
+    "timecode": "00:03:49,270 --> 00:03:50,920",
+    "original": "<i>I know I'll be able to find it</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "65",
+    "timecode": "00:04:07,170 --> 00:04:09,250",
+    "original": "Listen to me, Fern.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "66",
+    "timecode": "00:04:09,670 --> 00:04:15,090",
+    "original": "From now, you must listen carefully to what\nFrieren tells you and be a good girl,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "67",
+    "timecode": "00:04:15,850 --> 00:04:17,250",
+    "original": "or else...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "68",
+    "timecode": "00:04:18,000 --> 00:04:19,760",
+    "original": "Or else what?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "69",
+    "timecode": "00:04:19,760 --> 00:04:22,530",
+    "original": "I'll haunt you after I'm dead.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "70",
+    "timecode": "00:04:26,300 --> 00:04:31,610",
+    "original": "Mr. Heiter, do you mean that if I'm a bad\ngirl, you'll come see me after you die?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "71",
+    "timecode": "00:04:36,150 --> 00:04:40,980",
+    "original": "You've grown into a clever girl.\nWho taught you to act like that?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "72",
+    "timecode": "00:04:42,170 --> 00:04:43,840",
+    "original": "I take it back.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "73",
+    "timecode": "00:04:45,770 --> 00:04:52,050",
+    "original": "If you're a good girl, then I might\nbe willing to visit you sometimes.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "74",
+    "timecode": "00:04:57,100 --> 00:04:59,410",
+    "original": "We're almost at the village.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "75",
+    "timecode": "00:05:01,660 --> 00:05:03,170",
+    "original": "I see.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "76",
+    "timecode": "00:05:04,130 --> 00:05:05,020",
+    "original": "What?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "77",
+    "timecode": "00:05:05,580 --> 00:05:07,380",
+    "original": "Nothing.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "78",
+    "timecode": "00:05:26,250 --> 00:05:29,400",
+    "original": "You're heading to the mountain pass, right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "79",
+    "timecode": "00:05:29,800 --> 00:05:31,800",
+    "original": "I wouldn't if I were you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "80",
+    "timecode": "00:05:31,800 --> 00:05:34,650",
+    "original": "A bunch of people have gone missing.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "81",
+    "timecode": "00:05:35,210 --> 00:05:36,910",
+    "original": "Was it monsters?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "82",
+    "timecode": "00:05:37,220 --> 00:05:40,230",
+    "original": "Taken by ghosts, or so the rumors say.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "83",
+    "timecode": "00:05:40,230 --> 00:05:42,450",
+    "original": "Some people have seen them\nwith their own eyes.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "84",
+    "timecode": "00:05:42,450 --> 00:05:44,130",
+    "original": "Could be the undead.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "85",
+    "timecode": "00:05:44,130 --> 00:05:46,670",
+    "original": "Do you know what the ghosts look like?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "86",
+    "timecode": "00:05:46,670 --> 00:05:48,630",
+    "original": "I'm afraid not.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "87",
+    "timecode": "00:05:48,630 --> 00:05:51,500",
+    "original": "But if you're curious,\nwhy not ask them yourselves?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "88",
+    "timecode": "00:06:02,290 --> 00:06:03,780",
+    "original": "To summarize,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "89",
+    "timecode": "00:06:04,520 --> 00:06:10,550",
+    "original": "people saw the ghosts of dead family and\nacquaintances as they appeared in life.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "90",
+    "timecode": "00:06:11,480 --> 00:06:14,780",
+    "original": "Some witnesses claimed the\nghosts spoke to them.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "91",
+    "timecode": "00:06:15,870 --> 00:06:18,980",
+    "original": "This isn't the work of the undead.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "92",
+    "timecode": "00:06:18,980 --> 00:06:20,510",
+    "original": "It's not?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "93",
+    "timecode": "00:06:23,230 --> 00:06:27,400",
+    "original": "The undead are corpses controlled by magic,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "94",
+    "timecode": "00:06:27,400 --> 00:06:29,970",
+    "original": "like zombies or skeletons.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "95",
+    "timecode": "00:06:31,510 --> 00:06:34,840",
+    "original": "But these ghosts appeared\nas they did in life.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "96",
+    "timecode": "00:06:35,410 --> 00:06:37,390",
+    "original": "A reanimated corpse wouldn't look like that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "97",
+    "timecode": "00:06:38,600 --> 00:06:42,100",
+    "original": "This is the work of a completely\ndifferent type of monster.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "98",
+    "timecode": "00:06:43,920 --> 00:06:46,360",
+    "original": "You seem to have some inkling\nof what it might be.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "99",
+    "timecode": "00:06:47,380 --> 00:06:51,540",
+    "original": "It's a nasty one. We'd best\nbe careful to avoid it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "100",
+    "timecode": "00:06:54,950 --> 00:06:56,840",
+    "original": "We'll leave first thing in the morning.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "101",
+    "timecode": "00:06:57,630 --> 00:07:01,630",
+    "original": "Ms. Frieren, the villagers need help.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "102",
+    "timecode": "00:07:02,280 --> 00:07:04,960",
+    "original": "You sound like Himmel and the others.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "103",
+    "timecode": "00:07:05,350 --> 00:07:08,730",
+    "original": "Unlike you, I'm a good girl.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "104",
+    "timecode": "00:07:09,130 --> 00:07:12,740",
+    "original": "If you want to help, then I suppose we can.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "105",
+    "timecode": "00:07:13,540 --> 00:07:16,300",
+    "original": "We'll be traveling through the\nmountain pass either way.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "106",
+    "timecode": "00:07:31,440 --> 00:07:34,470",
+    "original": "This is where the villagers have\nbeen disappearing recently.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "107",
+    "timecode": "00:07:35,800 --> 00:07:40,130",
+    "original": "At least there are plenty of clues.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "108",
+    "timecode": "00:07:40,930 --> 00:07:43,770",
+    "original": "There are signs of magic use here.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "109",
+    "timecode": "00:07:44,300 --> 00:07:47,370",
+    "original": "Yes. What kind of magic do you think it was?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "110",
+    "timecode": "00:07:48,090 --> 00:07:49,720",
+    "original": "Illusion magic.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "111",
+    "timecode": "00:07:50,760 --> 00:07:54,380",
+    "original": "I read in a book on magical ecology\nthat there's a monster",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "112",
+    "timecode": "00:07:54,850 --> 00:07:57,660",
+    "original": "that uses illusions to lure prey.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "113",
+    "timecode": "00:07:58,230 --> 00:07:59,640",
+    "original": "The Einsam.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "114",
+    "timecode": "00:08:01,000 --> 00:08:03,180",
+    "original": "Even among monsters of its type,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "115",
+    "timecode": "00:08:03,180 --> 00:08:07,530",
+    "original": "it's an especially crafty and greedy\nmonster that consumes only humans.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "116",
+    "timecode": "00:08:08,510 --> 00:08:11,650",
+    "original": "It shows people phantoms\nof the dead to lure them in.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "117",
+    "timecode": "00:08:12,250 --> 00:08:14,650",
+    "original": "Does that really work?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "118",
+    "timecode": "00:08:14,960 --> 00:08:18,870",
+    "original": "They're illusions of people very dear to them.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "119",
+    "timecode": "00:08:21,430 --> 00:08:26,670",
+    "original": "But the Einsam's illusions\naren't a threat to mages.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "120",
+    "timecode": "00:08:27,380 --> 00:08:32,540",
+    "original": "They're easily dispersed by high-density\nmana such as offensive magic.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "121",
+    "timecode": "00:08:33,240 --> 00:08:35,930",
+    "original": "So we just need to shoot\nthe phantoms of the dead.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "122",
+    "timecode": "00:08:38,300 --> 00:08:39,380",
+    "original": "Could you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "123",
+    "timecode": "00:08:40,670 --> 00:08:41,970",
+    "original": "Of course.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "124",
+    "timecode": "00:08:42,480 --> 00:08:44,890",
+    "original": "After all, I know they're fake.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "125",
+    "timecode": "00:08:45,370 --> 00:08:49,150",
+    "original": "I shot a phantom of my master\nbegging for her life.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "126",
+    "timecode": "00:08:50,680 --> 00:08:54,150",
+    "original": "But I was used to hearing her\nbeg for her life,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "127",
+    "timecode": "00:08:54,150 --> 00:08:57,220",
+    "original": "so I didn't feel particularly\nguilty about it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "128",
+    "timecode": "00:08:57,870 --> 00:09:00,790",
+    "original": "Either way, it doesn't feel good.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "129",
+    "timecode": "00:09:01,180 --> 00:09:04,680",
+    "original": "What does it mean that you were accustomed\nto hearing her beg for her life?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "130",
+    "timecode": "00:09:10,530 --> 00:09:12,510",
+    "original": "It's gotten misty.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "131",
+    "timecode": "00:09:13,440 --> 00:09:14,700",
+    "original": "We're close.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "132",
+    "timecode": "00:09:16,240 --> 00:09:18,970",
+    "original": "If you see a phantom,\ndon't hesitate to shoot it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "133",
+    "timecode": "00:09:24,050 --> 00:09:25,030",
+    "original": "Fern.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "134",
+    "timecode": "00:09:30,480 --> 00:09:33,990",
+    "original": "<i>There it is. A phantom of the dead.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "135",
+    "timecode": "00:09:35,850 --> 00:09:37,230",
+    "original": "<i>I'm calm.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "136",
+    "timecode": "00:09:38,610 --> 00:09:39,730",
+    "original": "<i>I can shoot it.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "137",
+    "timecode": "00:09:41,710 --> 00:09:45,620",
+    "original": "You've become quite the mage.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "138",
+    "timecode": "00:09:47,560 --> 00:09:53,500",
+    "original": "I decided to pay you a visit\nbecause you've been a good girl.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "139",
+    "timecode": "00:09:56,770 --> 00:09:57,830",
+    "original": "<i>My memories...</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "140",
+    "timecode": "00:09:57,830 --> 00:10:01,530",
+    "original": "You were right to choose the path of a mage.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "141",
+    "timecode": "00:10:01,530 --> 00:10:04,950",
+    "original": "You've always loved magic.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "142",
+    "timecode": "00:10:03,800 --> 00:10:07,000",
+    "original": "<i>It's using my memories against me.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "143",
+    "timecode": "00:10:04,950 --> 00:10:10,400",
+    "original": "You were so happy when\nI gave you that staff.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "144",
+    "timecode": "00:10:07,740 --> 00:10:09,730",
+    "original": "<i>How cruel.</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "145",
+    "timecode": "00:10:10,370 --> 00:10:12,970",
+    "original": "<i>One of my most cherished memories...</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "146",
+    "timecode": "00:10:10,400 --> 00:10:12,250",
+    "original": "You slept with it every night.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "147",
+    "timecode": "00:10:15,190 --> 00:10:16,170",
+    "original": "Fern.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "148",
+    "timecode": "00:10:19,750 --> 00:10:21,140",
+    "original": "No, huh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "149",
+    "timecode": "00:10:28,980 --> 00:10:31,170",
+    "original": "So it's Himmel this time.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "150",
+    "timecode": "00:10:31,770 --> 00:10:35,540",
+    "original": "I assumed it'd be my master again.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "151",
+    "timecode": "00:10:36,790 --> 00:10:40,170",
+    "original": "Does this mean I've changed?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "152",
+    "timecode": "00:10:43,680 --> 00:10:46,690",
+    "original": "Frieren, shoot me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "153",
+    "timecode": "00:10:47,740 --> 00:10:51,220",
+    "original": "Right. That's what Himmel would say.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "154",
+    "timecode": "00:11:13,460 --> 00:11:16,080",
+    "original": "Now the mountain pass is safe again.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "155",
+    "timecode": "00:11:17,120 --> 00:11:18,530",
+    "original": "Ms. Frieren...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "156",
+    "timecode": "00:11:19,270 --> 00:11:21,960",
+    "original": "That was a phantom of Mr. Heiter.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "157",
+    "timecode": "00:11:22,500 --> 00:11:23,950",
+    "original": "An impostor.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "158",
+    "timecode": "00:11:23,950 --> 00:11:25,130",
+    "original": "Yes.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "159",
+    "timecode": "00:11:28,780 --> 00:11:31,150",
+    "original": "Let's go see the real Heiter now.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "160",
+    "timecode": "00:11:32,220 --> 00:11:35,360",
+    "original": "After all, we're trying to reach Aureole.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "161",
+    "timecode": "00:11:37,720 --> 00:11:39,150",
+    "original": "You're right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "162",
+    "timecode": "00:11:49,670 --> 00:11:51,240",
+    "original": "That's a dragon?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "163",
+    "timecode": "00:11:52,810 --> 00:11:54,690",
+    "original": "I've never seen one before.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "164",
+    "timecode": "00:11:55,770 --> 00:11:57,090",
+    "original": "Look at its nest.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "165",
+    "timecode": "00:11:58,610 --> 00:12:00,410",
+    "original": "See that grimoire?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "166",
+    "timecode": "00:12:00,930 --> 00:12:03,560",
+    "original": "It's one I've been looking for.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "167",
+    "timecode": "00:12:03,560 --> 00:12:05,690",
+    "original": "You do love your grimoires.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "168",
+    "timecode": "00:12:06,100 --> 00:12:08,160",
+    "original": "But what's it doing there?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "169",
+    "timecode": "00:12:08,740 --> 00:12:12,940",
+    "original": "Dragons use objects infused\nwith magic to build their nests.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "170",
+    "timecode": "00:12:13,950 --> 00:12:15,350",
+    "original": "That's a solar dragon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "171",
+    "timecode": "00:12:16,030 --> 00:12:18,930",
+    "original": "It's eaten numerous adventurers.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "172",
+    "timecode": "00:12:19,410 --> 00:12:22,400",
+    "original": "Either way, we should probably take it out.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "173",
+    "timecode": "00:12:23,740 --> 00:12:26,180",
+    "original": "Be careful you don't hit the nest.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "174",
+    "timecode": "00:12:26,180 --> 00:12:26,980",
+    "original": "Got it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "175",
+    "timecode": "00:12:40,260 --> 00:12:43,990",
+    "original": "Ms. Frieren, that didn't do anything.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "176",
+    "timecode": "00:12:43,990 --> 00:12:46,300",
+    "original": "Figures. Dragons really are tough.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "177",
+    "timecode": "00:12:46,300 --> 00:12:48,380",
+    "original": "We have no choice, then. Let's run.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "178",
+    "timecode": "00:13:07,160 --> 00:13:09,170",
+    "original": "We finally lost it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "179",
+    "timecode": "00:13:09,650 --> 00:13:11,680",
+    "original": "It's a quick flyer, too.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "180",
+    "timecode": "00:13:11,680 --> 00:13:13,950",
+    "original": "I doubt we can beat it in an aerial battle.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "181",
+    "timecode": "00:13:13,950 --> 00:13:18,400",
+    "original": "I... I thought I was going to die.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "182",
+    "timecode": "00:13:18,400 --> 00:13:19,700",
+    "original": "Let's head back.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "183",
+    "timecode": "00:13:20,100 --> 00:13:23,650",
+    "original": "If we repeat that process enough times,\nwe'll beat it eventually.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "184",
+    "timecode": "00:13:28,250 --> 00:13:29,370",
+    "original": "Of course.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "185",
+    "timecode": "00:13:29,950 --> 00:13:34,140",
+    "original": "Mages don't play tag with dragons.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "186",
+    "timecode": "00:13:38,560 --> 00:13:40,980",
+    "original": "I guess we'll just have\nto take on a companion.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "187",
+    "timecode": "00:13:44,440 --> 00:13:45,750",
+    "original": "A front-liner?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "188",
+    "timecode": "00:13:45,750 --> 00:13:48,610",
+    "original": "Yeah. You're searching\nfor someone, aren't you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "189",
+    "timecode": "00:13:48,940 --> 00:13:54,020",
+    "original": "There's a warrior named Stark\nin a village near Riegel Canyon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "190",
+    "timecode": "00:13:54,020 --> 00:13:57,620",
+    "original": "Pick him up on your way\ninto the northern lands.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "191",
+    "timecode": "00:13:57,620 --> 00:13:59,710",
+    "original": "He's my apprentice.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "192",
+    "timecode": "00:14:00,180 --> 00:14:03,370",
+    "original": "Huh. Is he a good warrior?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "193",
+    "timecode": "00:14:14,980 --> 00:14:18,770",
+    "original": "It's so peaceful, it's hard to\nbelieve there's a dragon nearby.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "194",
+    "timecode": "00:14:18,770 --> 00:14:20,100",
+    "original": "You're right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "195",
+    "timecode": "00:14:22,140 --> 00:14:27,670",
+    "original": "Ms. Frieren, what kind of magic\ndoes that grimoire contain?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "196",
+    "timecode": "00:14:28,260 --> 00:14:30,410",
+    "original": "A spell that lets you see through clothes.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "197",
+    "timecode": "00:14:33,490 --> 00:14:37,790",
+    "original": "You really do collect a lot of odd spells.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "198",
+    "timecode": "00:14:37,790 --> 00:14:39,450",
+    "original": "It's my hobby, after all.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "199",
+    "timecode": "00:14:40,210 --> 00:14:42,460",
+    "original": "But it's practical, too.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "200",
+    "timecode": "00:14:42,910 --> 00:14:47,730",
+    "original": "Depending on what you consider clothes,\nit can reveal hidden weapons—",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "201",
+    "timecode": "00:14:46,500 --> 00:14:50,380",
+    "original": "Travelers, may I have a moment of your time?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "202",
+    "timecode": "00:14:51,370 --> 00:14:54,300",
+    "original": "Mr. Stark would like to meet you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "203",
+    "timecode": "00:14:54,990 --> 00:14:57,210",
+    "original": "Well, that saves us having to look for him.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "204",
+    "timecode": "00:15:01,270 --> 00:15:07,470",
+    "original": "Three years ago, that dragon\nattacked the village.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "205",
+    "timecode": "00:15:14,650 --> 00:15:19,070",
+    "original": "That's when Mr. Stark appeared.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "206",
+    "timecode": "00:15:19,340 --> 00:15:23,340",
+    "original": "He stood his ground in front of that dragon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "207",
+    "timecode": "00:15:23,340 --> 00:15:28,210",
+    "original": "After a long standoff, the dragon left.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "208",
+    "timecode": "00:15:28,210 --> 00:15:32,470",
+    "original": "Since then, because he's stayed here,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "209",
+    "timecode": "00:15:32,470 --> 00:15:37,850",
+    "original": "the dragon hasn't attacked,\nand we've lived in peace.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "210",
+    "timecode": "00:15:39,300 --> 00:15:44,250",
+    "original": "Then perhaps we could defeat\nthe dragon with Mr. Stark's help.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "211",
+    "timecode": "00:15:44,760 --> 00:15:46,110",
+    "original": "I hope you're right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "212",
+    "timecode": "00:15:48,430 --> 00:15:51,980",
+    "original": "Do you think I can become\na powerful warrior like you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "213",
+    "timecode": "00:15:51,980 --> 00:15:53,120",
+    "original": "Sure you can.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "214",
+    "timecode": "00:15:53,560 --> 00:15:56,360",
+    "original": "But a warrior's job is hardly a noble one.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "215",
+    "timecode": "00:15:58,680 --> 00:16:00,760",
+    "original": "Grandma!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "216",
+    "timecode": "00:16:08,530 --> 00:16:11,220",
+    "original": "So you're the ones who\nmessed with the dragon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "217",
+    "timecode": "00:16:11,910 --> 00:16:15,720",
+    "original": "Don't get it too worked up.\nYou'll put the village in danger.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "218",
+    "timecode": "00:16:16,800 --> 00:16:20,470",
+    "original": "Dragons are far more terrifying\nthan you think they are.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "219",
+    "timecode": "00:16:22,350 --> 00:16:25,820",
+    "original": "I got this scar on my forehead\nfighting a shadow dragon—",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "220",
+    "timecode": "00:16:25,820 --> 00:16:27,970",
+    "original": "It's not that serious an injury.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "221",
+    "timecode": "00:16:30,030 --> 00:16:32,670",
+    "original": "Did my master put you up to this?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "222",
+    "timecode": "00:16:32,670 --> 00:16:33,740",
+    "original": "Who are you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "223",
+    "timecode": "00:16:34,620 --> 00:16:36,750",
+    "original": "Frieren the Mage.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "224",
+    "timecode": "00:16:39,490 --> 00:16:41,860",
+    "original": "Grandma, could you give us some privacy?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "225",
+    "timecode": "00:16:43,240 --> 00:16:46,480",
+    "original": "It's all right.\nThey're acquaintances of my master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "226",
+    "timecode": "00:16:52,220 --> 00:16:54,840",
+    "original": "My master must be furious.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "227",
+    "timecode": "00:16:55,490 --> 00:16:57,640",
+    "original": "I left him without so much as a word.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "228",
+    "timecode": "00:16:58,270 --> 00:17:01,920",
+    "original": "Stark, why haven't you defeated the dragon?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "229",
+    "timecode": "00:17:01,920 --> 00:17:04,440",
+    "original": "You have no reason to remain in this village.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "230",
+    "timecode": "00:17:05,040 --> 00:17:07,950",
+    "original": "Why don't you tell me what you want first?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "231",
+    "timecode": "00:17:08,470 --> 00:17:11,610",
+    "original": "If you're here to send me back\nto my master, then forget it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "232",
+    "timecode": "00:17:12,730 --> 00:17:16,300",
+    "original": "We want you to join us as our front-liner,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "233",
+    "timecode": "00:17:16,300 --> 00:17:20,030",
+    "original": "though before that, we'd appreciate\nyour help in defeating the solar dragon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "234",
+    "timecode": "00:17:20,470 --> 00:17:23,330",
+    "original": "I want the grimoire in its nest.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "235",
+    "timecode": "00:17:23,330 --> 00:17:24,170",
+    "original": "Why?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "236",
+    "timecode": "00:17:24,620 --> 00:17:27,670",
+    "original": "It's just a hobby. No particular reason.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "237",
+    "timecode": "00:17:28,040 --> 00:17:30,420",
+    "original": "We're talking about a solar dragon here.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "238",
+    "timecode": "00:17:30,420 --> 00:17:32,920",
+    "original": "It's not something you fight\nfor no particular reason.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "239",
+    "timecode": "00:17:41,400 --> 00:17:42,830",
+    "original": "Wow!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "240",
+    "timecode": "00:17:44,230 --> 00:17:45,690",
+    "original": "You're right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "241",
+    "timecode": "00:17:46,090 --> 00:17:49,730",
+    "original": "There was once an idiot who\ncomplimented the spells I collected.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "242",
+    "timecode": "00:17:50,460 --> 00:17:52,320",
+    "original": "Is that enough of a reason for you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "243",
+    "timecode": "00:17:53,360 --> 00:17:56,010",
+    "original": "Complimented you, huh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "244",
+    "timecode": "00:17:58,660 --> 00:17:59,960",
+    "original": "That's ridiculous.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "245",
+    "timecode": "00:17:59,960 --> 00:18:00,980",
+    "original": "Right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "246",
+    "timecode": "00:18:01,930 --> 00:18:04,360",
+    "original": "I don't mind joining your party.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "247",
+    "timecode": "00:18:05,200 --> 00:18:07,660",
+    "original": "My master told you to take\nme with you, didn't he?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "248",
+    "timecode": "00:18:08,200 --> 00:18:12,070",
+    "original": "But I need the solar\ndragon dealt with first.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "249",
+    "timecode": "00:18:12,940 --> 00:18:15,200",
+    "original": "Honestly, I've had trouble\ndefeating it alone.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "250",
+    "timecode": "00:18:16,400 --> 00:18:19,710",
+    "original": "Frieren, you can defeat it, can't you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "251",
+    "timecode": "00:18:20,120 --> 00:18:23,730",
+    "original": "If you can keep it busy\nfor thirty seconds, certainly.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "252",
+    "timecode": "00:18:24,340 --> 00:18:28,500",
+    "original": "I see. Thirty seconds, huh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "253",
+    "timecode": "00:18:30,340 --> 00:18:33,060",
+    "original": "Do I really have to do that?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "254",
+    "timecode": "00:18:33,060 --> 00:18:35,470",
+    "original": "What is he talking about?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "255",
+    "timecode": "00:18:35,910 --> 00:18:38,060",
+    "original": "I thought so.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "256",
+    "timecode": "00:18:38,660 --> 00:18:41,980",
+    "original": "Stark, how much experience\ndo you have fighting monsters?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "257",
+    "timecode": "00:18:42,240 --> 00:18:43,730",
+    "original": "Zero!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "258",
+    "timecode": "00:18:43,730 --> 00:18:46,500",
+    "original": "Help me, Frieren!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "259",
+    "timecode": "00:18:46,860 --> 00:18:49,740",
+    "original": "I confronted the dragon at first.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "260",
+    "timecode": "00:18:50,010 --> 00:18:53,760",
+    "original": "But I was so scared,\nI couldn't move a muscle!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "261",
+    "timecode": "00:18:54,070 --> 00:18:58,520",
+    "original": "It slices through houses\nlike they're vegetables!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "262",
+    "timecode": "00:18:58,520 --> 00:19:01,770",
+    "original": "A human doesn't stand a chance against it!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "263",
+    "timecode": "00:19:02,990 --> 00:19:05,990",
+    "original": "I figured it spared me on a whim, but then...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "264",
+    "timecode": "00:19:08,640 --> 00:19:13,160",
+    "original": "For some reason the dragon stopped attacking\nthe village, and I was treated like a hero.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "265",
+    "timecode": "00:19:13,160 --> 00:19:16,390",
+    "original": "And the villagers are such nice people!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "266",
+    "timecode": "00:19:16,390 --> 00:19:18,700",
+    "original": "You're still young. Get plenty to eat.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "267",
+    "timecode": "00:19:18,700 --> 00:19:21,780",
+    "original": "Stark, show me your new killer move!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "268",
+    "timecode": "00:19:22,050 --> 00:19:25,900",
+    "original": "I couldn't leave if I wanted to.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "269",
+    "timecode": "00:19:25,900 --> 00:19:30,530",
+    "original": "Ms. Frieren, this one is no good.\nLet's find someone else.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "270",
+    "timecode": "00:19:30,530 --> 00:19:33,240",
+    "original": "Please don't abandon me!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "271",
+    "timecode": "00:19:33,240 --> 00:19:38,040",
+    "original": "No, he can fight the dragon. I know he can.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "272",
+    "timecode": "00:19:38,040 --> 00:19:41,230",
+    "original": "He'll need more than just encouragement...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "273",
+    "timecode": "00:20:02,190 --> 00:20:05,500",
+    "original": "Stark, you have until tomorrow morning.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "274",
+    "timecode": "00:20:06,360 --> 00:20:07,960",
+    "original": "Think carefully.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "275",
+    "timecode": "00:20:08,310 --> 00:20:11,460",
+    "original": "I know you realize\nyou can't keep this up.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "276",
+    "timecode": "00:20:25,640 --> 00:20:28,180",
+    "original": "You met Mr. Stark?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "277",
+    "timecode": "00:20:28,540 --> 00:20:30,540",
+    "original": "He's a nice young man, isn't he?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "278",
+    "timecode": "00:20:30,540 --> 00:20:35,190",
+    "original": "He seems to really enjoy our cooking.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "279",
+    "timecode": "00:20:36,050 --> 00:20:38,310",
+    "original": "People really love Mr. Stark.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "280",
+    "timecode": "00:20:38,920 --> 00:20:42,310",
+    "original": "Well, he seems like a kind person.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "281",
+    "timecode": "00:20:43,000 --> 00:20:44,190",
+    "original": "Kind?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "282",
+    "timecode": "00:20:45,040 --> 00:20:47,640",
+    "original": "He only seemed cowardly to me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "283",
+    "timecode": "00:20:48,210 --> 00:20:50,840",
+    "original": "I won't deny the cowardly part.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "284",
+    "timecode": "00:20:50,840 --> 00:20:54,210",
+    "original": "But in your first battle against monsters...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "285",
+    "timecode": "00:20:56,020 --> 00:20:57,840",
+    "original": "Okay, okay. I'll forget about that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "286",
+    "timecode": "00:21:01,130 --> 00:21:05,850",
+    "original": "Honestly, you were so meek\nand cute when you were little.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "287",
+    "timecode": "00:21:07,060 --> 00:21:11,280",
+    "original": "By the way, why doesn't the\ndragon attack this village?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "288",
+    "timecode": "00:21:11,280 --> 00:21:15,840",
+    "original": "Who knows? It could be\nmere whimsy, or perhaps...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "289",
+    "timecode": "00:21:18,560 --> 00:21:20,100",
+    "original": "What's that sound?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "290",
+    "timecode": "00:21:20,540 --> 00:21:22,100",
+    "original": "Stark, probably.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "291",
+    "timecode": "00:21:23,660 --> 00:21:25,600",
+    "original": "If you're curious, why not check on him?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "292",
+    "timecode": "00:21:26,050 --> 00:21:27,720",
+    "original": "I'm going to bed.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "293",
+    "timecode": "00:21:44,990 --> 00:21:47,850",
+    "original": "Huh. Is he a good warrior?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "294",
+    "timecode": "00:21:50,530 --> 00:21:58,780",
+    "original": "He was the only one who ran when monsters\nattacked his hometown. A coward.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "295",
+    "timecode": "00:22:00,550 --> 00:22:02,170",
+    "original": "He's like me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "296",
+    "timecode": "00:22:04,440 --> 00:22:08,240",
+    "original": "So I taught him everything I knew.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "297",
+    "timecode": "00:22:09,080 --> 00:22:13,240",
+    "original": "Now he's someone who can fight for another.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "298",
+    "timecode": "00:22:14,010 --> 00:22:17,130",
+    "original": "I see. He's a good warrior, then.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "299",
+    "timecode": "00:22:38,150 --> 00:22:41,470",
+    "original": "So this fissure was left by your training.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "300",
+    "timecode": "00:22:49,980 --> 00:22:52,520",
+    "original": "<i>And you alright</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "301",
+    "timecode": "00:22:53,050 --> 00:22:55,040",
+    "original": "<i>Can you hear me</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "302",
+    "timecode": "00:22:55,830 --> 00:23:01,940",
+    "original": "<i>Trailing along deserted train tracks</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "303",
+    "timecode": "00:23:01,940 --> 00:23:04,270",
+    "original": "<i>Crying excessively</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "304",
+    "timecode": "00:23:04,830 --> 00:23:07,440",
+    "original": "<i>Wanting you to smile</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "305",
+    "timecode": "00:23:07,440 --> 00:23:13,480",
+    "original": "<i>I hold on to memories I'd like to keep fresh</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "306",
+    "timecode": "00:23:13,480 --> 00:23:17,170",
+    "original": "<i>There's something I'd like to tell you</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "307",
+    "timecode": "00:23:17,170 --> 00:23:19,960",
+    "original": "<i>With words more precious than a goodbye</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "308",
+    "timecode": "00:23:19,960 --> 00:23:25,630",
+    "original": "<i>Unremarkable yet special</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "309",
+    "timecode": "00:23:25,630 --> 00:23:29,150",
+    "original": "<i>See, things that couldn't have been</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "310",
+    "timecode": "00:23:29,150 --> 00:23:32,200",
+    "original": "<i>Seen if it weren't for these eyes</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "311",
+    "timecode": "00:23:32,200 --> 00:23:36,960",
+    "original": "<i>Why? They begin to overflow</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "312",
+    "timecode": "00:23:36,960 --> 00:23:43,060",
+    "original": "<i>So, if I were to be born again</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "313",
+    "timecode": "00:23:43,060 --> 00:23:48,880",
+    "original": "<i>I would surely choose this place once more</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "314",
+    "timecode": "00:23:48,880 --> 00:23:54,890",
+    "original": "<i>So, if we were to meet again</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "315",
+    "timecode": "00:23:54,890 --> 00:24:00,650",
+    "original": "<i>I'd never let you go, I'd choose the present</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "316",
+    "timecode": "00:24:00,650 --> 00:24:03,600",
+    "original": "<i>Even if no promises were made</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "317",
+    "timecode": "00:24:03,600 --> 00:24:06,520",
+    "original": "<i>Even if I'm lost in days of loneliness</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "318",
+    "timecode": "00:24:06,520 --> 00:24:12,720",
+    "original": "<i>Those tears will be alright,\ndawn will surely break</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "319",
+    "timecode": "00:24:12,720 --> 00:24:15,360",
+    "original": "<i>I'm whispering our lullaby</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "320",
+    "timecode": "00:24:15,360 --> 00:24:19,280",
+    "original": "<i>for you to come back home</i>",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "321",
+    "timecode": "00:24:20,040 --> 00:24:22,280",
+    "original": "The passage of time is cruel.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "322",
+    "timecode": "00:24:20,560 --> 00:24:22,000",
+    "original": "That old hag...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "323",
+    "timecode": "00:24:21,170 --> 00:24:23,120",
+    "original": "Isn't that a bit dangerous?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "324",
+    "timecode": "00:24:21,930 --> 00:24:24,370",
+    "original": "Don't cause any trouble in this town.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "325",
+    "timecode": "00:24:23,350 --> 00:24:25,500",
+    "original": "He must've been disappointed in me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "326",
+    "timecode": "00:24:24,280 --> 00:24:26,020",
+    "original": "We parted in anger.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "327",
+    "timecode": "00:24:25,020 --> 00:24:26,750",
+    "original": "His hands are trembling.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "328",
+    "timecode": "00:24:25,890 --> 00:24:27,890",
+    "original": "They even tremble the same way.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "329",
+    "timecode": "00:24:27,890 --> 00:24:30,020",
+    "original": "I'm Stark, the hero of this village.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  }
+]

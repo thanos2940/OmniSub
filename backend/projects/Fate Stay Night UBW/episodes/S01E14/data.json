@@ -1,0 +1,3178 @@
+[
+  {
+    "id": "﻿1",
+    "timecode": "00:00:02,240 --> 00:00:03,320",
+    "original": "Ow!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "2",
+    "timecode": "00:00:03,900 --> 00:00:05,240",
+    "original": "Hold still.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "3",
+    "timecode": "00:00:09,410 --> 00:00:10,890",
+    "original": "Okay, all done.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "4",
+    "timecode": "00:00:10,890 --> 00:00:12,000",
+    "original": "Thanks.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "5",
+    "timecode": "00:00:14,140 --> 00:00:14,920",
+    "original": "Tohsaka?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "6",
+    "timecode": "00:00:15,310 --> 00:00:16,970",
+    "original": "I'm making dinner.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "7",
+    "timecode": "00:00:16,970 --> 00:00:19,380",
+    "original": "Dinner? Now?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "8",
+    "timecode": "00:00:19,380 --> 00:00:21,120",
+    "original": "Of course.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "9",
+    "timecode": "00:00:21,120 --> 00:00:24,970",
+    "original": "Can't come up with decent ideas on an empty stomach, right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "10",
+    "timecode": "00:00:26,260 --> 00:00:28,330",
+    "original": "I did a lot of thinking afterward.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "11",
+    "timecode": "00:00:28,330 --> 00:00:31,440",
+    "original": "About why I started fighting in the Grail War.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "12",
+    "timecode": "00:00:31,440 --> 00:00:34,190",
+    "original": "About what I wanted to accomplish.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "13",
+    "timecode": "00:00:35,240 --> 00:00:36,180",
+    "original": "And?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "14",
+    "timecode": "00:00:37,520 --> 00:00:42,190",
+    "original": "At first it was just because I got dragged into it,\nbut that makes no difference.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "15",
+    "timecode": "00:00:42,520 --> 00:00:45,620",
+    "original": "I like champions of justice,\nand I want to follow their example.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "16",
+    "timecode": "00:00:45,620 --> 00:00:47,450",
+    "original": "So I have to protect people.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "17",
+    "timecode": "00:00:48,140 --> 00:00:51,920",
+    "original": "Master or not, Saber or not...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "18",
+    "timecode": "00:00:51,920 --> 00:00:53,950",
+    "original": "I'm going to fight all the same.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "19",
+    "timecode": "00:00:55,270 --> 00:00:56,460",
+    "original": "Oh.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "20",
+    "timecode": "00:00:56,460 --> 00:01:01,080",
+    "original": "Look, this is serious. At least pay attention.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "21",
+    "timecode": "00:01:01,080 --> 00:01:02,730",
+    "original": "I am paying attention.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "22",
+    "timecode": "00:01:02,730 --> 00:01:08,640",
+    "original": "The idea of others dying bothers you more than the idea of your own death.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "23",
+    "timecode": "00:01:08,640 --> 00:01:12,930",
+    "original": "So you've decided to keep fighting despite your weakness, right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "24",
+    "timecode": "00:01:12,930 --> 00:01:15,990",
+    "original": "Y-Yeah.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "25",
+    "timecode": "00:01:15,990 --> 00:01:17,180",
+    "original": "What's with you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "26",
+    "timecode": "00:01:17,180 --> 00:01:19,860",
+    "original": "You look like a squirrel that bit into a candy instead of a nut.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "27",
+    "timecode": "00:01:19,860 --> 00:01:23,130",
+    "original": "I just assumed you'd be against it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "28",
+    "timecode": "00:01:23,130 --> 00:01:25,260",
+    "original": "Of course I'm against it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "29",
+    "timecode": "00:01:25,260 --> 00:01:30,450",
+    "original": "But after you saved me like that, I can hardly object, can I?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "30",
+    "timecode": "00:01:31,260 --> 00:01:36,790",
+    "original": "Plus, I've also learned that you'll do it even if I try to stop you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "31",
+    "timecode": "00:01:37,210 --> 00:01:41,040",
+    "original": "Then we're still partners?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "32",
+    "timecode": "00:01:41,400 --> 00:01:42,740",
+    "original": "I guess.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "33",
+    "timecode": "00:01:42,740 --> 00:01:47,300",
+    "original": "Anyway, I'd lose sleep worrying if I left you to your own devices.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "34",
+    "timecode": "00:01:47,300 --> 00:01:48,390",
+    "original": "Besides...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "35",
+    "timecode": "00:01:48,880 --> 00:01:53,410",
+    "original": "To put it in your terms, I don't exactly hate you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "36",
+    "timecode": "00:01:53,410 --> 00:01:54,890",
+    "original": "And your cooking is good.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "37",
+    "timecode": "00:01:55,700 --> 00:02:01,140",
+    "original": "So that's how I feel about it,\nand you're okay still working with me, right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "38",
+    "timecode": "00:02:03,020 --> 00:02:05,240",
+    "original": "I need a refill!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "39",
+    "timecode": "00:03:38,990 --> 00:03:41,600",
+    "original": "For now, our enemy is Caster.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "40",
+    "timecode": "00:03:39,160 --> 00:03:43,490",
+    "original": "{\\an4}The Princess of Colchis",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "41",
+    "timecode": "00:03:41,600 --> 00:03:43,460",
+    "original": "She's protected by Kuzuki,\n a close-combat fighter,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "42",
+    "timecode": "00:03:43,460 --> 00:03:45,750",
+    "original": "and Archer, who's gone over to her side.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "43",
+    "timecode": "00:03:46,280 --> 00:03:49,960",
+    "original": "And it's only a matter of time before Saber falls under her control.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "44",
+    "timecode": "00:03:49,960 --> 00:03:52,450",
+    "original": "Yeah, once Saber's resistance wears out,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "45",
+    "timecode": "00:03:52,450 --> 00:03:54,850",
+    "original": "we really won't have any chance.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "46",
+    "timecode": "00:03:54,850 --> 00:03:57,680",
+    "original": "Exactly. Do you have any ideas?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "47",
+    "timecode": "00:03:58,720 --> 00:04:00,950",
+    "original": "Hear me out, and don't get mad.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "48",
+    "timecode": "00:04:00,950 --> 00:04:04,020",
+    "original": "Could we work with other Masters?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "49",
+    "timecode": "00:04:05,890 --> 00:04:07,150",
+    "original": "It's all right.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "50",
+    "timecode": "00:04:07,150 --> 00:04:09,860",
+    "original": "Actually, I was thinking the same thing.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "51",
+    "timecode": "00:04:10,320 --> 00:04:13,910",
+    "original": "We still don't know who Lancer's Master is, so that's out,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "52",
+    "timecode": "00:04:13,910 --> 00:04:16,700",
+    "original": "but we might have a shot with Illyasviel.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "53",
+    "timecode": "00:04:17,190 --> 00:04:19,930",
+    "original": "How do we find her, though?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "54",
+    "timecode": "00:04:19,930 --> 00:04:22,290",
+    "original": "I have an idea of where she might be.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "55",
+    "timecode": "00:04:23,430 --> 00:04:26,290",
+    "original": "My father told me something long ago.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "56",
+    "timecode": "00:04:26,290 --> 00:04:30,880",
+    "original": "He said that the Einzberns have a villa in the forest outside of town.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "57",
+    "timecode": "00:04:41,140 --> 00:04:43,600",
+    "original": "Why can I not find it?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "58",
+    "timecode": "00:04:44,010 --> 00:04:46,520",
+    "original": "There is no Holy Grail here.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "59",
+    "timecode": "00:04:46,520 --> 00:04:49,850",
+    "original": "No. That can't possibly be true.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "60",
+    "timecode": "00:04:49,850 --> 00:04:54,950",
+    "original": "The Holy Grail War's overseer would never let the catalyst—his trump card—out of sight.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "61",
+    "timecode": "00:05:07,540 --> 00:05:09,210",
+    "original": "Welcome, Caster!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "62",
+    "timecode": "00:05:09,760 --> 00:05:11,970",
+    "original": "It is my great honor to be able to welcome",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "63",
+    "timecode": "00:05:11,970 --> 00:05:15,710",
+    "original": "a great pioneer of magecraft, the Princess of Colchis.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "64",
+    "timecode": "00:05:18,520 --> 00:05:20,960",
+    "original": "Now, do you have any questions?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "65",
+    "timecode": "00:05:20,960 --> 00:05:22,640",
+    "original": "Should I have introduced myself?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "66",
+    "timecode": "00:05:23,010 --> 00:05:26,030",
+    "original": "No, I understand the situation.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "67",
+    "timecode": "00:05:26,030 --> 00:05:27,950",
+    "original": "I have been summoned by the Holy Grail",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "68",
+    "timecode": "00:05:27,950 --> 00:05:31,730",
+    "original": "and brought back to life in this era with you as my Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "69",
+    "timecode": "00:05:32,110 --> 00:05:34,880",
+    "original": "Yes, that is what a Servant is.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "70",
+    "timecode": "00:05:34,880 --> 00:05:36,940",
+    "original": "And that is the Holy Grail War.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "71",
+    "timecode": "00:05:36,940 --> 00:05:39,580",
+    "original": "That's a mage Servant for you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "72",
+    "timecode": "00:05:39,580 --> 00:05:41,550",
+    "original": "I'm glad I don't have to explain everything.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "73",
+    "timecode": "00:05:42,670 --> 00:05:45,630",
+    "original": "Oh, would you care for a drink?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "74",
+    "timecode": "00:05:45,630 --> 00:05:49,390",
+    "original": "After all, coming from more than 3,000 years is a long way.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "75",
+    "timecode": "00:05:49,390 --> 00:05:51,410",
+    "original": "I'm sure you must be tired.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "76",
+    "timecode": "00:05:51,690 --> 00:05:53,920",
+    "original": "Or would you like a bath first?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "77",
+    "timecode": "00:05:56,110 --> 00:05:59,260",
+    "original": "I appreciate your thoughtfulness, but before that...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "78",
+    "timecode": "00:05:59,510 --> 00:06:03,400",
+    "original": "you have not yet told me your name.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "79",
+    "timecode": "00:06:05,860 --> 00:06:08,330",
+    "original": "I'm Atrum Galliasta.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "80",
+    "timecode": "00:06:08,330 --> 00:06:11,500",
+    "original": "I'm a Master sent here by the Mages Association.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "81",
+    "timecode": "00:06:11,500 --> 00:06:13,130",
+    "original": "My reasons for winning the Grail",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "82",
+    "timecode": "00:06:13,130 --> 00:06:16,610",
+    "original": "are the growth of the magical world and securing a quiet future.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "83",
+    "timecode": "00:06:17,160 --> 00:06:18,950",
+    "original": "Does that satisfy your curiosity?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "84",
+    "timecode": "00:06:18,950 --> 00:06:21,510",
+    "original": "What do you mean by \"a quiet future\"?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "85",
+    "timecode": "00:06:21,510 --> 00:06:25,030",
+    "original": "A world where there are none who threaten me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "86",
+    "timecode": "00:06:25,460 --> 00:06:30,660",
+    "original": "It's not as bad as it was in your time,\nbut humans are still as stupid as ever.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "87",
+    "timecode": "00:06:30,660 --> 00:06:33,400",
+    "original": "The greater the self-defense measures, the better.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "88",
+    "timecode": "00:06:33,400 --> 00:06:37,250",
+    "original": "Something like that dragon Noble Phantasm of yours, for instance.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "89",
+    "timecode": "00:06:37,250 --> 00:06:38,590",
+    "original": "Something like...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "90",
+    "timecode": "00:06:39,240 --> 00:06:41,550",
+    "original": "Hang on, Caster.\nWhat's that Noble Phantasm?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "91",
+    "timecode": "00:06:42,080 --> 00:06:44,740",
+    "original": "The summoning of a dragon from the age of myths...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "92",
+    "timecode": "00:06:44,740 --> 00:06:47,310",
+    "original": "I thought that's what the Noble Phantasm of Princess Medea was?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "93",
+    "timecode": "00:06:47,730 --> 00:06:50,910",
+    "original": "My apologies, Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "94",
+    "timecode": "00:06:50,910 --> 00:06:56,080",
+    "original": "My Noble Phantasm is a conceptual one, given shape by my nature.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "95",
+    "timecode": "00:06:56,080 --> 00:06:59,270",
+    "original": "Even though I possess the knowledge to summon a dragon,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "96",
+    "timecode": "00:06:59,270 --> 00:07:01,890",
+    "original": "I would not be able to control it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "97",
+    "timecode": "00:07:08,760 --> 00:07:10,780",
+    "original": "Well, isn't that a shame!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "98",
+    "timecode": "00:07:10,780 --> 00:07:12,660",
+    "original": "She can't even use a dragon!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "99",
+    "timecode": "00:07:13,290 --> 00:07:16,330",
+    "original": "What a ridiculous Servant did I pick!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "100",
+    "timecode": "00:07:16,870 --> 00:07:21,090",
+    "original": "And your Noble Phantasm is Spell-breaking...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "101",
+    "timecode": "00:07:21,650 --> 00:07:27,840",
+    "original": "Oh, Princess Medea was the first case of fratricide, wasn't she?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "102",
+    "timecode": "00:07:28,120 --> 00:07:30,570",
+    "original": "For a woman who's done nothing but betray others...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "103",
+    "timecode": "00:07:30,570 --> 00:07:33,310",
+    "original": "...isn't that oath-breaking dagger very fitting?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "104",
+    "timecode": "00:07:35,510 --> 00:07:38,680",
+    "original": "But I won't cast you aside, Caster.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "105",
+    "timecode": "00:07:39,500 --> 00:07:42,880",
+    "original": "Every Servant has its uses.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "106",
+    "timecode": "00:07:43,950 --> 00:07:48,960",
+    "original": "As long as you remain a clever woman, I'll break you in properly.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "107",
+    "timecode": "00:08:12,710 --> 00:08:16,020",
+    "original": "My family is still new to the Mages' Association.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "108",
+    "timecode": "00:08:16,940 --> 00:08:21,150",
+    "original": "So one reason I'm fighting in this Grail War is to gain prestige.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "109",
+    "timecode": "00:08:21,150 --> 00:08:25,170",
+    "original": "El-Melloi didn't take the last war seriously, but I'm different.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "110",
+    "timecode": "00:08:25,170 --> 00:08:27,030",
+    "original": "I fully intend to win.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "111",
+    "timecode": "00:08:27,490 --> 00:08:30,900",
+    "original": "For one thing, I've invested a lot more capital.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "112",
+    "timecode": "00:08:30,900 --> 00:08:34,750",
+    "original": "Do you think a purchased title is purchased glory?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "113",
+    "timecode": "00:08:34,750 --> 00:08:39,040",
+    "original": "No. One should use every tool at one's disposal.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "114",
+    "timecode": "00:08:39,410 --> 00:08:41,330",
+    "original": "If you intend to use wealth as a weapon,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "115",
+    "timecode": "00:08:41,330 --> 00:08:43,810",
+    "original": "I'm sure there are strategies tailored to that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "116",
+    "timecode": "00:08:44,910 --> 00:08:46,690",
+    "original": "Don't get the wrong idea.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "117",
+    "timecode": "00:08:46,690 --> 00:08:51,140",
+    "original": "As a mage, I've made preparations to overwhelm the other Masters.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "118",
+    "timecode": "00:08:51,550 --> 00:08:52,430",
+    "original": "Come.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "119",
+    "timecode": "00:08:52,430 --> 00:08:54,680",
+    "original": "I'll prove it to you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "120",
+    "timecode": "00:08:56,540 --> 00:09:00,750",
+    "original": "Is this an alchemy workshop?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "121",
+    "timecode": "00:09:00,750 --> 00:09:05,780",
+    "original": "My family uses a magic system that generates mana via offerings.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "122",
+    "timecode": "00:09:06,180 --> 00:09:10,080",
+    "original": "Well, it's a primitive curse that relies on human sacrifice.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "123",
+    "timecode": "00:09:10,080 --> 00:09:15,470",
+    "original": "This workshop is a more modern and efficient version\nof the original system.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "124",
+    "timecode": "00:09:15,470 --> 00:09:17,250",
+    "original": "I'll make one to show you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "125",
+    "timecode": "00:09:22,230 --> 00:09:25,420",
+    "original": "It works best when the raw materials are fresh.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "126",
+    "timecode": "00:09:49,820 --> 00:09:54,450",
+    "original": "How's that? Ordinarily this would take a month to create, but I did it in the blink of an eye.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "127",
+    "timecode": "00:09:54,450 --> 00:09:57,790",
+    "original": "Oh, and don't worry about the raw materials.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "128",
+    "timecode": "00:09:58,290 --> 00:10:00,560",
+    "original": "I won't procure them in Fuyuki.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "129",
+    "timecode": "00:10:00,560 --> 00:10:02,480",
+    "original": "I bought these from other—",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "130",
+    "timecode": "00:10:02,480 --> 00:10:04,000",
+    "original": "This is too inefficient.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "131",
+    "timecode": "00:10:04,000 --> 00:10:09,170",
+    "original": "Using all these lives to create such a tiny crystal\nis the act of a third-rate mage.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "132",
+    "timecode": "00:10:14,320 --> 00:10:15,320",
+    "original": "What...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "133",
+    "timecode": "00:10:15,320 --> 00:10:16,510",
+    "original": "What did you do?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "134",
+    "timecode": "00:10:16,510 --> 00:10:20,100",
+    "original": "How could you create mana from an empty kiln?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "135",
+    "timecode": "00:10:20,100 --> 00:10:21,430",
+    "original": "Empty?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "136",
+    "timecode": "00:10:22,150 --> 00:10:28,070",
+    "original": "Oh. So this appears empty to the eyes of you modern mages?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "137",
+    "timecode": "00:10:28,070 --> 00:10:31,350",
+    "original": "Your mana-generating technique must be one level—",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "138",
+    "timecode": "00:10:31,350 --> 00:10:34,160",
+    "original": "no, a whole world below mine.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "139",
+    "timecode": "00:10:35,020 --> 00:10:37,480",
+    "original": "B-But what about the incantation?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "140",
+    "timecode": "00:10:37,480 --> 00:10:43,360",
+    "original": "I devoted all I had to designing this workshop\nfor the purpose of omitting the incantation process.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "141",
+    "timecode": "00:10:43,360 --> 00:10:47,360",
+    "original": "The transmutation incantation alone\nis supposed to take three days and nights!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "142",
+    "timecode": "00:10:47,360 --> 00:10:50,330",
+    "original": "I have no need for incantations.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "143",
+    "timecode": "00:10:50,330 --> 00:10:54,260",
+    "original": "For me, magic is simply something to command.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "144",
+    "timecode": "00:10:55,760 --> 00:11:01,430",
+    "original": "Forgive me for acting out of turn,\nbut I ask that you close this workshop.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "145",
+    "timecode": "00:11:02,010 --> 00:11:05,050",
+    "original": "Throwing away lives is unwise.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "146",
+    "timecode": "00:11:05,050 --> 00:11:10,370",
+    "original": "As a mage, I cannot abide a workshop that generates such a loss.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "147",
+    "timecode": "00:11:10,370 --> 00:11:16,310",
+    "original": "Ah, it would appear that I have failed to grasp the true nature of a Servant.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "148",
+    "timecode": "00:11:16,310 --> 00:11:18,030",
+    "original": "By my Command Spell, I order you:",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "149",
+    "timecode": "00:11:19,310 --> 00:11:22,040",
+    "original": "do not use your Noble Phantasm on me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "150",
+    "timecode": "00:11:22,380 --> 00:11:26,540",
+    "original": "I wouldn't want to be stabbed in the back by a treacherous witch.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "151",
+    "timecode": "00:11:37,310 --> 00:11:38,850",
+    "original": "Witch?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "152",
+    "timecode": "00:11:38,850 --> 00:11:40,560",
+    "original": "He called me a witch?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "153",
+    "timecode": "00:11:41,160 --> 00:11:44,840",
+    "original": "Everyone I meet calls me a witch.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "154",
+    "timecode": "00:11:46,380 --> 00:11:49,810",
+    "original": "You say that Caster is too much for you to handle?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "155",
+    "timecode": "00:11:50,310 --> 00:11:54,270",
+    "original": "It's not a matter of ability but of trust.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "156",
+    "timecode": "00:11:54,270 --> 00:11:56,910",
+    "original": "Her sense of values is just too different from ours.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "157",
+    "timecode": "00:11:57,720 --> 00:12:01,420",
+    "original": "She is a woman who can cast magic with a wave of her fingers.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "158",
+    "timecode": "00:12:01,420 --> 00:12:05,500",
+    "original": "To her, human life is as worthless as paper.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "159",
+    "timecode": "00:12:05,500 --> 00:12:09,890",
+    "original": "After all, this woman killed her rival in love\nby burning her alive in her castle.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "160",
+    "timecode": "00:12:09,890 --> 00:12:11,880",
+    "original": "I'd have to be crazy to trust her.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "161",
+    "timecode": "00:12:11,880 --> 00:12:13,340",
+    "original": "I see.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "162",
+    "timecode": "00:12:13,750 --> 00:12:17,930",
+    "original": "That is how you have interpreted the stories of Princess Medea?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "163",
+    "timecode": "00:12:17,930 --> 00:12:22,670",
+    "original": "My job is to accommodate the Masters' wishes as best I can.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "164",
+    "timecode": "00:12:22,670 --> 00:12:27,000",
+    "original": "All the more so for those with the Mages' Association's backing.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "165",
+    "timecode": "00:12:27,000 --> 00:12:31,120",
+    "original": "At this stage, the Grail has selected five Masters.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "166",
+    "timecode": "00:12:31,120 --> 00:12:33,810",
+    "original": "Two positions remain vacant.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "167",
+    "timecode": "00:12:38,660 --> 00:12:40,760",
+    "original": "I was hoping you'd say that!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "168",
+    "timecode": "00:12:40,760 --> 00:12:44,660",
+    "original": "It's possible for me to make a pact with a different Servant, right?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "169",
+    "timecode": "00:12:45,120 --> 00:12:48,400",
+    "original": "Though unprecedented, it is possible.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "170",
+    "timecode": "00:12:48,400 --> 00:12:49,920",
+    "original": "But before that,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "171",
+    "timecode": "00:12:50,370 --> 00:12:54,670",
+    "original": "something must be done about the Servant\nto whom you are currently bound.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "172",
+    "timecode": "00:12:54,980 --> 00:12:57,300",
+    "original": "No matter how gifted she might be in magic,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "173",
+    "timecode": "00:12:57,300 --> 00:13:00,940",
+    "original": "she's nothing but a vixen whose only trick is deceiving men.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "174",
+    "timecode": "00:13:00,940 --> 00:13:03,410",
+    "original": "I've already laid the groundwork.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "175",
+    "timecode": "00:13:03,410 --> 00:13:06,910",
+    "original": "Still, better safe than sorry, Father Kotomine.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "176",
+    "timecode": "00:13:06,910 --> 00:13:09,780",
+    "original": "I want you to give this to Lancer's Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "177",
+    "timecode": "00:13:09,780 --> 00:13:14,740",
+    "original": "She owes me at least this much as a\nfellow Mages' Association participant.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "178",
+    "timecode": "00:13:18,040 --> 00:13:19,200",
+    "original": "What is it?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "179",
+    "timecode": "00:13:19,610 --> 00:13:24,200",
+    "original": "Oh, it's only a contract selling the right to dispose of Caster.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "180",
+    "timecode": "00:13:24,780 --> 00:13:29,450",
+    "original": "If she agrees, I'll be rid of Caster\nwithout having to waste a Command Spell.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "181",
+    "timecode": "00:13:34,620 --> 00:13:37,320",
+    "original": "To Lancer's Master, you say?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "182",
+    "timecode": "00:13:38,590 --> 00:13:42,930",
+    "original": "Like Servant, like Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "183",
+    "timecode": "00:13:43,480 --> 00:13:46,430",
+    "original": "Neither of them has any luck at all.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "184",
+    "timecode": "00:13:58,690 --> 00:14:00,940",
+    "original": "What is the meaning of this?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "185",
+    "timecode": "00:14:00,940 --> 00:14:04,500",
+    "original": "I took it upon myself to dismantle your workshop.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "186",
+    "timecode": "00:14:04,500 --> 00:14:08,540",
+    "original": "I shall take you to a more suitable place for fortification.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "187",
+    "timecode": "00:14:11,240 --> 00:14:13,050",
+    "original": "Dismantle, eh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "188",
+    "timecode": "00:14:13,050 --> 00:14:14,790",
+    "original": "What about my supplies?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "189",
+    "timecode": "00:14:14,790 --> 00:14:17,830",
+    "original": "I still had around fifty left.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "190",
+    "timecode": "00:14:18,560 --> 00:14:21,050",
+    "original": "They were unnecessary, so I freed them.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "191",
+    "timecode": "00:14:23,070 --> 00:14:26,500",
+    "original": "Then what is this \"more suitable\" location?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "192",
+    "timecode": "00:14:27,110 --> 00:14:29,380",
+    "original": "The heart of this ritual.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "193",
+    "timecode": "00:14:29,380 --> 00:14:31,690",
+    "original": "The place where the Greater Grail rests.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "194",
+    "timecode": "00:14:31,690 --> 00:14:36,220",
+    "original": "I have located a natural fortress that repels Servants.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "195",
+    "timecode": "00:14:36,220 --> 00:14:41,410",
+    "original": "If you do as I say, I shall take you there, Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "196",
+    "timecode": "00:14:42,940 --> 00:14:44,980",
+    "original": "That won't be necessary.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "197",
+    "timecode": "00:14:44,980 --> 00:14:47,750",
+    "original": "I no longer require your services, Medea.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "198",
+    "timecode": "00:14:47,750 --> 00:14:49,830",
+    "original": "I order you by my Command Spell:",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "199",
+    "timecode": "00:14:49,830 --> 00:14:51,370",
+    "original": "kill yourself, Caster.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "200",
+    "timecode": "00:14:56,360 --> 00:14:57,710",
+    "original": "What's going on?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "201",
+    "timecode": "00:14:57,710 --> 00:14:59,760",
+    "original": "It takes more than one?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "202",
+    "timecode": "00:15:00,300 --> 00:15:02,480",
+    "original": "I once again order you by my Command Spell:",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "203",
+    "timecode": "00:15:02,480 --> 00:15:04,680",
+    "original": "terminate yourself, Caster!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "204",
+    "timecode": "00:15:09,890 --> 00:15:12,420",
+    "original": "What a foolish Master you are.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "205",
+    "timecode": "00:15:12,420 --> 00:15:15,610",
+    "original": "Have you forgotten what my Noble Phantasm is?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "206",
+    "timecode": "00:15:16,010 --> 00:15:18,520",
+    "original": "Rule Breaker...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "207",
+    "timecode": "00:15:18,520 --> 00:15:20,820",
+    "original": "But I used a Command Spell to forbid you from using it!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "208",
+    "timecode": "00:15:21,110 --> 00:15:23,680",
+    "original": "Indeed, I cannot use it on you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "209",
+    "timecode": "00:15:24,200 --> 00:15:28,800",
+    "original": "Thus, I used it on myself to sever my pact with you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "210",
+    "timecode": "00:15:29,950 --> 00:15:32,180",
+    "original": "I-Impossible!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "211",
+    "timecode": "00:15:32,180 --> 00:15:36,400",
+    "original": "To you Servants, that's tantamount to suicide!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "212",
+    "timecode": "00:15:36,400 --> 00:15:39,070",
+    "original": "You won't be able to maintain your physical form!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "213",
+    "timecode": "00:15:39,070 --> 00:15:41,340",
+    "original": "Yes, but what of it?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "214",
+    "timecode": "00:15:41,800 --> 00:15:45,800",
+    "original": "You are about to die here, so is that any of your concern?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "215",
+    "timecode": "00:15:58,050 --> 00:15:59,070",
+    "original": "What is this?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "216",
+    "timecode": "00:15:59,070 --> 00:16:00,820",
+    "original": "What's going on?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "217",
+    "timecode": "00:16:00,820 --> 00:16:02,650",
+    "original": "I won't let it end like this!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "218",
+    "timecode": "00:16:07,100 --> 00:16:09,750",
+    "original": "The Grail War hasn't even started!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "219",
+    "timecode": "00:16:09,750 --> 00:16:11,980",
+    "original": "I haven't fought a single battle!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "220",
+    "timecode": "00:16:11,980 --> 00:16:13,080",
+    "original": "Not like this!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "221",
+    "timecode": "00:16:30,340 --> 00:16:31,810",
+    "original": "{\\an8}Yes...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "222",
+    "timecode": "00:16:31,810 --> 00:16:36,520",
+    "original": "{\\an8}It is a fitting end for you,\na man who desired results before he even began.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "223",
+    "timecode": "00:16:37,180 --> 00:16:40,540",
+    "original": "You treacherous... witch...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "224",
+    "timecode": "00:16:46,200 --> 00:16:47,410",
+    "original": "It's hot.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "225",
+    "timecode": "00:17:12,910 --> 00:17:16,770",
+    "original": "In the end, is this how I shall die once again?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "226",
+    "timecode": "00:17:16,770 --> 00:17:20,710",
+    "original": "Passed around for others' convenience, exploited,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "227",
+    "timecode": "00:17:20,710 --> 00:17:23,180",
+    "original": "reviled as a traitor...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "228",
+    "timecode": "00:17:23,180 --> 00:17:25,490",
+    "original": "All I wanted...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "229",
+    "timecode": "00:17:26,810 --> 00:17:30,570",
+    "original": "was to return to my homeland.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "230",
+    "timecode": "00:17:38,910 --> 00:17:41,150",
+    "original": "What are you doing there?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "231",
+    "timecode": "00:17:43,730 --> 00:17:46,750",
+    "original": "You believe such an outrageous story?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "232",
+    "timecode": "00:17:46,750 --> 00:17:50,180",
+    "original": "I don't think you'd have any reason to lie...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "233",
+    "timecode": "00:17:50,180 --> 00:17:54,180",
+    "original": "unless you stand to gain something by deceiving me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "234",
+    "timecode": "00:17:54,180 --> 00:17:59,350",
+    "original": "Rather, it is you who has no reason\nto help a woman covered in blood.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "235",
+    "timecode": "00:17:59,350 --> 00:18:04,440",
+    "original": "I could hardly ascertain your character\nwhile you were unconscious.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "236",
+    "timecode": "00:18:06,900 --> 00:18:08,460",
+    "original": "Have you calmed down?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "237",
+    "timecode": "00:18:08,460 --> 00:18:10,450",
+    "original": "If so, we should begin.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "238",
+    "timecode": "00:18:10,890 --> 00:18:12,980",
+    "original": "Then you are saying...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "239",
+    "timecode": "00:18:13,960 --> 00:18:16,990",
+    "original": "You need what you called a \"vessel,\" correct?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "240",
+    "timecode": "00:18:17,590 --> 00:18:21,640",
+    "original": "I thought your only chance was for me to become your Master.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "241",
+    "timecode": "00:18:21,640 --> 00:18:23,210",
+    "original": "Or was I wrong?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "242",
+    "timecode": "00:18:37,780 --> 00:18:40,220",
+    "original": "Go for wool and come home shorn, huh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "243",
+    "timecode": "00:18:40,620 --> 00:18:44,250",
+    "original": "I see that even a peerless witch is surprisingly delicate.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "244",
+    "timecode": "00:18:44,250 --> 00:18:47,060",
+    "original": "I thought I told you to keep watch outside.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "245",
+    "timecode": "00:18:47,340 --> 00:18:48,810",
+    "original": "Oh, about that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "246",
+    "timecode": "00:18:48,810 --> 00:18:51,210",
+    "original": "There are no enemies worth mentioning outside.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "247",
+    "timecode": "00:18:51,210 --> 00:18:53,170",
+    "original": "I could no longer stand the boredom.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "248",
+    "timecode": "00:18:53,170 --> 00:18:54,810",
+    "original": "That is no surprise.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "249",
+    "timecode": "00:18:54,810 --> 00:18:58,810",
+    "original": "The moment you changed sides,\nBerserker became our only enemy.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "250",
+    "timecode": "00:18:58,810 --> 00:19:02,750",
+    "original": "Did you not side with me because you knew that?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "251",
+    "timecode": "00:19:02,750 --> 00:19:04,260",
+    "original": "Perhaps.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "252",
+    "timecode": "00:19:04,260 --> 00:19:08,960",
+    "original": "Haven't you even thought that I simply\nwanted to sever my pact with that Master?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "253",
+    "timecode": "00:19:09,560 --> 00:19:13,880",
+    "original": "That I didn't care who my Master was, if not that girl?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "254",
+    "timecode": "00:19:13,880 --> 00:19:14,990",
+    "original": "I see.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "255",
+    "timecode": "00:19:14,990 --> 00:19:19,480",
+    "original": "We as Servants are usually dissatisfied with our Masters.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "256",
+    "timecode": "00:19:19,480 --> 00:19:23,480",
+    "original": "Are you saying that you are relieved\nat being freed from babysitting that little girl?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "257",
+    "timecode": "00:19:27,070 --> 00:19:28,630",
+    "original": "A word of advice.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "258",
+    "timecode": "00:19:29,190 --> 00:19:33,230",
+    "original": "Don't assume that all Servants are like you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "259",
+    "timecode": "00:19:33,770 --> 00:19:35,910",
+    "original": "A righteous Heroic Spirit...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "260",
+    "timecode": "00:19:35,910 --> 00:19:39,070",
+    "original": "...can serve only a righteous human.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "261",
+    "timecode": "00:19:39,710 --> 00:19:42,260",
+    "original": "You do not need to tell me that.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "262",
+    "timecode": "00:19:42,260 --> 00:19:46,620",
+    "original": "Twisted Masters summon\ntwisted Heroic Spirits because of their nature.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "263",
+    "timecode": "00:19:46,620 --> 00:19:50,990",
+    "original": "Then it makes sense that such a witch",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "264",
+    "timecode": "00:19:50,990 --> 00:19:53,250",
+    "original": "summoned a fictitious Heroic Spirit.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "265",
+    "timecode": "00:19:53,870 --> 00:19:57,360",
+    "original": "I do not care what you think.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "266",
+    "timecode": "00:19:57,360 --> 00:20:00,460",
+    "original": "Your life is in my hands.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "267",
+    "timecode": "00:20:00,460 --> 00:20:03,520",
+    "original": "Bear that in mind when you speak.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "268",
+    "timecode": "00:20:03,890 --> 00:20:05,440",
+    "original": "Understood.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "269",
+    "timecode": "00:20:05,440 --> 00:20:07,610",
+    "original": "Then, like the faithful Servant I am,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "270",
+    "timecode": "00:20:07,610 --> 00:20:10,040",
+    "original": "I shall strive to meet the expectations of my Lord.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "271",
+    "timecode": "00:20:18,930 --> 00:20:22,820",
+    "original": "Just a little longer, and the Holy Grail will be in my grasp.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "272",
+    "timecode": "00:20:34,780 --> 00:20:37,960",
+    "original": "For now, I guess we have to pin our hopes on Illyasviel.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "273",
+    "timecode": "00:20:37,960 --> 00:20:41,640",
+    "original": "Berserker is definitely Caster's natural enemy.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "274",
+    "timecode": "00:20:41,980 --> 00:20:45,320",
+    "original": "Is Caster somehow connected to Berserker?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "275",
+    "timecode": "00:20:45,320 --> 00:20:46,990",
+    "original": "Archer told me.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "276",
+    "timecode": "00:20:46,990 --> 00:20:49,820",
+    "original": "He said Berserker's true identity is Heracles.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "277",
+    "timecode": "00:20:50,380 --> 00:20:53,870",
+    "original": "If Caster really is the peerless witch Medea,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "278",
+    "timecode": "00:20:53,870 --> 00:20:56,490",
+    "original": "they should have met on the <i>Argo</i>.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "279",
+    "timecode": "00:20:56,490 --> 00:21:00,040",
+    "original": "It's like my sore spot when it comes to Kirei.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "280",
+    "timecode": "00:21:00,040 --> 00:21:03,790",
+    "original": "Everyone has someone they just can't deal with.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "281",
+    "timecode": "00:21:06,310 --> 00:21:09,280",
+    "original": "Hey, Shirou. Would you mind walking ahead a bit?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "282",
+    "timecode": "00:21:09,280 --> 00:21:10,790",
+    "original": "Sure, I guess.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "283",
+    "timecode": "00:21:12,690 --> 00:21:13,340",
+    "original": "What was that?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "284",
+    "timecode": "00:21:13,630 --> 00:21:14,920",
+    "original": "I knew it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "285",
+    "timecode": "00:21:14,920 --> 00:21:17,740",
+    "original": "It seems her control extends to the entire forest.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "286",
+    "timecode": "00:21:17,740 --> 00:21:21,500",
+    "original": "But that means we just tripped her security system!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "287",
+    "timecode": "00:21:21,500 --> 00:21:23,540",
+    "original": "I don't think it's a problem, do you?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "288",
+    "timecode": "00:21:23,540 --> 00:21:26,850",
+    "original": "We came here to talk, not attack.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "289",
+    "timecode": "00:21:26,850 --> 00:21:30,180",
+    "original": "So it's better to let her know we don't intend to fight.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "290",
+    "timecode": "00:21:30,180 --> 00:21:31,230",
+    "original": "I get it.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "291",
+    "timecode": "00:21:31,610 --> 00:21:33,350",
+    "original": "Be careful, though.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "292",
+    "timecode": "00:21:33,350 --> 00:21:35,360",
+    "original": "It shocks you a bit.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "293",
+    "timecode": "00:21:35,360 --> 00:21:37,190",
+    "original": "I'll be fine.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "294",
+    "timecode": "00:21:42,520 --> 00:21:45,120",
+    "original": "Now that brat's really done it!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "295",
+    "timecode": "00:21:45,120 --> 00:21:48,870",
+    "original": "I know I heard her laugh just now!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "296",
+    "timecode": "00:21:50,780 --> 00:21:52,710",
+    "original": "She walked right into my trap.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "297",
+    "timecode": "00:21:53,050 --> 00:21:58,220",
+    "original": "Rin's really amusing.\nYou can always expect an instant reaction from her.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "298",
+    "timecode": "00:21:58,630 --> 00:22:01,220",
+    "original": "But I wonder if they'll get here safely.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "299",
+    "timecode": "00:22:01,590 --> 00:22:04,440",
+    "original": "Maybe I should disable a few of the traps.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "300",
+    "timecode": "00:22:04,440 --> 00:22:09,140",
+    "original": "Mistress, surely you don't intend to welcome those people in.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "301",
+    "timecode": "00:22:09,140 --> 00:22:11,370",
+    "original": "Wh-Why not?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "302",
+    "timecode": "00:22:11,370 --> 00:22:14,310",
+    "original": "They said that they're here to talk.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "303",
+    "timecode": "00:22:15,310 --> 00:22:16,570",
+    "original": "Plus...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "304",
+    "timecode": "00:22:18,550 --> 00:22:20,650",
+    "original": "There are things I'd like to ask him.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "305",
+    "timecode": "00:22:20,650 --> 00:22:22,060",
+    "original": "Mistress!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "306",
+    "timecode": "00:22:22,060 --> 00:22:24,050",
+    "original": "You're such a worrywart, Sella.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "307",
+    "timecode": "00:22:24,050 --> 00:22:27,740",
+    "original": "Even if they're planning something,\nthey're no match for Berserker.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "308",
+    "timecode": "00:22:27,740 --> 00:22:31,070",
+    "original": "As that may be, I can't condone this.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "309",
+    "timecode": "00:22:31,070 --> 00:22:33,330",
+    "original": "Enough! I've already decided!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "310",
+    "timecode": "00:22:33,820 --> 00:22:36,590",
+    "original": "If the lady of the castle says to welcome them in, you do it!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "311",
+    "timecode": "00:22:36,590 --> 00:22:39,880",
+    "original": "That's all the more reason for you to drive them off!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "312",
+    "timecode": "00:22:39,880 --> 00:22:43,620",
+    "original": "As the Einzbern princess,\nyou must send a proper invitation",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "313",
+    "timecode": "00:22:43,620 --> 00:22:46,270",
+    "original": "and then throw an evening party,\nin keeping with proper decorum!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "314",
+    "timecode": "00:22:46,270 --> 00:22:47,890",
+    "original": "Sella, you're being stubborn.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "315",
+    "timecode": "00:22:47,890 --> 00:22:50,640",
+    "original": "Also, what you describe is not what she meant.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "316",
+    "timecode": "00:22:53,920 --> 00:22:54,840",
+    "original": "All right, fine.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "317",
+    "timecode": "00:22:54,840 --> 00:22:56,940",
+    "original": "You understand now, Mistress?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "318",
+    "timecode": "00:22:56,940 --> 00:22:59,490",
+    "original": "In that case, you two go and bring them here.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "319",
+    "timecode": "00:22:59,490 --> 00:23:00,360",
+    "original": "Mistress?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "320",
+    "timecode": "00:23:00,360 --> 00:23:02,700",
+    "original": "I'm telling you to go capture them!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "321",
+    "timecode": "00:23:08,740 --> 00:23:11,150",
+    "original": "How about it? Do we need this?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "322",
+    "timecode": "00:23:11,150 --> 00:23:13,410",
+    "original": "It's only natural that as maids,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "323",
+    "timecode": "00:23:13,410 --> 00:23:17,960",
+    "original": "if we see wrongdoing, we'll exact punishment.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "324",
+    "timecode": "00:23:19,600 --> 00:23:21,280",
+    "original": "Sella, that was...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "325",
+    "timecode": "00:23:21,280 --> 00:23:23,610",
+    "original": "I guess it's an unwelcomed guest.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "326",
+    "timecode": "00:23:34,470 --> 00:23:35,920",
+    "original": "Ow!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "327",
+    "timecode": "00:23:35,920 --> 00:23:39,110",
+    "original": "That jerk, dragging me along with him!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "328",
+    "timecode": "00:23:39,110 --> 00:23:40,870",
+    "original": "Where the hell am I?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "329",
+    "timecode": "00:23:40,870 --> 00:23:43,430",
+    "original": "Is this really where Berserker is?!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "330",
+    "timecode": "00:23:43,430 --> 00:23:45,280",
+    "original": "That is not Shirou.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "331",
+    "timecode": "00:23:45,280 --> 00:23:48,120",
+    "original": "No, he seems like a harmless fly.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "332",
+    "timecode": "00:23:48,120 --> 00:23:50,700",
+    "original": "Let's deal with him and be on our way.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "333",
+    "timecode": "00:23:52,370 --> 00:23:53,830",
+    "original": "You two...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "334",
+    "timecode": "00:23:53,830 --> 00:23:56,370",
+    "original": "Are you Einzbern servants?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "335",
+    "timecode": "00:23:56,370 --> 00:23:58,100",
+    "original": "You've come at just the right time.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "336",
+    "timecode": "00:23:58,100 --> 00:23:59,380",
+    "original": "Take me to Berserker's—",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "337",
+    "timecode": "00:24:03,280 --> 00:24:04,720",
+    "original": "Hold your tongue.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "338",
+    "timecode": "00:24:04,720 --> 00:24:07,590",
+    "original": "We have no time to deal with an unexpected guest like you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "339",
+    "timecode": "00:24:07,590 --> 00:24:12,400",
+    "original": "Either leap from the roof and run away, or fall to this weapon.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "340",
+    "timecode": "00:24:12,400 --> 00:24:14,540",
+    "original": "You have ten seconds to decide.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "341",
+    "timecode": "00:24:14,540 --> 00:24:19,520",
+    "original": "Nine. Eight. Seven. Six. Five.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "342",
+    "timecode": "00:24:16,880 --> 00:24:18,740",
+    "original": "W-W-Wait!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "343",
+    "timecode": "00:24:19,520 --> 00:24:21,520",
+    "original": "Four, three, two, one.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "344",
+    "timecode": "00:24:20,230 --> 00:24:21,520",
+    "original": "Are you kidding me?!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "345",
+    "timecode": "00:24:25,870 --> 00:24:28,780",
+    "original": "What have we here? Homunculi, eh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "346",
+    "timecode": "00:24:29,750 --> 00:24:31,700",
+    "original": "Nicely made, too.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "347",
+    "timecode": "00:24:31,700 --> 00:24:36,040",
+    "original": "Even though you are humans only in shape, you function as children of nature.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "348",
+    "timecode": "00:24:36,460 --> 00:24:39,030",
+    "original": "They must have used a fine mold to make you.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "349",
+    "timecode": "00:24:39,030 --> 00:24:41,530",
+    "original": "Sella, this man is highly...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "350",
+    "timecode": "00:24:41,530 --> 00:24:42,690",
+    "original": "I know.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "351",
+    "timecode": "00:24:42,690 --> 00:24:45,300",
+    "original": "Don't worry about me. Just get away.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "352",
+    "timecode": "00:24:45,300 --> 00:24:47,550",
+    "original": "Don't be afraid, now.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "353",
+    "timecode": "00:24:47,550 --> 00:24:50,800",
+    "original": "I shall pardon your disrespect, given your display of awe.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "354",
+    "timecode": "00:24:53,620 --> 00:24:56,570",
+    "original": "If you value your lives, be gone from my sight.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "355",
+    "timecode": "00:24:56,570 --> 00:25:01,650",
+    "original": "I shall grant you ten seconds in appreciation for allowing my Master to escape.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "356",
+    "timecode": "00:25:01,650 --> 00:25:04,310",
+    "original": "That boy is a Master?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "357",
+    "timecode": "00:25:04,310 --> 00:25:06,820",
+    "original": "Then we cannot do as you ask.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "358",
+    "timecode": "00:25:07,190 --> 00:25:11,190",
+    "original": "Our purpose is to protect our mistress from all outside threats.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "359",
+    "timecode": "00:25:11,190 --> 00:25:13,530",
+    "original": "Though you strike me as royalty,",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "360",
+    "timecode": "00:25:13,530 --> 00:25:17,810",
+    "original": "we cannot allow a man who reeks so strongly of blood to pass!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "361",
+    "timecode": "00:25:17,810 --> 00:25:19,130",
+    "original": "Is that so?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "362",
+    "timecode": "00:25:19,130 --> 00:25:21,510",
+    "original": "Then fall like flowers.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "363",
+    "timecode": "00:25:21,510 --> 00:25:26,590",
+    "original": "I expect that the Grail's vessel will come running\nat the sound of your screams.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "364",
+    "timecode": "00:25:26,590 --> 00:25:29,090",
+    "original": "The Grail's vessel...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "365",
+    "timecode": "00:25:29,370 --> 00:25:32,050",
+    "original": "You are Illya's enemy!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "366",
+    "timecode": "00:25:34,850 --> 00:25:39,850",
+    "original": "Shirou is coming here, to the castle where Mother once stayed.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "367",
+    "timecode": "00:25:50,150 --> 00:25:51,070",
+    "original": "Leysritt!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "368",
+    "timecode": "00:25:59,010 --> 00:26:01,870",
+    "original": "The mages never learn, do they?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "369",
+    "timecode": "00:26:02,400 --> 00:26:05,880",
+    "original": "One should never give a tool a human heart.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "370",
+    "timecode": "00:26:06,310 --> 00:26:10,880",
+    "original": "Humans are incapable of reciprocating your purity.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "371",
+    "timecode": "00:26:15,430 --> 00:26:18,790",
+    "original": "As long as I draw breath...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "372",
+    "timecode": "00:26:18,790 --> 00:26:21,640",
+    "original": "I will not let you near my mistress.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "373",
+    "timecode": "00:26:21,960 --> 00:26:23,310",
+    "original": "Oh?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "374",
+    "timecode": "00:26:32,180 --> 00:26:35,030",
+    "original": "Then you may see your duty through to the last.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "375",
+    "timecode": "00:26:42,620 --> 00:26:43,870",
+    "original": "Leys...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "376",
+    "timecode": "00:26:43,870 --> 00:26:45,130",
+    "original": "Sella!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "377",
+    "timecode": "00:26:52,090 --> 00:26:55,610",
+    "original": "You are the doll that possesses the Grail vessel?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "378",
+    "timecode": "00:26:56,220 --> 00:27:01,810",
+    "original": "I see that crossing a human and a homunculus\nhas given rise to a peculiarity.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "379",
+    "timecode": "00:27:02,320 --> 00:27:04,780",
+    "original": "You killed them...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "380",
+    "timecode": "00:27:05,830 --> 00:27:06,900",
+    "original": "Kill him.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "381",
+    "timecode": "00:27:06,900 --> 00:27:09,730",
+    "original": "Kill him right now, Berserker!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "382",
+    "timecode": "00:27:13,160 --> 00:27:14,790",
+    "original": "You heard her.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "383",
+    "timecode": "00:27:14,790 --> 00:27:16,740",
+    "original": "Then come, great Heroic Spirit.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "384",
+    "timecode": "00:27:20,490 --> 00:27:25,500",
+    "original": "Toying with you will relieve my boredom.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "385",
+    "timecode": "00:27:26,230 --> 00:27:31,080",
+    "original": "Shall we reenact a battle of legend here?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "386",
+    "timecode": "00:29:03,340 --> 00:29:05,070",
+    "original": "That's enough, damn it!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "387",
+    "timecode": "00:29:05,070 --> 00:29:07,440",
+    "original": "No way! Those were all Noble Phantasms?",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "388",
+    "timecode": "00:29:07,440 --> 00:29:09,320",
+    "original": "I can't wait, Illyasviel!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "389",
+    "timecode": "00:29:09,320 --> 00:29:11,530",
+    "original": "Your defeat is certain.",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "390",
+    "timecode": "00:29:11,530 --> 00:29:13,910",
+    "original": "Berserker won't lose to anyone...",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "391",
+    "timecode": "00:29:13,910 --> 00:29:16,660",
+    "original": "because he's the strongest in the world!",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "392",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "A Battle of Legend",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "393",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "A Battle of Legend",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "394",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "A Battle of Legend",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "395",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "Next Time",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "396",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "Next Time",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  },
+  {
+    "id": "397",
+    "timecode": "00:29:14,020 --> 00:29:17,530",
+    "original": "Next Time",
+    "translated": "",
+    "is_edited": false,
+    "needs_review": false
+  }
+]

@@ -1,0 +1,38 @@
+{
+    "eval_set_id": "glossary_extraction_test",
+    "cases": [
+        {
+            "id": "case_1_fantasy_battle",
+            "input_text": [
+                "Commander Kaelen, the Shadow Beast is approaching the Crimson Gate!",
+                "Hold the line! We must protect the Orb of Valoria at all costs.",
+                "By the light of the Sunwell, we shall not fall today.",
+                "Prepare the Aether Cannons!"
+            ],
+            "expected_terms": [
+                "Kaelen",
+                "Shadow Beast",
+                "Crimson Gate",
+                "Orb of Valoria",
+                "Sunwell",
+                "Aether Cannons"
+            ]
+        },
+        {
+            "id": "case_2_sci_fi_briefing",
+            "input_text": [
+                "Admiral Vance, the Hyperion Drive is unstable.",
+                "Reroute power from the Shield Matrix to the Core.",
+                "We are entering the Nebula of Lost Souls.",
+                "Contact the Zorgon Federation immediately."
+            ],
+            "expected_terms": [
+                "Vance",
+                "Hyperion Drive",
+                "Shield Matrix",
+                "Nebula of Lost Souls",
+                "Zorgon Federation"
+            ]
+        }
+    ]
+}

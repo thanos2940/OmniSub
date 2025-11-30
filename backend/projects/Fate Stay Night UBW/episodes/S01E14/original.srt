@@ -1,0 +1,1616 @@
+﻿1
+00:00:02,240 --> 00:00:03,320
+Ow!
+
+2
+00:00:03,900 --> 00:00:05,240
+Hold still.
+
+3
+00:00:09,410 --> 00:00:10,890
+Okay, all done.
+
+4
+00:00:10,890 --> 00:00:12,000
+Thanks.
+
+5
+00:00:14,140 --> 00:00:14,920
+Tohsaka?
+
+6
+00:00:15,310 --> 00:00:16,970
+I'm making dinner.
+
+7
+00:00:16,970 --> 00:00:19,380
+Dinner? Now?
+
+8
+00:00:19,380 --> 00:00:21,120
+Of course.
+
+9
+00:00:21,120 --> 00:00:24,970
+Can't come up with decent ideas on an empty stomach, right?
+
+10
+00:00:26,260 --> 00:00:28,330
+I did a lot of thinking afterward.
+
+11
+00:00:28,330 --> 00:00:31,440
+About why I started fighting in the Grail War.
+
+12
+00:00:31,440 --> 00:00:34,190
+About what I wanted to accomplish.
+
+13
+00:00:35,240 --> 00:00:36,180
+And?
+
+14
+00:00:37,520 --> 00:00:42,190
+At first it was just because I got dragged into it,
+but that makes no difference.
+
+15
+00:00:42,520 --> 00:00:45,620
+I like champions of justice,
+and I want to follow their example.
+
+16
+00:00:45,620 --> 00:00:47,450
+So I have to protect people.
+
+17
+00:00:48,140 --> 00:00:51,920
+Master or not, Saber or not...
+
+18
+00:00:51,920 --> 00:00:53,950
+I'm going to fight all the same.
+
+19
+00:00:55,270 --> 00:00:56,460
+Oh.
+
+20
+00:00:56,460 --> 00:01:01,080
+Look, this is serious. At least pay attention.
+
+21
+00:01:01,080 --> 00:01:02,730
+I am paying attention.
+
+22
+00:01:02,730 --> 00:01:08,640
+The idea of others dying bothers you more than the idea of your own death.
+
+23
+00:01:08,640 --> 00:01:12,930
+So you've decided to keep fighting despite your weakness, right?
+
+24
+00:01:12,930 --> 00:01:15,990
+Y-Yeah.
+
+25
+00:01:15,990 --> 00:01:17,180
+What's with you?
+
+26
+00:01:17,180 --> 00:01:19,860
+You look like a squirrel that bit into a candy instead of a nut.
+
+27
+00:01:19,860 --> 00:01:23,130
+I just assumed you'd be against it.
+
+28
+00:01:23,130 --> 00:01:25,260
+Of course I'm against it.
+
+29
+00:01:25,260 --> 00:01:30,450
+But after you saved me like that, I can hardly object, can I?
+
+30
+00:01:31,260 --> 00:01:36,790
+Plus, I've also learned that you'll do it even if I try to stop you.
+
+31
+00:01:37,210 --> 00:01:41,040
+Then we're still partners?
+
+32
+00:01:41,400 --> 00:01:42,740
+I guess.
+
+33
+00:01:42,740 --> 00:01:47,300
+Anyway, I'd lose sleep worrying if I left you to your own devices.
+
+34
+00:01:47,300 --> 00:01:48,390
+Besides...
+
+35
+00:01:48,880 --> 00:01:53,410
+To put it in your terms, I don't exactly hate you.
+
+36
+00:01:53,410 --> 00:01:54,890
+And your cooking is good.
+
+37
+00:01:55,700 --> 00:02:01,140
+So that's how I feel about it,
+and you're okay still working with me, right?
+
+38
+00:02:03,020 --> 00:02:05,240
+I need a refill!
+
+39
+00:03:38,990 --> 00:03:41,600
+For now, our enemy is Caster.
+
+40
+00:03:39,160 --> 00:03:43,490
+{\an4}The Princess of Colchis
+
+41
+00:03:41,600 --> 00:03:43,460
+She's protected by Kuzuki,
+ a close-combat fighter,
+
+42
+00:03:43,460 --> 00:03:45,750
+and Archer, who's gone over to her side.
+
+43
+00:03:46,280 --> 00:03:49,960
+And it's only a matter of time before Saber falls under her control.
+
+44
+00:03:49,960 --> 00:03:52,450
+Yeah, once Saber's resistance wears out,
+
+45
+00:03:52,450 --> 00:03:54,850
+we really won't have any chance.
+
+46
+00:03:54,850 --> 00:03:57,680
+Exactly. Do you have any ideas?
+
+47
+00:03:58,720 --> 00:04:00,950
+Hear me out, and don't get mad.
+
+48
+00:04:00,950 --> 00:04:04,020
+Could we work with other Masters?
+
+49
+00:04:05,890 --> 00:04:07,150
+It's all right.
+
+50
+00:04:07,150 --> 00:04:09,860
+Actually, I was thinking the same thing.
+
+51
+00:04:10,320 --> 00:04:13,910
+We still don't know who Lancer's Master is, so that's out,
+
+52
+00:04:13,910 --> 00:04:16,700
+but we might have a shot with Illyasviel.
+
+53
+00:04:17,190 --> 00:04:19,930
+How do we find her, though?
+
+54
+00:04:19,930 --> 00:04:22,290
+I have an idea of where she might be.
+
+55
+00:04:23,430 --> 00:04:26,290
+My father told me something long ago.
+
+56
+00:04:26,290 --> 00:04:30,880
+He said that the Einzberns have a villa in the forest outside of town.
+
+57
+00:04:41,140 --> 00:04:43,600
+Why can I not find it?
+
+58
+00:04:44,010 --> 00:04:46,520
+There is no Holy Grail here.
+
+59
+00:04:46,520 --> 00:04:49,850
+No. That can't possibly be true.
+
+60
+00:04:49,850 --> 00:04:54,950
+The Holy Grail War's overseer would never let the catalyst—his trump card—out of sight.
+
+61
+00:05:07,540 --> 00:05:09,210
+Welcome, Caster!
+
+62
+00:05:09,760 --> 00:05:11,970
+It is my great honor to be able to welcome
+
+63
+00:05:11,970 --> 00:05:15,710
+a great pioneer of magecraft, the Princess of Colchis.
+
+64
+00:05:18,520 --> 00:05:20,960
+Now, do you have any questions?
+
+65
+00:05:20,960 --> 00:05:22,640
+Should I have introduced myself?
+
+66
+00:05:23,010 --> 00:05:26,030
+No, I understand the situation.
+
+67
+00:05:26,030 --> 00:05:27,950
+I have been summoned by the Holy Grail
+
+68
+00:05:27,950 --> 00:05:31,730
+and brought back to life in this era with you as my Master.
+
+69
+00:05:32,110 --> 00:05:34,880
+Yes, that is what a Servant is.
+
+70
+00:05:34,880 --> 00:05:36,940
+And that is the Holy Grail War.
+
+71
+00:05:36,940 --> 00:05:39,580
+That's a mage Servant for you.
+
+72
+00:05:39,580 --> 00:05:41,550
+I'm glad I don't have to explain everything.
+
+73
+00:05:42,670 --> 00:05:45,630
+Oh, would you care for a drink?
+
+74
+00:05:45,630 --> 00:05:49,390
+After all, coming from more than 3,000 years is a long way.
+
+75
+00:05:49,390 --> 00:05:51,410
+I'm sure you must be tired.
+
+76
+00:05:51,690 --> 00:05:53,920
+Or would you like a bath first?
+
+77
+00:05:56,110 --> 00:05:59,260
+I appreciate your thoughtfulness, but before that...
+
+78
+00:05:59,510 --> 00:06:03,400
+you have not yet told me your name.
+
+79
+00:06:05,860 --> 00:06:08,330
+I'm Atrum Galliasta.
+
+80
+00:06:08,330 --> 00:06:11,500
+I'm a Master sent here by the Mages Association.
+
+81
+00:06:11,500 --> 00:06:13,130
+My reasons for winning the Grail
+
+82
+00:06:13,130 --> 00:06:16,610
+are the growth of the magical world and securing a quiet future.
+
+83
+00:06:17,160 --> 00:06:18,950
+Does that satisfy your curiosity?
+
+84
+00:06:18,950 --> 00:06:21,510
+What do you mean by "a quiet future"?
+
+85
+00:06:21,510 --> 00:06:25,030
+A world where there are none who threaten me.
+
+86
+00:06:25,460 --> 00:06:30,660
+It's not as bad as it was in your time,
+but humans are still as stupid as ever.
+
+87
+00:06:30,660 --> 00:06:33,400
+The greater the self-defense measures, the better.
+
+88
+00:06:33,400 --> 00:06:37,250
+Something like that dragon Noble Phantasm of yours, for instance.
+
+89
+00:06:37,250 --> 00:06:38,590
+Something like...
+
+90
+00:06:39,240 --> 00:06:41,550
+Hang on, Caster.
+What's that Noble Phantasm?
+
+91
+00:06:42,080 --> 00:06:44,740
+The summoning of a dragon from the age of myths...
+
+92
+00:06:44,740 --> 00:06:47,310
+I thought that's what the Noble Phantasm of Princess Medea was?
+
+93
+00:06:47,730 --> 00:06:50,910
+My apologies, Master.
+
+94
+00:06:50,910 --> 00:06:56,080
+My Noble Phantasm is a conceptual one, given shape by my nature.
+
+95
+00:06:56,080 --> 00:06:59,270
+Even though I possess the knowledge to summon a dragon,
+
+96
+00:06:59,270 --> 00:07:01,890
+I would not be able to control it.
+
+97
+00:07:08,760 --> 00:07:10,780
+Well, isn't that a shame!
+
+98
+00:07:10,780 --> 00:07:12,660
+She can't even use a dragon!
+
+99
+00:07:13,290 --> 00:07:16,330
+What a ridiculous Servant did I pick!
+
+100
+00:07:16,870 --> 00:07:21,090
+And your Noble Phantasm is Spell-breaking...
+
+101
+00:07:21,650 --> 00:07:27,840
+Oh, Princess Medea was the first case of fratricide, wasn't she?
+
+102
+00:07:28,120 --> 00:07:30,570
+For a woman who's done nothing but betray others...
+
+103
+00:07:30,570 --> 00:07:33,310
+...isn't that oath-breaking dagger very fitting?
+
+104
+00:07:35,510 --> 00:07:38,680
+But I won't cast you aside, Caster.
+
+105
+00:07:39,500 --> 00:07:42,880
+Every Servant has its uses.
+
+106
+00:07:43,950 --> 00:07:48,960
+As long as you remain a clever woman, I'll break you in properly.
+
+107
+00:08:12,710 --> 00:08:16,020
+My family is still new to the Mages' Association.
+
+108
+00:08:16,940 --> 00:08:21,150
+So one reason I'm fighting in this Grail War is to gain prestige.
+
+109
+00:08:21,150 --> 00:08:25,170
+El-Melloi didn't take the last war seriously, but I'm different.
+
+110
+00:08:25,170 --> 00:08:27,030
+I fully intend to win.
+
+111
+00:08:27,490 --> 00:08:30,900
+For one thing, I've invested a lot more capital.
+
+112
+00:08:30,900 --> 00:08:34,750
+Do you think a purchased title is purchased glory?
+
+113
+00:08:34,750 --> 00:08:39,040
+No. One should use every tool at one's disposal.
+
+114
+00:08:39,410 --> 00:08:41,330
+If you intend to use wealth as a weapon,
+
+115
+00:08:41,330 --> 00:08:43,810
+I'm sure there are strategies tailored to that.
+
+116
+00:08:44,910 --> 00:08:46,690
+Don't get the wrong idea.
+
+117
+00:08:46,690 --> 00:08:51,140
+As a mage, I've made preparations to overwhelm the other Masters.
+
+118
+00:08:51,550 --> 00:08:52,430
+Come.
+
+119
+00:08:52,430 --> 00:08:54,680
+I'll prove it to you.
+
+120
+00:08:56,540 --> 00:09:00,750
+Is this an alchemy workshop?
+
+121
+00:09:00,750 --> 00:09:05,780
+My family uses a magic system that generates mana via offerings.
+
+122
+00:09:06,180 --> 00:09:10,080
+Well, it's a primitive curse that relies on human sacrifice.
+
+123
+00:09:10,080 --> 00:09:15,470
+This workshop is a more modern and efficient version
+of the original system.
+
+124
+00:09:15,470 --> 00:09:17,250
+I'll make one to show you.
+
+125
+00:09:22,230 --> 00:09:25,420
+It works best when the raw materials are fresh.
+
+126
+00:09:49,820 --> 00:09:54,450
+How's that? Ordinarily this would take a month to create, but I did it in the blink of an eye.
+
+127
+00:09:54,450 --> 00:09:57,790
+Oh, and don't worry about the raw materials.
+
+128
+00:09:58,290 --> 00:10:00,560
+I won't procure them in Fuyuki.
+
+129
+00:10:00,560 --> 00:10:02,480
+I bought these from other—
+
+130
+00:10:02,480 --> 00:10:04,000
+This is too inefficient.
+
+131
+00:10:04,000 --> 00:10:09,170
+Using all these lives to create such a tiny crystal
+is the act of a third-rate mage.
+
+132
+00:10:14,320 --> 00:10:15,320
+What...
+
+133
+00:10:15,320 --> 00:10:16,510
+What did you do?
+
+134
+00:10:16,510 --> 00:10:20,100
+How could you create mana from an empty kiln?
+
+135
+00:10:20,100 --> 00:10:21,430
+Empty?
+
+136
+00:10:22,150 --> 00:10:28,070
+Oh. So this appears empty to the eyes of you modern mages?
+
+137
+00:10:28,070 --> 00:10:31,350
+Your mana-generating technique must be one level—
+
+138
+00:10:31,350 --> 00:10:34,160
+no, a whole world below mine.
+
+139
+00:10:35,020 --> 00:10:37,480
+B-But what about the incantation?
+
+140
+00:10:37,480 --> 00:10:43,360
+I devoted all I had to designing this workshop
+for the purpose of omitting the incantation process.
+
+141
+00:10:43,360 --> 00:10:47,360
+The transmutation incantation alone
+is supposed to take three days and nights!
+
+142
+00:10:47,360 --> 00:10:50,330
+I have no need for incantations.
+
+143
+00:10:50,330 --> 00:10:54,260
+For me, magic is simply something to command.
+
+144
+00:10:55,760 --> 00:11:01,430
+Forgive me for acting out of turn,
+but I ask that you close this workshop.
+
+145
+00:11:02,010 --> 00:11:05,050
+Throwing away lives is unwise.
+
+146
+00:11:05,050 --> 00:11:10,370
+As a mage, I cannot abide a workshop that generates such a loss.
+
+147
+00:11:10,370 --> 00:11:16,310
+Ah, it would appear that I have failed to grasp the true nature of a Servant.
+
+148
+00:11:16,310 --> 00:11:18,030
+By my Command Spell, I order you:
+
+149
+00:11:19,310 --> 00:11:22,040
+do not use your Noble Phantasm on me.
+
+150
+00:11:22,380 --> 00:11:26,540
+I wouldn't want to be stabbed in the back by a treacherous witch.
+
+151
+00:11:37,310 --> 00:11:38,850
+Witch?
+
+152
+00:11:38,850 --> 00:11:40,560
+He called me a witch?
+
+153
+00:11:41,160 --> 00:11:44,840
+Everyone I meet calls me a witch.
+
+154
+00:11:46,380 --> 00:11:49,810
+You say that Caster is too much for you to handle?
+
+155
+00:11:50,310 --> 00:11:54,270
+It's not a matter of ability but of trust.
+
+156
+00:11:54,270 --> 00:11:56,910
+Her sense of values is just too different from ours.
+
+157
+00:11:57,720 --> 00:12:01,420
+She is a woman who can cast magic with a wave of her fingers.
+
+158
+00:12:01,420 --> 00:12:05,500
+To her, human life is as worthless as paper.
+
+159
+00:12:05,500 --> 00:12:09,890
+After all, this woman killed her rival in love
+by burning her alive in her castle.
+
+160
+00:12:09,890 --> 00:12:11,880
+I'd have to be crazy to trust her.
+
+161
+00:12:11,880 --> 00:12:13,340
+I see.
+
+162
+00:12:13,750 --> 00:12:17,930
+That is how you have interpreted the stories of Princess Medea?
+
+163
+00:12:17,930 --> 00:12:22,670
+My job is to accommodate the Masters' wishes as best I can.
+
+164
+00:12:22,670 --> 00:12:27,000
+All the more so for those with the Mages' Association's backing.
+
+165
+00:12:27,000 --> 00:12:31,120
+At this stage, the Grail has selected five Masters.
+
+166
+00:12:31,120 --> 00:12:33,810
+Two positions remain vacant.
+
+167
+00:12:38,660 --> 00:12:40,760
+I was hoping you'd say that!
+
+168
+00:12:40,760 --> 00:12:44,660
+It's possible for me to make a pact with a different Servant, right?
+
+169
+00:12:45,120 --> 00:12:48,400
+Though unprecedented, it is possible.
+
+170
+00:12:48,400 --> 00:12:49,920
+But before that,
+
+171
+00:12:50,370 --> 00:12:54,670
+something must be done about the Servant
+to whom you are currently bound.
+
+172
+00:12:54,980 --> 00:12:57,300
+No matter how gifted she might be in magic,
+
+173
+00:12:57,300 --> 00:13:00,940
+she's nothing but a vixen whose only trick is deceiving men.
+
+174
+00:13:00,940 --> 00:13:03,410
+I've already laid the groundwork.
+
+175
+00:13:03,410 --> 00:13:06,910
+Still, better safe than sorry, Father Kotomine.
+
+176
+00:13:06,910 --> 00:13:09,780
+I want you to give this to Lancer's Master.
+
+177
+00:13:09,780 --> 00:13:14,740
+She owes me at least this much as a
+fellow Mages' Association participant.
+
+178
+00:13:18,040 --> 00:13:19,200
+What is it?
+
+179
+00:13:19,610 --> 00:13:24,200
+Oh, it's only a contract selling the right to dispose of Caster.
+
+180
+00:13:24,780 --> 00:13:29,450
+If she agrees, I'll be rid of Caster
+without having to waste a Command Spell.
+
+181
+00:13:34,620 --> 00:13:37,320
+To Lancer's Master, you say?
+
+182
+00:13:38,590 --> 00:13:42,930
+Like Servant, like Master.
+
+183
+00:13:43,480 --> 00:13:46,430
+Neither of them has any luck at all.
+
+184
+00:13:58,690 --> 00:14:00,940
+What is the meaning of this?
+
+185
+00:14:00,940 --> 00:14:04,500
+I took it upon myself to dismantle your workshop.
+
+186
+00:14:04,500 --> 00:14:08,540
+I shall take you to a more suitable place for fortification.
+
+187
+00:14:11,240 --> 00:14:13,050
+Dismantle, eh?
+
+188
+00:14:13,050 --> 00:14:14,790
+What about my supplies?
+
+189
+00:14:14,790 --> 00:14:17,830
+I still had around fifty left.
+
+190
+00:14:18,560 --> 00:14:21,050
+They were unnecessary, so I freed them.
+
+191
+00:14:23,070 --> 00:14:26,500
+Then what is this "more suitable" location?
+
+192
+00:14:27,110 --> 00:14:29,380
+The heart of this ritual.
+
+193
+00:14:29,380 --> 00:14:31,690
+The place where the Greater Grail rests.
+
+194
+00:14:31,690 --> 00:14:36,220
+I have located a natural fortress that repels Servants.
+
+195
+00:14:36,220 --> 00:14:41,410
+If you do as I say, I shall take you there, Master.
+
+196
+00:14:42,940 --> 00:14:44,980
+That won't be necessary.
+
+197
+00:14:44,980 --> 00:14:47,750
+I no longer require your services, Medea.
+
+198
+00:14:47,750 --> 00:14:49,830
+I order you by my Command Spell:
+
+199
+00:14:49,830 --> 00:14:51,370
+kill yourself, Caster.
+
+200
+00:14:56,360 --> 00:14:57,710
+What's going on?
+
+201
+00:14:57,710 --> 00:14:59,760
+It takes more than one?
+
+202
+00:15:00,300 --> 00:15:02,480
+I once again order you by my Command Spell:
+
+203
+00:15:02,480 --> 00:15:04,680
+terminate yourself, Caster!
+
+204
+00:15:09,890 --> 00:15:12,420
+What a foolish Master you are.
+
+205
+00:15:12,420 --> 00:15:15,610
+Have you forgotten what my Noble Phantasm is?
+
+206
+00:15:16,010 --> 00:15:18,520
+Rule Breaker...
+
+207
+00:15:18,520 --> 00:15:20,820
+But I used a Command Spell to forbid you from using it!
+
+208
+00:15:21,110 --> 00:15:23,680
+Indeed, I cannot use it on you.
+
+209
+00:15:24,200 --> 00:15:28,800
+Thus, I used it on myself to sever my pact with you.
+
+210
+00:15:29,950 --> 00:15:32,180
+I-Impossible!
+
+211
+00:15:32,180 --> 00:15:36,400
+To you Servants, that's tantamount to suicide!
+
+212
+00:15:36,400 --> 00:15:39,070
+You won't be able to maintain your physical form!
+
+213
+00:15:39,070 --> 00:15:41,340
+Yes, but what of it?
+
+214
+00:15:41,800 --> 00:15:45,800
+You are about to die here, so is that any of your concern?
+
+215
+00:15:58,050 --> 00:15:59,070
+What is this?
+
+216
+00:15:59,070 --> 00:16:00,820
+What's going on?
+
+217
+00:16:00,820 --> 00:16:02,650
+I won't let it end like this!
+
+218
+00:16:07,100 --> 00:16:09,750
+The Grail War hasn't even started!
+
+219
+00:16:09,750 --> 00:16:11,980
+I haven't fought a single battle!
+
+220
+00:16:11,980 --> 00:16:13,080
+Not like this!
+
+221
+00:16:30,340 --> 00:16:31,810
+{\an8}Yes...
+
+222
+00:16:31,810 --> 00:16:36,520
+{\an8}It is a fitting end for you,
+a man who desired results before he even began.
+
+223
+00:16:37,180 --> 00:16:40,540
+You treacherous... witch...
+
+224
+00:16:46,200 --> 00:16:47,410
+It's hot.
+
+225
+00:17:12,910 --> 00:17:16,770
+In the end, is this how I shall die once again?
+
+226
+00:17:16,770 --> 00:17:20,710
+Passed around for others' convenience, exploited,
+
+227
+00:17:20,710 --> 00:17:23,180
+reviled as a traitor...
+
+228
+00:17:23,180 --> 00:17:25,490
+All I wanted...
+
+229
+00:17:26,810 --> 00:17:30,570
+was to return to my homeland.
+
+230
+00:17:38,910 --> 00:17:41,150
+What are you doing there?
+
+231
+00:17:43,730 --> 00:17:46,750
+You believe such an outrageous story?
+
+232
+00:17:46,750 --> 00:17:50,180
+I don't think you'd have any reason to lie...
+
+233
+00:17:50,180 --> 00:17:54,180
+unless you stand to gain something by deceiving me.
+
+234
+00:17:54,180 --> 00:17:59,350
+Rather, it is you who has no reason
+to help a woman covered in blood.
+
+235
+00:17:59,350 --> 00:18:04,440
+I could hardly ascertain your character
+while you were unconscious.
+
+236
+00:18:06,900 --> 00:18:08,460
+Have you calmed down?
+
+237
+00:18:08,460 --> 00:18:10,450
+If so, we should begin.
+
+238
+00:18:10,890 --> 00:18:12,980
+Then you are saying...
+
+239
+00:18:13,960 --> 00:18:16,990
+You need what you called a "vessel," correct?
+
+240
+00:18:17,590 --> 00:18:21,640
+I thought your only chance was for me to become your Master.
+
+241
+00:18:21,640 --> 00:18:23,210
+Or was I wrong?
+
+242
+00:18:37,780 --> 00:18:40,220
+Go for wool and come home shorn, huh?
+
+243
+00:18:40,620 --> 00:18:44,250
+I see that even a peerless witch is surprisingly delicate.
+
+244
+00:18:44,250 --> 00:18:47,060
+I thought I told you to keep watch outside.
+
+245
+00:18:47,340 --> 00:18:48,810
+Oh, about that.
+
+246
+00:18:48,810 --> 00:18:51,210
+There are no enemies worth mentioning outside.
+
+247
+00:18:51,210 --> 00:18:53,170
+I could no longer stand the boredom.
+
+248
+00:18:53,170 --> 00:18:54,810
+That is no surprise.
+
+249
+00:18:54,810 --> 00:18:58,810
+The moment you changed sides,
+Berserker became our only enemy.
+
+250
+00:18:58,810 --> 00:19:02,750
+Did you not side with me because you knew that?
+
+251
+00:19:02,750 --> 00:19:04,260
+Perhaps.
+
+252
+00:19:04,260 --> 00:19:08,960
+Haven't you even thought that I simply
+wanted to sever my pact with that Master?
+
+253
+00:19:09,560 --> 00:19:13,880
+That I didn't care who my Master was, if not that girl?
+
+254
+00:19:13,880 --> 00:19:14,990
+I see.
+
+255
+00:19:14,990 --> 00:19:19,480
+We as Servants are usually dissatisfied with our Masters.
+
+256
+00:19:19,480 --> 00:19:23,480
+Are you saying that you are relieved
+at being freed from babysitting that little girl?
+
+257
+00:19:27,070 --> 00:19:28,630
+A word of advice.
+
+258
+00:19:29,190 --> 00:19:33,230
+Don't assume that all Servants are like you.
+
+259
+00:19:33,770 --> 00:19:35,910
+A righteous Heroic Spirit...
+
+260
+00:19:35,910 --> 00:19:39,070
+...can serve only a righteous human.
+
+261
+00:19:39,710 --> 00:19:42,260
+You do not need to tell me that.
+
+262
+00:19:42,260 --> 00:19:46,620
+Twisted Masters summon
+twisted Heroic Spirits because of their nature.
+
+263
+00:19:46,620 --> 00:19:50,990
+Then it makes sense that such a witch
+
+264
+00:19:50,990 --> 00:19:53,250
+summoned a fictitious Heroic Spirit.
+
+265
+00:19:53,870 --> 00:19:57,360
+I do not care what you think.
+
+266
+00:19:57,360 --> 00:20:00,460
+Your life is in my hands.
+
+267
+00:20:00,460 --> 00:20:03,520
+Bear that in mind when you speak.
+
+268
+00:20:03,890 --> 00:20:05,440
+Understood.
+
+269
+00:20:05,440 --> 00:20:07,610
+Then, like the faithful Servant I am,
+
+270
+00:20:07,610 --> 00:20:10,040
+I shall strive to meet the expectations of my Lord.
+
+271
+00:20:18,930 --> 00:20:22,820
+Just a little longer, and the Holy Grail will be in my grasp.
+
+272
+00:20:34,780 --> 00:20:37,960
+For now, I guess we have to pin our hopes on Illyasviel.
+
+273
+00:20:37,960 --> 00:20:41,640
+Berserker is definitely Caster's natural enemy.
+
+274
+00:20:41,980 --> 00:20:45,320
+Is Caster somehow connected to Berserker?
+
+275
+00:20:45,320 --> 00:20:46,990
+Archer told me.
+
+276
+00:20:46,990 --> 00:20:49,820
+He said Berserker's true identity is Heracles.
+
+277
+00:20:50,380 --> 00:20:53,870
+If Caster really is the peerless witch Medea,
+
+278
+00:20:53,870 --> 00:20:56,490
+they should have met on the <i>Argo</i>.
+
+279
+00:20:56,490 --> 00:21:00,040
+It's like my sore spot when it comes to Kirei.
+
+280
+00:21:00,040 --> 00:21:03,790
+Everyone has someone they just can't deal with.
+
+281
+00:21:06,310 --> 00:21:09,280
+Hey, Shirou. Would you mind walking ahead a bit?
+
+282
+00:21:09,280 --> 00:21:10,790
+Sure, I guess.
+
+283
+00:21:12,690 --> 00:21:13,340
+What was that?
+
+284
+00:21:13,630 --> 00:21:14,920
+I knew it.
+
+285
+00:21:14,920 --> 00:21:17,740
+It seems her control extends to the entire forest.
+
+286
+00:21:17,740 --> 00:21:21,500
+But that means we just tripped her security system!
+
+287
+00:21:21,500 --> 00:21:23,540
+I don't think it's a problem, do you?
+
+288
+00:21:23,540 --> 00:21:26,850
+We came here to talk, not attack.
+
+289
+00:21:26,850 --> 00:21:30,180
+So it's better to let her know we don't intend to fight.
+
+290
+00:21:30,180 --> 00:21:31,230
+I get it.
+
+291
+00:21:31,610 --> 00:21:33,350
+Be careful, though.
+
+292
+00:21:33,350 --> 00:21:35,360
+It shocks you a bit.
+
+293
+00:21:35,360 --> 00:21:37,190
+I'll be fine.
+
+294
+00:21:42,520 --> 00:21:45,120
+Now that brat's really done it!
+
+295
+00:21:45,120 --> 00:21:48,870
+I know I heard her laugh just now!
+
+296
+00:21:50,780 --> 00:21:52,710
+She walked right into my trap.
+
+297
+00:21:53,050 --> 00:21:58,220
+Rin's really amusing.
+You can always expect an instant reaction from her.
+
+298
+00:21:58,630 --> 00:22:01,220
+But I wonder if they'll get here safely.
+
+299
+00:22:01,590 --> 00:22:04,440
+Maybe I should disable a few of the traps.
+
+300
+00:22:04,440 --> 00:22:09,140
+Mistress, surely you don't intend to welcome those people in.
+
+301
+00:22:09,140 --> 00:22:11,370
+Wh-Why not?
+
+302
+00:22:11,370 --> 00:22:14,310
+They said that they're here to talk.
+
+303
+00:22:15,310 --> 00:22:16,570
+Plus...
+
+304
+00:22:18,550 --> 00:22:20,650
+There are things I'd like to ask him.
+
+305
+00:22:20,650 --> 00:22:22,060
+Mistress!
+
+306
+00:22:22,060 --> 00:22:24,050
+You're such a worrywart, Sella.
+
+307
+00:22:24,050 --> 00:22:27,740
+Even if they're planning something,
+they're no match for Berserker.
+
+308
+00:22:27,740 --> 00:22:31,070
+As that may be, I can't condone this.
+
+309
+00:22:31,070 --> 00:22:33,330
+Enough! I've already decided!
+
+310
+00:22:33,820 --> 00:22:36,590
+If the lady of the castle says to welcome them in, you do it!
+
+311
+00:22:36,590 --> 00:22:39,880
+That's all the more reason for you to drive them off!
+
+312
+00:22:39,880 --> 00:22:43,620
+As the Einzbern princess,
+you must send a proper invitation
+
+313
+00:22:43,620 --> 00:22:46,270
+and then throw an evening party,
+in keeping with proper decorum!
+
+314
+00:22:46,270 --> 00:22:47,890
+Sella, you're being stubborn.
+
+315
+00:22:47,890 --> 00:22:50,640
+Also, what you describe is not what she meant.
+
+316
+00:22:53,920 --> 00:22:54,840
+All right, fine.
+
+317
+00:22:54,840 --> 00:22:56,940
+You understand now, Mistress?
+
+318
+00:22:56,940 --> 00:22:59,490
+In that case, you two go and bring them here.
+
+319
+00:22:59,490 --> 00:23:00,360
+Mistress?
+
+320
+00:23:00,360 --> 00:23:02,700
+I'm telling you to go capture them!
+
+321
+00:23:08,740 --> 00:23:11,150
+How about it? Do we need this?
+
+322
+00:23:11,150 --> 00:23:13,410
+It's only natural that as maids,
+
+323
+00:23:13,410 --> 00:23:17,960
+if we see wrongdoing, we'll exact punishment.
+
+324
+00:23:19,600 --> 00:23:21,280
+Sella, that was...
+
+325
+00:23:21,280 --> 00:23:23,610
+I guess it's an unwelcomed guest.
+
+326
+00:23:34,470 --> 00:23:35,920
+Ow!
+
+327
+00:23:35,920 --> 00:23:39,110
+That jerk, dragging me along with him!
+
+328
+00:23:39,110 --> 00:23:40,870
+Where the hell am I?
+
+329
+00:23:40,870 --> 00:23:43,430
+Is this really where Berserker is?!
+
+330
+00:23:43,430 --> 00:23:45,280
+That is not Shirou.
+
+331
+00:23:45,280 --> 00:23:48,120
+No, he seems like a harmless fly.
+
+332
+00:23:48,120 --> 00:23:50,700
+Let's deal with him and be on our way.
+
+333
+00:23:52,370 --> 00:23:53,830
+You two...
+
+334
+00:23:53,830 --> 00:23:56,370
+Are you Einzbern servants?
+
+335
+00:23:56,370 --> 00:23:58,100
+You've come at just the right time.
+
+336
+00:23:58,100 --> 00:23:59,380
+Take me to Berserker's—
+
+337
+00:24:03,280 --> 00:24:04,720
+Hold your tongue.
+
+338
+00:24:04,720 --> 00:24:07,590
+We have no time to deal with an unexpected guest like you.
+
+339
+00:24:07,590 --> 00:24:12,400
+Either leap from the roof and run away, or fall to this weapon.
+
+340
+00:24:12,400 --> 00:24:14,540
+You have ten seconds to decide.
+
+341
+00:24:14,540 --> 00:24:19,520
+Nine. Eight. Seven. Six. Five.
+
+342
+00:24:16,880 --> 00:24:18,740
+W-W-Wait!
+
+343
+00:24:19,520 --> 00:24:21,520
+Four, three, two, one.
+
+344
+00:24:20,230 --> 00:24:21,520
+Are you kidding me?!
+
+345
+00:24:25,870 --> 00:24:28,780
+What have we here? Homunculi, eh?
+
+346
+00:24:29,750 --> 00:24:31,700
+Nicely made, too.
+
+347
+00:24:31,700 --> 00:24:36,040
+Even though you are humans only in shape, you function as children of nature.
+
+348
+00:24:36,460 --> 00:24:39,030
+They must have used a fine mold to make you.
+
+349
+00:24:39,030 --> 00:24:41,530
+Sella, this man is highly...
+
+350
+00:24:41,530 --> 00:24:42,690
+I know.
+
+351
+00:24:42,690 --> 00:24:45,300
+Don't worry about me. Just get away.
+
+352
+00:24:45,300 --> 00:24:47,550
+Don't be afraid, now.
+
+353
+00:24:47,550 --> 00:24:50,800
+I shall pardon your disrespect, given your display of awe.
+
+354
+00:24:53,620 --> 00:24:56,570
+If you value your lives, be gone from my sight.
+
+355
+00:24:56,570 --> 00:25:01,650
+I shall grant you ten seconds in appreciation for allowing my Master to escape.
+
+356
+00:25:01,650 --> 00:25:04,310
+That boy is a Master?
+
+357
+00:25:04,310 --> 00:25:06,820
+Then we cannot do as you ask.
+
+358
+00:25:07,190 --> 00:25:11,190
+Our purpose is to protect our mistress from all outside threats.
+
+359
+00:25:11,190 --> 00:25:13,530
+Though you strike me as royalty,
+
+360
+00:25:13,530 --> 00:25:17,810
+we cannot allow a man who reeks so strongly of blood to pass!
+
+361
+00:25:17,810 --> 00:25:19,130
+Is that so?
+
+362
+00:25:19,130 --> 00:25:21,510
+Then fall like flowers.
+
+363
+00:25:21,510 --> 00:25:26,590
+I expect that the Grail's vessel will come running
+at the sound of your screams.
+
+364
+00:25:26,590 --> 00:25:29,090
+The Grail's vessel...
+
+365
+00:25:29,370 --> 00:25:32,050
+You are Illya's enemy!
+
+366
+00:25:34,850 --> 00:25:39,850
+Shirou is coming here, to the castle where Mother once stayed.
+
+367
+00:25:50,150 --> 00:25:51,070
+Leysritt!
+
+368
+00:25:59,010 --> 00:26:01,870
+The mages never learn, do they?
+
+369
+00:26:02,400 --> 00:26:05,880
+One should never give a tool a human heart.
+
+370
+00:26:06,310 --> 00:26:10,880
+Humans are incapable of reciprocating your purity.
+
+371
+00:26:15,430 --> 00:26:18,790
+As long as I draw breath...
+
+372
+00:26:18,790 --> 00:26:21,640
+I will not let you near my mistress.
+
+373
+00:26:21,960 --> 00:26:23,310
+Oh?
+
+374
+00:26:32,180 --> 00:26:35,030
+Then you may see your duty through to the last.
+
+375
+00:26:42,620 --> 00:26:43,870
+Leys...
+
+376
+00:26:43,870 --> 00:26:45,130
+Sella!
+
+377
+00:26:52,090 --> 00:26:55,610
+You are the doll that possesses the Grail vessel?
+
+378
+00:26:56,220 --> 00:27:01,810
+I see that crossing a human and a homunculus
+has given rise to a peculiarity.
+
+379
+00:27:02,320 --> 00:27:04,780
+You killed them...
+
+380
+00:27:05,830 --> 00:27:06,900
+Kill him.
+
+381
+00:27:06,900 --> 00:27:09,730
+Kill him right now, Berserker!
+
+382
+00:27:13,160 --> 00:27:14,790
+You heard her.
+
+383
+00:27:14,790 --> 00:27:16,740
+Then come, great Heroic Spirit.
+
+384
+00:27:20,490 --> 00:27:25,500
+Toying with you will relieve my boredom.
+
+385
+00:27:26,230 --> 00:27:31,080
+Shall we reenact a battle of legend here?
+
+386
+00:29:03,340 --> 00:29:05,070
+That's enough, damn it!
+
+387
+00:29:05,070 --> 00:29:07,440
+No way! Those were all Noble Phantasms?
+
+388
+00:29:07,440 --> 00:29:09,320
+I can't wait, Illyasviel!
+
+389
+00:29:09,320 --> 00:29:11,530
+Your defeat is certain.
+
+390
+00:29:11,530 --> 00:29:13,910
+Berserker won't lose to anyone...
+
+391
+00:29:13,910 --> 00:29:16,660
+because he's the strongest in the world!
+
+392
+00:29:14,020 --> 00:29:17,530
+A Battle of Legend
+
+393
+00:29:14,020 --> 00:29:17,530
+A Battle of Legend
+
+394
+00:29:14,020 --> 00:29:17,530
+A Battle of Legend
+
+395
+00:29:14,020 --> 00:29:17,530
+Next Time
+
+396
+00:29:14,020 --> 00:29:17,530
+Next Time
+
+397
+00:29:14,020 --> 00:29:17,530
+Next Time
+
