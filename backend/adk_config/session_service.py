@@ -1,26 +1,29 @@
 """
 ADK Session Service Configuration
 
-This replaces the JSON-based project storage with ADK's managed sessions.
-Each project gets its own session, storing:
-- Glossary state
-- Context guide
-- Translation cache info
+Manages persistent session storage using SQLite for project state.
+Each project maps to a unique session containing glossary, context, and settings.
 """
 
 from google.adk.sessions import DatabaseSessionService
 from pathlib import Path
 
-# Database for session persistence
 SESSION_DB_PATH = Path(__file__).parent.parent / "ombisub_sessions.db"
 
-def get_session_service():
+_session_service = None
+
+
+def get_session_service() -> DatabaseSessionService:
     """
-    Get the ADK session service for OmbiSub.
+    Get singleton instance of the ADK session service.
     
-    This uses SQLite to persist session data across restarts.
-    In production, this could be switched to Cloud SQL or Firestore.
+    Uses SQLite for persistence across server restarts.
+    Production deployments can switch to Cloud SQL or Firestore.
     """
-    return DatabaseSessionService(
-        db_url=f"sqlite:///{SESSION_DB_PATH}"
-    )
+    global _session_service
+    if _session_service is None:
+        # Use sqlite+aiosqlite for async SQLite support (required by ADK)
+        _session_service = DatabaseSessionService(
+            db_url=f"sqlite+aiosqlite:///{SESSION_DB_PATH}"
+        )
+    return _session_service

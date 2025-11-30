@@ -1,83 +1,68 @@
 """
 SRT Processing Tools for ADK Agents
 
-These tools wrap your existing SRT parser into ADK FunctionTools.
+Wraps SRT parser functions as ADK FunctionTools for agent use.
 """
 
 from typing import List, Dict
 from google.adk.tools import FunctionTool
 
-# Import your existing parser
-import sys
-from pathlib import Path
-# Add backend root to path to import utils
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from utils.srt_parser import parse_srt, extract_text_only
 
-def parse_srt_file(content: str) -> dict:
+def parse_srt_content(content: str) -> dict:
     """
-    Parse an SRT subtitle file into structured data.
+    Parse SRT subtitle content into structured data.
     
     Args:
-        content: Raw SRT file content as string
+        content: Raw SRT file content
         
     Returns:
-        Dictionary with:
-        - status: "success" or "error"
-        - data: List of subtitle entries (if success)
-        - error_message: Error description (if error)
-        
-    Example:
-        >>> result = parse_srt_file(srt_content)
-        >>> if result["status"] == "success":
-        ...     for entry in result["data"]:
-        ...         print(entry["text"])
+        Dictionary with status, data (if success), or error_message
     """
     try:
-        data = parse_srt(content)
-        if not data:
-            return {
-                "status": "error",
-                "error_message": "Invalid SRT format - no entries found"
-            }
-        return {
-            "status": "success",
-            "data": data
-        }
+        if not content:
+            return {"status": "error", "error_message": "Empty content"}
+        
+        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        blocks = content.strip().split('\n\n')
+        
+        parsed_data = []
+        for block in blocks:
+            lines = block.strip().split('\n')
+            if len(lines) >= 3:
+                parsed_data.append({
+                    "id": lines[0].strip(),
+                    "timecode": lines[1].strip(),
+                    "original": "\n".join(lines[2:]).strip(),
+                    "translated": "",
+                    "is_edited": False,
+                    "needs_review": False
+                })
+        
+        if not parsed_data:
+            return {"status": "error", "error_message": "No valid entries found"}
+        
+        return {"status": "success", "data": parsed_data, "count": len(parsed_data)}
+        
     except Exception as e:
-        return {
-            "status": "error",
-            "error_message": str(e)
-        }
+        return {"status": "error", "error_message": str(e)}
 
 
-def extract_subtitle_text(subtitle_data: List[Dict]) -> dict:
+def extract_text_from_srt(subtitle_data: List[Dict]) -> dict:
     """
     Extract plain text from parsed subtitle data.
     
     Args:
-        subtitle_data: List of subtitle entries from parse_srt_file
+        subtitle_data: List of subtitle entries from parse_srt_content
         
     Returns:
-        Dictionary with:
-        - status: "success" or "error"
-        - text_lines: List of text strings (if success)
-        - count: Number of lines extracted
+        Dictionary with status, text_lines (if success), and count
     """
     try:
-        lines = extract_text_only(subtitle_data)
-        return {
-            "status": "success",
-            "text_lines": lines,
-            "count": len(lines)
-        }
+        lines = [entry.get("original", "") for entry in subtitle_data]
+        return {"status": "success", "text_lines": lines, "count": len(lines)}
     except Exception as e:
-        return {
-            "status": "error",
-            "error_message": str(e)
-        }
+        return {"status": "error", "error_message": str(e)}
 
 
-# Create ADK FunctionTools (these get passed to agents)
-parse_srt_tool = FunctionTool(parse_srt_file)
-extract_text_tool = FunctionTool(extract_subtitle_text)
+parse_srt_tool = FunctionTool(parse_srt_content)
+extract_text_tool = FunctionTool(extract_text_from_srt)

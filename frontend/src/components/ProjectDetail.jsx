@@ -114,7 +114,7 @@ const ProjectDetail = () => {
                     let season = ep.season;
                     if (!season) {
                         // Auto-detect from filename (SxxExx)
-                        const match = ep.name.match(/S(\d+)E\d+/i);
+                        const match = ep.name?.match(/S(\d+)E\d+/i);
                         if (match) {
                             season = parseInt(match[1], 10);
                         } else {
@@ -932,13 +932,14 @@ const ProjectDetail = () => {
                                         <AnimatePresence>
                                             {expandedSeasons.has(seasonKey) && (
                                                 <motion.div
+                                                    key={seasonKey}
                                                     initial={{ height: 0, opacity: 0 }}
                                                     animate={{ height: 'auto', opacity: 1 }}
                                                     exit={{ height: 0, opacity: 0 }}
                                                     className="grid grid-cols-1 gap-4 pl-4 border-l-2 border-gray-200 dark:border-gray-700 ml-2"
                                                 >
                                                     {seasonEpisodes.map(ep => (
-                                                        <div key={ep.name} className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border transition-colors flex justify-between items-center ${selectedEpisodes.has(ep.name) ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200 dark:border-gray-700'}`}>
+                                                        <div key={ep.name || ep.id || Math.random()} className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border transition-colors flex justify-between items-center ${selectedEpisodes.has(ep.name) ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200 dark:border-gray-700'}`}>
                                                             <div className="flex items-center gap-4">
                                                                 <input
                                                                     type="checkbox"
@@ -1184,8 +1185,8 @@ const ProjectDetail = () => {
                                     try {
                                         const files = Array.from(file);
                                         for (const f of files) {
-                                            let epName = f.name;
-                                            const match = f.name.match(/[Ss]\d{2}[Ee]\d{2}/);
+                                            let epName = f.name || 'unnamed';
+                                            const match = f.name?.match(/[Ss]\d{2}[Ee]\d{2}/);
                                             if (match) epName = match[0].toUpperCase();
                                             await api.uploadEpisode(projectName, epName, f);
                                         }

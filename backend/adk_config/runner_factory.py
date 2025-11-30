@@ -1,7 +1,8 @@
 """
 ADK Runner Factory
 
-Creates configured Runners for executing agents.
+Creates configured Runners for executing agents with shared services.
+Ensures consistent configuration across all agent executions.
 """
 
 from google.adk.runners import Runner
@@ -9,14 +10,17 @@ from google.adk.agents import Agent
 from .session_service import get_session_service
 from .memory_service import get_memory_service
 
+APP_NAME = "OmbiSub"
+
+
 class OmbiSubRunnerFactory:
     """
-    Factory to create ADK Runners with standard configuration.
+    Factory for creating ADK Runners with standard OmbiSub configuration.
     
-    Ensures all runners have access to:
-    - Session service (for project state)
-    - Memory service (for global knowledge)
-    - Standard observability hooks
+    All runners share:
+    - Session service for project state persistence
+    - Memory service for cross-project knowledge
+    - Consistent app name for session scoping
     """
     
     def __init__(self):
@@ -25,20 +29,18 @@ class OmbiSubRunnerFactory:
     
     def create_runner(self, agent: Agent, session_id: str) -> Runner:
         """
-        Create a runner for a specific agent and session.
+        Create a runner for an agent with full service integration.
         
         Args:
-            agent: The ADK agent to run
-            session_id: The session ID to attach to
+            agent: ADK agent to execute
+            session_id: Session identifier for state persistence
             
         Returns:
             Configured Runner instance
         """
         return Runner(
             agent=agent,
-            app_name="OmbiSub",
+            app_name=APP_NAME,
             session_service=self.session_service,
             memory_service=self.memory_service
-            # session_id is passed to run() methods, not __init__
-            # plugins=[LoggingPlugin()]
         )

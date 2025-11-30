@@ -45,3 +45,22 @@ backend/test.srt
 .idea/
 *.swp
 *.swo
+
+# Electron App
+electron-app/node_modules/
+electron-app/dist/
+*.exe
+*.dmg
+*.AppImage
+
+# Docker
+*.tar.gz
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

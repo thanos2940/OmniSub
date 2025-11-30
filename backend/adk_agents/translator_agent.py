@@ -1,100 +1,98 @@
 """
-ADK-based Translator Agent
+Translator Agent - Context-Aware Subtitle Translation
 
-This replaces agents/translator.py with an ADK-native implementation.
+Translates subtitle text while maintaining glossary consistency,
+cultural adaptation, and natural dialogue flow.
 """
 
 from google.adk.agents import Agent
 from google.adk.models.google_llm import Gemini
 from google.genai import types
-from typing import Dict
+from typing import Dict, List
 
-retry_config = types.HttpRetryOptions(attempts=5)
+RETRY_CONFIG = types.HttpRetryOptions(attempts=5)
 
-def create_translator_agent(
-    model_name: str = "gemini-2.0-flash-exp",
-    glossary: Dict = None,
-    target_language: str = "English"
-) -> Agent:
-    """
-    Create the Translator Agent for context-aware subtitle translation.
+
+def _build_glossary_context(glossary: Dict) -> str:
+    """Format glossary terms for inclusion in agent instruction."""
+    if not glossary or not glossary.get("terms"):
+        return "(No glossary terms provided)"
     
-    This agent translates subtitle text while maintaining:
-    - Glossary term consistency
-    - Cultural context awareness
-    - Natural dialogue flow
-    
-    Args:
-        model_name: Gemini model identifier
-        glossary: Project glossary dictionary
-        target_language: Target language for translation
-        
-    Returns:
-        Configured ADK Agent instance with glossary context
-    """
-    
-    # Build glossary context for the instruction
-    glossary_context = ""
-    if glossary and glossary.get("terms"):
-        glossary_lines = []
-        for term in glossary["terms"]:
-            case_note = " (case-sensitive)" if term.get("case_sensitive", True) else ""
-            glossary_lines.append(
-                f"- {term['term']} → {term['translation']}{case_note}"
-            )
-        glossary_context = "\n".join(glossary_lines)
-    
-    instruction = f"""You are the Translator Agent for OmbiSub, a subtitle translation platform.
+    lines = []
+    for term in glossary["terms"]:
+        case_note = " (case-sensitive)" if term.get("case_sensitive", True) else ""
+        lines.append(f"- {term['term']} → {term['translation']}{case_note}")
+    return "\n".join(lines)
+
+
+def _build_instruction(target_language: str, glossary_context: str) -> str:
+    """Build complete instruction for the translator agent."""
+    return f"""You are the Translator Agent for OmbiSub, a subtitle translation platform.
 
 **Target Language:** {target_language}
 
 **Translation Guidelines:**
 1. Translate naturally and conversationally (subtitles must feel authentic)
 2. Preserve speaker intent and emotional tone
-3. Adapt idioms to target culture (don't translate literally if awkward)
+3. Adapt idioms to target culture (avoid literal translations if awkward)
 4. Maintain subtitle length constraints (readable in ~3 seconds)
 
 **CRITICAL: Glossary Consistency**
-You MUST use these exact translations for recognized terms:
+Use these exact translations for recognized terms:
 
-{glossary_context if glossary_context else "(No glossary terms provided)"}
+{glossary_context}
 
 **Case Sensitivity Rules:**
-- Case-sensitive terms: Match capitalization of source (e.g., "Mana" stays "Mana", "mana" stays "mana")
-- Case-insensitive terms: Adapt capitalization to natural sentence flow
+- Case-sensitive terms: Match source capitalization
+- Case-insensitive terms: Adapt to natural sentence flow
 
 **Input Format:**
-You will receive numbered subtitle lines:
+Numbered subtitle lines:
 ```
 1: First subtitle line
 2: Second subtitle line
-...
 ```
 
 **Output Format:**
-Return ONLY the translated lines in the same numbered format:
+Return ONLY translated lines in same numbered format:
 ```
 1: Translated first line
 2: Translated second line
-...
 ```
 
-Do NOT include explanations, notes, or anything other than the numbered translations.
-"""
+Do NOT include explanations or anything other than numbered translations."""
+
+
+def create_translator_agent(
+    model_name: str = "gemini-flash-latest",
+    glossary: Dict = None,
+    target_language: str = "English"
+) -> Agent:
+    """
+    Create Translator Agent for context-aware subtitle translation.
     
-    agent = Agent(
+    Maintains glossary consistency, cultural adaptation, and natural dialogue flow.
+    Uses lower temperature for consistent output.
+    
+    Args:
+        model_name: Gemini model identifier
+        glossary: Project glossary with terms and translations
+        target_language: Target language for translation
+        
+    Returns:
+        Configured ADK Agent for translation
+    """
+    glossary_context = _build_glossary_context(glossary)
+    instruction = _build_instruction(target_language, glossary_context)
+    
+    return Agent(
         name="TranslatorAgent",
         model=Gemini(
             model=model_name,
-            retry_options=retry_config,
-            # Context caching happens at model level in ADK
-            generation_config={
-                "temperature": 0.3,  # Lower temperature for consistency
-            }
+            retry_options=RETRY_CONFIG,
+            generation_config={"temperature": 0.3}
         ),
         instruction=instruction,
-        tools=[],  # Translation doesn't need additional tools
+        tools=[],
         output_key="translation_result"
     )
-    
-    return agent

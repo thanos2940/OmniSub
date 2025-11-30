@@ -38,6 +38,12 @@ const EpisodeView = () => {
     }, [activeJobs, episodeName]);
 
     const loadData = async () => {
+        if (!episodeName || !projectName) {
+            console.error("Missing projectName or episodeName");
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             const [epRes, projRes] = await Promise.all([

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  ombisub:
+    build: .
+    container_name: ombisub-app
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    volumes:
+      - ./backend/projects:/app/projects
+      - ./backend/ombisub_sessions.db:/app/ombisub_sessions.db
+    restart: unless-stopped
+    networks:
+      - ombisub-network
+
+networks:
+  ombisub-network:
+    driver: bridge

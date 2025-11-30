@@ -1,46 +1,42 @@
 """
-Glossary Orchestrator Agent
+Glossary Orchestrator - Research + Extraction Pipeline
 
-Combines ResearchAgent and CartographerAgent to create comprehensive
-glossaries with both web research and term extraction.
+Combines ResearchAgent and CartographerAgent for comprehensive
+glossary creation with optional web research enhancement.
 """
 
 from google.adk.agents import SequentialAgent
 from .research_agent import create_research_agent
 from .cartographer_agent import create_cartographer_agent
 
+
 def create_glossary_orchestrator(
     model_name: str = "gemini-flash-latest",
     enable_research: bool = True
 ) -> SequentialAgent:
     """
-    Create an orchestrator that combines research and extraction agents.
+    Create orchestrator combining research and extraction agents.
     
     Workflow:
-    1. ResearchAgent (optional): Performs web research if enabled
-    2. CartographerAgent: Extracts glossary terms with structured output
+    1. ResearchAgent (optional): Web research for canonical information
+    2. CartographerAgent: Extract glossary terms with structured output
     
     Args:
-        model_name: Gemini model to use for both agents
-        enable_research: Whether to include the research step
+        model_name: Gemini model for both agents
+        enable_research: Whether to include web research step
         
     Returns:
-        SequentialAgent that orchestrates the glossary creation workflow
+        SequentialAgent orchestrating the glossary creation workflow
     """
-    
     agents = []
     
-    # Add research agent if enabled
     if enable_research:
         agents.append(create_research_agent(model_name))
     
-    # Always add extraction agent
     agents.append(create_cartographer_agent(model_name))
     
-    orchestrator = SequentialAgent(
+    return SequentialAgent(
         name="GlossaryOrchestrator",
         sub_agents=agents,
         description="Orchestrates glossary creation through research and extraction"
     )
-    
-    return orchestrator

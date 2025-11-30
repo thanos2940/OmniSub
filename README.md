@@ -77,10 +77,10 @@ Perfect for anime, TV series, and films with complex terminology, character rela
 
 ## 🎓 Google ADK Seminar Alignment
 
-**Capstone Requirement**: Demonstrate at least 3 key ADK concepts  
-**OmbiSub Demonstrates**: 5 concepts ✅
+**Capstone Requirement**: Demonstrate at least 3 key ADK concepts
+**OmbiSub Demonstrates**: 7 concepts ✅
 
-This project demonstrates core concepts from Google's Agent Development Kit (ADK) seminar using a custom implementation with the Gemini API. While built with raw Gemini API rather than the ADK framework, the architecture naturally aligns with ADK patterns and best practices.
+This project is built entirely with Google's Agent Development Kit (ADK) framework, demonstrating production-ready implementation of ADK patterns and best practices.
 
 ### Concepts Demonstrated
 
@@ -129,25 +129,24 @@ Each agent has distinct responsibilities, models, and tools - following the "tea
 
 ### Implementation Mapping
 
-| ADK Concept | OmbiSub Custom Implementation |
-|-------------|-------------------------------|
-| `Agent(name, model, instruction, tools)` | `CartographerAgent`, `TranslatorAgent` classes |
-| `Gemini(model="gemini-2.5-flash-lite")` | `genai.GenerativeModel(model_name)` |
-| `tools=[google_search]` | `protos.Tool.GoogleSearch()` |
-| `FunctionTool(my_function)` | Custom utility functions in `backend/utils/` |
-| `Runner` with `SessionService` | FastAPI endpoints + file-based storage |
-| `session.state["key"]` | `project_meta["key"]` in JSON files |
-| Context caching | `caching.CachedContent.create()` with TTL |
+| ADK Concept | OmbiSub ADK Implementation |
+|-------------|---------------------------|
+| `Agent(name, model, instruction, tools)` | `create_cartographer_agent()`, `create_translator_agent()` |
+| `Gemini(model="gemini-flash-latest")` | `Gemini(model=model_name, retry_options=RETRY_CONFIG)` |
+| `tools=[google_search]` | `tools=[google_search]` in ResearchAgent |
+| `SequentialAgent(sub_agents=[...])` | `GlossaryOrchestrator`, `TranslationPipeline` |
+| `Runner` with `SessionService` | `OmbiSubRunnerFactory` + `DatabaseSessionService` |
+| `session.state["key"]` | `adk_session_manager.get_project_state()` |
+| Memory Service | `InMemoryMemoryService` (production: VertexAI) |
+| Structured Output | `output_schema=GlossaryOutput` with Pydantic models |
 
-### Why Custom Implementation?
+### ADK Benefits Realized
 
-OmbiSub uses raw Gemini API instead of ADK because:
-1. Project requires custom orchestration with FastAPI backend
-2. Hierarchical project/episode structure needs specialized storage
-3. SRT file handling requires domain-specific utilities
-4. Direct control over context caching and model selection
-
-Despite the custom approach, all patterns align with ADK principles and demonstrate the same concepts taught in the seminar.
+1. **Automatic Retry Logic**: Built-in retry with exponential backoff
+2. **Session Persistence**: SQLite-backed session state
+3. **Observability**: Job tracking with prompts, responses, and logs
+4. **Type Safety**: Pydantic schemas for structured output
+5. **Production Ready**: Designed for Vertex AI deployment
 
 ---
 
@@ -333,31 +332,45 @@ Traditional subtitle translation fails with complex media because:
 
 ### Prerequisites
 
-- **Python** 3.8+ 
-- **Node.js** 16+
+- **Python** 3.11+
+- **Node.js** 18+
 - **Google Gemini API Key** ([Get one here](https://makersuite.google.com/app/apikey))
 
-### Backend Setup
+### Quick Start (Docker - Recommended)
+
+```bash
+# 1. Set your API key
+echo "GOOGLE_API_KEY=your_api_key_here" > .env
+
+# 2. Build and run
+docker-compose up -d
+
+# Access at http://localhost:8000
+```
+
+### Development Setup
+
+#### Backend
 
 ```bash
 cd backend
 
-# Install dependencies
+# Install dependencies (use virtual environment)
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# Configure API key
-# Create .env file in project root (not in backend/)
+# Configure API key (create .env in project root)
 echo "GOOGLE_API_KEY=your_api_key_here" > ../.env
 
 # Start server
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Backend runs at `http://localhost:8000`
-
 **API Documentation**: `http://localhost:8000/docs`
 
-### Frontend Setup
+#### Frontend
 
 ```bash
 cd frontend
@@ -370,6 +383,18 @@ npm run dev
 ```
 
 Frontend runs at `http://localhost:5173`
+
+### Desktop App (Windows Executable)
+
+```bash
+cd electron-app
+npm install
+npm run build:win
+```
+
+Executable created at: `electron-app/dist/OmbiSub Setup.exe`
+
+See [electron-app/README.md](electron-app/README.md) for macOS and Linux builds.
 
 ---
 
@@ -410,17 +435,26 @@ Frontend runs at `http://localhost:5173`
 ```
 OmbiSub/
 ├── backend/
-│   ├── agents/
-│   │   ├── cartographer.py      # Glossary builder agent
-│   │   └── translator.py        # Translation agent
+│   ├── adk_agents/              # ADK-based AI agents
+│   │   ├── cartographer_agent.py    # Glossary extraction with structured output
+│   │   ├── research_agent.py        # Web research using Google Search
+│   │   ├── translator_agent.py      # Context-aware translation
+│   │   ├── glossary_orchestrator.py # Sequential: Research → Extract
+│   │   ├── translation_pipeline.py  # Sequential: Extract → Translate
+│   │   └── operations.py            # High-level ADK operations
+│   ├── adk_config/              # ADK configuration
+│   │   ├── session_service.py       # DatabaseSessionService setup
+│   │   ├── session_manager.py       # OmbiSub session operations
+│   │   └── runner_factory.py        # Runner initialization
 │   ├── utils/
-│   │   ├── srt_parser.py        # SRT file parser/reconstructor
-│   │   └── storage.py           # File-based storage manager
-│   ├── main.py                  # FastAPI application (35+ endpoints)
+│   │   ├── srt_parser.py            # SRT file parser/reconstructor
+│   │   └── storage.py               # File-based storage manager
+│   ├── main.py                      # FastAPI application (35+ endpoints)
 │   ├── requirements.txt
-│   └── projects/                # Data storage
+│   ├── ombisub_sessions.db          # ADK session database
+│   └── projects/                    # Project data storage
 │       └── {ProjectName}/
-│           ├── project.json     # Glossary, context, settings
+│           ├── project.json         # Glossary, context, settings
 │           └── episodes/
 │               └── {EpisodeName}/
 │                   ├── data.json
@@ -428,18 +462,19 @@ OmbiSub/
 │                   └── metadata.json
 ├── frontend/
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── ProjectList.jsx
-│   │   │   ├── ProjectDetail.jsx
-│   │   │   ├── GlossaryEditor.jsx
-│   │   │   ├── EditorView.jsx
-│   │   │   └── ... (15+ components)
-│   │   ├── context/
-│   │   │   └── JobContext.jsx   # Background job tracking
-│   │   ├── api.js               # API client
+│   │   ├── components/              # 18 React components
+│   │   ├── context/JobContext.jsx   # Background job tracking
+│   │   ├── api.js                   # API client
 │   │   └── App.jsx
 │   ├── package.json
 │   └── tailwind.config.js
+├── electron-app/                # Desktop application
+│   ├── main.js                  # Electron main process
+│   ├── package.json             # Build scripts
+│   └── README.md
+├── Dockerfile                   # Multi-stage Docker build
+├── docker-compose.yml           # Container orchestration
+├── .github/workflows/deploy.yml # CI/CD pipeline
 └── .env                         # GOOGLE_API_KEY
 ```
 

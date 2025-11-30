@@ -1,13 +1,15 @@
 """
-Sequential Translation Pipeline
+Translation Pipeline - Sequential Multi-Agent Workflow
 
-Combines Cartographer → Translator in a deterministic workflow.
+Combines Cartographer and Translator agents in a deterministic pipeline
+for complete subtitle translation with glossary enhancement.
 """
 
 from google.adk.agents import SequentialAgent
 from .cartographer_agent import create_cartographer_agent
 from .translator_agent import create_translator_agent
-from typing import Dict, Optional
+from typing import Dict
+
 
 def create_translation_pipeline(
     project_name: str,
@@ -18,10 +20,10 @@ def create_translation_pipeline(
     skip_glossary_step: bool = False
 ) -> SequentialAgent:
     """
-    Create a sequential pipeline for full translation workflow.
+    Create sequential pipeline for full translation workflow.
     
-    Pipeline steps:
-    1. CartographerAgent: Extract/enhance glossary from subtitle text
+    Pipeline Steps:
+    1. CartographerAgent: Extract/enhance glossary from subtitle text (optional)
     2. TranslatorAgent: Translate using enhanced glossary
     
     Args:
@@ -30,40 +32,23 @@ def create_translation_pipeline(
         glossary: Existing project glossary
         cartographer_model: Model for glossary extraction
         translator_model: Model for translation
-        skip_glossary_step: If True, skip glossary enhancement (use existing)
+        skip_glossary_step: If True, skip glossary enhancement
         
     Returns:
         SequentialAgent that runs both steps in order
-        
-    Example:
-        >>> pipeline = create_translation_pipeline(
-        ...     project_name="Frieren",
-        ...     target_language="Greek",
-        ...     glossary=existing_glossary
-        ... )
-        >>> runner = InMemoryRunner(agent=pipeline)
-        >>> result = await runner.run_debug("Translate: [subtitle text]")
     """
-    
     sub_agents = []
     
-    # Step 1: Glossary enhancement (optional)
     if not skip_glossary_step:
-        cartographer = create_cartographer_agent(model_name=cartographer_model)
-        sub_agents.append(cartographer)
+        sub_agents.append(create_cartographer_agent(model_name=cartographer_model))
     
-    # Step 2: Translation (always included)
-    translator = create_translator_agent(
+    sub_agents.append(create_translator_agent(
         model_name=translator_model,
         glossary=glossary,
         target_language=target_language
-    )
-    sub_agents.append(translator)
+    ))
     
-    # Create sequential pipeline
-    pipeline = SequentialAgent(
+    return SequentialAgent(
         name=f"TranslationPipeline_{project_name}",
         sub_agents=sub_agents
     )
-    
-    return pipeline
