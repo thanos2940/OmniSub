@@ -1018,13 +1018,15 @@ const ProjectDetail = () => {
                             >
                                 <Sparkles size={20} />
                             </button>
-                            <button
-                                onClick={handleBatchSetSeason}
-                                className="p-2 hover:bg-green-50 text-green-600 rounded-full transition-colors tooltip"
-                                title="Set Season"
-                            >
-                                <Tv size={20} />
-                            </button>
+                            {!isMovie && (
+                                <button
+                                    onClick={handleBatchSetSeason}
+                                    className="p-2 hover:bg-green-50 text-green-600 rounded-full transition-colors tooltip"
+                                    title="Set Season"
+                                >
+                                    <Tv size={20} />
+                                </button>
+                            )}
                             <button
                                 onClick={handleBatchDownload}
                                 className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-colors tooltip"

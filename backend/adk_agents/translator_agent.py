@@ -20,8 +20,10 @@ def _build_glossary_context(glossary: Dict) -> str:
     
     lines = []
     for term in glossary["terms"]:
-        case_note = " (case-sensitive)" if term.get("case_sensitive", True) else ""
-        lines.append(f"- {term['term']} → {term['translation']}{case_note}")
+        case_note = " (case-sensitive)" if term.get("case_sensitive", True) else " (case-insensitive)"
+        gender = term.get("gender", "n/a")
+        gender_note = f" [{gender}]" if gender and gender != "n/a" else ""
+        lines.append(f"- {term['term']} → {term['translation']}{gender_note}{case_note}")
     return "\n".join(lines)
 
 
@@ -42,9 +44,13 @@ Use these exact translations for recognized terms:
 
 {glossary_context}
 
-**Case Sensitivity Rules:**
-- Case-sensitive terms: Match source capitalization
-- Case-insensitive terms: Adapt to natural sentence flow
+**Strict Grammar & Casing Rules:**
+1. **Gender Compliance:** If a glossary term has a specified gender (e.g., [neuter]), you MUST use the corresponding articles and adjectives in {target_language}.
+   - Example: "mana" [neuter] -> "το μάνα" (NOT "η μάνα")
+   
+2. **Case Sensitivity:**
+   - **(case-sensitive):** Match the glossary term EXACTLY as shown.
+   - **(case-insensitive):** If the glossary term is "Mana" but the source says "her mana", output "το μάνα της" (lowercase). Retain the casing of the SOURCE text for the term.
 
 **Input Format:**
 Numbered subtitle lines:

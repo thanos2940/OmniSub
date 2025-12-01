@@ -1,0 +1,6 @@
+{
+    "default_target_language": "English",
+    "default_scan_model": "gemini-flash-lite-latest",
+    "default_translation_model": "gemini-flash-latest",
+    "api_key": ""
+}

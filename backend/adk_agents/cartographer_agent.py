@@ -2,7 +2,7 @@
 Cartographer Agent - Glossary Term Extraction
 
 Extracts translatable terms from subtitle text using structured output.
-For web research, use ResearchAgent separately.
+Refined to strictly enforce Target Language translations while keeping descriptions in English.
 """
 
 from google.adk.agents import Agent
@@ -13,35 +13,48 @@ from typing import List, Literal
 
 RETRY_CONFIG = types.HttpRetryOptions(attempts=5)
 
-INSTRUCTION = """You are the Cartographer Agent for OmbiSub, a subtitle translation platform.
 
-Extract glossary terms from subtitle text:
-- Character names (e.g., "Frieren", "Himmel") -> type: "person"
-- Location names (e.g., "Kingdom of Enser") -> type: "location"
-- Specialized terminology (e.g., "mana", "grimoire") -> type: "object" or "technique"
-- Cultural references specific to the source material and categorized as anything you see fit
+def _build_instruction(target_language: str) -> str:
+    return f"""You are the Cartographer Agent for OmbiSub.
 
-Quality Guidelines:
-- Provide a clear, short 'description' explaining the term for context
-- Identify 'gender' (masculine/feminine/neuter/n/a) in target language for correct grammatical agreement
-- Mark 'case_sensitive' terms (proper nouns) appropriately
-- Avoid generic terms like articles or common words
-- Focus on terms requiring translation consistency
+**Role:** Extract terminology from the source text and prepare it for translation into **{target_language}**.
 
-Extract ALL relevant terms from the provided text."""
+**Strict Output Rules:**
+1. **`translation` Field:** MUST be in **{target_language}**.
+   - If {target_language} uses a different script than the source (e.g., English -> Greek), you MUST transliterate or translate names/places into the {target_language} script.
+   - Do NOT output English translations unless {target_language} is English.
+   
+2. **`description` Field:** MUST be in **English**.
+   - This is for the human editor to understand the term's context.
+
+3. **`term` Field:** Keep in the original source language/script.
+
+**Extraction Strategy:**
+- **Proper Nouns:** Transliterate to {target_language}.
+- **Concepts/Items:** Translate the meaning to {target_language}.
+- **Fantasy Terms:** Adapt phonetically to {target_language}.
+
+**Categories:**
+- Character names -> type: "person"
+- Location names -> type: "location"
+- Specialized terminology -> type: "object" or "technique"
+- Cultural references -> type: "other"
+"""
 
 
 class GlossaryTerm(BaseModel):
     """A single glossary term for translation consistency."""
-    term: str = Field(description="Original term in source language")
-    translation: str = Field(description="Translated term in target language")
-    description: str = Field(description="Term context")
+    term: str = Field(description="Original term as it appears in the source text")
+    translation: str = Field(
+        description="The term translated or transliterated into the TARGET language defined in instructions."
+    )
+    description: str = Field(description="Brief definition/context of the term in ENGLISH")
     type: Literal["person", "location", "organization", "event", "object", "technique", "other"] = Field(
-        description="Term category (use 'person' for characters)"
+        description="Term category"
     )
     gender: Literal["masculine", "feminine", "neuter", "n/a"] = Field(
         default="neuter",
-        description="Grammatical gender for the term in the TARGET language (e.g., 'blade' is neuter in English, but feminine in Greek ('λεπίδα'))"
+        description="Grammatical gender for the term in the TARGET language"
     )
     case_sensitive: bool = Field(
         default=True, 
@@ -61,9 +74,6 @@ def create_cartographer_agent(model_name: str = "gemini-flash-latest", target_la
     """
     Create Cartographer Agent for glossary term extraction.
     
-    Uses structured output schema to ensure consistent JSON format.
-    Does NOT perform web research; use ResearchAgent for that.
-    
     Args:
         model_name: Gemini model identifier
         target_language: Target language for translations
@@ -71,12 +81,12 @@ def create_cartographer_agent(model_name: str = "gemini-flash-latest", target_la
     Returns:
         Configured ADK Agent with structured output
     """
-    formatted_instruction = INSTRUCTION + f"\n\nIMPORTANT: Translate all terms to {target_language}."
+    instruction = _build_instruction(target_language)
     
     return Agent(
         name="CartographerAgent",
         model=Gemini(model=model_name, retry_options=RETRY_CONFIG),
-        instruction=formatted_instruction,
+        instruction=instruction,
         tools=[],
         output_schema=GlossaryOutput,
         output_key="glossary_result"

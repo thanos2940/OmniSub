@@ -39,9 +39,9 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
             // Set a new debounce timer - only notify parent after 300ms of no changes
             debounceTimerRef.current = setTimeout(() => {
                 onChange({ ...glossary, terms });
+                isInternalUpdateRef.current = false;
             }, 300);
         }
-        isInternalUpdateRef.current = false;
 
         // Cleanup function to clear timer on unmount
         return () => {
@@ -51,11 +51,20 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
         };
     }, [terms]);
 
+    // Track the last glossary terms prop we received to detect external changes
+    const prevGlossaryTermsRef = useRef(glossary.terms);
+
     // Sync with prop changes (e.g. when switching projects or reloading)
-    // Only update if the change came from outside (not from internal edits)
     React.useEffect(() => {
-        if (!isInternalUpdateRef.current) {
-            setTerms(glossary.terms || []);
+        // Simple length check or reference check might be enough, but let's be safe.
+        // If the prop reference changes AND it's different from what we have, update.
+        if (glossary.terms !== prevGlossaryTermsRef.current) {
+            // Only update if we are NOT currently editing (internal update)
+            // OR if the terms are drastically different (like switching projects)
+            if (!isInternalUpdateRef.current) {
+                setTerms(glossary.terms || []);
+            }
+            prevGlossaryTermsRef.current = glossary.terms;
         }
     }, [glossary.terms]);
 

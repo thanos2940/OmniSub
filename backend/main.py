@@ -28,6 +28,7 @@ from utils.srt_parser import parse_srt, extract_text_only, reconstruct_srt
 from utils import storage
 from adk_agents import (
     create_cartographer_agent,
+    create_research_agent,
     create_glossary_orchestrator,
     create_translation_pipeline,
     generate_glossary_adk,
@@ -112,11 +113,15 @@ class BatchDownloadRequest(BaseModel):
     episodes: Optional[List[str]] = None
 
 
+class SettingsRequest(BaseModel):
+    default_target_language: Optional[str] = None
+    default_scan_model: Optional[str] = None
+    default_translation_model: Optional[str] = None
+
+
 class ApiKeyRequest(BaseModel):
     api_key: str
 
-
-# Job Management
 
 class JobStatus(BaseModel):
     id: str
@@ -206,6 +211,19 @@ async def set_api_key(request: ApiKeyRequest):
 async def delete_api_key():
     if "GOOGLE_API_KEY" in os.environ:
         del os.environ["GOOGLE_API_KEY"]
+    return {"status": "success"}
+
+
+# Settings
+
+@app.get("/settings")
+async def get_settings():
+    return storage.load_global_config()
+
+
+@app.post("/settings")
+async def update_settings(settings: SettingsRequest):
+    storage.save_global_config(settings.dict(exclude_unset=True))
     return {"status": "success"}
 
 
@@ -575,40 +593,101 @@ async def _process_enhance_glossary(
 ):
     update_job(job_id, status="running", progress=0.0, message="Enhancing glossary...", log="Job started")
     try:
+        # 1. Load Project Metadata (Source of Truth)
+        metadata = storage.load_project_metadata(project_name)
+        if not metadata:
+            update_job(job_id, status="failed", message="Project not found")
+            return
+            
+        target_language = metadata.get("target_language", "English")
+        show_name = metadata.get("show_name", project_name)
+        existing_terms = metadata.get("glossary", {}).get("terms", [])
+
+        # 2. Gather Source Text (Subtitles)
         if episode_names:
             text_lines = await _gather_project_text(project_name, episode_names)
             update_job(job_id, message="Analyzing text...", log=f"Gathered {len(text_lines)} lines")
-            input_text = "\n".join(text_lines[:5000])
+            # Take a larger sample for extraction to ensure context
+            input_text = "\n".join(text_lines[:8000]) 
         else:
-            # Research mode (no files selected)
+            # Research Mode (No files)
             text_lines = []
-            enable_research = True
+            enable_research = True # Force research if no text
             update_job(job_id, message="Researching...", log="Research mode (no files selected)")
             input_text = ""
+
+        # 3. Run Research Step (Optional / Side-Channel)
+        research_context = ""
+        if enable_research:
+            update_job(job_id, progress=20.0, message="Performing Research...", log=f"Researching '{show_name}'")
+            
+            # Create a dedicated runner for research
+            research_agent = create_research_agent(model_name=model)
+            research_session_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+            research_runner = adk_runner_factory.create_runner(research_agent, research_session_id)
+            
+            await adk_session_manager.session_service.create_session(
+                session_id=research_session_id, user_id="default_user", app_name=f"OmbiSub_{research_session_id}"
+            )
+
+            research_prompt = f"Research the show '{show_name}'. Focus on official character names, locations, and specific terminology. Target Language for translation is: {target_language}."
+            
+            async for event in research_runner.run_async(
+                user_id="default_user", session_id=research_session_id,
+                new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=research_prompt)])
+            ):
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if part.text:
+                            research_context += part.text
+            
+            update_job(job_id, progress=40.0, message="Research complete", log="Research data acquired")
+
+        # 4. Run Extraction Step (Cartographer)
+        update_job(job_id, progress=50.0, message="Extracting terms...", log=f"Target Language: {target_language}")
         
-        state = await adk_session_manager.get_project_state(project_name)
-        existing_terms = state.get("glossary", {}).get("terms", [])
-        target_language = state.get("target_language", "English")
-        
-        orchestrator = create_glossary_orchestrator(
+        cartographer = create_cartographer_agent(
             model_name=model, 
-            enable_research=enable_research,
             target_language=target_language
         )
-        session_id_unique = f"enhance_glossary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-        runner = adk_runner_factory.create_runner(orchestrator, session_id_unique)
         
-        # Create session explicitly
+        session_id_unique = f"enhance_glossary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+        runner = adk_runner_factory.create_runner(cartographer, session_id_unique)
+        
         await adk_session_manager.session_service.create_session(
-            session_id=session_id_unique,
-            user_id="default_user",
-            app_name=f"OmbiSub_{session_id_unique}"
+            session_id=session_id_unique, user_id="default_user", app_name=f"OmbiSub_{session_id_unique}"
         )
         
+        # Construct a robust prompt that injects research as context, but keeps source text primary
         if input_text:
-            prompt = f"Extract glossary terms from the text below and translate them to {target_language}:\n\n{input_text}"
+            prompt = f"""TASK: Extract glossary terms from the SOURCE TEXT below.
+            
+TARGET LANGUAGE: {target_language}
+
+RESEARCH CONTEXT (Use this for accurate names/definitions):
+{research_context}
+
+SOURCE TEXT (Subtitle Sample):
+{input_text}
+
+INSTRUCTIONS:
+1. Extract terms from SOURCE TEXT.
+2. Use RESEARCH CONTEXT to verify names and lore.
+3. Translate/Transliterate strictly into {target_language}.
+"""
         else:
-            prompt = f"Research the show '{project_name}' and create a glossary. Translate all terms to {target_language}."
+            # Pure Research Mode
+            prompt = f"""TASK: Create a glossary for '{show_name}' based on the research below.
+            
+TARGET LANGUAGE: {target_language}
+
+RESEARCH FINDINGS:
+{research_context}
+
+INSTRUCTIONS:
+1. Extract key terms from the research.
+2. Translate/Transliterate strictly into {target_language}.
+"""
         
         response_text = ""
         async for event in runner.run_async(
@@ -621,33 +700,27 @@ async def _process_enhance_glossary(
                     if part.text:
                         response_text += part.text
         
-        # Extract text from response object
-        # response_text is already the text
-        
+        # 5. Parse and Merge Results
         try:
-            print(f"DEBUG: Response text type: {type(response_text)}")
-            print(f"DEBUG: Response text content: {response_text[:200]}...")
             new_glossary = _parse_json_response(response_text)
-            print(f"DEBUG: Parsed glossary type: {type(new_glossary)}")
         except Exception as e:
             print(f"DEBUG: JSON parse error: {str(e)}")
             new_glossary = {"terms": [], "raw_output": response_text}
         
+        # Deduplicate
         existing_names = {t.get("term", "").lower() for t in existing_terms}
         new_terms = [t for t in new_glossary.get("terms", []) if t.get("term", "").lower() not in existing_names]
         merged = {"terms": existing_terms + new_terms}
         
+        # Save
         await adk_session_manager.update_glossary(project_name, merged)
-        
-        metadata = storage.load_project_metadata(project_name)
-        if metadata:
-            metadata["glossary"] = merged
-            storage.save_project_metadata(project_name, metadata)
+        metadata["glossary"] = merged
+        storage.save_project_metadata(project_name, metadata)
         
         update_job(
             job_id, status="completed", progress=100.0,
             message="Glossary enhanced",
-            log=f"Added {len(new_terms)} new terms",
+            log=f"Added {len(new_terms)} new terms for {target_language}",
             result={"terms": new_terms}
         )
     except Exception as e:
@@ -809,9 +882,14 @@ async def _process_batch_translation(
 ):
     update_job(job_id, status="running", progress=0.0, message="Starting translation...", log="Job started")
     try:
-        state = await adk_session_manager.get_project_state(project_name)
-        glossary = state.get("glossary", {"terms": []})
-        target_lang = state.get("target_language", "English")
+        # Load metadata for source of truth
+        metadata = storage.load_project_metadata(project_name)
+        if not metadata:
+            update_job(job_id, status="failed", message="Project not found")
+            return
+
+        glossary = metadata.get("glossary", {"terms": []})
+        target_lang = metadata.get("target_language", "English")
         
         pipeline = create_translation_pipeline(
             project_name=project_name,
@@ -824,6 +902,13 @@ async def _process_batch_translation(
         
         session_id_unique = f"batch_translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
         runner = adk_runner_factory.create_runner(pipeline, session_id_unique)
+        
+        # Create session explicitly (once per batch job)
+        await adk_session_manager.session_service.create_session(
+            session_id=session_id_unique,
+            user_id="default_user",
+            app_name=f"OmbiSub_{session_id_unique}"
+        )
         
         results = {}
         total = len(episode_names)
@@ -846,13 +931,6 @@ async def _process_batch_translation(
             for chunk_idx, chunk in enumerate(chunks):
                 chunk_input = "\n".join([f"{j+1}: {line}" for j, line in enumerate(chunk)])
                 prompt = f"Translate to {target_lang}:\n{chunk_input}"
-                
-                # Create session explicitly
-                await adk_session_manager.session_service.create_session(
-                    session_id=session_id_unique,
-                    user_id="default_user",
-                    app_name=f"OmbiSub_{session_id_unique}"
-                )
                 
                 response_text = ""
                 async for event in runner.run_async(

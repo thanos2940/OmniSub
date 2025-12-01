@@ -160,6 +160,36 @@ def delete_episode(project_name: str, episode_name: str) -> bool:
     return False
 
 
+# Global Configuration
+
+CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
+
+def load_global_config() -> Dict:
+    """Load global configuration from JSON file."""
+    if not CONFIG_FILE.exists():
+        return {
+            "default_target_language": "English",
+            "default_scan_model": "gemini-flash-lite-latest",
+            "default_translation_model": "gemini-flash-latest"
+        }
+    
+    try:
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def save_global_config(config: Dict) -> None:
+    """Save global configuration to JSON file."""
+    # Preserve existing keys (like api_key) if not in new config
+    current = load_global_config()
+    current.update(config)
+    
+    with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        json.dump(current, f, indent=2, ensure_ascii=False)
+
+
 def save_original_srt(project_name: str, episode_name: str, content: str) -> None:
     """Save original SRT file content."""
     episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name

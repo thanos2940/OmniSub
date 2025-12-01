@@ -3,7 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import ProjectList from './components/ProjectList';
 import ProjectDetail from './components/ProjectDetail';
 import JobProgressWidget from './components/JobProgressWidget';
-import Sidebar from './components/Sidebar';
+import TopBar from './components/TopBar';
+import SettingsPage from './components/SettingsPage';
 import EpisodeView from './components/EpisodeView';
 import ApiKeyModal from './components/ApiKeyModal';
 import { JobProvider } from './context/JobContext';
@@ -41,15 +42,15 @@ function App() {
     return (
         <Router>
             <JobProvider>
-                <div className="flex min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
-                    <Sidebar />
-                    <div className="flex-1 ml-64 relative">
+                <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
+                    <TopBar />
+                    <div className="flex-1 relative">
                         <Routes>
                             <Route path="/" element={<ProjectList />} />
                             <Route path="/project/:projectName/*" element={<ProjectDetail />} />
                             <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
                             <Route path="/tools" element={<div className="p-8">Tools Page (Coming Soon)</div>} />
-                            <Route path="/settings" element={<div className="p-8">Settings Page (Coming Soon)</div>} />
+                            <Route path="/settings" element={<SettingsPage />} />
                         </Routes>
                         <JobProgressWidget />
                     </div>
