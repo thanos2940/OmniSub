@@ -1444,78 +1444,125 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
         context_guide = metadata.get("context_guide", "")
 
         pipeline = create_translation_pipeline(
-            project_name=project_name,
-            target_language=target_lang,
-            glossary=glossary,
-            context_guide=context_guide,
-            cartographer_model=tr_model,
-            translator_model=tr_model,
-            skip_glossary_step=True  # Already built glossary in stage 2
+            project_name=project_name, target_language=target_lang,
+            glossary=glossary, context_guide=context_guide,
+            cartographer_model=tr_model, translator_model=tr_model,
+            skip_glossary_step=True
         )
 
-        session_id_unique = f"pipeline_translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-        runner = adk_runner_factory.create_runner(pipeline, session_id_unique)
-        await adk_session_manager.session_service.create_session(
-            session_id=session_id_unique, user_id="default_user",
-            app_name=f"OmbiSub_{session_id_unique}"
-        )
-
-        chunk_size = 200
+        # Determine concurrency limit
+        from adk_agents.llm_factory import is_local_model, get_recommended_chunk_size
+        is_local = is_local_model(tr_model)
+        max_parallel = 2 if is_local else 5
+        semaphore = asyncio.Semaphore(max_parallel)
+        processed_count = 0
         total = len(episode_names)
+        # Feature 4: use model-aware chunk sizing instead of hardcoded 200
+        chunk_size = get_recommended_chunk_size(tr_model)
+        update_job(job_id, log=f"Chunk size: {chunk_size} lines/request (model: {tr_model})")
 
-        for idx, episode_name in enumerate(episode_names):
-            if jobs[job_id].cancelled:
-                return
+        from adk_agents.operations import _parse_numbered_output
 
-            update_job(job_id, message=f"Translating {episode_name}...", log=f"Translating {episode_name}")
+        async def _translate_episode_task(ep_name):
+            nonlocal processed_count
+            async with semaphore:
+                if jobs[job_id].cancelled: return
+                
+                # Create a DEDICATED runner for each parallel task to avoid state collisions
+                ep_session_id = f"ep_{uuid4().hex[:6]}"
+                ep_runner = adk_runner_factory.create_runner(pipeline, ep_session_id)
+                await adk_session_manager.session_service.create_session(
+                    session_id=ep_session_id, user_id="default_user",
+                    app_name=f"OmbiSub_{ep_name}"
+                )
 
-            episode_data = storage.load_episode(project_name, episode_name)
-            if not episode_data:
-                continue
+                try:
+                    update_job(job_id, log=f"Translating: {ep_name}")
+                    ep_data = storage.load_episode(project_name, ep_name)
+                    if not ep_data: return
 
-            parsed_srt = episode_data["data"]
-            text_lines_ep = extract_text_only(parsed_srt)
-            chunks = [text_lines_ep[i:i + chunk_size] for i in range(0, len(text_lines_ep), chunk_size)]
-            translated_map = {}
+                    parsed_srt = ep_data["data"]
+                    text_lines_ep = extract_text_only(parsed_srt)
+                    chunks = [text_lines_ep[i:i + chunk_size] for i in range(0, len(text_lines_ep), chunk_size)]
+                    translated_lines_all = []
 
-            for chunk_idx, chunk in enumerate(chunks):
-                if jobs[job_id].cancelled:
-                    return
+                    for chunk in chunks:
+                        if jobs[job_id].cancelled: return
+                        
+                        chunk_input = "\n".join([f"{j+1}: {line.replace(chr(10), '<br>')}" for j, line in enumerate(chunk)])
+                        base_prompt = f"Translate these subtitles to {target_lang}:\n\n{chunk_input}"
 
-                chunk_input = "\n".join([f"{j+1}: {line.replace(chr(10), '<br>')}" for j, line in enumerate(chunk)])
-                prompt = f"Translate these subtitles to {target_lang}:\n\n{chunk_input}"
+                        # Feature 3: auto-retry on truncated output (max 2 retries)
+                        chunk_translated = []
+                        MAX_RETRIES = 2
+                        for attempt in range(MAX_RETRIES + 1):
+                            response_text = ""
+                            current_prompt = base_prompt
 
-                response_text = ""
-                async for event in runner.run_async(
-                    user_id="default_user", session_id=session_id_unique,
-                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-                ):
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if part.text:
-                                response_text += part.text
+                            # On retry, only request missing lines
+                            if attempt > 0 and chunk_translated:
+                                recovered = sum(1 for t in chunk_translated if t)
+                                missing_start = recovered + 1
+                                missing_end = len(chunk)
+                                if missing_start > missing_end:
+                                    break  # All lines recovered
+                                retry_lines = chunk[missing_start - 1:]
+                                retry_input = "\n".join([f"{missing_start + k}: {line.replace(chr(10), '<br>')}" for k, line in enumerate(retry_lines)])
+                                current_prompt = f"You only translated lines 1–{recovered} out of {len(chunk)}. Please translate ONLY lines {missing_start}–{missing_end} now:\n\n{retry_input}"
+                                update_job(job_id, log=f"Retry {attempt}/{MAX_RETRIES} for missing lines {missing_start}–{missing_end} in {ep_name}")
 
-                for line in response_text.split('\n'):
-                    line = line.strip()
-                    if not line:
-                        continue
-                    match = re.match(r'^(\d+)\s*[:.]\s*(.*)', line)
-                    if match:
-                        local_idx = int(match.group(1)) - 1
-                        if 0 <= local_idx < len(chunk):
-                            global_idx = (chunk_idx * chunk_size) + local_idx
-                            translated_text = match.group(2).strip().replace("<br>", "\n")
-                            translated_map[global_idx] = translated_text
+                            async for event in ep_runner.run_async(
+                                user_id="default_user", session_id=ep_session_id,
+                                new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=current_prompt)])
+                            ):
+                                if event.content and event.content.parts:
+                                    for part in event.content.parts:
+                                        if part.text: response_text += part.text
 
-            for i, item in enumerate(parsed_srt):
-                if i in translated_map:
-                    item["translated"] = translated_map[i]
+                            parsed = _parse_numbered_output(response_text, len(chunk))
 
-            storage.save_episode(project_name, episode_name, parsed_srt)
+                            if attempt == 0:
+                                chunk_translated = parsed
+                            else:
+                                # Merge retry results into existing list
+                                for k, val in enumerate(parsed):
+                                    global_k = (chunk[0:].index(chunk[0]) if False else 0) # positional
+                                    idx = (len(chunk_translated) - len(chunk)) + k  # adjust offset
+                                    actual_idx = len(chunk) - len(parsed) + k
+                                    if actual_idx < len(chunk_translated) and val:
+                                        chunk_translated[actual_idx] = val
 
-            # Map progress from 55% to 100%
-            progress = 55.0 + ((idx + 1) / total) * 45.0
-            update_job(job_id, progress=progress, log=f"Completed {episode_name}")
+                            recovered_count = sum(1 for t in chunk_translated if t)
+                            if recovered_count >= len(chunk):
+                                break  # All lines recovered — no retry needed
+
+                        translated_lines_all.extend(chunk_translated)
+
+                    # Feature 6: Two-pass glossary enforcement (CPU-side, zero API cost)
+                    from utils.glossary_enforcer import enforce_glossary
+                    corrected_lines, correction_count = enforce_glossary(
+                        translated_lines_all,
+                        metadata.get("glossary", {}),
+                        text_lines_ep,
+                    )
+                    if correction_count > 0:
+                        update_job(job_id, log=f"Glossary enforced: {correction_count} correction(s) in {ep_name}")
+
+                    # Update and save
+                    for i, translated_text in enumerate(corrected_lines):
+                        if i < len(parsed_srt):
+                            parsed_srt[i]["translated"] = translated_text
+                    
+                    storage.save_episode(project_name, ep_name, parsed_srt)
+                    processed_count += 1
+                    prog = 55.0 + (processed_count / total) * 45.0
+                    update_job(job_id, progress=prog, message=f"Translated {processed_count}/{total} episodes", log=f"Success: {ep_name}")
+                except Exception as task_err:
+                    update_job(job_id, log=f"Error in {ep_name}: {str(task_err)}")
+                    # We don't raise here so other episodes can continue
+
+        # Execute all tasks in parallel
+        await asyncio.gather(*[_translate_episode_task(name) for name in episode_names])
 
         update_job(
             job_id, status="completed", progress=100.0,

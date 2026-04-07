@@ -121,6 +121,46 @@ Do NOT include explanations, notes, or anything other than numbered translations
 Do NOT skip any line numbers. Every input line must have a corresponding output line."""
 
 
+def _build_local_instruction(
+    target_language: str,
+    glossary_context: str,
+    context_guide: str = "",
+) -> str:
+    """Compact, example-driven instruction for local models.
+
+    Local models respond significantly better to concrete few-shot examples
+    than to long abstract rule sets. This instruction:
+    - Strips verbose sections that waste tokens on small context windows
+    - Shows 3 concrete input → output pairs as format anchors
+    - Ends with a hard 'begin output now' signal to suppress preamble
+    """
+    context_section = f"\nShow Context: {context_guide[:300]}\n" if context_guide else ""
+    glossary_section = f"\nGlossary (use exact translations):\n{glossary_context}\n" if glossary_context and glossary_context != "(No glossary terms provided)" else ""
+
+    return f"""Translate subtitles to {target_language}. Output ONLY numbered lines. No explanations.
+{context_section}{glossary_section}
+Rules:
+- Translate naturally, preserve emotion and tone
+- Use <br> for line breaks within a subtitle entry
+- Follow glossary terms exactly (case-sensitive where marked)
+- Never skip a line number
+
+Examples:
+Input:
+1: I missed you.
+2: Don't lie to me!
+3: We'll meet again<br>I promise.
+4: I said I don't want it, damnit.
+
+Output:
+1: Μου έλειψες.
+2: Μην μου λες ψέματα!
+3: Θα ξανασυναντηθούμε<br>Το υπόσχομαι.
+4: Είπα ότι δεν το θέλω, γαμώτο.
+
+Begin output immediately. First line below:"""
+
+
 def create_translator_agent(
     model_name: str = "gemini-flash-latest",
     glossary: Dict = None,
@@ -143,7 +183,23 @@ def create_translator_agent(
         Configured ADK Agent for translation
     """
     glossary_context = _build_glossary_context(glossary)
-    instruction = _build_instruction(target_language, glossary_context, context_guide)
+    
+    is_local = model_name.startswith("local/")
+    is_gemma = "gemma" in model_name.lower()
+
+    if is_local:
+        instruction = _build_local_instruction(target_language, glossary_context, context_guide)
+        # Feature: Gemma 4 has native multilingual competency — steer it explicitly
+        if is_gemma and target_language:
+            lang_hint = (
+                f"You are natively fluent in {target_language}. "
+                f"Your {target_language} output must sound like a native speaker: "
+                f"use correct articles, natural word order, and idiomatic expressions. "
+                f"Never leave foreign words untranslated unless marked keep_original.\n\n"
+            )
+            instruction = lang_hint + instruction
+    else:
+        instruction = _build_instruction(target_language, glossary_context, context_guide)
     
     return Agent(
         name="TranslatorAgent",

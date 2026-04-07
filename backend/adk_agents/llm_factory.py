@@ -13,6 +13,7 @@ The local endpoint URL is resolved from (highest priority first):
 """
 
 import os
+import re
 from typing import Optional
 
 from google.adk.models.google_llm import Gemini
@@ -25,6 +26,10 @@ RETRY_CONFIG = types.HttpRetryOptions(attempts=5)
 _DEFAULT_LOCAL_URL = "http://localhost:1234/v1"
 
 
+# ---------------------------------------------------------------------------
+# URL Resolution
+# ---------------------------------------------------------------------------
+
 def _resolve_local_base_url(base_url: Optional[str] = None) -> str:
     """Resolve the base URL for the local LLM server."""
     if base_url:
@@ -34,7 +39,6 @@ def _resolve_local_base_url(base_url: Optional[str] = None) -> str:
     if env_url:
         return env_url
 
-    # Try global config
     try:
         from utils.storage import load_global_config
         cfg = load_global_config()
@@ -46,10 +50,90 @@ def _resolve_local_base_url(base_url: Optional[str] = None) -> str:
     return _DEFAULT_LOCAL_URL
 
 
+# ---------------------------------------------------------------------------
+# Model Classification
+# ---------------------------------------------------------------------------
+
 def is_local_model(model_name: str) -> bool:
     """Check whether a model name refers to a local LLM."""
     return model_name.startswith("local/")
 
+
+# ---------------------------------------------------------------------------
+# Feature 4: Dynamic Chunk Sizing
+# ---------------------------------------------------------------------------
+
+def get_recommended_chunk_size(model_name: str) -> int:
+    """Return a safe translation chunk size (in subtitle lines) for this model."""
+    if not is_local_model(model_name):
+        return 300
+
+    name_lower = model_name.lower()
+
+    # Gemma 26B+ has a 128K context window — use much larger chunks
+    if "gemma" in name_lower:
+        match = re.search(r'(\d+(?:\.\d+)?)\s*-?\s*b(?:\b|it|q)', name_lower)
+        if match and float(match.group(1)) >= 26:
+            return 350
+        elif match and float(match.group(1)) >= 14:
+            return 200
+        else:
+            return 80  # translategemma-4b and similar small models
+
+    match = re.search(r'(\d+(?:\.\d+)?)\s*-?\s*b(?:\b|it|q)', name_lower)
+    if match:
+        params_b = float(match.group(1))
+        if params_b <= 4:
+            return 80
+        elif params_b <= 9:
+            return 120
+        elif params_b <= 13:
+            return 160
+        elif params_b <= 26:
+            return 200
+        else:
+            return 300
+
+    if any(k in name_lower for k in ("mini", "lite", "tiny", "small")):
+        return 80
+    if any(k in name_lower for k in ("large", "70b", "72b", "65b")):
+        return 300
+
+    return 150
+
+
+# ---------------------------------------------------------------------------
+# Feature 2: Generation Parameter Defaults for Local Models
+# ---------------------------------------------------------------------------
+
+_LOCAL_GEN_DEFAULTS = {
+    # Reduces repetition significantly for local models that loop phrases
+    "repetition_penalty": 1.1,
+    # Nucleus sampling — keeps output diverse but coherent
+    "top_p": 0.9,
+    # Top-K sampling — limits vocabulary to most likely tokens
+    "top_k": 40,
+}
+
+# Gemma-specific override: tuned for its architecture and vocab distribution
+# Also disables Gemma 4's built-in thinking mode (wastes tokens on translation)
+_GEMMA_GEN_DEFAULTS = {
+    "temperature": 0.1,       # Gemma over-generates at 0.3+
+    "repetition_penalty": 1.15,
+    "top_k": 64,              # Gemma's own recommended default
+    "top_p": 0.95,
+    "enable_thinking": False, # Disable Gemma 4's thinking mode for speed
+}
+
+
+def _is_gemma_model(model_name: str) -> bool:
+    """Check if the local model is a Gemma variant."""
+    return "gemma" in model_name.lower()
+
+
+# ---------------------------------------------------------------------------
+# Model Factory
+# ---------------------------------------------------------------------------
 
 def create_model(
     model_name: str,
@@ -74,15 +158,14 @@ def create_model(
         gen_config["temperature"] = temperature
 
     if is_local_model(model_name):
-        # Strip the "local/" prefix to get the actual model name
         actual_model = model_name[len("local/"):]
         resolved_url = _resolve_local_base_url(base_url)
 
         try:
             from google.adk.models.lite_llm import LiteLlm
             import litellm
-            
-            # Critical fix for local models (like translategemma) that 
+
+            # Critical fix for local models (like translategemma) that
             # don't support a 'system' role as the first message.
             litellm.push_system_message_to_user_message = True
         except ImportError:
@@ -92,16 +175,26 @@ def create_model(
             )
 
         # LiteLLM uses "openai/<model>" for OpenAI-compatible endpoints
-        # Set the base URL via environment variable (LiteLLM convention)
         os.environ["OPENAI_API_BASE"] = resolved_url
         os.environ["OPENAI_API_KEY"] = "not-needed"
 
+        # Feature 2: Apply model-specific generation defaults
+        # Gemma gets its own tuned profile; other local models use generic defaults
+        if _is_gemma_model(model_name):
+            extra_body = dict(_GEMMA_GEN_DEFAULTS)
+            if temperature is not None:
+                extra_body["temperature"] = temperature  # explicit override wins
+        else:
+            extra_body = dict(_LOCAL_GEN_DEFAULTS)
+            if temperature is not None:
+                extra_body["temperature"] = temperature
+
         return LiteLlm(
             model=f"openai/{actual_model}",
-            **({"generation_config": gen_config} if gen_config else {}),
+            extra_body=extra_body,
         )
     else:
-        # Standard Gemini model
+        # Standard Gemini model — gen_config only populated if temperature given
         kwargs = {"model": model_name, "retry_options": RETRY_CONFIG}
         if gen_config:
             kwargs["generation_config"] = gen_config

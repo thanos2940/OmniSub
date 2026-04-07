@@ -350,6 +350,36 @@ def _sanitize_json(text: str) -> str:
     return text
 
 
+def _strip_reasoning_blocks(text: str) -> str:
+    """Strip internal reasoning blocks that local thinking models emit.
+
+    Handles formats produced by Qwen, DeepSeek-R1, Gemma-thinking, etc.:
+    - <think>...</think>
+    - <thinking>...</thinking>
+    - [REASONING]...[/REASONING]
+    - "Thinking Process:\\n..." markdown header blocks
+    - "reasoning_content" JSON leakage (usually separate, but guard anyway)
+    """
+    if not text:
+        return text
+
+    # XML-style tags (greedy across newlines)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'\[REASONING\].*?\[/REASONING\]', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    # Markdown "Thinking Process:" header block — strip until the next heading or blank line run
+    text = re.sub(
+        r'(?:^|\n)(?:Thinking Process|Internal Reasoning|Chain of Thought)\s*:.*?(?=\n(?:\d+[:.])|\Z)',
+        '', text, flags=re.DOTALL | re.IGNORECASE
+    )
+
+    # Strip incomplete opening tags (model was cut off mid-think)
+    text = re.sub(r'<think[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+
+    return text.strip()
+
+
 def _parse_glossary_from_text(text: str) -> Dict:
     """Parse glossary from AI response text.
     
@@ -361,6 +391,9 @@ def _parse_glossary_from_text(text: str) -> Dict:
     """
     if not text or not text.strip():
         return {"terms": []}
+
+    # Strip reasoning blocks first (Qwen, DeepSeek-R1, Gemma-thinking)
+    text = _strip_reasoning_blocks(text)
 
     # Strip markdown code blocks
     clean = text.strip()
@@ -442,6 +475,9 @@ def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
     """
     lines_map: Dict[int, str] = {}
     current_idx: Optional[int] = None
+
+    # Strip reasoning blocks before parsing (handles Qwen/DeepSeek think tags)
+    text = _strip_reasoning_blocks(text)
 
     for line in text.split("\n"):
         stripped = line.strip()
