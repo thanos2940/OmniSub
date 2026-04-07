@@ -3,18 +3,18 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
 import { ArrowLeft, Sparkles, Languages } from 'lucide-react';
-import TranslationModal from './TranslationModal';
 import { useJobs } from '../context/JobContext';
+import { useToast } from '../context/ToastContext';
 
 const EpisodeView = () => {
     const { projectName, episodeName } = useParams();
     const { addJob, activeJobs } = useJobs();
+    const toast = useToast();
     const [data, setData] = useState([]);
     const [project, setProject] = useState(null);
     const [glossary, setGlossary] = useState({ terms: [] });
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
-    const [isModalOpen, setIsModalOpen] = useState(false);
     const [originalFilename, setOriginalFilename] = useState(null);
     const handledJobsRef = React.useRef(new Set());
 
@@ -64,49 +64,39 @@ const EpisodeView = () => {
     const handleEnhanceGlossary = async () => {
         setProcessing(true);
         try {
-            // Pass the current episode name in a list to target only this episode
             await api.enhanceGlossary(projectName, { episode_names: [episodeName] });
-            // Reload project data to get updated glossary
             const projRes = await api.getProject(projectName);
             setProject(projRes.data);
             setGlossary(projRes.data.glossary || { terms: [] });
-            alert("Glossary enhanced with terms from this episode!");
+            toast.success('Glossary enhanced with terms from this episode!');
         } catch (err) {
-            console.error("Failed to enhance glossary", err);
-            alert("Failed to enhance glossary");
+            console.error('Failed to enhance glossary', err);
+            toast.error('Failed to enhance glossary');
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleConfirmTranslation = async (enhanceGlossary) => {
-        setIsModalOpen(false);
+    const handleTranslate = async () => {
         try {
             const settings = project?.settings || {};
             const translationModel = settings.translation_model || 'gemini-flash-latest';
-            const res = await api.translateEpisode(projectName, episodeName, translationModel, enhanceGlossary);
-            addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`);
+            const res = await api.translateEpisode(projectName, episodeName, translationModel);
+            addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`, { projectId: projectName, episodeName });
         } catch (err) {
-            console.error("Failed to start translation", err);
-            alert("Failed to start translation");
+            console.error('Failed to start translation', err);
+            toast.error('Failed to start translation');
         }
     };
 
-    if (loading) return <div className="h-screen flex items-center justify-center">Loading...</div>;
+    if (loading) return <div className="h-screen flex items-center justify-center text-gray-500">Loading...</div>;
 
     return (
         <div className="h-screen flex flex-col bg-slate-50 dark:bg-gray-900">
-            <TranslationModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onConfirm={handleConfirmTranslation}
-                title={`Translate ${episodeName}`}
-            />
-
             {/* Header */}
             <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-4">
-                    <Link to={`/project/${projectName}`} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                    <Link to={`/project/${encodeURIComponent(projectName)}`} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
                         <ArrowLeft size={20} />
                     </Link>
                     <div>
@@ -124,12 +114,12 @@ const EpisodeView = () => {
                         Enhance Glossary
                     </button>
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleTranslate}
                         disabled={processing}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium disabled:opacity-50 shadow-lg shadow-indigo-500/20"
                     >
                         <Languages size={18} />
-                        Translate Episode
+                        Translate
                     </button>
                 </div>
             </header>

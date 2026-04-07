@@ -1,6 +1,7 @@
 {
-    "default_target_language": "English",
-    "default_scan_model": "gemini-flash-lite-latest",
-    "default_translation_model": "gemini-flash-latest",
-    "api_key": ""
+  "default_target_language": "Greek",
+  "default_scan_model": "gemini-flash-latest",
+  "default_translation_model": "gemini-flash-latest",
+  "api_key": "",
+  "local_llm_base_url": "http://localhost:1234/v1"
 }

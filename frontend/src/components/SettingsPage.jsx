@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Info, Settings as SettingsIcon, BookOpen, Zap, Globe } from 'lucide-react';
 import { api } from '../api';
+import ModelCombobox from './ModelCombobox';
 
 const SettingsPage = () => {
     const [settings, setSettings] = useState({
         default_target_language: 'English',
-        default_scan_model: 'gemini-flash-lite-latest',
-        default_translation_model: 'gemini-flash-latest'
+        default_scan_model: 'gemini-2.5-flash',
+        default_translation_model: 'gemini-2.5-flash'
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -18,7 +19,7 @@ const SettingsPage = () => {
 
     const loadSettings = async () => {
         try {
-            const response = await api.get('/settings');
+            const response = await api.getSettings();
             setSettings(response.data);
         } catch (error) {
             console.error('Failed to load settings:', error);
@@ -31,7 +32,7 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            await api.post('/settings', settings);
+            await api.updateSettings(settings);
             setMessage({ type: 'success', text: 'Settings saved successfully!' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error) {
@@ -90,35 +91,17 @@ const SettingsPage = () => {
                             <p className="text-xs text-gray-500 mt-1">Used when creating new projects.</p>
                         </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Default Translation Model
-                            </label>
-                            <select
-                                value={settings.default_translation_model}
-                                onChange={(e) => handleChange('default_translation_model', e.target.value)}
-                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            >
-                                <option value="gemini-flash-latest">Gemini Flash (Recommended)</option>
-                                <option value="gemini-pro-latest">Gemini Pro (Higher Quality)</option>
-                                <option value="gemini-flash-lite-latest">Gemini Flash Lite (Faster)</option>
-                            </select>
-                        </div>
+                        <ModelCombobox
+                            label="Default Translation Model"
+                            value={settings.default_translation_model}
+                            onChange={(v) => handleChange('default_translation_model', v)}
+                        />
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Default Scan Model
-                            </label>
-                            <select
-                                value={settings.default_scan_model}
-                                onChange={(e) => handleChange('default_scan_model', e.target.value)}
-                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                            >
-                                <option value="gemini-flash-lite-latest">Gemini Flash Lite (Fastest)</option>
-                                <option value="gemini-flash-latest">Gemini Flash</option>
-                            </select>
-                            <p className="text-xs text-gray-500 mt-1">Used for glossary extraction and research.</p>
-                        </div>
+                        <ModelCombobox
+                            label="Default Scan Model"
+                            value={settings.default_scan_model}
+                            onChange={(v) => handleChange('default_scan_model', v)}
+                        />
                     </div>
                 </div>
 

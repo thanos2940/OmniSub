@@ -8,6 +8,7 @@ import SettingsPage from './components/SettingsPage';
 import EpisodeView from './components/EpisodeView';
 import ApiKeyModal from './components/ApiKeyModal';
 import { JobProvider } from './context/JobContext';
+import { ToastProvider } from './context/ToastContext';
 import { api } from './api';
 
 function App() {
@@ -42,26 +43,28 @@ function App() {
     return (
         <Router>
             <JobProvider>
-                <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
-                    <TopBar />
-                    <div className="flex-1 relative">
-                        <Routes>
-                            <Route path="/" element={<ProjectList />} />
-                            <Route path="/project/:projectName/*" element={<ProjectDetail />} />
-                            <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
-                            <Route path="/tools" element={<div className="p-8">Tools Page (Coming Soon)</div>} />
-                            <Route path="/settings" element={<SettingsPage />} />
-                        </Routes>
-                        <JobProgressWidget />
-                    </div>
-                </div>
+                <ToastProvider>
+                    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
+                        <TopBar />
+                        <div className="flex-1 relative">
+                            <Routes>
+                                <Route path="/" element={<ProjectList />} />
+                                <Route path="/project/:projectName/*" element={<ProjectDetail />} />
+                                <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
 
-                <ApiKeyModal
-                    isOpen={showApiKeyModal}
-                    onClose={() => setShowApiKeyModal(false)}
-                    onSave={handleApiKeySaved}
-                    allowSkip={true}
-                />
+                                <Route path="/settings" element={<SettingsPage />} />
+                            </Routes>
+                            <JobProgressWidget />
+                        </div>
+                    </div>
+
+                    <ApiKeyModal
+                        isOpen={showApiKeyModal}
+                        onClose={() => setShowApiKeyModal(false)}
+                        onSave={handleApiKeySaved}
+                        allowSkip={true}
+                    />
+                </ToastProvider>
             </JobProvider>
         </Router>
     );

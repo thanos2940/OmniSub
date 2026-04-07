@@ -1,77 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { ArrowLeft, FileText, Upload, Book, Sparkles, RefreshCw, Save, Edit2, ChevronDown, ChevronUp, ChevronRight, Trash2, Settings, Check, Folder, Film, Tv, X, Languages } from 'lucide-react';
+import {
+    ArrowLeft, Upload, Book, Sparkles, Save, Edit2, Trash2,
+    Settings, Check, Folder, Film, Tv, X, Languages,
+    FileText, RefreshCw, Download, Play
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlossaryEditor from './GlossaryEditor';
 import GlossaryReviewModal from './GlossaryReviewModal';
 import ContextReviewModal from './ContextReviewModal';
-import TranslationModal from './TranslationModal';
 import ProjectSettingsModal from './ProjectSettingsModal';
-import FileSelectionModal from './FileSelectionModal';
+import PipelineStepper from './PipelineStepper';
+import SimplePipelineWizard from './SimplePipelineWizard';
 import { useJobs } from '../context/JobContext';
+import { useToast } from '../context/ToastContext';
+
+// --- Tab Definitions ---
+const TABS = {
+    EPISODES: 'episodes',
+    GLOSSARY: 'glossary',
+    CONTEXT: 'context',
+    SUBPROJECTS: 'subprojects',
+};
 
 const ProjectDetail = () => {
     const { projectName } = useParams();
-    const { activeJobs, addJob, removeJob } = useJobs();
+    const { activeJobs, addJob, removeJob, cancelJob } = useJobs();
+    const toast = useToast();
     const location = useLocation();
     const navigate = useNavigate();
     const handledJobsRef = useRef(new Set());
+    const fileInputRef = useRef(null);
 
+    // Core State
     const [project, setProject] = useState(null);
     const [episodes, setEpisodes] = useState([]);
     const [subprojects, setSubprojects] = useState([]);
-    const [seasonGroups, setSeasonGroups] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [expandedSeasons, setExpandedSeasons] = useState(new Set());
+    const [activeTab, setActiveTab] = useState(TABS.EPISODES);
+    const [isSimplePipelineActive, setIsSimplePipelineActive] = useState(false);
 
-    // Selection State
+    // Selection & UI State
     const [selectedEpisodes, setSelectedEpisodes] = useState(new Set());
     const [isDownloading, setIsDownloading] = useState(false);
-
-    // Editing States
-    const [isEditingContext, setIsEditingContext] = useState(false);
-    const [editedContext, setEditedContext] = useState('');
-    const [isEditingGlossary, setIsEditingGlossary] = useState(false);
-    const [editedGlossary, setEditedGlossary] = useState({ terms: [] });
-    const [isGlossaryOpen, setIsGlossaryOpen] = useState(() => {
-        const saved = localStorage.getItem(`panel_glossary_${projectName}`);
-        return saved !== null ? JSON.parse(saved) : true;
-    });
-    const [isContextOpen, setIsContextOpen] = useState(() => {
-        const saved = localStorage.getItem(`panel_context_${projectName}`);
-        return saved !== null ? JSON.parse(saved) : true;
-    });
-    const [isSubprojectsOpen, setIsSubprojectsOpen] = useState(() => {
-        const saved = localStorage.getItem(`panel_subprojects_${projectName}`);
-        return saved !== null ? JSON.parse(saved) : true;
-    });
+    const [isDragging, setIsDragging] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [file, setFile] = useState(null);
-    const [importModal, setImportModal] = useState({ isOpen: false, type: null });
-    const [availableProjects, setAvailableProjects] = useState([]);
 
-    // Modal States
-    const [translationModal, setTranslationModal] = useState({ isOpen: false, type: 'batch', target: null });
+    // Editing State
+    const [editedContext, setEditedContext] = useState('');
+    const [isEditingContext, setIsEditingContext] = useState(false);
+
+    // Modal State
     const [glossaryReviewModal, setGlossaryReviewModal] = useState({ isOpen: false, newTerms: [], existingTerms: [] });
     const [contextReviewModal, setContextReviewModal] = useState({ isOpen: false, newContext: '', currentContext: '' });
-    const [fileSelectionModal, setFileSelectionModal] = useState({ isOpen: false, type: null, action: null });
-    const [enableResearch, setEnableResearch] = useState(false);
 
-    // Job Tracking State
+    // Job Tracking
     const [contextJobId, setContextJobId] = useState(null);
     const [glossaryJobId, setGlossaryJobId] = useState(null);
+    const [pipelineJobId, setPipelineJobId] = useState(null);
 
     const isParent = project?.type === 'parent';
     const isMovie = project?.type === 'movie';
 
-
-
-    useEffect(() => {
-        loadData();
-    }, [projectName]);
+    // --- Data Loading ---
+    useEffect(() => { loadData(); }, [projectName]);
 
     const loadData = async () => {
         setLoading(true);
@@ -81,66 +75,22 @@ const ProjectDetail = () => {
                 api.getProject(projectName),
                 api.getProjects()
             ]);
-
             const projData = projRes.data;
             setProject(projData);
             setEditedContext(projData.context_guide || '');
-            setEditedGlossary(projData.glossary || { terms: [] });
-            setAvailableProjects(allProjRes.data.filter(p => p !== projectName));
 
-            // Load additional data based on type
             if (projData.type === 'parent') {
-                // For parent projects, find subprojects
+                setActiveTab(TABS.SUBPROJECTS);
                 const allDetails = await Promise.all(allProjRes.data.map(async name => {
                     try {
                         const res = await api.getProject(name);
-                        return { ...res.data, name: name };
-                    } catch {
-                        return null;
-                    }
+                        return { ...res.data, name };
+                    } catch { return null; }
                 }));
-                const children = allDetails
-                    .filter(p => p && p.parent_project === projectName);
-                setSubprojects(children);
+                setSubprojects(allDetails.filter(p => p && p.parent_project === projectName));
             } else {
-                // For regular projects, load episodes
                 const epRes = await api.getEpisodes(projectName);
-                setProject(projRes.data);
                 setEpisodes(epRes.data);
-
-                // Group episodes by season
-                const groups = {};
-                epRes.data.forEach(ep => {
-                    let season = ep.season;
-                    if (!season) {
-                        // Auto-detect from filename (SxxExx)
-                        const match = ep.name?.match(/S(\d+)E\d+/i);
-                        if (match) {
-                            season = parseInt(match[1], 10);
-                        } else {
-                            season = "Unassigned";
-                        }
-                    }
-
-                    const key = season === "Unassigned" ? "Unassigned" : `Season ${season}`;
-                    if (!groups[key]) groups[key] = [];
-                    groups[key].push(ep);
-                });
-
-                // Sort seasons
-                const sortedGroups = {};
-                Object.keys(groups).sort((a, b) => {
-                    if (a === "Unassigned") return 1;
-                    if (b === "Unassigned") return -1;
-                    return parseInt(a.replace("Season ", "")) - parseInt(b.replace("Season ", ""));
-                }).forEach(key => {
-                    sortedGroups[key] = groups[key];
-                });
-
-                setSeasonGroups(sortedGroups);
-
-                // Expand all seasons by default
-                setExpandedSeasons(new Set(Object.keys(sortedGroups)));
             }
         } catch (err) {
             console.error("Failed to load project data", err);
@@ -150,62 +100,48 @@ const ProjectDetail = () => {
         }
     };
 
-    const handleJobComplete = (job) => {
-        if (!job || !job.result) {
-            if (job.type !== 'translate_episode' && job.type !== 'batch_translate') return;
-        }
+    // --- Job Completion Handling ---
+    const handleJobComplete = useCallback((job) => {
+        if (!job) return;
         const result = job.result;
 
         if (job.type === 'context' || job.type === 'create_context' || job.type === 'enhance_context') {
-            setContextReviewModal({
-                isOpen: true,
-                newContext: result.context_guide,
-                currentContext: project.context_guide || ''
-            });
+            if (result?.context_guide) {
+                setContextReviewModal({
+                    isOpen: true,
+                    newContext: result.context_guide,
+                    currentContext: project?.context_guide || ''
+                });
+            }
         } else if (job.type === 'glossary' || job.type === 'create_glossary' || job.type === 'enhance_glossary') {
-            const existingTerms = project.glossary?.terms || [];
-            const existingTermNames = new Set(existingTerms.map(t => t.term.toLowerCase()));
-            const newTerms = (result.terms || []).filter(
-                t => !existingTermNames.has(t.term.toLowerCase())
-            );
-
-            setGlossaryReviewModal({
-                isOpen: true,
-                newTerms: newTerms,
-                existingTerms: existingTerms
-            });
-        } else if (job.type === 'scan_episode') {
-            loadData();
+            const existingTerms = project?.glossary?.terms || [];
+            const existingNames = new Set(existingTerms.map(t => t.term.toLowerCase()));
+            const newTerms = (result?.terms || []).filter(t => !existingNames.has(t.term.toLowerCase()));
+            setGlossaryReviewModal({ isOpen: true, newTerms, existingTerms });
         } else if (job.type === 'translate_episode') {
             loadData();
-            const episodeName = job.metadata?.episodeName || (typeof job.description === 'string' ? job.description.replace('Translating ', '') : 'Episode');
-            setTimeout(() => {
-                if (window.confirm(`Translation complete for ${episodeName}. Do you want to open the editor?`)) {
-                    navigate(`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`);
-                }
-            }, 100);
+            const epName = job.metadata?.episodeName || 'Episode';
+            toast.success(`Translation complete for ${epName}`);
         } else if (job.type === 'batch_translate') {
             loadData();
-            setTimeout(() => {
-                alert("Batch translation complete.");
-            }, 100);
+            toast.success('Batch translation complete');
+        } else if (job.type === 'pipeline') {
+            loadData();
+            toast.success('Pipeline complete — all episodes translated');
+            setPipelineJobId(null);
         }
-    };
+    }, [project, projectName, navigate, toast]);
 
     // Watch for completed jobs
     useEffect(() => {
         if (!project) return;
 
-        // Load previously handled jobs from localStorage
         const storageKey = `handledJobs_${projectName}`;
-        const storedHandledJobs = localStorage.getItem(storageKey);
-        if (storedHandledJobs && handledJobsRef.current.size === 0) {
+        if (handledJobsRef.current.size === 0) {
             try {
-                const jobIds = JSON.parse(storedHandledJobs);
-                handledJobsRef.current = new Set(jobIds);
-            } catch (e) {
-                console.error('Failed to load handled jobs:', e);
-            }
+                const stored = localStorage.getItem(storageKey);
+                if (stored) handledJobsRef.current = new Set(JSON.parse(stored));
+            } catch { }
         }
 
         const projectJobs = Object.values(activeJobs).filter(
@@ -213,141 +149,94 @@ const ProjectDetail = () => {
         );
 
         for (const job of projectJobs) {
+            if (job.type === 'enhance_context' || job.type === 'create_context' || job.type === 'enhance_glossary' || job.type === 'create_glossary' || job.type === 'pipeline') continue;
             const isHighlighted = location.state?.highlightJobId === job.id;
             const isUnhandled = !handledJobsRef.current.has(job.id);
-
-            if (job.type === 'enhance_context' || job.type === 'create_context' || job.type === 'enhance_glossary' || job.type === 'create_glossary') {
-                continue;
-            }
-
-            if (isHighlighted || (isUnhandled && !job.metadata?.handled)) {
-                if (!job.result && job.type !== 'translate_episode' && job.type !== 'batch_translate') {
-                    continue;
-                }
-
+            if ((isHighlighted || isUnhandled) && (job.result || job.type === 'translate_episode' || job.type === 'batch_translate')) {
                 handleJobComplete(job);
                 handledJobsRef.current.add(job.id);
-
-                // Persist to localStorage
-                try {
-                    const jobArray = Array.from(handledJobsRef.current);
-                    localStorage.setItem(storageKey, JSON.stringify(jobArray));
-                } catch (e) {
-                    console.error('Failed to save handled jobs:', e);
-                }
+                try { localStorage.setItem(storageKey, JSON.stringify([...handledJobsRef.current])); } catch { }
             }
         }
-    }, [activeJobs, projectName, project, location.state, navigate]);
+    }, [activeJobs, projectName, project, location.state, handleJobComplete]);
 
-    const handleAIAction = async (type, action, selectedFiles = null) => {
-        if (selectedFiles === null) {
-            if (episodes.length > 0) {
-                setFileSelectionModal({
-                    isOpen: true,
-                    type: type,
-                    action: action
-                });
-                return;
-            }
-            selectedFiles = [];
-        }
-
+    // --- Actions ---
+    const handleAIAction = async (type, action) => {
         try {
             let res;
             const settings = project.settings || {};
-            const contextModel = settings.context_model || 'gemini-flash-lite-latest';
-            const glossaryModel = settings.glossary_model || 'gemini-flash-lite-latest';
 
             if (type === 'context') {
+                const model = settings.context_model || 'gemini-flash-lite-latest';
                 res = action === 'enhance'
-                    ? await api.enhanceContext(projectName, contextModel)
-                    : await api.createContext(projectName, contextModel);
+                    ? await api.enhanceContext(projectName, model)
+                    : await api.createContext(projectName, model);
             } else {
+                const model = settings.glossary_model || 'gemini-flash-lite-latest';
+                const selected = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : [];
                 if (action === 'enhance') {
-                    // Auto-enable research if no files selected
-                    const shouldEnableResearch = selectedFiles.length === 0 || enableResearch;
-                    res = await api.enhanceGlossary(projectName, { episode_names: selectedFiles }, glossaryModel, shouldEnableResearch);
+                    res = await api.enhanceGlossary(projectName, { episode_names: selected }, model, selected.length === 0);
                 } else {
-                    res = await api.createGlossary(projectName, glossaryModel);
+                    res = await api.createGlossary(projectName, model);
                 }
             }
 
             if (res.data.job_id) {
-                addJob(res.data.job_id, type, `AI Task: ${action} ${type}`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
+                addJob(res.data.job_id, type, `AI: ${action} ${type}`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
                 if (type === 'context') setContextJobId(res.data.job_id);
                 else setGlossaryJobId(res.data.job_id);
             }
-            setFileSelectionModal({ isOpen: false, type: null, action: null });
         } catch (err) {
             console.error(`Failed to ${action} ${type}`, err);
-            alert(`Failed to ${action} ${type}`);
-        }
-    };
-
-    const handleImport = async (sourceProject) => {
-        try {
-            const importContext = importModal.type === 'context';
-            const importGlossary = importModal.type === 'glossary';
-            await api.importProjectData(projectName, sourceProject, importGlossary, importContext);
-            setImportModal({ isOpen: false, type: null });
-            loadData();
-            alert(`Successfully imported ${importModal.type} from ${sourceProject}`);
-        } catch (err) {
-            console.error("Failed to import data", err);
-            alert("Failed to import data");
+            toast.error(`Failed to ${action} ${type}`);
         }
     };
 
     const handleSaveContext = async (contextToSave = null) => {
+        const context = contextToSave !== null ? contextToSave : editedContext;
         try {
-            const context = contextToSave !== null ? contextToSave : editedContext;
             await api.updateProject(projectName, { context_guide: context });
             setIsEditingContext(false);
             setProject(prev => ({ ...prev, context_guide: context }));
             setEditedContext(context);
         } catch (err) {
-            console.error("Failed to save context", err);
+            console.error('Failed to save context', err);
+            toast.error('Failed to save context guide');
         }
     };
 
     const handleSaveGlossary = async (newGlossary) => {
         try {
             await api.updateProject(projectName, { glossary: newGlossary });
-            setIsEditingGlossary(false);
-            setEditedGlossary(newGlossary);
             setProject(prev => ({ ...prev, glossary: newGlossary }));
         } catch (err) {
-            console.error("Failed to save glossary", err);
+            console.error('Failed to save glossary', err);
+            toast.error('Failed to save glossary');
         }
     };
 
     const handleDeleteContext = async () => {
-        if (!window.confirm("Are you sure you want to delete the context guide? This action cannot be undone.")) {
-            return;
-        }
+        if (!window.confirm("Delete the context guide? This cannot be undone.")) return;
         try {
             await api.deleteContext(projectName);
             setContextJobId(null);
-            loadData();
-            alert("Context guide deleted successfully");
+            setEditedContext('');
+            setProject(prev => ({ ...prev, context_guide: '' }));
         } catch (err) {
-            console.error("Failed to delete context", err);
-            alert("Failed to delete context");
+            console.error('Failed to delete context', err);
+            toast.error('Failed to delete context');
         }
     };
 
     const handleDeleteGlossary = async () => {
-        if (!window.confirm("Are you sure you want to delete the glossary? This action cannot be undone.")) {
-            return;
-        }
+        if (!window.confirm("Delete the glossary? This cannot be undone.")) return;
         try {
             await api.deleteGlossary(projectName);
             setGlossaryJobId(null);
-            loadData();
-            alert("Glossary deleted successfully");
+            setProject(prev => ({ ...prev, glossary: { terms: [] } }));
         } catch (err) {
-            console.error("Failed to delete glossary", err);
-            alert("Failed to delete glossary");
+            console.error('Failed to delete glossary', err);
+            toast.error('Failed to delete glossary');
         }
     };
 
@@ -356,137 +245,200 @@ const ProjectDetail = () => {
             await api.updateProject(projectName, { settings: newSettings });
             setProject(prev => ({ ...prev, settings: newSettings }));
         } catch (err) {
-            console.error("Failed to save settings", err);
-            alert("Failed to save settings");
+            console.error('Failed to save settings', err);
+            toast.error('Failed to save settings');
         }
     };
 
+    // --- Episode Actions ---
     const handleSelectAll = () => {
-        if (selectedEpisodes.size === episodes.length) {
-            setSelectedEpisodes(new Set());
-        } else {
-            setSelectedEpisodes(new Set(episodes.map(ep => ep.name)));
+        setSelectedEpisodes(prev =>
+            prev.size === episodes.length ? new Set() : new Set(episodes.map(ep => ep.name))
+        );
+    };
+
+    const handleSelectEpisode = (name) => {
+        setSelectedEpisodes(prev => {
+            const next = new Set(prev);
+            next.has(name) ? next.delete(name) : next.add(name);
+            return next;
+        });
+    };
+
+    const handleTranslateEpisode = async (episodeName) => {
+        try {
+            const model = project.settings?.translation_model || 'gemini-flash-latest';
+            const res = await api.translateEpisode(projectName, episodeName, model);
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`, { projectId: projectName, episodeName });
+            }
+        } catch (err) {
+            console.error('Failed to start translation', err);
+            toast.error('Failed to start translation');
         }
     };
 
-    const handleSelectEpisode = (episodeName) => {
-        const newSelected = new Set(selectedEpisodes);
-        if (newSelected.has(episodeName)) {
-            newSelected.delete(episodeName);
-        } else {
-            newSelected.add(episodeName);
+    // --- Pipeline Actions ---
+    const handleStartPipeline = async (mode = 'auto') => {
+        try {
+            const settings = project.settings || {};
+            const res = await api.startPipeline(projectName, {
+                mode,
+                skip_context: !!project.context_guide,
+                skip_glossary: project.glossary?.terms?.length > 0,
+                episode_names: selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null,
+                model: settings.translation_model || 'gemini-2.5-flash',
+                context_model: settings.context_model || null,
+                glossary_model: settings.glossary_model || null,
+                translation_model: settings.translation_model || null,
+            });
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'pipeline', `Auto-Translate Pipeline`, { projectId: projectName });
+                setPipelineJobId(res.data.job_id);
+                toast.info(`Pipeline started (${mode} mode)`);
+            }
+        } catch (err) {
+            console.error('Failed to start pipeline', err);
+            toast.error('Failed to start pipeline');
         }
-        setSelectedEpisodes(newSelected);
+    };
+
+    const handleContinuePipeline = async () => {
+        if (!pipelineJobId) return;
+        try {
+            await api.continuePipeline(projectName, pipelineJobId);
+            toast.info('Pipeline continuing...');
+        } catch (err) {
+            toast.error('Failed to continue pipeline');
+        }
+    };
+
+    const handleCancelPipeline = async () => {
+        if (!pipelineJobId) return;
+        try {
+            await cancelJob(pipelineJobId);
+            setPipelineJobId(null);
+            toast.info('Pipeline cancelled');
+        } catch (err) {
+            toast.error('Failed to cancel pipeline');
+        }
+    };
+
+    const handleBatchTranslate = async () => {
+        try {
+            const model = project.settings?.translation_model || 'gemini-flash-latest';
+            const names = Array.from(selectedEpisodes);
+            const res = await api.batchTranslate(projectName, names, model);
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'batch_translate', `Batch translating ${names.length} episodes`, { projectId: projectName });
+            }
+        } catch (err) {
+            console.error('Batch translate failed', err);
+            toast.error('Failed to start batch translation');
+        }
     };
 
     const handleBatchDownload = async () => {
         try {
             setIsDownloading(true);
-            const episodeNames = Array.from(selectedEpisodes);
-            await api.batchDownload(projectName, episodeNames);
+            await api.batchDownload(projectName, Array.from(selectedEpisodes));
         } catch (err) {
-            console.error("Failed to download batch", err);
-            alert("Failed to download batch");
+            console.error('Download failed', err);
+            toast.error('Download failed');
         } finally {
             setIsDownloading(false);
         }
     };
 
     const handleBatchDelete = async () => {
-        if (!window.confirm(`Are you sure you want to delete ${selectedEpisodes.size} episodes? This action cannot be undone.`)) {
-            return;
-        }
+        if (!window.confirm(`Delete ${selectedEpisodes.size} episodes? This cannot be undone.`)) return;
         try {
-            const episodeNames = Array.from(selectedEpisodes);
-            await Promise.all(episodeNames.map(name => api.deleteEpisode(projectName, name)));
+            await Promise.all(Array.from(selectedEpisodes).map(name => api.deleteEpisode(projectName, name)));
             setSelectedEpisodes(new Set());
             loadData();
         } catch (err) {
-            console.error("Failed to delete batch", err);
-            alert("Failed to delete batch");
+            console.error('Delete failed', err);
+            toast.error('Delete failed');
         }
     };
 
-    const handleBatchSetSeason = async () => {
-        const seasonStr = prompt("Enter Season Number (e.g., 1, 2):");
-        if (!seasonStr) return;
-
-        const season = parseInt(seasonStr, 10);
-        if (isNaN(season)) {
-            alert("Invalid season number");
-            return;
-        }
-
+    // --- File Upload (drag & drop + click) ---
+    const handleFiles = async (files) => {
+        if (!files || files.length === 0) return;
         try {
-            const episodeNames = Array.from(selectedEpisodes);
-            await Promise.all(episodeNames.map(name => api.updateEpisodeMetadata(projectName, name, { season })));
-            setSelectedEpisodes(new Set());
-            loadData();
-        } catch (err) {
-            console.error("Failed to set season", err);
-            alert("Failed to set season");
-        }
-    };
-
-    const toggleSeason = (seasonKey) => {
-        const newExpanded = new Set(expandedSeasons);
-        if (newExpanded.has(seasonKey)) {
-            newExpanded.delete(seasonKey);
-        } else {
-            newExpanded.add(seasonKey);
-        }
-        setExpandedSeasons(newExpanded);
-    };
-
-    const handleTranslationConfirm = async (enhanceGlossary) => {
-        try {
-            const isBatch = translationModal.type === 'batch';
-            const episodeNames = isBatch ? Array.from(selectedEpisodes) : [translationModal.target];
-            const settings = project.settings || {};
-            const translationModel = settings.translation_model || 'gemini-flash-latest';
-            const glossaryModel = settings.glossary_model || 'gemini-flash-lite-latest';
-
-            if (enhanceGlossary) {
-                // Auto-enable research if no files selected
-                const shouldEnableResearch = episodeNames.length === 0 || enableResearch;
-                const res = await api.enhanceGlossary(projectName, { episode_names: episodeNames }, glossaryModel, shouldEnableResearch);
-                if (res.data.job_id) {
-                    addJob(res.data.job_id, 'enhance_glossary', `Enhancing Glossary (${episodeNames.length} files)`, { projectId: projectName });
-                    setGlossaryJobId(res.data.job_id);
-                }
-                alert("Glossary enhancement started. Please wait for it to complete before translating.");
-            } else {
-                if (isBatch) {
-                    const res = await api.batchTranslate(projectName, episodeNames, translationModel);
-                    if (res.data.job_id) {
-                        addJob(res.data.job_id, 'batch_translate', `Batch Translating ${episodeNames.length} episodes`, { projectId: projectName });
-                    }
-                } else {
-                    const res = await api.translateEpisode(projectName, translationModal.target, translationModel);
-                    if (res.data.job_id) {
-                        addJob(res.data.job_id, 'translate_episode', `Translating ${translationModal.target}`, { projectId: projectName, episodeName: translationModal.target });
-                    }
-                }
+            for (const f of Array.from(files)) {
+                let epName = f.name || 'unnamed';
+                const match = f.name?.match(/[Ss]\d{2}[Ee]\d{2}/);
+                if (match) epName = match[0].toUpperCase();
+                await api.uploadEpisode(projectName, epName, f);
             }
-            setTranslationModal({ ...translationModal, isOpen: false });
-        } catch (err) {
-            console.error("Translation request failed", err);
-            alert("Failed to start translation");
+            loadData();
+        } catch (e) {
+            toast.error('Upload failed');
         }
     };
 
-    // --- Render Helpers ---
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        handleFiles(e.dataTransfer.files);
+    };
 
+    const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+    const handleDragLeave = () => setIsDragging(false);
 
+    // --- Job status helpers ---
+    const getJobStatus = (jobId) => {
+        if (!jobId) return null;
+        return activeJobs[jobId] || null;
+    };
 
+    // Get active pipeline job (if any)
+    const pipelineJob = pipelineJobId ? activeJobs[pipelineJobId] : null;
+    const isPipelineActive = pipelineJob && !['completed', 'failed', 'cancelled'].includes(pipelineJob.status);
+
+    const renderJobButton = (jobId, setJobId, label) => {
+        const job = getJobStatus(jobId);
+        if (!job) return null;
+
+        if (job.status === 'running' || job.status === 'pending') {
+            return (
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-indigo-600 animate-pulse font-medium">{label}...</span>
+                    <button onClick={() => setJobId(null)} className="p-1 hover:bg-red-50 text-red-500 rounded"><X size={14} /></button>
+                </div>
+            );
+        }
+
+        if (job.status === 'completed') {
+            return (
+                <button
+                    onClick={() => { handleJobComplete(job); setJobId(null); }}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                >
+                    <Check size={14} /> Review Result
+                </button>
+            );
+        }
+        return null;
+    };
+
+    // --- Render ---
     if (loading) return <div className="h-screen flex items-center justify-center text-gray-500">Loading project...</div>;
     if (error) return <div className="h-screen flex items-center justify-center text-red-500">{error}</div>;
-    if (!project) {
+    if (!project) return null;
 
-        return null;
-    }
-
-
+    const tabs = isParent
+        ? [
+            { id: TABS.SUBPROJECTS, label: 'Subprojects', icon: Folder, count: subprojects.length },
+            { id: TABS.GLOSSARY, label: 'Glossary', icon: Book, count: project.glossary?.terms?.length || 0 },
+            { id: TABS.CONTEXT, label: 'Context Guide', icon: FileText },
+        ]
+        : [
+            { id: TABS.EPISODES, label: isMovie ? 'Files' : 'Episodes', icon: Film, count: episodes.length },
+            { id: TABS.GLOSSARY, label: 'Glossary', icon: Book, count: project.glossary?.terms?.length || 0 },
+            { id: TABS.CONTEXT, label: 'Context Guide', icon: FileText },
+        ];
 
     return (
         <div className="min-h-screen pb-20">
@@ -499,7 +451,7 @@ const ProjectDetail = () => {
                         </Link>
                         <div>
                             {project.parent_project && (
-                                <Link to={`/project/${encodeURIComponent(project.parent_project)}`} className="text-sm text-indigo-600 hover:underline block mb-0.5">
+                                <Link to={`/project/${encodeURIComponent(project.parent_project)}`} className="text-xs text-indigo-600 hover:underline block mb-0.5">
                                     ← {project.parent_project}
                                 </Link>
                             )}
@@ -511,542 +463,375 @@ const ProjectDetail = () => {
                                     }`}>
                                     {project.type || 'show'}
                                 </span>
+                                {project.target_language && (
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">→ {project.target_language}</span>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => setIsSettingsOpen(true)}
-                            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                        >
-                            <Settings size={20} />
-                        </button>
+                    <div className="flex items-center gap-2">
                         {!isParent && (
-                            <button
-                                onClick={() => setIsUploading(true)}
-                                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium shadow-sm"
-                            >
-                                <Upload size={18} />
-                                Add {isMovie ? 'File' : 'Episode'}
-                            </button>
+                            <div className="relative group">
+                                <button
+                                    onClick={() => setIsSimplePipelineActive(true)}
+                                    disabled={isPipelineActive || isSimplePipelineActive}
+                                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0"
+                                >
+                                    <Sparkles size={18} className="animate-pulse" />
+                                    Auto-Translate
+                                </button>
+                                {/* Dropdown for legacy/advanced mode */}
+                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 translate-y-1 group-hover:translate-y-0">
+                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Advanced Options</div>
+                                    <button
+                                        onClick={() => handleStartPipeline('auto')}
+                                        disabled={isPipelineActive}
+                                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshCw size={14} className="text-gray-400" />
+                                        <span>Legacy Full Pipeline</span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleStartPipeline('step')}
+                                        disabled={isPipelineActive}
+                                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 transition-colors rounded-b-2xl disabled:opacity-50"
+                                    >
+                                        <RefreshCw size={14} className="text-gray-400" />
+                                        <span>Legacy Step-by-Step</span>
+                                    </button>
+                                </div>
+                            </div>
                         )}
+                        <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all" title="Project Settings">
+                            <Settings size={22} />
+                        </button>
                     </div>
                 </div>
             </header>
 
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-                {/* Subprojects Section (Parent Only) */}
-                {isParent && (
-                    <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div
-                            className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors"
-                            onClick={() => {
-                                setIsSubprojectsOpen(!isSubprojectsOpen);
-                                localStorage.setItem(`panel_subprojects_${projectName}`, JSON.stringify(!isSubprojectsOpen));
-                            }}
-                        >
-                            <div className="flex items-center gap-3">
-                                <Folder className="text-amber-500" size={24} />
-                                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Subprojects</h2>
-                                <span className="text-sm text-gray-500">({subprojects.length})</span>
-                            </div>
-                            {isSubprojectsOpen ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
-                        </div>
-                        <AnimatePresence>
-                            {isSubprojectsOpen && (
-                                <motion.div
-                                    initial={{ height: 0 }}
-                                    animate={{ height: 'auto' }}
-                                    exit={{ height: 0 }}
-                                    className="overflow-hidden"
+            {/* Tabs */}
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <nav className="flex gap-1" aria-label="Tabs">
+                        {tabs.map(tab => {
+                            const Icon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${isActive
+                                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200'
+                                        }`}
                                 >
-                                    <div className="p-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {subprojects.map(sub => (
-                                                <Link key={sub.name} to={`/project/${encodeURIComponent(sub.name)}`} className="block group">
-                                                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-all">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-lg ${sub.type === 'movie' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                                {sub.type === 'movie' ? <Film size={20} /> : <Tv size={20} />}
-                                                            </div>
-                                                            <div>
-                                                                <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors">{sub.show_name}</h3>
-                                                                <span className="text-xs text-gray-500 capitalize">{sub.type}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </Link>
-                                            ))}
-                                            {subprojects.length === 0 && (
-                                                <div className="col-span-full text-center py-8 text-gray-500">
-                                                    No subprojects yet. Create one from the main dashboard.
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </section>
+                                    <Icon size={16} />
+                                    {tab.label}
+                                    {tab.count !== undefined && (
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                            }`}>
+                                            {tab.count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </div>
+            </div>
+
+            {/* Pipeline Stepper */}
+            <AnimatePresence>
+                {pipelineJob && (
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+                        <PipelineStepper
+                            job={pipelineJob}
+                            onContinue={handleContinuePipeline}
+                            onCancel={handleCancelPipeline}
+                        />
+                    </div>
                 )}
+            </AnimatePresence>
 
-                {/* Context Guide Section */}
-                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div
-                        className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors"
-                        onClick={() => {
-                            setIsContextOpen(!isContextOpen);
-                            localStorage.setItem(`panel_context_${projectName}`, JSON.stringify(!isContextOpen));
+            {/* Tab Content */}
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                {isSimplePipelineActive ? (
+                    <SimplePipelineWizard 
+                        projectName={projectName} 
+                        onComplete={() => {
+                            setIsSimplePipelineActive(false);
+                            loadData();
                         }}
-                    >
-                        <div className="flex items-center gap-3">
-                            <Book className="text-indigo-500" size={24} />
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Context Guide</h2>
-                        </div>
-                        {isContextOpen ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
-                    </div>
-
-                    {/* Action buttons - Always visible */}
-                    <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex gap-2 justify-end">
-                        {(() => {
-                            const job = contextJobId ? activeJobs[contextJobId] : null;
-
-                            if (job && job.status && (job.status === 'running' || job.status === 'pending')) {
-                                return (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-indigo-600 animate-pulse font-medium">Generating...</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setContextJobId(null);
-                                            }}
-                                            className="p-1 hover:bg-red-50 text-red-500 rounded"
-                                        >
-                                            <X size={16} />
-                                        </button>
-                                    </div>
-                                );
-                            }
-
-                            if (job && job.status && job.status === 'completed') {
-                                return (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleJobComplete(job);
-                                            setContextJobId(null);
-                                        }}
-                                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors text-sm font-medium animate-bounce-subtle"
-                                    >
-                                        <Check size={16} />
-                                        Review Result
-                                    </button>
-                                );
-                            }
-
-                            if (!isEditingContext) {
-                                return (
-                                    <>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setImportModal({ isOpen: true, type: 'context' });
-                                            }}
-                                            className="flex items-center gap-2 text-gray-600 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-                                        >
-                                            <Folder size={16} />
-                                            Import
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAIAction('context', project.context_guide ? 'enhance' : 'create');
-                                            }}
-                                            className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-medium"
-                                        >
-                                            <Sparkles size={16} />
-                                            {project.context_guide ? 'Enhance' : 'Create'}
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsEditingContext(true);
-                                                if (!isContextOpen) {
-                                                    setIsContextOpen(true);
-                                                    localStorage.setItem(`panel_context_${projectName}`, JSON.stringify(true));
-                                                }
-                                            }}
-                                            className="flex items-center gap-2 text-gray-600 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-                                        >
-                                            <Edit2 size={16} />
-                                            Edit
-                                        </button>
-                                        {project.context_guide && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteContext();
-                                                }}
-                                                className="flex items-center gap-2 text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
-                                                title="Delete context guide"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        )}
-                                    </>
-                                );
-                            } else {
-                                return (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleSaveContext();
-                                        }}
-                                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg transition-colors text-sm font-medium"
-                                    >
-                                        <Save size={16} />
-                                        Save
-                                    </button>
-                                );
-                            }
-                        })()}
-                    </div>
-
-                    <AnimatePresence>
-                        {isContextOpen && (
-                            <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: 'auto' }}
-                                exit={{ height: 0 }}
-                                className="overflow-hidden"
+                        onCancel={() => setIsSimplePipelineActive(false)}
+                    />
+                ) : (
+                    <AnimatePresence mode="wait">
+                    {/* ======= EPISODES TAB ======= */}
+                    {activeTab === TABS.EPISODES && (
+                        <motion.div key="episodes" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            {/* Upload Area */}
+                            <div
+                                className={`mb-6 border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${isDragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                                    }`}
+                                onDrop={handleDrop}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onClick={() => fileInputRef.current?.click()}
                             >
-                                <div className="p-6">
-                                    {isEditingContext ? (
-                                        <textarea
-                                            value={editedContext}
-                                            onChange={(e) => setEditedContext(e.target.value)}
-                                            placeholder="Describe the tone, style, and context for translations (e.g., 'Formal fantasy dialogue with British spelling')"
-                                            className="w-full min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white resize-y font-mono text-sm"
+                                <input ref={fileInputRef} type="file" accept=".srt" multiple onChange={(e) => handleFiles(e.target.files)} className="hidden" />
+                                <Upload size={24} className={`mx-auto mb-2 ${isDragging ? 'text-indigo-500' : 'text-gray-400'}`} />
+                                <p className={`text-sm font-medium ${isDragging ? 'text-indigo-600' : 'text-gray-500 dark:text-gray-400'}`}>
+                                    {isDragging ? 'Drop files here' : `Drop .srt files here or click to upload`}
+                                </p>
+                            </div>
+
+                            {episodes.length === 0 ? (
+                                <div className="text-center py-16 text-gray-400">
+                                    <Film size={48} className="mx-auto mb-4 opacity-50" />
+                                    <p className="text-lg font-medium text-gray-500 dark:text-gray-400">No episodes yet</p>
+                                    <p className="text-sm mt-1">Upload .srt files to get started</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Select All */}
+                                    <div className="flex items-center gap-2 mb-3 px-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedEpisodes.size === episodes.length}
+                                            onChange={handleSelectAll}
+                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                         />
-                                    ) : (
-                                        <div className="prose dark:prose-invert max-w-none">
-                                            {project.context_guide ? (
-                                                <p className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{project.context_guide}</p>
-                                            ) : (
-                                                <p className="text-gray-400 italic">No context guide yet. Click "Create" to generate one with AI, or "Edit" to write manually.</p>
+                                        <span className="text-sm text-gray-500">Select All ({episodes.length})</span>
+                                    </div>
+
+                                    {/* Episode List */}
+                                    <div className="space-y-2">
+                                        {episodes.map(ep => (
+                                            <div
+                                                key={ep.name}
+                                                className={`bg-white dark:bg-gray-800 p-4 rounded-xl border transition-all flex justify-between items-center ${selectedEpisodes.has(ep.name)
+                                                    ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm'
+                                                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedEpisodes.has(ep.name)}
+                                                        onChange={() => handleSelectEpisode(ep.name)}
+                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <h3 className="font-semibold text-gray-900 dark:text-white">{ep.name}</h3>
+                                                            {ep.season && <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded">S{String(ep.season).padStart(2, '0')}</span>}
+                                                            {ep.translated && (
+                                                                <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">
+                                                                    <Check size={10} /> Translated
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-400 mt-0.5">{ep.line_count} lines</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleTranslateEpisode(ep.name)}
+                                                        className="flex items-center gap-1.5 text-gray-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium"
+                                                        title="Translate"
+                                                    >
+                                                        <Languages size={16} />
+                                                        <span className="hidden sm:inline">Translate</span>
+                                                    </button>
+                                                    <Link
+                                                        to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`}
+                                                        className="text-indigo-600 hover:text-indigo-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                                                    >
+                                                        Edit
+                                                    </Link>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* ======= GLOSSARY TAB ======= */}
+                    {activeTab === TABS.GLOSSARY && (
+                        <motion.div key="glossary" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            {/* Action Bar */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                        Glossary
+                                        <span className="text-sm font-normal text-gray-500 ml-2">({project.glossary?.terms?.length || 0} terms)</span>
+                                    </h2>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {renderJobButton(glossaryJobId, setGlossaryJobId, 'Enhancing')}
+                                    {!getJobStatus(glossaryJobId) && (
+                                        <>
+                                            <button
+                                                onClick={() => handleAIAction('glossary', project.glossary?.terms?.length > 0 ? 'enhance' : 'create')}
+                                                className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium"
+                                            >
+                                                <Sparkles size={14} />
+                                                {project.glossary?.terms?.length > 0 ? 'AI Enhance' : 'AI Create'}
+                                            </button>
+                                            {project.glossary?.terms?.length > 0 && (
+                                                <button
+                                                    onClick={handleDeleteGlossary}
+                                                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                    title="Delete glossary"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
                                             )}
-                                        </div>
+                                        </>
                                     )}
                                 </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </section>
+                            </div>
 
-                {/* Glossary Section */}
-                <section className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div
-                        className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:border-gray-900/50 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900/70 transition-colors"
-                        onClick={() => {
-                            setIsGlossaryOpen(!isGlossaryOpen);
-                            localStorage.setItem(`panel_glossary_${projectName}`, JSON.stringify(!isGlossaryOpen));
-                        }}
-                    >
-                        <div className="flex items-center gap-3">
-                            <Book className="text-pink-500" size={24} />
-                            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Glossary ({project.glossary?.terms?.length || 0} terms)</h2>
-                        </div>
-                        {isGlossaryOpen ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
-                    </div>
+                            {/* Glossary Editor - always editable */}
+                            <GlossaryEditor
+                                glossary={project.glossary || { terms: [] }}
+                                readOnly={false}
+                                onSave={handleSaveGlossary}
+                                onCancel={() => { }}
+                                isSaving={false}
+                                hideSaveButton={false}
+                            />
+                        </motion.div>
+                    )}
 
-                    {/* Action buttons - Always visible */}
-                    <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30 flex gap-2 justify-end">
-                        {(() => {
-                            const job = glossaryJobId ? activeJobs[glossaryJobId] : null;
-
-                            if (job && job.status && (job.status === 'running' || job.status === 'pending')) {
-                                return (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-sm text-indigo-600 animate-pulse font-medium">Enhancing...</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setGlossaryJobId(null);
-                                            }}
-                                            className="p-1 hover:bg-red-50 text-red-500 rounded"
-                                        >
-                                            <X size={16} />
-                                        </button>
-                                    </div>
-                                );
-                            }
-
-                            if (job && job.status && job.status === 'completed') {
-                                return (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleJobComplete(job);
-                                            setGlossaryJobId(null);
-                                        }}
-                                        className="fl items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors text-sm font-medium animate-bounce-subtle"
-                                    >
-                                        <Check size={16} />
-                                        Review Result
-                                    </button>
-                                );
-                            }
-
-                            if (!isEditingGlossary) {
-                                return (
-                                    <>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setImportModal({ isOpen: true, type: 'glossary' });
-                                            }}
-                                            className="flex items-center gap-2 text-gray-600 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-                                        >
-                                            <Folder size={16} />
-                                            Import
-                                        </button>
-                                        <label className="flex items-center gap-2 text-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium cursor-pointer" title="Enable web research for glossary terms (slower but more accurate)">
-                                            <input
-                                                type="checkbox"
-                                                checked={enableResearch}
-                                                onChange={(e) => {
-                                                    e.stopPropagation();
-                                                    setEnableResearch(e.target.checked);
-                                                }}
-                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                            />
-                                            <span className="text-xs">Research</span>
-                                        </label>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleAIAction('glossary', 'enhance');
-                                            }}
-                                            className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-medium"
-                                        >
-                                            <Sparkles size={16} />
-                                            Enhance
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsEditingGlossary(true);
-                                                if (!isGlossaryOpen) {
-                                                    setIsGlossaryOpen(true);
-                                                    localStorage.setItem(`panel_glossary_${projectName}`, JSON.stringify(true));
-                                                }
-                                            }}
-                                            className="flex items-center gap-2 text-gray-600 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-                                        >
-                                            <Edit2 size={16} />
-                                            Edit
-                                        </button>
-                                        {project.glossary?.terms?.length > 0 && (
+                    {/* ======= CONTEXT GUIDE TAB ======= */}
+                    {activeTab === TABS.CONTEXT && (
+                        <motion.div key="context" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            {/* Action Bar */}
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Context Guide</h2>
+                                <div className="flex items-center gap-2">
+                                    {renderJobButton(contextJobId, setContextJobId, 'Generating')}
+                                    {!getJobStatus(contextJobId) && (
+                                        <>
                                             <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteGlossary();
-                                                }}
-                                                className="flex items-center gap-2 text-red-600 hover:text-red-700 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
-                                                title="Delete glossary"
+                                                onClick={() => handleAIAction('context', project.context_guide ? 'enhance' : 'create')}
+                                                className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium"
                                             >
-                                                <Trash2 size={16} />
+                                                <Sparkles size={14} />
+                                                {project.context_guide ? 'AI Enhance' : 'AI Create'}
                                             </button>
-                                        )}
-                                    </>
-                                );
-                            }
-                            return null;
-                        })()}
-                    </div>
-
-                    <AnimatePresence>
-                        {isGlossaryOpen && (
-                            <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: 'auto' }}
-                                exit={{ height: 0 }}
-                                className="overflow-hidden"
-                            >
-                                <GlossaryEditor
-                                    glossary={isEditingGlossary ? editedGlossary : project.glossary}
-                                    readOnly={!isEditingGlossary}
-                                    onChange={setEditedGlossary}
-                                    onSave={handleSaveGlossary}
-                                    onCancel={() => setIsEditingGlossary(false)}
-                                    isSaving={false}
-                                    hideSaveButton={!isEditingGlossary}
-                                />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </section>
-
-                {/* Episodes/Files Section (Non-Parent Only) */}
-                {!isParent && (
-                    <section>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{isMovie ? 'Movie Files' : 'Episodes'}</h2>
-                        </div>
-
-                        {episodes.length === 0 ? (
-                            <div className="text-center py-12 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                                <p className="text-gray-500 dark:text-gray-400 mb-4">No files uploaded yet.</p>
-                                <button
-                                    onClick={() => setIsUploading(true)}
-                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-                                >
-                                    Upload {isMovie ? 'File' : 'Episode'}
-                                </button>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 gap-4 pb-24">
-                                <div className="flex items-center gap-2 mb-2 px-4">
-                                    <input
-                                        type="checkbox"
-                                        checked={episodes.length > 0 && selectedEpisodes.size === episodes.length}
-                                        onChange={handleSelectAll}
-                                        className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-sm text-gray-500">Select All</span>
-                                </div>
-
-                                {/* Season Grouping UI */}
-                                {Object.entries(seasonGroups).map(([seasonKey, seasonEpisodes]) => (
-                                    <div key={seasonKey} className="mb-4">
-                                        <div
-                                            className="flex items-center gap-2 mb-2 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded p-1 transition-colors"
-                                            onClick={() => toggleSeason(seasonKey)}
-                                        >
-                                            {expandedSeasons.has(seasonKey) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                                            <h3 className="font-bold text-gray-700 dark:text-gray-300">{seasonKey}</h3>
-                                            <span className="text-xs text-gray-500 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full">{seasonEpisodes.length}</span>
-                                        </div>
-
-                                        <AnimatePresence>
-                                            {expandedSeasons.has(seasonKey) && (
-                                                <motion.div
-                                                    key={seasonKey}
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="grid grid-cols-1 gap-4 pl-4 border-l-2 border-gray-200 dark:border-gray-700 ml-2"
-                                                >
-                                                    {seasonEpisodes.map(ep => (
-                                                        <div key={ep.name || ep.id || Math.random()} className={`bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm border transition-colors flex justify-between items-center ${selectedEpisodes.has(ep.name) ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-gray-200 dark:border-gray-700'}`}>
-                                                            <div className="flex items-center gap-4">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedEpisodes.has(ep.name)}
-                                                                    onChange={() => handleSelectEpisode(ep.name)}
-                                                                    className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                                                                />
-                                                                <div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <h3 className="font-bold text-gray-900 dark:text-white">{ep.name}</h3>
-                                                                        {ep.translated && (
-                                                                            <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">
-                                                                                <Check size={12} />
-                                                                                Translated
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    <p className="text-sm text-gray-500">{ep.line_count} lines</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <button
-                                                                    onClick={() => setTranslationModal({ isOpen: true, type: 'single', target: ep.name })}
-                                                                    className="flex items-center gap-2 text-gray-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors text-sm font-medium"
-                                                                    title="Translate Episode"
-                                                                >
-                                                                    <Languages size={18} />
-                                                                    <span className="hidden sm:inline">Translate</span>
-                                                                </button>
-                                                                <Link
-                                                                    to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`}
-                                                                    className="text-indigo-600 hover:text-indigo-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors"
-                                                                >
-                                                                    Open Editor
-                                                                </Link>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </motion.div>
+                                            {isEditingContext ? (
+                                                <>
+                                                    <button onClick={() => { setIsEditingContext(false); setEditedContext(project.context_guide || ''); }} className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">Cancel</button>
+                                                    <button onClick={() => handleSaveContext()} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                                                        <Save size={14} /> Save
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button onClick={() => setIsEditingContext(true)} className="flex items-center gap-1.5 text-gray-600 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium">
+                                                        <Edit2 size={14} /> Edit
+                                                    </button>
+                                                    {project.context_guide && (
+                                                        <button onClick={handleDeleteContext} className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="Delete context">
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
-                                        </AnimatePresence>
-                                    </div>
-                                ))}
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        )}
-                    </section>
-                )}
 
+                            {/* Context Content */}
+                            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                {isEditingContext ? (
+                                    <textarea
+                                        value={editedContext}
+                                        onChange={(e) => setEditedContext(e.target.value)}
+                                        placeholder="Describe the tone, style, and context for translations (e.g., 'Formal fantasy dialogue with British spelling')"
+                                        className="w-full min-h-[400px] px-6 py-4 border-none focus:ring-0 dark:bg-gray-800 dark:text-white resize-y font-mono text-sm leading-relaxed outline-none"
+                                    />
+                                ) : (
+                                    <div className="px-6 py-4 min-h-[200px]">
+                                        {project.context_guide ? (
+                                            <p className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-relaxed">{project.context_guide}</p>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                                                <FileText size={48} className="mb-4 opacity-50" />
+                                                <p className="text-lg font-medium text-gray-500 dark:text-gray-400">No context guide yet</p>
+                                                <p className="text-sm mt-1">Click "AI Create" to generate one, or "Edit" to write manually</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ======= SUBPROJECTS TAB (Parent Only) ======= */}
+                    {activeTab === TABS.SUBPROJECTS && (
+                        <motion.div key="subprojects" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {subprojects.map(sub => (
+                                    <Link key={sub.name} to={`/project/${encodeURIComponent(sub.name)}`} className="block group">
+                                        <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-md transition-all">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2.5 rounded-lg ${sub.type === 'movie' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'}`}>
+                                                    {sub.type === 'movie' ? <Film size={20} /> : <Tv size={20} />}
+                                                </div>
+                                                <div>
+                                                    <h3 className="font-bold text-gray-900 dark:text-white group-hover:text-indigo-600 transition-colors">{sub.show_name}</h3>
+                                                    <span className="text-xs text-gray-500 capitalize">{sub.type}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                                {subprojects.length === 0 && (
+                                    <div className="col-span-full text-center py-16 text-gray-400">
+                                        <Folder size={48} className="mx-auto mb-4 opacity-50" />
+                                        <p className="text-lg font-medium text-gray-500">No subprojects</p>
+                                        <p className="text-sm mt-1">Create child projects from the main dashboard</p>
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+                )}
             </main>
 
-            {/* Sticky Batch Actions Toolbar */}
+            {/* Batch Actions Bar */}
             <AnimatePresence>
                 {selectedEpisodes.size > 0 && (
                     <motion.div
                         initial={{ y: 100, opacity: 0 }}
                         animate={{ y: 0, opacity: 1 }}
                         exit={{ y: 100, opacity: 0 }}
-                        className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-white dark:bg-gray-800 rounded-full shadow-2xl border border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-4 z-40"
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white dark:bg-gray-800 rounded-full shadow-2xl border border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-4 z-40"
                     >
                         <div className="flex items-center gap-2 border-r border-gray-200 dark:border-gray-700 pr-4">
                             <span className="font-bold text-indigo-600">{selectedEpisodes.size}</span>
                             <span className="text-sm text-gray-500">selected</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setTranslationModal({ isOpen: true, type: 'batch', target: null })}
-                                className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-full transition-colors tooltip"
-                                title="Translate Selected"
-                            >
+                        <div className="flex items-center gap-1">
+                            <button onClick={handleBatchTranslate} className="p-2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-600 rounded-full transition-colors" title="Translate Selected">
                                 <Languages size={20} />
                             </button>
-                            <button
-                                onClick={() => handleTranslationConfirm(true)}
-                                className="p-2 hover:bg-purple-50 text-purple-600 rounded-full transition-colors tooltip"
-                                title="Enhance Glossary First"
-                            >
-                                <Sparkles size={20} />
+                            <button onClick={handleBatchDownload} disabled={isDownloading} className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 rounded-full transition-colors disabled:opacity-50" title="Download Selected">
+                                <Download size={20} />
                             </button>
-                            {!isMovie && (
-                                <button
-                                    onClick={handleBatchSetSeason}
-                                    className="p-2 hover:bg-green-50 text-green-600 rounded-full transition-colors tooltip"
-                                    title="Set Season"
-                                >
-                                    <Tv size={20} />
-                                </button>
-                            )}
-                            <button
-                                onClick={handleBatchDownload}
-                                className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-colors tooltip"
-                                title="Download Selected"
-                            >
-                                <Upload size={20} className="rotate-180" />
-                            </button>
-                            <div className="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1"></div>
-                            <button
-                                onClick={handleBatchDelete}
-                                className="p-2 hover:bg-red-50 text-red-600 rounded-full transition-colors tooltip"
-                                title="Delete Selected"
-                            >
-                                <Trash2 size={20} />
+                            <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-1" />
+                            <button onClick={handleBatchDelete} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 rounded-full transition-colors" title="Delete Selected">
+                                <Trash2 size={18} />
                             </button>
                         </div>
-                        <button
-                            onClick={() => setSelectedEpisodes(new Set())}
-                            className="ml-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400"
-                        >
+                        <button onClick={() => setSelectedEpisodes(new Set())} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full text-gray-400">
                             <X size={16} />
                         </button>
                     </motion.div>
@@ -1064,18 +849,9 @@ const ProjectDetail = () => {
                         onConfirm={(selectedTerms) => {
                             handleSaveGlossary({ terms: [...(project.glossary?.terms || []), ...selectedTerms] });
                             setGlossaryReviewModal({ ...glossaryReviewModal, isOpen: false });
-                            // Clean up job
-                            if (glossaryJobId) {
-                                removeJob(glossaryJobId);
-                                setGlossaryJobId(null);
-                            }
+                            if (glossaryJobId) { removeJob(glossaryJobId); setGlossaryJobId(null); }
                         }}
-                        onDelete={() => {
-                            if (glossaryJobId) {
-                                removeJob(glossaryJobId);
-                                setGlossaryJobId(null);
-                            }
-                        }}
+                        onDelete={() => { if (glossaryJobId) { removeJob(glossaryJobId); setGlossaryJobId(null); } }}
                     />
                 )}
                 {contextReviewModal.isOpen && (
@@ -1085,31 +861,11 @@ const ProjectDetail = () => {
                         newContext={contextReviewModal.newContext}
                         currentContext={contextReviewModal.currentContext}
                         onConfirm={(finalContext) => {
-                            handleSaveContext(finalContext); // This needs to be adapted to accept string
-                            setEditedContext(finalContext);
-                            setProject(prev => ({ ...prev, context_guide: finalContext }));
+                            handleSaveContext(finalContext);
                             setContextReviewModal({ ...contextReviewModal, isOpen: false });
-                            // Clean up job
-                            if (contextJobId) {
-                                removeJob(contextJobId);
-                                setContextJobId(null);
-                            }
+                            if (contextJobId) { removeJob(contextJobId); setContextJobId(null); }
                         }}
-                        onDelete={() => {
-                            if (contextJobId) {
-                                removeJob(contextJobId);
-                                setContextJobId(null);
-                            }
-                        }}
-                    />
-                )}
-                {translationModal.isOpen && (
-                    <TranslationModal
-                        isOpen={translationModal.isOpen}
-                        onClose={() => setTranslationModal({ ...translationModal, isOpen: false })}
-                        onConfirm={() => handleTranslationConfirm(false)}
-                        type={translationModal.type}
-                        target={translationModal.target}
+                        onDelete={() => { if (contextJobId) { removeJob(contextJobId); setContextJobId(null); } }}
                     />
                 )}
                 {isSettingsOpen && (
@@ -1120,89 +876,8 @@ const ProjectDetail = () => {
                         onSave={handleSaveSettings}
                     />
                 )}
-                {fileSelectionModal.isOpen && (
-                    <FileSelectionModal
-                        isOpen={fileSelectionModal.isOpen}
-                        onClose={() => setFileSelectionModal({ isOpen: false, type: null, action: null })}
-                        episodes={episodes}
-                        onConfirm={(selectedFiles) => handleAIAction(fileSelectionModal.type, fileSelectionModal.action, selectedFiles)}
-                        title={`Select Episodes for ${fileSelectionModal.type === 'context' ? 'Context' : 'Glossary'} ${fileSelectionModal.action === 'create' ? 'Creation' : 'Enhancement'}`}
-                    />
-                )}
-                {importModal.isOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full overflow-hidden"
-                        >
-                            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Import {importModal.type === 'context' ? 'Context' : 'Glossary'}</h3>
-                                <p className="text-sm text-gray-500 mt-1">Select a project to import from</p>
-                            </div>
-                            <div className="max-h-96 overflow-y-auto p-2">
-                                {availableProjects.map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => handleImport(p)}
-                                        className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-lg transition-colors text-left"
-                                    >
-                                        <Folder size={20} className="text-blue-500" />
-                                        <span className="text-gray-700 dark:text-gray-200">{p}</span>
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end">
-                                <button
-                                    onClick={() => setImportModal({ isOpen: false, type: null })}
-                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
             </AnimatePresence>
-
-            {/* Upload Modal */}
-            <AnimatePresence>
-                {isUploading && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6"
-                        >
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upload {isMovie ? 'File' : 'Episode'}</h3>
-                            {/* Simplified Upload Form for brevity */}
-                            <input type="file" onChange={(e) => setFile(e.target.files)} multiple className="block w-full mb-4 text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => setIsUploading(false)} className="px-4 py-2 text-gray-600">Cancel</button>
-                                <button onClick={async () => {
-                                    if (!file) return;
-                                    // Basic upload logic
-                                    try {
-                                        const files = Array.from(file);
-                                        for (const f of files) {
-                                            let epName = f.name || 'unnamed';
-                                            const match = f.name?.match(/[Ss]\d{2}[Ee]\d{2}/);
-                                            if (match) epName = match[0].toUpperCase();
-                                            await api.uploadEpisode(projectName, epName, f);
-                                        }
-                                        setIsUploading(false);
-                                        loadData();
-                                    } catch (e) { alert("Upload failed"); }
-                                }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg">Upload</button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-
-        </div >
+        </div>
     );
 };
 

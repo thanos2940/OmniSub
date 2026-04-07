@@ -5,13 +5,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
 const JobProgressWidget = () => {
-    const { activeJobs, removeJob } = useJobs();
+    const { activeJobs, removeJob, cancelJob } = useJobs();
     const [isExpanded, setIsExpanded] = useState(true);
     const [showLogs, setShowLogs] = useState(null); // jobId to show logs for
     const navigate = useNavigate();
 
     const jobs = Object.values(activeJobs);
-    if (jobs.length === 0) return null;
+    // Don't show pipeline jobs here (they have their own stepper)
+    const nonPipelineJobs = jobs.filter(j => j.type !== 'pipeline');
+    if (nonPipelineJobs.length === 0) return null;
+
+    const isActive = (job) => ['running', 'pending', 'awaiting_review'].includes(job.status);
 
     return (
         <div className="fixed bottom-4 right-4 z-50 w-96 flex flex-col gap-2">
@@ -26,7 +30,7 @@ const JobProgressWidget = () => {
                         <div className="p-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                             <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                                 <Activity size={16} className="text-indigo-500" />
-                                Active Tasks ({jobs.length})
+                                Active Tasks ({nonPipelineJobs.length})
                             </h3>
                             <button onClick={() => setIsExpanded(false)} className="text-gray-500 hover:text-gray-700">
                                 <ChevronDown size={16} />
@@ -34,7 +38,7 @@ const JobProgressWidget = () => {
                         </div>
 
                         <div className="overflow-y-auto p-2 space-y-2">
-                            {jobs.map(job => (
+                            {nonPipelineJobs.map(job => (
                                 <div key={job.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-600">
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
@@ -44,8 +48,14 @@ const JobProgressWidget = () => {
                                         <div className="flex items-center gap-2">
                                             {job.status === 'completed' && <CheckCircle size={16} className="text-green-500" />}
                                             {job.status === 'failed' && <AlertCircle size={16} className="text-red-500" />}
+                                            {job.status === 'cancelled' && <X size={16} className="text-gray-400" />}
                                             {job.status === 'running' && <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
-                                            <button onClick={() => removeJob(job.id)} className="text-gray-400 hover:text-gray-600">
+                                            {isActive(job) && (
+                                                <button onClick={() => cancelJob(job.id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Cancel">
+                                                    <AlertCircle size={14} />
+                                                </button>
+                                            )}
+                                            <button onClick={() => removeJob(job.id)} className="text-gray-400 hover:text-gray-600" title="Dismiss">
                                                 <X size={14} />
                                             </button>
                                         </div>

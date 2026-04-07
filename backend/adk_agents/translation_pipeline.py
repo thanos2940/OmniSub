@@ -15,6 +15,7 @@ def create_translation_pipeline(
     project_name: str,
     target_language: str,
     glossary: Dict,
+    context_guide: str = "",
     cartographer_model: str = "gemini-flash-latest",
     translator_model: str = "gemini-flash-latest",
     skip_glossary_step: bool = False
@@ -30,6 +31,7 @@ def create_translation_pipeline(
         project_name: Name of the translation project
         target_language: Target language for translation
         glossary: Existing project glossary
+        context_guide: Project-specific tone/style guidance for the translator
         cartographer_model: Model for glossary extraction
         translator_model: Model for translation
         skip_glossary_step: If True, skip glossary enhancement
@@ -40,15 +42,22 @@ def create_translation_pipeline(
     sub_agents = []
     
     if not skip_glossary_step:
-        sub_agents.append(create_cartographer_agent(model_name=cartographer_model))
+        sub_agents.append(create_cartographer_agent(
+            model_name=cartographer_model,
+            target_language=target_language,
+        ))
     
     sub_agents.append(create_translator_agent(
         model_name=translator_model,
         glossary=glossary,
-        target_language=target_language
+        target_language=target_language,
+        context_guide=context_guide,
     ))
     
+    # Sanitize project name to be a valid ADK agent name (no spaces)
+    sanitized_name = "".join(c if c.isalnum() or c == "_" else "_" for c in project_name)
+    
     return SequentialAgent(
-        name=f"TranslationPipeline_{project_name}",
+        name=f"TranslationPipeline_{sanitized_name}",
         sub_agents=sub_agents
     )

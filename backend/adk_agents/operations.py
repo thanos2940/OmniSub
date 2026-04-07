@@ -1,23 +1,86 @@
 """
 ADK Agent Operations - High-level Functions for OmbiSub
 
-Provides ADK-based implementations of all agent operations, replacing legacy code.
+Provides ADK-based implementations of all agent operations.
 Uses ADK Runner for proper session management and observability.
 """
 
 import json
-import asyncio
+import re
 from uuid import uuid4
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
 from google.adk.runners import Runner, types as adk_types
+from google.adk.agents import Agent
+from .llm_factory import create_model
 from .cartographer_agent import create_cartographer_agent, GlossaryOutput
 from .research_agent import create_research_agent
 from .translator_agent import create_translator_agent
 from .glossary_orchestrator import create_glossary_orchestrator
 from adk_config.session_service import get_session_service
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+async def _collect_response_text(
+    runner: Runner,
+    session_id: str,
+    prompt: str,
+    user_id: str = "default_user"
+) -> str:
+    """Run an agent and collect the full text response.
+
+    Consolidates the repeated async-for-event pattern used across all
+    operations into a single reusable helper.
+    """
+    response_parts: list[str] = []
+    async for event in runner.run_async(
+        user_id=user_id,
+        session_id=session_id,
+        new_message=adk_types.Content(
+            role="user",
+            parts=[adk_types.Part(text=prompt)]
+        ),
+    ):
+        if event.content and event.content.parts:
+            for part in event.content.parts:
+                if part.text:
+                    response_parts.append(part.text)
+    return "".join(response_parts)
+
+
+def _make_session_id(prefix: str) -> str:
+    """Generate a unique, timestamped session ID."""
+    return f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
+
+
+async def _create_session_and_runner(
+    agent,
+    prefix: str,
+) -> Tuple[Runner, str]:
+    """Create a session + runner pair for a one-shot agent execution."""
+    session_id = _make_session_id(prefix)
+    session_service = get_session_service()
+    app_name = f"OmbiSub_{session_id}"
+    runner = Runner(
+        agent=agent,
+        app_name=app_name,
+        session_service=session_service,
+    )
+    await session_service.create_session(
+        session_id=session_id,
+        user_id="default_user",
+        app_name=app_name,
+    )
+    return runner, session_id
+
+
+# ---------------------------------------------------------------------------
+# Glossary Generation
+# ---------------------------------------------------------------------------
 
 async def generate_glossary_adk(
     text_lines: List[str],
@@ -30,96 +93,62 @@ async def generate_glossary_adk(
     """
     Generate or enhance glossary using ADK agents.
 
-    Args:
-        text_lines: Subtitle text lines to analyze
-        show_name: Name of the show/project
-        target_language: Target translation language
-        existing_glossary: Existing glossary to avoid duplicates
-        model_name: Gemini model to use
-        enable_research: Whether to use web research
-
     Returns:
         Tuple of (glossary_dict, debug_info)
     """
     # Prepare text sample
     text_sample = "\n".join(text_lines[:500]) if text_lines else ""
-    existing_terms = [t.get("term", "") for t in existing_glossary.get("terms", [])] if existing_glossary else []
+    existing_terms = [
+        t.get("term", "")
+        for t in (existing_glossary or {}).get("terms", [])
+    ]
 
     # Build prompt
     prompt = f"""Show: {show_name}
 Target Language: {target_language}
 
-{"Existing terms (avoid duplicates): " + ", ".join(existing_terms) if existing_terms else "No existing terms."}
+{"Existing terms (DO NOT duplicate): " + ", ".join(existing_terms) if existing_terms else "No existing terms."}
 
 Analyze this subtitle text, extract glossary terms, and translate them to {target_language}:
     
 {text_sample}"""
 
-    # Create appropriate agent (with or without research)
+    # Create appropriate agent
     if enable_research and show_name:
-        agent = create_glossary_orchestrator(model_name=model_name, enable_research=True, target_language=target_language)
+        agent = create_glossary_orchestrator(
+            model_name=model_name,
+            enable_research=True,
+            target_language=target_language,
+        )
     else:
-        agent = create_cartographer_agent(model_name=model_name, target_language=target_language)
+        agent = create_cartographer_agent(
+            model_name=model_name,
+            target_language=target_language,
+        )
 
-    # Run agent with unique session ID
-    session_id = f"glossary_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-    session_service = get_session_service()
-    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
+    runner, session_id = await _create_session_and_runner(agent, "glossary")
 
     try:
-        # Create session explicitly
-        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
-        
-        response_text = ""
-        async for event in runner.run_async(
-            user_id="default_user",
-            session_id=session_id,
-            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
+        response_text = await _collect_response_text(runner, session_id, prompt)
 
-        class MockResponse:
-            def __init__(self, text):
-                self.text = text
-        response = MockResponse(response_text)
+        # Parse the structured JSON response
+        glossary_dict = _parse_glossary_from_text(response_text)
 
-        # Extract structured output
-        if hasattr(response, 'glossary_result'):
-            glossary_output: GlossaryOutput = response.glossary_result
-            glossary_dict = {
-                "terms": [
-                    {
-                        "term": term.term,
-                        "translation": term.translation,
-                        "description": term.context,
-                        "category": term.category,
-                        "case_sensitive": term.case_sensitive,
-                        "gender": "neuter"  # Default, can be enhanced
-                    }
-                    for term in glossary_output.terms
-                ]
-            }
-        else:
-            # Fallback: parse text response
-            glossary_dict = _parse_glossary_from_text(response.text)
-
-        # Debug info
         debug_info = {
             "prompt": prompt,
-            "response": response.text if hasattr(response, 'text') else str(response),
-            "model": model_name
+            "response": response_text,
+            "model": model_name,
         }
-
         return glossary_dict, debug_info
 
     except Exception as e:
-        # Return empty glossary on error
-        print(f"DEBUG: generate_glossary_adk failed: {str(e)}")
+        print(f"DEBUG: generate_glossary_adk failed: {e}")
         return {"terms": []}, {"error": str(e), "prompt": prompt}
 
+
+# ---------------------------------------------------------------------------
+# Research
+# ---------------------------------------------------------------------------
 
 async def research_project_adk(
     show_name: str,
@@ -129,12 +158,6 @@ async def research_project_adk(
 ) -> Tuple[Dict, Dict]:
     """
     Perform web research for a project using ADK ResearchAgent.
-
-    Args:
-        show_name: Name of the show to research
-        text_sample: Sample subtitle lines for context
-        target_language: Target language
-        model_name: Gemini model to use
 
     Returns:
         Tuple of (research_data, debug_info)
@@ -151,59 +174,44 @@ Use Google Search to find:
 2. Location names and their significance
 3. Cultural context and key terminology
 4. Official romanizations or naming conventions
-5. Overall tone and style of the show.
+5. Overall tone and style of the show
 
 Context from subtitles:
 {text_preview}
 
-Provide findings in a clear, structured format."""
+Structure your findings clearly under these headings:
+## Characters
+## Locations
+## Key Terms & Concepts
+## Cultural Notes
+## Tone & Style"""
 
     agent = create_research_agent(model_name=model_name)
-    session_id = f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-    session_service = get_session_service()
-    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
+    runner, session_id = await _create_session_and_runner(agent, "research")
 
     try:
-        # Create session explicitly
-        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+        response_text = await _collect_response_text(runner, session_id, prompt)
 
-        response_text = ""
-        async for event in runner.run_async(
-            user_id="default_user",
-            session_id=session_id,
-            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
-
-        class MockResponse:
-            def __init__(self, text):
-                self.text = text
-        response = MockResponse(response_text)
-
-        research_text = response_text
-
-        # Parse research findings into structured format
         research_data = {
-            "findings": research_text,
+            "findings": response_text,
             "show_name": show_name,
-            "target_language": target_language
+            "target_language": target_language,
         }
-
         debug_info = {
             "prompt": prompt,
-            "response": research_text,
-            "model": model_name
+            "response": response_text,
+            "model": model_name,
         }
-
         return research_data, debug_info
 
     except Exception as e:
-        print(f"DEBUG: research_project_adk failed: {str(e)}")
+        print(f"DEBUG: research_project_adk failed: {e}")
         return {"findings": "", "error": str(e)}, {"error": str(e), "prompt": prompt}
 
+
+# ---------------------------------------------------------------------------
+# Translation
+# ---------------------------------------------------------------------------
 
 async def translate_batch_adk(
     text_lines: List[str],
@@ -215,87 +223,46 @@ async def translate_batch_adk(
     """
     Translate batch of subtitle lines using ADK TranslatorAgent.
 
-    Args:
-        text_lines: Lines to translate
-        glossary: Project glossary
-        target_language: Target language
-        context_guide: Additional context/tone guidelines
-        model_name: Gemini model to use
-
     Returns:
         Tuple of (translated_lines, debug_info)
     """
-    # Format input as numbered lines
-    numbered_lines = "\n".join([f"{i+1}: {line}" for i, line in enumerate(text_lines)])
+    # Flatten multi-line subtitles: replace \n with <br> so each entry stays on one line
+    numbered_lines = "\n".join([f"{i+1}: {line.replace(chr(10), '<br>')}" for i, line in enumerate(text_lines)])
 
     prompt = f"""Translate these subtitles:
 
 {numbered_lines}
 
-{f"Additional Context: {context_guide}" if context_guide else ""}"""
+{"Additional Context: " + context_guide if context_guide else ""}"""
 
     agent = create_translator_agent(
         model_name=model_name,
         glossary=glossary,
-        target_language=target_language
+        target_language=target_language,
+        context_guide=context_guide,
     )
-
-    session_id = f"translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-    session_service = get_session_service()
-    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
+    runner, session_id = await _create_session_and_runner(agent, "translate")
 
     try:
-        # Create session explicitly
-        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+        response_text = await _collect_response_text(runner, session_id, prompt)
 
-        response_text = ""
-        async for event in runner.run_async(
-            user_id="default_user",
-            session_id=session_id,
-            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
-
-        class MockResponse:
-            def __init__(self, text):
-                self.text = text
-        response = MockResponse(response_text)
-
-        # Parse numbered output
         translated_lines = _parse_numbered_output(response_text, len(text_lines))
 
         debug_info = {
             "prompt": prompt,
             "response": response_text,
-            "model": model_name
+            "model": model_name,
         }
-
         return translated_lines, debug_info
 
     except Exception as e:
-        # Return original lines on error
-        print(f"DEBUG: translate_batch_adk failed: {str(e)}")
+        print(f"DEBUG: translate_batch_adk failed: {e}")
         return text_lines, {"error": str(e), "prompt": prompt}
 
 
-def _parse_glossary_from_text(text: str) -> Dict:
-    """Parse glossary from unstructured text response (fallback)."""
-    try:
-        # Try to find JSON block
-        if "{" in text and "}" in text:
-            start = text.find("{")
-            end = text.rfind("}") + 1
-            json_str = text[start:end]
-            return json.loads(json_str)
-    except:
-        pass
-
-    # Return empty glossary if parsing fails
-    return {"terms": []}
-
+# ---------------------------------------------------------------------------
+# Context Guide Enhancement
+# ---------------------------------------------------------------------------
 
 async def enhance_context_guide_adk(
     research_data: str,
@@ -304,11 +271,6 @@ async def enhance_context_guide_adk(
 ) -> Tuple[str, Dict]:
     """
     Transform research findings into translation instructions.
-
-    Args:
-        research_data: Research findings or existing context guide
-        show_name: Name of the show
-        model_name: Gemini model to use
 
     Returns:
         Tuple of (enhanced_guide, debug_info)
@@ -329,66 +291,179 @@ Do NOT provide specific examples of translations of names or terms, as there wil
 The instructions should provide a solid foundation for translators to work from, and should result in high quality, consistent translations.
 Output as clear, actionable instructions for translators."""
 
-    # Use a simple agent for text generation
-    agent = create_research_agent(model_name=model_name)
-    session_id = f"context_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-    session_service = get_session_service()
-    runner = Runner(agent=agent, app_name=f"OmbiSub_{session_id}", session_service=session_service)
+    # Dedicated agent for context generation (not reusing ResearchAgent)
+    agent = Agent(
+        name="ContextGuideAgent",
+        model=create_model(model_name),
+        instruction="""You are a translation style guide expert. 
+Your job is to create clear, actionable translation instructions 
+based on research about a show, movie, or media property. 
+Focus on tone, style, formality, and cultural adaptation — 
+NOT specific term translations (those are handled by the glossary).""",
+        tools=[],
+        output_key="context_guide_result",
+    )
+
+    runner, session_id = await _create_session_and_runner(agent, "context")
 
     try:
-        # Create session explicitly
-        await session_service.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+        response_text = await _collect_response_text(runner, session_id, prompt)
 
-        response_text = ""
-        async for event in runner.run_async(
-            user_id="default_user",
-            session_id=session_id,
-            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-        ):
-            if event.content and event.content.parts:
-                for part in event.content.parts:
-                    if part.text:
-                        response_text += part.text
-
-        class MockResponse:
-            def __init__(self, text):
-                self.text = text
-        response = MockResponse(response_text)
-        
-        print(f"DEBUG: Context Agent Response Length: {len(response_text)}")
         if not response_text:
-            print("DEBUG: Context Agent returned empty response!")
-            print(f"DEBUG: Prompt was: {prompt[:200]}...")
+            print(f"DEBUG: Context Agent returned empty response for '{show_name}'")
 
         debug_info = {
             "prompt": prompt,
             "response": response_text,
-            "model": model_name
+            "model": model_name,
         }
-
         return response_text, debug_info
 
     except Exception as e:
-        print(f"DEBUG: enhance_context_guide_adk failed: {str(e)}")
+        print(f"DEBUG: enhance_context_guide_adk failed: {e}")
         return "", {"prompt": prompt, "error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Parsing Helpers
+# ---------------------------------------------------------------------------
+
+def _sanitize_json(text: str) -> str:
+    """Pre-clean common LLM JSON output errors before parsing.
+    
+    Handles:
+    - Missing opening quote on keys: /key": → "key":
+    - Trailing commas before } or ]
+    - JS-style // comments
+    - Mixed quote styles
+    """
+    # Fix common mistake: /key": value → "key": value
+    # This catches cases where a model accidentally types /gender", _gender", or similar
+    text = re.sub(r'(?<!")\s*[/_\-\u2014]\s*(\w+)":', r' "\1":', text)
+    
+    # Remove JS-style single-line comments
+    text = re.sub(r'//[^\n]*', '', text)
+    
+    # Remove trailing commas before closing braces/brackets
+    text = re.sub(r',\s*([\}\]])', r'\1', text)
+    
+    return text
+
+
+def _parse_glossary_from_text(text: str) -> Dict:
+    """Parse glossary from AI response text.
+    
+    Handles multiple formats:
+    - JSON wrapped in markdown code blocks
+    - Raw JSON objects
+    - JSON arrays of terms
+    - Slightly malformed JSON from local LLMs (auto-sanitized)
+    """
+    if not text or not text.strip():
+        return {"terms": []}
+
+    # Strip markdown code blocks
+    clean = text.strip()
+    if clean.startswith("```json"):
+        clean = clean[7:]
+    elif clean.startswith("```"):
+        clean = clean[3:]
+    if clean.endswith("```"):
+        clean = clean[:-3]
+    clean = clean.strip()
+
+    # Try 1: Direct JSON parse
+    try:
+        parsed = json.loads(clean)
+        if isinstance(parsed, dict) and "terms" in parsed:
+            return parsed
+        if isinstance(parsed, list):
+            return {"terms": parsed}
+        return {"terms": [parsed] if "term" in parsed else []}
+    except json.JSONDecodeError:
+        pass
+
+    # Try 2: Sanitize and re-parse (fixes common local LLM typos)
+    sanitized = _sanitize_json(clean)
+    try:
+        parsed = json.loads(sanitized)
+        if isinstance(parsed, dict) and "terms" in parsed:
+            return parsed
+        if isinstance(parsed, list):
+            return {"terms": parsed}
+        return {"terms": [parsed] if "term" in parsed else []}
+    except json.JSONDecodeError:
+        pass
+
+    # Try 3: Find a JSON object containing "terms"
+    terms_match = re.search(r'\{"terms"\s*:\s*\[.*?\]\s*\}', sanitized, re.DOTALL)
+    if terms_match:
+        try:
+            return json.loads(terms_match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    # Try 4: Find any JSON array
+    array_match = re.search(r'\[.*\]', sanitized, re.DOTALL)
+    if array_match:
+        try:
+            parsed = json.loads(array_match.group(0))
+            if isinstance(parsed, list):
+                return {"terms": parsed}
+        except json.JSONDecodeError:
+            pass
+
+    # Try 5: Parse individual term objects (extremely lenient fallback)
+    # Extracts each {...} block and tries to parse them one by one
+    term_objects = re.findall(r'\{[^{}]+\}', sanitized, re.DOTALL)
+    valid_terms = []
+    for obj_str in term_objects:
+        try:
+            obj = json.loads(_sanitize_json(obj_str))
+            if "term" in obj and "translation" in obj:
+                valid_terms.append(obj)
+        except json.JSONDecodeError:
+            continue
+    if valid_terms:
+        print(f"DEBUG: Recovered {len(valid_terms)} terms via object-by-object fallback")
+        return {"terms": valid_terms}
+
+    print(f"DEBUG: Failed to parse glossary JSON. Response preview: {text[:200]}")
+    return {"terms": []}
+
+
 def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
-    """Parse numbered translation output."""
-    lines = []
+    """Parse numbered translation output, supporting multi-line entries.
+    
+    Handles formats like:
+    - "1: Translated text"
+    - "1. Translated text"
+    - "1: Line one\n   Line two" (continuation lines)
+    """
+    lines_map: Dict[int, str] = {}
+    current_idx: Optional[int] = None
+
     for line in text.split("\n"):
-        line = line.strip()
-        if not line:
+        stripped = line.strip()
+        if not stripped:
             continue
 
-        # Match "N: text" format
-        if ":" in line and line[0].isdigit():
-            parts = line.split(":", 1)
-            if len(parts) == 2:
-                lines.append(parts[1].strip())
+        # Match "N: text" or "N. text" where N is a number
+        match = re.match(r'^(\d+)\s*[:.]\s*(.*)', stripped)
+        if match:
+            current_idx = int(match.group(1))
+            content = match.group(2).strip()
+            if 1 <= current_idx <= expected_count:
+                lines_map[current_idx] = content
+        elif current_idx is not None and current_idx in lines_map:
+            # continuation line for the current index
+            lines_map[current_idx] += "\n" + stripped
 
-    # Ensure we have the right count
-    while len(lines) < expected_count:
-        lines.append("")
+    # Build ordered result, restoring <br> placeholders to real newlines
+    result = []
+    for i in range(1, expected_count + 1):
+        text = lines_map.get(i, "")
+        text = text.replace("<br>", "\n")
+        result.append(text)
 
-    return lines[:expected_count]
+    return result

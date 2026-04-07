@@ -2,16 +2,13 @@
 Cartographer Agent - Glossary Term Extraction
 
 Extracts translatable terms from subtitle text using structured output.
-Refined to strictly enforce Target Language translations while keeping descriptions in English.
+Strictly enforces Target Language translations while keeping descriptions in English.
 """
 
 from google.adk.agents import Agent
-from google.adk.models.google_llm import Gemini
-from google.genai import types
+from .llm_factory import create_model
 from pydantic import BaseModel, Field
 from typing import List, Literal
-
-RETRY_CONFIG = types.HttpRetryOptions(attempts=5)
 
 
 def _build_instruction(target_language: str) -> str:
@@ -26,20 +23,54 @@ def _build_instruction(target_language: str) -> str:
    
 2. **`description` Field:** MUST be in **English**.
    - This is for the human editor to understand the term's context.
+   - Keep it brief (1-2 sentences max).
 
-3. **`term` Field:** Keep in the original source language/script.
+3. **`term` Field:** Keep in the original source language/script exactly as it appears.
+
+4. **`keep_original` Field:** Set to `true` ONLY for terms that should NOT be translated 
+   (e.g., attack names, spell names, brand names that are always said in the original language).
+   When `true`, the translator will use the original term as-is.
+
+5. **`gender` Field:** Set the grammatical gender the term should take in {target_language}.
+   This controls which articles/adjectives are used. Use "n/a" for languages without grammatical gender.
 
 **Extraction Strategy:**
-- **Proper Nouns:** Transliterate to {target_language}.
-- **Concepts/Items:** Translate the meaning to {target_language}.
-- **Fantasy Terms:** Adapt phonetically to {target_language}.
+- **Proper Nouns (Character names):** Transliterate to {target_language} script. Type: "person".
+- **Proper Nouns (Locations):** Transliterate to {target_language} script. Type: "location".
+- **Concepts/Items:** Translate the meaning to {target_language}. Type: "object" or "technique".
+- **Fantasy/Sci-fi Terms:** Adapt phonetically to {target_language}. Consider setting keep_original=true if the term sounds better untranslated.
+- **Organizations/Groups:** Transliterate or translate as appropriate. Type: "organization".
 
-**Categories:**
-- Character names -> type: "person"
-- Location names -> type: "location"
-- Specialized terminology -> type: "object" or "technique"
-- Cultural references -> type: "other"
-"""
+**What NOT to extract:**
+- Common words (yes, no, hello, goodbye, please, etc.)
+- Generic verbs, adjectives, or adverbs
+- Terms that have no special meaning in the show's context
+- Sentence fragments or dialogue lines
+
+**Deduplication:** If you are given a list of existing terms, do NOT include any term that already appears in that list (case-insensitive match on the `term` field).
+
+**Output ONLY valid JSON. No explanations outside the JSON.**"""
+
+
+def _build_local_instruction(target_language: str) -> str:
+    """Build instruction for local models that don't support structured output schemas."""
+    base = _build_instruction(target_language)
+    return base + f"""
+
+**JSON Structure Example:**
+{{
+  "terms": [
+    {{
+      "term": "Winterfell",
+      "translation": "Γουίντερφελ",
+      "description": "Ancestral castle of House Stark",
+      "type": "location",
+      "gender": "neuter",
+      "case_sensitive": true,
+      "keep_original": false
+    }}
+  ]
+}}"""
 
 
 class GlossaryTerm(BaseModel):
@@ -48,7 +79,7 @@ class GlossaryTerm(BaseModel):
     translation: str = Field(
         description="The term translated or transliterated into the TARGET language defined in instructions."
     )
-    description: str = Field(description="Brief definition/context of the term in ENGLISH")
+    description: str = Field(description="Brief definition/context of the term in ENGLISH (1-2 sentences)")
     type: Literal["person", "location", "organization", "event", "object", "technique", "other"] = Field(
         description="Term category"
     )
@@ -59,6 +90,10 @@ class GlossaryTerm(BaseModel):
     case_sensitive: bool = Field(
         default=True, 
         description="Whether capitalization matters (true for proper nouns)"
+    )
+    keep_original: bool = Field(
+        default=False,
+        description="If true, the translator will NOT translate this term — it will be kept in the original language"
     )
 
 
@@ -81,13 +116,15 @@ def create_cartographer_agent(model_name: str = "gemini-flash-latest", target_la
     Returns:
         Configured ADK Agent with structured output
     """
-    instruction = _build_instruction(target_language)
+    is_local = model_name.startswith("local/")
+    instruction = _build_local_instruction(target_language) if is_local else _build_instruction(target_language)
     
     return Agent(
         name="CartographerAgent",
-        model=Gemini(model=model_name, retry_options=RETRY_CONFIG),
+        model=create_model(model_name),
         instruction=instruction,
         tools=[],
-        output_schema=GlossaryOutput,
+        # Disable structured output for local models for compatibility
+        output_schema=None if model_name.startswith("local/") else GlossaryOutput,
         output_key="glossary_result"
     )

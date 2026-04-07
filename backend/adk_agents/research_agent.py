@@ -6,11 +6,8 @@ about characters, locations, and terminology for translation accuracy.
 """
 
 from google.adk.agents import Agent
-from google.adk.models.google_llm import Gemini
 from google.adk.tools import google_search
-from google.genai import types
-
-RETRY_CONFIG = types.HttpRetryOptions(attempts=5)
+from .llm_factory import create_model, is_local_model
 
 INSTRUCTION = """You are a Research Agent specializing in media research for translation.
 
@@ -20,7 +17,24 @@ Your task:
 - Find canonical spellings and romanizations
 - Gather cultural context and background information
 
-Output your findings as clear text for the extraction agent to process."""
+**Structure your output under these headings:**
+
+## Characters
+List main and recurring characters with their full names, roles, and any official translations.
+
+## Locations
+List key locations with descriptions and significance.
+
+## Key Terms & Concepts
+List specialized terminology unique to the show/movie (e.g., magic systems, factions, special abilities).
+
+## Cultural Notes
+Note any cultural references, real-world parallels, or historical context relevant to translation.
+
+## Tone & Style
+Describe the overall tone (e.g., dark fantasy, lighthearted comedy, formal drama) and any speech patterns or register variations between characters.
+
+Be thorough but concise. Focus on information that would help a translator maintain consistency and accuracy."""
 
 
 def create_research_agent(model_name: str = "gemini-flash-latest") -> Agent:
@@ -38,10 +52,14 @@ def create_research_agent(model_name: str = "gemini-flash-latest") -> Agent:
     Returns:
         ADK Agent configured with google_search tool
     """
+    # Research Agent with Google Search tool is only compatible with Gemini models
+    # Local models don't support the tool yet.
+    is_local = is_local_model(model_name)
+    
     return Agent(
         name="ResearchAgent",
-        model=Gemini(model=model_name, retry_options=RETRY_CONFIG),
+        model=create_model(model_name),
         instruction=INSTRUCTION,
-        tools=[google_search],
+        tools=[google_search] if not is_local else [],
         output_key="research_findings"
     )
