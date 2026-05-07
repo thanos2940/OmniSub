@@ -66,3 +66,4 @@ logs/
 Thumbs.db
 
 config.json
+.claude/
