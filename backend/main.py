@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 
-from utils.srt_parser import parse_srt, extract_text_only, reconstruct_srt, build_scene_ast
+from utils.srt_parser import parse_srt, extract_text_only, reconstruct_srt, build_scene_ast, get_scene_context_hint
 from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text, parse_translations_from_text
 
 from utils import storage
@@ -39,7 +39,8 @@ from adk_agents import (
     translate_batch_adk,
     enhance_context_guide_adk
 )
-from adk_config import OmbiSubRunnerFactory, OmbiSubSessionManager
+from adk_agents.translator_agent import build_translation_prompt
+from adk_config import OmbiSubRunnerFactory, OmbiSubSessionManager, get_ephemeral_session_service
 from google.adk.runners import types as adk_types
 
 
@@ -731,6 +732,66 @@ async def continue_pipeline(
     return {"status": "resumed"}
 
 
+@app.get("/api/models")
+async def list_all_models(base_url: Optional[str] = None):
+    """Unified model registry — returns Gemini cloud models and discovered local models.
+
+    Response shape:
+    {
+      "gemini": [{"value": "gemini-2.5-flash", "label": "Gemini 2.5 Flash", "group": "gemini"}, ...],
+      "local":  [{"value": "local/my-model", "label": "my-model", "group": "local"}, ...],
+      "local_endpoint": "http://localhost:1234/v1",
+      "local_online": true | false
+    }
+    """
+    gemini_models = [
+        {"value": "gemini-2.5-flash",       "label": "Gemini 2.5 Flash",       "group": "gemini"},
+        {"value": "gemini-2.5-flash-lite",   "label": "Gemini 2.5 Flash Lite",  "group": "gemini"},
+        {"value": "gemini-2.5-pro",          "label": "Gemini 2.5 Pro",         "group": "gemini"},
+        {"value": "gemini-flash-latest",     "label": "Gemini Flash (latest)",  "group": "gemini"},
+        {"value": "gemini-flash-lite-latest","label": "Gemini Flash Lite",      "group": "gemini"},
+    ]
+
+    from adk_agents.llm_factory import _resolve_local_base_url
+    global_config = storage.load_global_config()
+    resolved_url = _resolve_local_base_url(base_url or global_config.get("local_llm_base_url"))
+
+    local_models: list = []
+    local_online = False
+
+    try:
+        import httpx
+        from urllib.parse import urlparse
+        parsed = urlparse(resolved_url)
+        candidates = [resolved_url.rstrip("/") + "/models"]
+        if not resolved_url.rstrip("/").endswith("/v1"):
+            candidates.append(resolved_url.rstrip("/") + "/v1/models")
+
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            for target in candidates:
+                try:
+                    resp = await client.get(target)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        local_models = [
+                            {"value": f"local/{m['id']}", "label": m["id"], "group": "local"}
+                            for m in data.get("data", [])
+                        ]
+                        local_online = True
+                        break
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return {
+        "gemini": gemini_models,
+        "local": local_models,
+        "local_endpoint": resolved_url,
+        "local_online": local_online,
+    }
+
+
 @app.get("/api/config/models/local")
 async def list_local_models(base_url: Optional[str] = None):
     """Fetch available models from a local OpenAI-compatible server."""
@@ -804,6 +865,150 @@ async def list_local_models(base_url: Optional[str] = None):
             }
     except Exception as e:
         return {"models": [], "error": str(e)}
+
+
+class AutoPipelineRequest(BaseModel):
+    model: Optional[str] = None          # overrides project default
+    episode_names: Optional[List[str]] = None  # None = all episodes
+    skip_context: bool = False
+    skip_glossary: bool = False
+
+
+@app.post("/projects/{project_name}/auto-translate")
+async def start_auto_translate(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    request: AutoPipelineRequest = AutoPipelineRequest(),
+):
+    """Fire-and-forget translation pipeline — no review gates.
+
+    Steps (all automatic):
+    1. Generate context guide if missing (or skip_context=True)
+    2. Generate glossary if missing (or skip_glossary=True)
+    3. Translate all episodes (or the provided subset)
+
+    Uses the project's default model from settings, overridable via ``model``.
+    """
+    metadata = storage.load_project_metadata(project_name)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    global_config = storage.load_global_config()
+    model = request.model or global_config.get("default_translation_model", "gemini-flash-latest")
+
+    job_id = create_job("auto_translate")
+    jobs[job_id].pipeline_mode = "auto"
+    jobs[job_id].pipeline_stage = "context"
+    background_tasks.add_task(
+        _process_auto_translate,
+        job_id, project_name, model,
+        request.episode_names, request.skip_context, request.skip_glossary,
+    )
+    return {"job_id": job_id}
+
+
+async def _process_auto_translate(
+    job_id: str,
+    project_name: str,
+    model: str,
+    episode_names: Optional[List[str]],
+    skip_context: bool,
+    skip_glossary: bool,
+):
+    """Fully automatic pipeline: context → glossary → translate, no pauses."""
+    update_job(job_id, status="running", progress=0.0, message="Starting auto-translate...", log="Auto pipeline started")
+
+    try:
+        metadata = storage.load_project_metadata(project_name)
+        if not metadata:
+            update_job(job_id, status="failed", message="Project not found")
+            return
+
+        from adk_agents.llm_factory import is_local_model
+
+        # ── Stage 1: Context guide ────────────────────────────────────────
+        has_context = bool(metadata.get("context_guide", "").strip())
+        if not skip_context and not has_context:
+            update_job(job_id, progress=5.0, message="Generating context guide...", log="Stage 1/3: context")
+            jobs[job_id].pipeline_stage = "context"
+
+            text_lines = await _gather_project_text(project_name, episode_names)
+            enable_research = not is_local_model(model)
+
+            if enable_research:
+                research_data, _ = await research_project_adk(
+                    metadata.get("show_name", project_name),
+                    text_lines,
+                    metadata.get("target_language", "English"),
+                    model_name=model,
+                )
+                context_guide, _ = await enhance_context_guide_adk(
+                    research_data.get("findings", ""),
+                    metadata.get("show_name", project_name),
+                    model_name=model,
+                )
+            else:
+                # Local model: derive minimal context from show name only
+                context_guide, _ = await enhance_context_guide_adk(
+                    f"Show: {metadata.get('show_name', project_name)}",
+                    metadata.get("show_name", project_name),
+                    model_name=model,
+                )
+
+            metadata["context_guide"] = context_guide
+            _invalidate_translation_cache(metadata)
+            storage.save_project_metadata(project_name, metadata)
+            update_job(job_id, progress=25.0, log="Context guide saved")
+        else:
+            update_job(job_id, progress=25.0, log="Context: skipped (already exists)" if has_context else "Context: skipped by request")
+
+        if jobs[job_id].cancelled:
+            update_job(job_id, status="cancelled", message="Cancelled")
+            return
+
+        # ── Stage 2: Glossary ────────────────────────────────────────────
+        has_glossary = bool(metadata.get("glossary", {}).get("terms"))
+        if not skip_glossary and not has_glossary:
+            update_job(job_id, progress=28.0, message="Building glossary...", log="Stage 2/3: glossary")
+            jobs[job_id].pipeline_stage = "glossary"
+
+            text_lines = await _gather_project_text(project_name, episode_names)
+            enable_research = not is_local_model(model) and not text_lines
+
+            result, _ = await generate_glossary_adk(
+                text_lines,
+                metadata.get("show_name", project_name),
+                metadata.get("target_language", "English"),
+                existing_glossary=metadata.get("glossary"),
+                model_name=model,
+                enable_research=enable_research,
+            )
+            metadata["glossary"] = result
+            _invalidate_translation_cache(metadata)
+            storage.save_project_metadata(project_name, metadata)
+            update_job(job_id, progress=50.0, log=f"Glossary: {len(result.get('terms', []))} terms")
+        else:
+            update_job(job_id, progress=50.0, log="Glossary: skipped (already exists)" if has_glossary else "Glossary: skipped by request")
+
+        if jobs[job_id].cancelled:
+            update_job(job_id, status="cancelled", message="Cancelled")
+            return
+
+        # ── Stage 3: Translate ───────────────────────────────────────────
+        jobs[job_id].pipeline_stage = "translate"
+        episodes = episode_names or storage.list_episodes(project_name)
+        if not episodes:
+            update_job(job_id, status="completed", progress=100.0, message="No episodes to translate")
+            return
+
+        update_job(job_id, progress=52.0, message=f"Translating {len(episodes)} episodes...", log=f"Stage 3/3: {len(episodes)} episodes")
+
+        # Reload metadata so translation sees any freshly-saved glossary/context
+        metadata = storage.load_project_metadata(project_name)
+        await _process_batch_translation(job_id, project_name, episodes, model, enhance_glossary_flag=False)
+
+    except Exception as e:
+        update_job(job_id, status="failed", message=f"Auto-translate error: {str(e)}", log=str(e))
 
 
 @app.post("/projects/{project_name}/simple-pipeline/start")
@@ -1304,7 +1509,8 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         target_lang = metadata.get("target_language", "English")
         
         # Step 1: Analyze Context
-        update_job(job_id, pipeline_stage="analyze", log="Starting context analysis")
+        jobs[job_id].pipeline_stage = "analyze"
+        update_job(job_id, log="Starting context analysis")
         
         from adk_agents.llm_factory import is_local_model
         is_local = is_local_model(model)
@@ -1332,7 +1538,8 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         if jobs[job_id].cancelled: return
 
         # Step 2: Glossary Scan
-        update_job(job_id, status="running", progress=25.0, pipeline_stage="glossary", message="Scanning episodes for glossary terms...")
+        jobs[job_id].pipeline_stage = "glossary"
+        update_job(job_id, status="running", progress=25.0, message="Scanning episodes for glossary terms...")
         
         golden_files = _select_golden_ratio_files(episodes)
         update_job(job_id, log=f"Selected {len(golden_files)} episodes for glossary extraction")
@@ -1356,7 +1563,8 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         if jobs[job_id].cancelled: return
 
         # Step 3: Batch Translation
-        update_job(job_id, status="running", progress=55.0, pipeline_stage="translate", message="Translating episodes...")
+        jobs[job_id].pipeline_stage = "translate"
+        update_job(job_id, status="running", progress=55.0, message="Translating episodes...")
         
         # Reload metadata to get confirmed changes
         metadata = storage.load_project_metadata(project_name)
@@ -1385,30 +1593,27 @@ async def _process_batch_translation(
         glossary = metadata.get("glossary", {"terms": []})
         target_lang = metadata.get("target_language", "English")
         context_guide = metadata.get("context_guide", "")
-        
-        pipeline = create_translation_pipeline(
+
+        global_config = storage.load_global_config()
+        concurrent_limit = global_config.get("concurrent_scenes", 3)
+        semaphore = asyncio.Semaphore(concurrent_limit)
+
+        # Build the agent ONCE per batch job — all scenes share the same instruction
+        # string, so the local LLM server can reuse its KV-cached system prefix.
+        shared_agent = create_translation_pipeline(
             project_name=project_name,
             target_language=target_lang,
             glossary=glossary,
             context_guide=context_guide,
             cartographer_model=model,
             translator_model=model,
-            skip_glossary_step=not enhance_glossary_flag
+            skip_glossary_step=not enhance_glossary_flag,
+            temperature=global_config.get("temperature"),
+            top_k=global_config.get("top_k"),
+            top_p=global_config.get("top_p"),
         )
-        
-        session_id_unique = f"batch_translate_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-        runner = adk_runner_factory.create_runner(pipeline, session_id_unique)
-        
-        # Create session explicitly (once per batch job)
-        await adk_session_manager.session_service.create_session(
-            session_id=session_id_unique,
-            user_id="default_user",
-            app_name=f"OmbiSub_{session_id_unique}"
-        )
-        # Add Semaphore for concurrency limit
-        global_config = storage.load_global_config()
-        concurrent_limit = global_config.get("concurrent_scenes", 3)
-        semaphore = asyncio.Semaphore(concurrent_limit)
+        _eph_svc = get_ephemeral_session_service()
+        from google.adk.runners import Runner as _Runner
 
         # Track total progress across multiple episodes
         progress = 0.0
@@ -1418,56 +1623,30 @@ async def _process_batch_translation(
             nonlocal progress
             scene_label = f"Scene {scene['scene_id']}"
             update_job(job_id, scene_status={scene_label: "pending"})
-            
+
             async with semaphore:
                 if jobs[job_id].cancelled:
                     return
 
                 update_job(job_id, scene_status={scene_label: "running"})
-                
-                # Update job message with scene progress
                 completed_scenes = [s for s in jobs[job_id].scene_status.values() if s == "completed"]
                 update_job(job_id, message=f"Translating {episode_name} ({len(completed_scenes)}/{total_scenes} scenes done)...")
-                
-                # Critical Fix: Instantiate a fresh ADK agent pipeline per scene
-                scene_pipeline = create_translation_pipeline(
-                    project_name=project_name,
-                    target_language=target_lang,
-                    glossary=glossary,
-                    context_guide=context_guide,
-                    cartographer_model=model,
-                    translator_model=model,
-                    skip_glossary_step=not enhance_glossary_flag,
-                    temperature=global_config.get("temperature"),
-                    top_k=global_config.get("top_k"),
-                    top_p=global_config.get("top_p"),
-                )
-                
+
+                # Each scene gets its own ephemeral session on the shared agent
                 session_id = f"scene_{uuid4().hex[:8]}"
-                runner = adk_runner_factory.create_runner(scene_pipeline, session_id)
-                await adk_session_manager.session_service.create_session(
+                runner = _Runner(agent=shared_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc)
+                await _eph_svc.create_session(
                     session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
                 )
 
                 lines = scene.get("lines", [])
                 if not lines:
                     return
-                
-                # Prepend overlap for context (last 3 lines of previous scene)
-                overlap_size = 0
-                context_lines = []
-                if prev_scene_lines:
-                    overlap = prev_scene_lines[-3:]
-                    overlap_size = len(overlap)
-                    context_lines.extend(overlap)
-                
-                context_lines.extend(lines)
 
-                # Flatten multi-line subtitles
-                # We number the prompt lines 1..N starting from the overlap
-                chunk_input = "\n".join([f"{j+1}: {line.get('original', '').replace(chr(10), '<br>')}" for j, line in enumerate(context_lines)])
-                
-                prompt = f"Translate these subtitles to {target_lang}:\n\n{chunk_input}"
+                # One-line context hint from the end of the previous scene — zero overlap waste
+                context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
+                source_texts = [line.get("original", "") for line in lines]
+                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
 
                 response_text = ""
                 async for event in runner.run_async(
@@ -1496,17 +1675,15 @@ async def _process_batch_translation(
                 
                 # Robust parsing using shared utility
                 parsed_lines = parse_translations_from_text(response_text)
-                any_tags_found = "<line" in response_text
-                
+
                 for item in parsed_lines:
-                    idx_one_based = item["index"]
-                    if idx_one_based > overlap_size:
-                        actual_idx = idx_one_based - 1 - overlap_size
-                        if actual_idx < len(lines):
-                            global_idx = scene["start_index"] + actual_idx
-                            translated_map[global_idx] = item["text"]
-                            if global_idx < len(parsed_srt):
-                                parsed_srt[global_idx]["translated"] = item["text"]
+                    # Output indices are 1-based, no overlap offset needed
+                    actual_idx = item["index"] - 1
+                    if 0 <= actual_idx < len(lines):
+                        global_idx = scene["start_index"] + actual_idx
+                        translated_map[global_idx] = item["text"]
+                        if global_idx < len(parsed_srt):
+                            parsed_srt[global_idx]["translated"] = item["text"]
                 
                 # Incrementally save the episode for the frontend Live View
                 storage.save_episode(project_name, episode_name, parsed_srt)
@@ -1541,12 +1718,21 @@ async def _process_batch_translation(
             translated_map = {}
             
             # 2. Parallel Scene Translation
+            # Skip scenes that are already fully translated (resume support)
+            def _scene_complete(scene: Dict) -> bool:
+                return all(line.get("translated", "").strip() for line in scene.get("lines", []))
+
+            pending_scenes = [(i, s) for i, s in enumerate(scenes) if not _scene_complete(s)]
+            skipped = len(scenes) - len(pending_scenes)
+            if skipped:
+                update_job(job_id, log=f"Resuming {episode_name}: skipping {skipped} already-translated scene(s)")
+
             tasks = []
             total_scenes = len(scenes)
-            for i, scene in enumerate(scenes):
-                prev_scene_lines = scenes[i-1]["lines"] if i > 0 else None
+            for i, scene in pending_scenes:
+                prev_scene_lines = scenes[i - 1]["lines"] if i > 0 else None
                 tasks.append(_translate_scene_task(scene, target_lang, translated_map, parsed_srt, total_scenes, episode_name, prev_scene_lines))
-                
+
             await asyncio.gather(*tasks)
             
             if jobs[job_id].cancelled:
@@ -1618,36 +1804,38 @@ async def _process_targeted_retranslation(job_id: str, project_name: str, affect
         concurrent_limit = global_config.get("concurrent_scenes", 3)
         semaphore = asyncio.Semaphore(concurrent_limit)
 
+        # Build the agent once for the whole retranslation job
+        _retrans_agent = create_translation_pipeline(
+            project_name=project_name,
+            target_language=target_lang,
+            glossary=glossary,
+            context_guide=context_guide,
+            cartographer_model=model,
+            translator_model=model,
+            skip_glossary_step=True,
+        )
+        _eph_svc_rt = get_ephemeral_session_service()
+        from google.adk.runners import Runner as _Runner
+
         async def _translate_scene_task(scene: Dict, translated_map: Dict):
             scene_label = f"Ep {current_ep_idx} - Scene {scene['scene_id']}"
             update_job(job_id, scene_status={scene_label: "pending"})
-            
+
             async with semaphore:
                 if jobs[job_id].cancelled:
                     return
 
                 update_job(job_id, scene_status={scene_label: "running"})
-                
-                # Critical Fix: Instantiate a fresh ADK agent pipeline per scene
-                scene_pipeline = create_translation_pipeline(
-                    project_name=project_name,
-                    target_language=target_lang,
-                    glossary=glossary,
-                    context_guide=context_guide,
-                    cartographer_model=model,
-                    translator_model=model,
-                    skip_glossary_step=True
-                )
-                
+
                 session_id = f"scene_{uuid4().hex[:8]}"
-                runner = adk_runner_factory.create_runner(scene_pipeline, session_id)
-                await adk_session_manager.session_service.create_session(
+                runner = _Runner(agent=_retrans_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc_rt)
+                await _eph_svc_rt.create_session(
                     session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
                 )
 
                 lines = scene.get("lines", [])
-                chunk_input = "\n".join([f"{j+1}: {line.get('original', '').replace(chr(10), '<br>')}" for j, line in enumerate(lines)])
-                prompt = f"Translate these subtitles to {target_lang}:\n\n{chunk_input}"
+                source_texts = [line.get("original", "") for line in lines]
+                prompt = build_translation_prompt(source_texts, target_lang)
 
                 response_text = ""
                 async for event in runner.run_async(
@@ -1869,17 +2057,17 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
         chunk_size = get_recommended_chunk_size(tr_model)
         update_job(job_id, log=f"Chunk size: {chunk_size} lines/request (model: {tr_model})")
 
-        from adk_agents.operations import _parse_numbered_output
-
         async def _translate_episode_task(ep_name):
             nonlocal processed_count
             async with semaphore:
                 if jobs[job_id].cancelled: return
                 
-                # Create a DEDICATED runner for each parallel task to avoid state collisions
+                # Dedicated ephemeral runner per episode — no SQLite write needed
                 ep_session_id = f"ep_{uuid4().hex[:6]}"
-                ep_runner = adk_runner_factory.create_runner(pipeline, ep_session_id)
-                await adk_session_manager.session_service.create_session(
+                _eph = get_ephemeral_session_service()
+                from google.adk.runners import Runner as _Runner
+                ep_runner = _Runner(agent=pipeline, app_name=f"OmbiSub_{ep_name}", session_service=_eph)
+                await _eph.create_session(
                     session_id=ep_session_id, user_id="default_user",
                     app_name=f"OmbiSub_{ep_name}"
                 )
@@ -1894,56 +2082,49 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
                     chunks = [text_lines_ep[i:i + chunk_size] for i in range(0, len(text_lines_ep), chunk_size)]
                     translated_lines_all = []
 
-                    for chunk in chunks:
-                        if jobs[job_id].cancelled: return
-                        
-                        chunk_input = "\n".join([f"{j+1}: {line.replace(chr(10), '<br>')}" for j, line in enumerate(chunk)])
-                        base_prompt = f"Translate these subtitles to {target_lang}:\n\n{chunk_input}"
+                    for chunk_offset in range(0, len(text_lines_ep), chunk_size):
+                        if jobs[job_id].cancelled:
+                            return
 
-                        # Feature 3: auto-retry on truncated output (max 2 retries)
-                        chunk_translated = []
+                        chunk = text_lines_ep[chunk_offset:chunk_offset + chunk_size]
+                        base_prompt = build_translation_prompt(chunk, target_lang)
+
+                        # Index-based retry: track which 1-based indices are still missing
+                        results_map: Dict[int, str] = {}
                         MAX_RETRIES = 2
+
                         for attempt in range(MAX_RETRIES + 1):
+                            # On retry, build a prompt containing only the missing indices
+                            if attempt > 0:
+                                missing = [i for i in range(1, len(chunk) + 1) if not results_map.get(i)]
+                                if not missing:
+                                    break
+                                retry_lines = [(missing[k], chunk[missing[k] - 1]) for k in range(len(missing))]
+                                retry_input = "\n".join(f"{idx}| {ln.replace(chr(10), '<br>')}" for idx, ln in retry_lines)
+                                current_prompt = f"Translate ONLY these missing lines to {target_lang}:\n\n{retry_input}"
+                                update_job(job_id, log=f"Retry {attempt}/{MAX_RETRIES}: {len(missing)} missing lines in {ep_name}")
+                            else:
+                                current_prompt = base_prompt
+
                             response_text = ""
-                            current_prompt = base_prompt
-
-                            # On retry, only request missing lines
-                            if attempt > 0 and chunk_translated:
-                                recovered = sum(1 for t in chunk_translated if t)
-                                missing_start = recovered + 1
-                                missing_end = len(chunk)
-                                if missing_start > missing_end:
-                                    break  # All lines recovered
-                                retry_lines = chunk[missing_start - 1:]
-                                retry_input = "\n".join([f"{missing_start + k}: {line.replace(chr(10), '<br>')}" for k, line in enumerate(retry_lines)])
-                                current_prompt = f"You only translated lines 1–{recovered} out of {len(chunk)}. Please translate ONLY lines {missing_start}–{missing_end} now:\n\n{retry_input}"
-                                update_job(job_id, log=f"Retry {attempt}/{MAX_RETRIES} for missing lines {missing_start}–{missing_end} in {ep_name}")
-
                             async for event in ep_runner.run_async(
                                 user_id="default_user", session_id=ep_session_id,
                                 new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=current_prompt)])
                             ):
                                 if event.content and event.content.parts:
                                     for part in event.content.parts:
-                                        if part.text: response_text += part.text
+                                        if part.text:
+                                            response_text += part.text
 
-                            parsed = _parse_numbered_output(response_text, len(chunk))
+                            for item in parse_translations_from_text(response_text):
+                                idx = item["index"]
+                                if 1 <= idx <= len(chunk) and item["text"]:
+                                    results_map[idx] = item["text"]
 
-                            if attempt == 0:
-                                chunk_translated = parsed
-                            else:
-                                # Merge retry results into existing list
-                                for k, val in enumerate(parsed):
-                                    global_k = (chunk[0:].index(chunk[0]) if False else 0) # positional
-                                    idx = (len(chunk_translated) - len(chunk)) + k  # adjust offset
-                                    actual_idx = len(chunk) - len(parsed) + k
-                                    if actual_idx < len(chunk_translated) and val:
-                                        chunk_translated[actual_idx] = val
+                            if len(results_map) >= len(chunk):
+                                break
 
-                            recovered_count = sum(1 for t in chunk_translated if t)
-                            if recovered_count >= len(chunk):
-                                break  # All lines recovered — no retry needed
-
+                        chunk_translated = [results_map.get(i, "") for i in range(1, len(chunk) + 1)]
                         translated_lines_all.extend(chunk_translated)
 
                     # Feature 6: Two-pass glossary enforcement (CPU-side, zero API cost)

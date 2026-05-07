@@ -92,6 +92,12 @@ export const api = {
     setApiKey: (apiKey) => axios.post(`${API_URL}/api/config/api-key`, { api_key: apiKey }),
     deleteApiKey: () => axios.delete(`${API_URL}/api/config/api-key`),
 
-    // Local Models
+    // Model Registry (unified: Gemini + local discovery)
+    fetchAllModels: (baseUrl = null) => axios.get(`${API_URL}/api/models`, { params: { base_url: baseUrl } }),
+    // Legacy local-only endpoint (kept for compatibility)
     fetchLocalModels: (baseUrl = null) => axios.get(`${API_URL}/api/config/models/local`, { params: { base_url: baseUrl } }),
+
+    // Auto-translate (fire-and-forget, no review gates)
+    autoTranslate: (projectName, options = {}) =>
+        axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/auto-translate`, options),
 };

@@ -1,14 +1,17 @@
 """
-Translation Pipeline - Sequential Multi-Agent Workflow
+Translation Pipeline — agent factory for subtitle translation.
 
-Combines Cartographer and Translator agents in a deterministic pipeline
-for complete subtitle translation with glossary enhancement.
+When glossary enhancement is skipped (the common case), returns a bare
+TranslatorAgent directly — no SequentialAgent wrapper overhead.
+When glossary enhancement is requested, wraps both agents in a
+SequentialAgent so the Cartographer runs first and its output flows into
+the Translator.
 """
 
-from google.adk.agents import SequentialAgent
+from google.adk.agents import Agent, SequentialAgent
 from .cartographer_agent import create_cartographer_agent
 from .translator_agent import create_translator_agent
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 
 def create_translation_pipeline(
@@ -22,51 +25,36 @@ def create_translation_pipeline(
     temperature: Optional[float] = None,
     top_k: Optional[int] = None,
     top_p: Optional[float] = None,
-) -> SequentialAgent:
+) -> Union[Agent, SequentialAgent]:
+    """Return a translation agent (or pipeline) for the given configuration.
+
+    Returns a bare TranslatorAgent when skip_glossary_step=True (default for
+    batch jobs) to avoid SequentialAgent dispatch overhead.  Returns a
+    SequentialAgent(Cartographer → Translator) only when live glossary
+    enhancement is requested.
     """
-    Create sequential pipeline for full translation workflow.
-    
-    Pipeline Steps:
-    1. CartographerAgent: Extract/enhance glossary from subtitle text (optional)
-    2. TranslatorAgent: Translate using enhanced glossary
-    
-    Args:
-        project_name: Name of the translation project
-        target_language: Target language for translation
-        glossary: Existing project glossary
-        context_guide: Project-specific tone/style guidance for the translator
-        cartographer_model: Model for glossary extraction
-        translator_model: Model for translation
-        skip_glossary_step: If True, skip glossary enhancement
-        
-    Returns:
-        SequentialAgent that runs both steps in order
-    """
-    sub_agents = []
-    
-    if not skip_glossary_step:
-        sub_agents.append(create_cartographer_agent(
-            model_name=cartographer_model,
-            target_language=target_language,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-        ))
-    
-    sub_agents.append(create_translator_agent(
+    shared_kwargs = dict(temperature=temperature, top_k=top_k, top_p=top_p)
+
+    translator = create_translator_agent(
         model_name=translator_model,
         glossary=glossary,
         target_language=target_language,
         context_guide=context_guide,
-        temperature=temperature,
-        top_k=top_k,
-        top_p=top_p,
-    ))
-    
-    # Sanitize project name to be a valid ADK agent name (no spaces)
+        **shared_kwargs,
+    )
+
+    if skip_glossary_step:
+        # Fast path — no wrapper needed
+        return translator
+
+    cartographer = create_cartographer_agent(
+        model_name=cartographer_model,
+        target_language=target_language,
+        **shared_kwargs,
+    )
+
     sanitized_name = "".join(c if c.isalnum() or c == "_" else "_" for c in project_name)
-    
     return SequentialAgent(
         name=f"TranslationPipeline_{sanitized_name}",
-        sub_agents=sub_agents
+        sub_agents=[cartographer, translator],
     )

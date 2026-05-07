@@ -11,56 +11,27 @@ from typing import Dict, List, Literal, Optional
 
 
 def _build_instruction(target_language: str) -> str:
-    return f"""You are the Cartographer Agent for OmbiSub.
+    return f"""Extract named entities and special terms from subtitle text and translate them to {target_language}.
 
-**Role:** Extract terminology from the source text and prepare it for translation into **{target_language}**.
+Extract: character names (person), places (location), groups (organization), special items/concepts (object/technique).
+Skip: common words, generic verbs/adjectives, terms with no show-specific meaning.
+Deduplication: skip any term already in the provided existing-terms list (case-insensitive).
 
-**Extraction Strategy:**
-- **Proper Nouns (Character names):** Transliterate to {target_language} script. Type: "person".
-- **Proper Nouns (Locations):** Transliterate to {target_language} script. Type: "location".
-- **Concepts/Items:** Translate the meaning to {target_language}. Type: "object" or "technique".
-- **Fantasy/Sci-fi Terms:** Adapt phonetically to {target_language}.
-- **Organizations/Groups:** Transliterate or translate as appropriate. Type: "organization".
-
-**What NOT to extract:**
-- Common words, generic verbs, or adjectives.
-- Terms with no special meaning in the show's context.
-
-**Deduplication:** If you are given a list of existing terms, do NOT include any term that already appears in that list (case-insensitive match).
-
-**Output Format (STRICT TAGS):**
-Provide your output exactly in this format. No other text.
+Output ONLY valid XML — no extra text:
 
 <glossary>
   <term>
     <source>Winterfell</source>
     <translation>Γουίντερφελ</translation>
-    <description>Ancestral castle of House Stark</description>
+    <description>Stark ancestral castle</description>
     <type>location</type>
     <gender>neuter</gender>
     <case_sensitive>true</case_sensitive>
     <keep_original>false</keep_original>
   </term>
-  <term>
-    <source>Jon Snow</source>
-    <translation>Τζον Σνόου</translation>
-    <description>The King in the North</description>
-    <type>person</type>
-    <gender>masculine</gender>
-    <case_sensitive>true</case_sensitive>
-    <keep_original>false</keep_original>
-  </term>
 </glossary>
 
-**Field Rules:**
-- **<source>:** Keep the original term exactly as it appears.
-- **<translation>:** MUST be in **{target_language}**.
-- **<description>:** MUST be in **English**. Brief context.
-- **<type>:** person, location, organization, object, technique, other.
-- **<gender>:** masculine, feminine, neuter, n/a.
-- **<case_sensitive>:** true/false (true for proper nouns).
-- **<keep_original>:** true/false (true for terms that should NOT be translated).
-"""
+Field rules: source=original text, translation=in {target_language}, description=brief English context, type=person/location/organization/object/technique/other, gender=masculine/feminine/neuter/n/a, case_sensitive=true/false, keep_original=true if should NOT be translated."""
 
 
 def create_cartographer_agent(
