@@ -347,6 +347,29 @@ const ProjectDetail = () => {
         }
     };
 
+    const handleAutoTranslate = async () => {
+        try {
+            const model = project.settings?.translation_model || 'gemini-flash-latest';
+            const episodeNames = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null;
+            const res = await api.autoTranslate(projectName, {
+                model,
+                episode_names: episodeNames,
+                skip_context: !!project.context_guide,
+                skip_glossary: project.glossary?.terms?.length > 0,
+            });
+            if (res.data.job_id) {
+                const label = episodeNames
+                    ? `Auto-translating ${episodeNames.length} episode(s)`
+                    : `Auto-translating all episodes`;
+                addJob(res.data.job_id, 'auto_translate', label, { projectId: projectName });
+                toast.info('Auto-translate started');
+            }
+        } catch (err) {
+            console.error('Auto-translate failed', err);
+            toast.error('Failed to start auto-translate');
+        }
+    };
+
     const handleBatchDownload = async () => {
         try {
             setIsDownloading(true);
@@ -483,23 +506,27 @@ const ProjectDetail = () => {
                         {!isParent && (
                             <div className="relative group">
                                 <button
-                                    onClick={() => setIsSimplePipelineActive(true)}
-                                    disabled={isPipelineActive || isSimplePipelineActive}
+                                    onClick={handleAutoTranslate}
+                                    disabled={isPipelineActive || isSimplePipelineActive || episodes.length === 0}
                                     className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0"
+                                    title={selectedEpisodes.size > 0 ? `Auto-translate ${selectedEpisodes.size} selected episode(s)` : 'Auto-translate all episodes'}
                                 >
-                                    <Sparkles size={18} className="animate-pulse" />
-                                    Auto-Translate
+                                    <Sparkles size={18} />
+                                    {selectedEpisodes.size > 0 ? `Translate (${selectedEpisodes.size})` : 'Translate All'}
                                 </button>
-                                {/* Dropdown for legacy/advanced mode */}
-                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 translate-y-1 group-hover:translate-y-0">
-                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">Advanced Options</div>
+                                {/* Dropdown for guided / legacy modes */}
+                                <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 translate-y-1 group-hover:translate-y-0">
+                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">More Options</div>
                                     <button
-                                        onClick={() => handleStartPipeline('auto')}
-                                        disabled={isPipelineActive}
+                                        onClick={() => setIsSimplePipelineActive(true)}
+                                        disabled={isPipelineActive || isSimplePipelineActive}
                                         className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50"
                                     >
-                                        <RefreshCw size={14} className="text-gray-400" />
-                                        <span>Legacy Full Pipeline</span>
+                                        <Sparkles size={14} className="text-indigo-400" />
+                                        <div>
+                                            <div className="font-medium">Guided Pipeline</div>
+                                            <div className="text-xs text-gray-400">Review context & glossary first</div>
+                                        </div>
                                     </button>
                                     <button
                                         onClick={() => handleStartPipeline('step')}
@@ -507,7 +534,10 @@ const ProjectDetail = () => {
                                         className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 transition-colors rounded-b-2xl disabled:opacity-50"
                                     >
                                         <RefreshCw size={14} className="text-gray-400" />
-                                        <span>Legacy Step-by-Step</span>
+                                        <div>
+                                            <div className="font-medium">Step-by-Step Pipeline</div>
+                                            <div className="text-xs text-gray-400">Manual approval at each stage</div>
+                                        </div>
                                     </button>
                                 </div>
                             </div>

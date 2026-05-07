@@ -18,7 +18,7 @@ from .cartographer_agent import create_cartographer_agent
 from .research_agent import create_research_agent
 from .translator_agent import create_translator_agent
 from .glossary_orchestrator import create_glossary_orchestrator
-from adk_config.session_service import get_session_service
+from adk_config.session_service import get_ephemeral_session_service
 from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text
 
 
@@ -62,9 +62,12 @@ async def _create_session_and_runner(
     agent,
     prefix: str,
 ) -> Tuple[Runner, str]:
-    """Create a session + runner pair for a one-shot agent execution."""
+    """Create a session + runner pair for a one-shot agent execution.
+
+    Uses InMemorySessionService — these runners are stateless and ephemeral.
+    """
     session_id = _make_session_id(prefix)
-    session_service = get_session_service()
+    session_service = get_ephemeral_session_service()
     app_name = f"OmbiSub_{session_id}"
     runner = Runner(
         agent=agent,
@@ -83,6 +86,35 @@ async def _create_session_and_runner(
 # Glossary Generation
 # ---------------------------------------------------------------------------
 
+def _stratified_sample(text_lines: List[str], total: int = 400) -> List[str]:
+    """Pick a stratified sample spread evenly across all lines.
+
+    Samples anchor points at 0%, 25%, 50%, 75%, and 100% of the list,
+    taking a small window around each anchor. This gives much broader
+    coverage than a simple [:500] head slice.
+    """
+    n = len(text_lines)
+    if n <= total:
+        return text_lines
+
+    # 5 evenly-spaced anchor indices
+    anchors = [int(n * frac) for frac in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    window = max(1, total // len(anchors))
+
+    seen: set = set()
+    sample: List[str] = []
+    for anchor in anchors:
+        start = max(0, anchor - window // 2)
+        end = min(n, start + window)
+        for i in range(start, end):
+            if i not in seen:
+                seen.add(i)
+                sample.append(text_lines[i])
+                if len(sample) >= total:
+                    return sample
+    return sample
+
+
 async def generate_glossary_adk(
     text_lines: List[str],
     show_name: str,
@@ -91,27 +123,27 @@ async def generate_glossary_adk(
     model_name: str = "gemini-flash-latest",
     enable_research: bool = False
 ) -> Tuple[Dict, Dict]:
-    """
-    Generate or enhance glossary using ADK agents.
+    """Generate or enhance glossary using ADK agents.
 
     Returns:
         Tuple of (glossary_dict, debug_info)
     """
-    # Prepare text sample
-    text_sample = "\n".join(text_lines[:500]) if text_lines else ""
+    # Stratified sample for better show-wide coverage
+    sampled = _stratified_sample(text_lines, total=400) if text_lines else []
+    text_sample = "\n".join(sampled)
+
     existing_terms = [
         t.get("term", "")
         for t in (existing_glossary or {}).get("terms", [])
     ]
 
-    # Build prompt
     prompt = f"""Show: {show_name}
 Target Language: {target_language}
 
 {"Existing terms (DO NOT duplicate): " + ", ".join(existing_terms) if existing_terms else "No existing terms."}
 
-Analyze this subtitle text, extract glossary terms, and translate them to {target_language}:
-    
+Extract glossary terms from this subtitle text and translate them to {target_language}:
+
 {text_sample}"""
 
     # Create appropriate agent
@@ -274,37 +306,26 @@ async def enhance_context_guide_adk(
     show_name: str,
     model_name: str = "gemini-flash-latest"
 ) -> Tuple[str, Dict]:
-    """
-    Transform research findings into translation instructions.
+    """Transform research findings into a concise translation style guide."""
 
-    Returns:
-        Tuple of (enhanced_guide, debug_info)
-    """
-    prompt = f"""Create detailed translation instructions for "{show_name}".
+    prompt = f"""Write a subtitle translation style guide for "{show_name}".
+Max 200 words. Use EXACTLY this structure — no extra sections:
 
-Research Data:
-{research_data}
+TONE: [one sentence describing overall mood/register]
+FORMALITY: [formal/informal/mixed — one sentence]
+REGISTER: [2-3 bullets for character-specific speech patterns, if relevant]
+CULTURAL: [2-3 bullets for adaptation rules — idioms, honorifics, etc.]
+SPECIAL: [any unique handling rules for this show's specific terminology]
 
-Generate a comprehensive guide covering:
-1. Tone and formality level
-2. Cultural adaptation notes
-3. Terminology consistency rules
-4. Special handling instructions
+Do NOT list specific name/term translations — those are in the glossary.
+Base your guide on this research:
 
-Do NOT provide specific examples of translations of names or terms, as there will be a glossary to handle that.
+{research_data}"""
 
-The instructions should provide a solid foundation for translators to work from, and should result in high quality, consistent translations.
-Output as clear, actionable instructions for translators."""
-
-    # Dedicated agent for context generation (not reusing ResearchAgent)
     agent = Agent(
         name="ContextGuideAgent",
         model=create_model(model_name),
-        instruction="""You are a translation style guide expert. 
-Your job is to create clear, actionable translation instructions 
-based on research about a show, movie, or media property. 
-Focus on tone, style, formality, and cultural adaptation — 
-NOT specific term translations (those are handled by the glossary).""",
+        instruction="Write concise subtitle translation style guides. Output only the guide — no preamble, no commentary.",
         tools=[],
         output_key="context_guide_result",
     )
@@ -363,40 +384,39 @@ def _parse_glossary_from_text(text: str) -> Dict:
 
 
 def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
-    """Parse numbered translation output, supporting multi-line entries.
-    
-    Handles formats like:
-    - "1: Translated text"
-    - "1. Translated text"
-    - "1: Line one\n   Line two" (continuation lines)
+    """Parse numbered translation output into an ordered list.
+
+    Supports (in priority order):
+    - Pipe-delimited: ``1| text``  (primary)
+    - Colon/dot numbered: ``1: text`` / ``1. text`` with continuation lines
     """
     lines_map: Dict[int, str] = {}
     current_idx: Optional[int] = None
 
-    # Strip reasoning blocks before parsing (handles Qwen/DeepSeek think tags)
     text = strip_reasoning_blocks(text)
 
-    for line in text.split("\n"):
-        stripped = line.strip()
-        if not stripped:
-            continue
+    # Try pipe-delimited first (primary format)
+    pipe_matches = re.findall(r'^(\d+)\s*\|\s*(.*)', text, re.MULTILINE)
+    if pipe_matches:
+        for num_str, content in pipe_matches:
+            idx = int(num_str)
+            if 1 <= idx <= expected_count:
+                lines_map[idx] = content.strip()
+    else:
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            match = re.match(r'^(\d+)\s*[:.]\s*(.*)', stripped)
+            if match:
+                current_idx = int(match.group(1))
+                content = match.group(2).strip()
+                if 1 <= current_idx <= expected_count:
+                    lines_map[current_idx] = content
+            elif current_idx is not None and current_idx in lines_map:
+                lines_map[current_idx] += "\n" + stripped
 
-        # Match "N: text" or "N. text" where N is a number
-        match = re.match(r'^(\d+)\s*[:.]\s*(.*)', stripped)
-        if match:
-            current_idx = int(match.group(1))
-            content = match.group(2).strip()
-            if 1 <= current_idx <= expected_count:
-                lines_map[current_idx] = content
-        elif current_idx is not None and current_idx in lines_map:
-            # continuation line for the current index
-            lines_map[current_idx] += "\n" + stripped
-
-    # Build ordered result, restoring <br> placeholders to real newlines
-    result = []
-    for i in range(1, expected_count + 1):
-        text = lines_map.get(i, "")
-        text = text.replace("<br>", "\n")
-        result.append(text)
-
-    return result
+    return [
+        lines_map.get(i, "").replace("<br>", "\n")
+        for i in range(1, expected_count + 1)
+    ]

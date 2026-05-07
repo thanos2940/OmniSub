@@ -105,56 +105,84 @@ def timecode_to_ms(timecode: str) -> int:
     return (h * 3600 + m * 60 + s) * 1000 + ms
 
 
-def build_scene_ast(parsed_data: List[Dict], gap_threshold_ms: int = 3000, max_lines_per_scene: int = 250) -> List[Dict]:
-    """
-    Groups flat parsed SRT data into semantic Scene chunks.
-    A new scene starts if the gap between the end of one line and the start
-    of the next is greater than gap_threshold_ms, or if the current scene
-    exceeds max_lines_per_scene.
+def build_scene_ast(
+    parsed_data: List[Dict],
+    gap_threshold_ms: int = 3000,
+    max_lines_per_scene: int = 250,
+    min_lines_per_scene: int = 10,
+) -> List[Dict]:
+    """Group flat SRT entries into semantic Scene chunks.
+
+    A new scene starts when:
+    - The gap to the next subtitle exceeds gap_threshold_ms, OR
+    - The current scene has reached max_lines_per_scene.
+
+    Micro-scene merging: scenes with fewer than min_lines_per_scene lines are
+    merged into their neighbour (prefer merging forward, else backward) to
+    avoid wasting per-request overhead on tiny chunks.
     """
     if not parsed_data:
         return []
 
-    scenes = []
-    current_scene = {
-        "scene_id": 1,
-        "start_index": 0,
-        "end_index": 0,
-        "lines": []
-    }
-    
-    for i, entry in enumerate(parsed_data):
+    # --- Pass 1: split by temporal gaps and size cap ---
+    raw_scenes: List[List[Dict]] = []
+    current: List[Dict] = []
+
+    for entry in parsed_data:
         tc = entry.get("timecode", "")
         tc_parts = tc.split("-->")
-        start_ms = 0
-        end_ms = 0
+        start_ms = end_ms = 0
         if len(tc_parts) == 2:
             start_ms = timecode_to_ms(tc_parts[0].strip())
             end_ms = timecode_to_ms(tc_parts[1].strip())
-            
         entry["_start_ms"] = start_ms
         entry["_end_ms"] = end_ms
 
-        if current_scene["lines"]:
-            prev_entry = current_scene["lines"][-1]
-            prev_end_ms = prev_entry.get("_end_ms", 0)
-            
-            gap = start_ms - prev_end_ms
-            
-            if gap > gap_threshold_ms or len(current_scene["lines"]) >= max_lines_per_scene:
-                current_scene["end_index"] = i
-                scenes.append(current_scene)
-                current_scene = {
-                    "scene_id": len(scenes) + 1,
-                    "start_index": i,
-                    "end_index": i,
-                    "lines": []
-                }
-                
-        current_scene["lines"].append(entry)
+        if current:
+            gap = start_ms - current[-1].get("_end_ms", 0)
+            if gap > gap_threshold_ms or len(current) >= max_lines_per_scene:
+                raw_scenes.append(current)
+                current = []
 
-    if current_scene["lines"]:
-        current_scene["end_index"] = len(parsed_data)
-        scenes.append(current_scene)
+        current.append(entry)
+
+    if current:
+        raw_scenes.append(current)
+
+    # --- Pass 2: merge micro-scenes ---
+    merged: List[List[Dict]] = []
+    for chunk in raw_scenes:
+        if merged and len(chunk) < min_lines_per_scene:
+            # Absorb into the previous scene if it won't exceed the cap
+            if len(merged[-1]) + len(chunk) <= max_lines_per_scene:
+                merged[-1].extend(chunk)
+                continue
+        merged.append(chunk)
+
+    # --- Pass 3: renumber and compute index offsets ---
+    scenes: List[Dict] = []
+    offset = 0
+    for scene_id, lines in enumerate(merged, start=1):
+        scenes.append({
+            "scene_id": scene_id,
+            "start_index": offset,
+            "end_index": offset + len(lines),
+            "lines": lines,
+        })
+        offset += len(lines)
 
     return scenes
+
+
+def get_scene_context_hint(scene_lines: List[Dict]) -> str:
+    """Return the last subtitle text from a scene as a one-line context hint.
+
+    Used to give the translator minimal context about what came just before
+    the current scene, without sending full overlap lines that waste tokens.
+    """
+    for entry in reversed(scene_lines):
+        text = entry.get("translated") or entry.get("original", "")
+        if text:
+            # Collapse multi-line subtitles into a single line
+            return text.replace("\n", " ").strip()
+    return ""

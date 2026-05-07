@@ -43,28 +43,15 @@ Be thorough but concise. Focus on information that would help a translator maint
 
 
 def create_research_agent(model_name: str = "gemini-flash-latest") -> Agent:
-    """
-    Create Research Agent for web-based information gathering.
-    
-    Uses Google Search tool to find:
-    - Official character names and romanizations
-    - Location information and significance
-    - Cultural context and terminology
-    
-    Args:
-        model_name: Gemini model identifier
-        
-    Returns:
-        ADK Agent configured with google_search tool
-    """
-    # Research Agent with Google Search tool is only compatible with Gemini models
-    # Local models don't support the tool yet.
+    """Create Research Agent for web-based information gathering."""
     is_local = is_local_model(model_name)
-    
+    # <|think|> is a Gemma/local thinking trigger — meaningless for Gemini
+    instruction = ("<|think|> " + INSTRUCTION) if is_local else INSTRUCTION
+
     return Agent(
         name="ResearchAgent",
         model=create_model(model_name),
-        instruction="<|think|> " + INSTRUCTION,
+        instruction=instruction,
         tools=[google_search] if not is_local else [],
-        output_key="research_findings"
+        output_key="research_findings",
     )

@@ -128,52 +128,57 @@ def parse_glossary_from_text(text: str) -> dict:
 
 
 def parse_translations_from_text(text: str, expected_count: int = 0) -> List[Dict]:
-    """
-    Parse translated lines from AI response.
-    Supports:
-    - XML Tags: <line index="1">Text</line>
-    - Numbered list: 1: Text OR 1. Text
-    
+    """Parse translated lines from AI response.
+
+    Supports (in priority order):
+    1. Pipe-delimited: ``1| translated text``  (primary format)
+    2. XML tags: ``<line index="1">Text</line>``  (legacy / fallback)
+    3. Colon/dot numbered: ``1: text`` or ``1. text``  (last resort)
+
     Returns: List of {"index": int, "text": str}
     """
     if not text:
         return []
 
-    # Strip reasoning blocks first
     clean_text = strip_reasoning_blocks(text)
-    
     results = []
-    
-    # 1. Try XML Tag Parsing (Robust)
-    line_matches = re.finditer(r'<line\s+index=["\']?(\d+)["\']?>\s*(.*?)\s*(?:</line>|(?=<line)|$)', clean_text, re.DOTALL)
-    any_tags = False
-    for match in line_matches:
-        any_tags = True
-        results.append({
-            "index": int(match.group(1)),
-            "text": match.group(2).strip().replace("<br>", "\n")
-        })
-    
-    if any_tags:
+
+    # 1. Pipe-delimited format: N| text  (primary)
+    pipe_matches = re.findall(r'^(\d+)\s*\|\s*(.*)', clean_text, re.MULTILINE)
+    if pipe_matches:
+        # Collect into dict first so duplicate indices get overwritten by the last one
+        idx_map: Dict[int, str] = {}
+        for num_str, content in pipe_matches:
+            idx_map[int(num_str)] = content.strip().replace("<br>", "\n")
+        return [{"index": k, "text": v} for k, v in sorted(idx_map.items())]
+
+    # 2. XML tag format: <line index="N">text</line>  (legacy)
+    line_matches = list(re.finditer(
+        r'<line\s+index=["\']?(\d+)["\']?>\s*(.*?)\s*(?:</line>|(?=<line)|$)',
+        clean_text, re.DOTALL
+    ))
+    if line_matches:
+        for match in line_matches:
+            results.append({
+                "index": int(match.group(1)),
+                "text": match.group(2).strip().replace("<br>", "\n"),
+            })
         return results
 
-    # 2. Fallback to Numbered List Regex
-    lines = clean_text.split('\n')
+    # 3. Colon/dot numbered list: N: text or N. text  (last resort)
     current_idx = None
-    for line in lines:
+    for line in clean_text.split('\n'):
         line = line.strip()
         if not line:
             continue
-        
         match = re.match(r'^(\d+)\s*[:.]\s*(.*)', line)
         if match:
             current_idx = int(match.group(1))
             results.append({
                 "index": current_idx,
-                "text": match.group(2).strip().replace("<br>", "\n")
+                "text": match.group(2).strip().replace("<br>", "\n"),
             })
         elif current_idx is not None and results:
-            # Continuation line
             results[-1]["text"] += "\n" + line
-            
+
     return results

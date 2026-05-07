@@ -10,54 +10,43 @@ from .llm_factory import create_model
 from typing import Dict, List, Optional
 
 
+# Compact type/gender abbreviations to save tokens
+_TYPE_ABBREV = {"person": "P", "location": "L", "organization": "O", "object": "obj", "technique": "T", "other": ""}
+_GENDER_ABBREV = {"masculine": "m", "feminine": "f", "neuter": "n", "n/a": ""}
+
+
 def _build_glossary_context(glossary: Dict) -> str:
-    """Format glossary terms with all properties for the translator.
-    
-    Includes type, gender, case-sensitivity, keep_original flag,
-    and description so the translator has full context for each term.
+    """Format glossary as a compact pipe-delimited table to minimize tokens.
+
+    Format: source|translation|type|gender|flags
+    Flags: cs=case-sensitive, ci=case-insensitive, ko=keep-original
     """
     if not glossary or not glossary.get("terms"):
-        return "(No glossary terms provided)"
-    
-    lines = []
+        return "(none)"
+
+    rows = []
     for term in glossary["terms"]:
-        # Term → Translation
+        src = term.get("term", "")
+        if not src:
+            continue
+
         if term.get("keep_original", False):
-            header = f"- **{term['term']}** → {term['term']} [DO NOT TRANSLATE — keep original]"
+            tgt = f"[KEEP:{src}]"
         else:
-            header = f"- **{term['term']}** → {term.get('translation', term['term'])}"
-        
-        # Collect property tags
-        tags = []
-        
-        # Type (person, location, object, technique, etc.)
-        term_type = term.get("type", "")
-        if term_type:
-            tags.append(term_type)
-        
-        # Gender
-        gender = term.get("gender", "n/a")
-        if gender and gender != "n/a":
-            tags.append(gender)
-        
-        # Case sensitivity
-        if term.get("case_sensitive", True):
-            tags.append("case-sensitive")
-        else:
-            tags.append("case-insensitive")
-        
-        tag_str = f" [{', '.join(tags)}]" if tags else ""
-        
-        # Description/context — helps translator understand the term
+            tgt = term.get("translation", src)
+
+        t = _TYPE_ABBREV.get(term.get("type", ""), "")
+        g = _GENDER_ABBREV.get(term.get("gender", "n/a"), "")
+        cs = "cs" if term.get("case_sensitive", True) else "ci"
+
+        # Only emit non-empty fields
+        meta = "|".join(x for x in [t, g, cs] if x)
         desc = term.get("description", "")
-        desc_str = f" — {desc}" if desc else ""
-        
-        lines.append(f"{header}{tag_str}{desc_str}")
-    
-    return "\n".join(lines)
-    
+        row = f"{src}|{tgt}|{meta}" + (f"|{desc}" if desc else "")
+        rows.append(row)
 
-
+    header = "# source|translation|type|gender|case\n"
+    return header + "\n".join(rows)
 
 
 def _build_instruction(
@@ -65,81 +54,53 @@ def _build_instruction(
     glossary_context: str,
     context_guide: str = "",
 ) -> str:
-    """Build complete instruction for the translator agent."""
-    
-    context_section = ""
-    if context_guide:
-        context_section = f"""
-**Show/Project Context:**
-{context_guide}
+    """Build slim instruction for the translator agent."""
 
-"""
+    context_section = f"\n{context_guide}\n" if context_guide else ""
 
-    return f"""You are the Translator Agent for OmbiSub, a subtitle translation platform.
+    return f"""Translate subtitles to {target_language}. Output ONLY numbered translations — no extra text:
 
-**Target Language:** {target_language}
+1| translated line one
+2| translated line two
+
+Rules:
+- Every input line number must have a matching N| line in output.
+- Preserve <br> line-break markers within a line.
+- Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
+- cs terms: match case exactly. ci terms: adapt casing naturally.
+- KEEP: terms must not be translated — use the original word.
+- Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
 {context_section}
-
-**Translation Guidelines:**
-1. Translate naturally and conversationally (subtitles must feel authentic to native speakers)
-2. Preserve speaker intent and emotional tone
-3. Adapt idioms to target culture (avoid literal translations)
-4. Multi-line subtitles use `<br>` as a line break marker. Preserve these markers.
-
-**CRITICAL: Glossary Consistency**
-Use these exact translations for recognized terms:
-
-{glossary_context}
-
-**Strict Grammar & Casing Rules:**
-1. **Gender Compliance:** If a glossary term has a specified gender (e.g., [neuter]), you MUST use the corresponding articles and adjectives in {target_language}.
-   - Example for Greek: "mana" [neuter] -> "το μάνα" (NOT "η μάνα")
-
-2. **Case Sensitivity:**
-- **(case-sensitive):** Match the glossary term EXACTLY as shown.
-- **(case-insensitive):** Adapt casing naturally based on sentence position.
-
-3. **DO NOT TRANSLATE terms marked [DO NOT TRANSLATE — keep original].** Use the original term as-is, integrating it naturally into the {target_language} sentence structure.
-
-4. **No Expansion of Partial Matches:** Use the glossary translation ONLY if the source text matches the glossary term (subject to case-sensitivity). 
-   - **Example:** If the glossary contains "Rin Tohsaka" but the subtitle line only says "Rin", do NOT translate it as "Rin Tohsaka" (unless the context guide says otherwise). Translate "Rin" as its own entity.
-   - Respect the source text's choice of using a nickname, given name, or full name.
-**Strict Coverage Rule:**
-You MUST provide a translation for EVERY input line. Do not skip any.
-
-**Output Format (STRICT TAGS):**
-Provide your output exactly in this format. No other text.
-
-<translations>
-<line index="1">Translation here</line>
-<line index="2">Translation here</line>
-</translations>
-
-**CRITICAL:** Every input line number MUST have a matching `<line index="N">` tag inside the `<translations>` block.
-"""
+Glossary (source|translation|type|gender|case):
+{glossary_context}"""
 
 
-def _build_local_instruction(
+def _build_gemma_instruction(
     target_language: str,
     glossary_context: str,
     context_guide: str = "",
 ) -> str:
-    return f"""Translate subtitles into {target_language}. Use the Tag-Based format.
+    """Gemma-specific instruction with native-speaker fluency hint."""
+    base = _build_instruction(target_language, glossary_context, context_guide)
+    return (
+        f"<|think|> You are natively fluent in {target_language}. "
+        f"Use correct articles, natural word order, and idiomatic expressions.\n\n" + base
+    )
 
-Rules:
-1. Provide finalized translations in <translations> tags.
-2. Every input line MUST have a <line index="N"> tag.
 
-{context_section}{glossary_section}
+def build_translation_prompt(lines: List[str], target_language: str, context_line: str = "") -> str:
+    """Build a compact translation prompt for a batch of subtitle lines.
 
-Example Output:
-
-<translations>
-<line index="5">Καλή επιτυχία!</line>
-<line index="6">Μην με κοροϊδεύεις.</line>
-</translations>
-
-Translate these lines now:"""
+    Args:
+        lines: Original subtitle text lines (no timecodes).
+        target_language: Target language name.
+        context_line: Optional one-line context from the end of the previous scene.
+    """
+    numbered = "\n".join(
+        f"{i + 1}| {line.replace(chr(10), '<br>')}" for i, line in enumerate(lines)
+    )
+    ctx = f"[prev] {context_line}\n" if context_line else ""
+    return f"Translate to {target_language}:\n\n{ctx}{numbered}"
 
 
 def create_translator_agent(
@@ -151,56 +112,30 @@ def create_translator_agent(
     top_k: Optional[int] = None,
     top_p: Optional[float] = None,
 ) -> Agent:
-    """
-    Create Translator Agent for context-aware subtitle translation.
-    
-    Maintains glossary consistency, cultural adaptation, and natural dialogue flow.
-    Uses lower temperature for consistent output.
-    
-    Args:
-        model_name: Gemini model identifier
-        glossary: Project glossary with terms and translations
-        target_language: Target language for translation
-        context_guide: Project-specific context/tone/style guidance
-        
-    Returns:
-        Configured ADK Agent for translation
-    """
+    """Create Translator Agent for context-aware subtitle translation."""
     glossary_context = _build_glossary_context(glossary)
-    
+
     is_local = model_name.startswith("local/")
     is_gemma = "gemma" in model_name.lower()
 
-    # Always use the comprehensive instructions for modern models.
-    # We append grammatical steering for Gemma models specifically if needed.
-    instruction = _build_instruction(target_language, glossary_context, context_guide)
-    
     if is_local and is_gemma:
-        # User defined trigger for Gemma thinking mode
-        
-        if target_language:
-            lang_hint = (
-                f"You are natively fluent in {target_language}. "
-                f"Your {target_language} output must sound like a native speaker: "
-                f"use correct articles, natural word order, and idiomatic expressions. "
-                f"Never leave foreign words untranslated unless marked keep_original.\n\n"
-            )
-            instruction = "<|think|> " + lang_hint + instruction
-    
-    # Use passed temperature or fallback to defaults
+        instruction = _build_gemma_instruction(target_language, glossary_context, context_guide)
+    else:
+        instruction = _build_instruction(target_language, glossary_context, context_guide)
+
     final_temp = temperature if temperature is not None else (0.5 if is_local and is_gemma else 0.3)
-    
+
     return Agent(
         name="TranslatorAgent",
         model=create_model(
-            model_name, 
+            model_name,
             temperature=final_temp,
             top_k=top_k,
             top_p=top_p,
-            response_schema=None # We use raw Tag parsing now for maximum robustness
+            response_schema=None,
         ),
         instruction=instruction,
         tools=[],
         output_schema=None,
-        output_key="translation_result"
+        output_key="translation_result",
     )
