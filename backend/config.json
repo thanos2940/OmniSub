@@ -1,7 +1,7 @@
 {
   "default_target_language": "Greek",
-  "default_scan_model": "local/google_gemma-4-26b-a4b-it",
-  "default_translation_model": "local/gemma-4-e4b-it",
+  "default_scan_model": "local/google/gemma-4-e4b",
+  "default_translation_model": "local/google/gemma-4-e4b",
   "api_key": "",
   "local_llm_base_url": "http://localhost:1234/v1",
   "concurrent_scenes": 1,
