@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useJobs } from '../context/JobContext';
-import { X, ChevronDown, ChevronUp, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,21 +42,35 @@ const JobProgressWidget = () => {
                                 <div key={job.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-600">
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
-                                            <p className="font-medium text-sm text-gray-800 dark:text-gray-200">{job.description}</p>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400">{job.message}</p>
+                                            <p className="font-medium text-sm text-gray-800 dark:text-gray-200">
+                                                {job.metadata?.episodeName ? (
+                                                    <span className="flex flex-col">
+                                                        <span className="text-[10px] uppercase tracking-wider text-indigo-500 font-bold">{job.metadata.projectId}</span>
+                                                        <span>{job.metadata.episodeName}</span>
+                                                    </span>
+                                                ) : job.description}
+                                            </p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{job.message}</p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {job.status === 'completed' && <CheckCircle size={16} className="text-green-500" />}
                                             {job.status === 'failed' && <AlertCircle size={16} className="text-red-500" />}
                                             {job.status === 'cancelled' && <X size={16} className="text-gray-400" />}
-                                            {job.status === 'running' && <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
+                                            {job.status === 'running' && (
+                                                <div className="relative">
+                                                    <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                                    {job.logs.some(l => l.includes("Reasoning:")) && (
+                                                        <Sparkles size={10} className="absolute -top-1 -right-1 text-yellow-500 animate-pulse" />
+                                                    )}
+                                                </div>
+                                            )}
                                             {isActive(job) && (
-                                                <button onClick={() => cancelJob(job.id)} className="text-gray-400 hover:text-red-500 transition-colors" title="Cancel">
-                                                    <AlertCircle size={14} />
+                                                <button onClick={() => cancelJob(job.id)} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 font-medium px-2 py-1 rounded bg-red-50 dark:bg-red-900/20" title="Cancel Job">
+                                                    Cancel
                                                 </button>
                                             )}
-                                            <button onClick={() => removeJob(job.id)} className="text-gray-400 hover:text-gray-600" title="Dismiss">
-                                                <X size={14} />
+                                            <button onClick={() => removeJob(job.id)} className="text-gray-400 hover:text-gray-600 ml-1" title="Dismiss">
+                                                <X size={16} />
                                             </button>
                                         </div>
                                     </div>
@@ -92,6 +106,23 @@ const JobProgressWidget = () => {
                                             </button>
                                         )}
                                     </div>
+
+                                    {/* Scenes Progress */}
+                                    {job.scene_status && Object.keys(job.scene_status).length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                            {Object.entries(job.scene_status).map(([sceneName, status]) => {
+                                                let bgColor = 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300';
+                                                if (status === 'running') bgColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-400';
+                                                if (status === 'completed') bgColor = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                                                
+                                                return (
+                                                    <span key={sceneName} className={`text-[10px] px-1.5 py-0.5 rounded ${bgColor}`}>
+                                                        {sceneName.replace('Scene ', 'S')}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
 
                                     {/* Logs View */}
                                     <AnimatePresence>

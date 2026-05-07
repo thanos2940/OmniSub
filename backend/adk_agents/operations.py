@@ -14,11 +14,12 @@ from typing import List, Dict, Tuple, Optional
 from google.adk.runners import Runner, types as adk_types
 from google.adk.agents import Agent
 from .llm_factory import create_model
-from .cartographer_agent import create_cartographer_agent, GlossaryOutput
+from .cartographer_agent import create_cartographer_agent
 from .research_agent import create_research_agent
 from .translator_agent import create_translator_agent
 from .glossary_orchestrator import create_glossary_orchestrator
 from adk_config.session_service import get_session_service
+from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text
 
 
 # ---------------------------------------------------------------------------
@@ -192,8 +193,12 @@ Structure your findings clearly under these headings:
     try:
         response_text = await _collect_response_text(runner, session_id, prompt)
 
+        # Support XML tag extraction for research findings
+        findings_match = re.search(r'<research_findings>(.*?)</research_findings>', response_text, re.DOTALL)
+        findings = findings_match.group(1).strip() if findings_match else response_text
+
         research_data = {
-            "findings": response_text,
+            "findings": findings,
             "show_name": show_name,
             "target_language": target_language,
         }
@@ -337,9 +342,12 @@ def _sanitize_json(text: str) -> str:
     - JS-style // comments
     - Mixed quote styles
     """
-    # Fix common mistake: /key": value → "key": value
-    # This catches cases where a model accidentally types /gender", _gender", or similar
-    text = re.sub(r'(?<!")\s*[/_\-\u2014]\s*(\w+)":', r' "\1":', text)
+    # Fix common mistake: missing opening quote for JSON keys (e.g., `ingender":` or `/gender":`)
+    # This catches cases where a model accidentally omits the leading quote.
+    text = re.sub(r'(?<![\w"])([a-zA-Z0-9_]+)":', r'"\1":', text)
+    
+    # Still replace trailing slashes/dashes directly if they got attached (e.g. `"/gender":` -> `"gender":`)
+    text = re.sub(r'"[/_\-\u2014]+(\w+)":', r'"\1":', text)
     
     # Remove JS-style single-line comments
     text = re.sub(r'//[^\n]*', '', text)
@@ -349,120 +357,9 @@ def _sanitize_json(text: str) -> str:
     
     return text
 
-
-def _strip_reasoning_blocks(text: str) -> str:
-    """Strip internal reasoning blocks that local thinking models emit.
-
-    Handles formats produced by Qwen, DeepSeek-R1, Gemma-thinking, etc.:
-    - <think>...</think>
-    - <thinking>...</thinking>
-    - [REASONING]...[/REASONING]
-    - "Thinking Process:\\n..." markdown header blocks
-    - "reasoning_content" JSON leakage (usually separate, but guard anyway)
-    """
-    if not text:
-        return text
-
-    # XML-style tags (greedy across newlines)
-    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
-    text = re.sub(r'\[REASONING\].*?\[/REASONING\]', '', text, flags=re.DOTALL | re.IGNORECASE)
-
-    # Markdown "Thinking Process:" header block — strip until the next heading or blank line run
-    text = re.sub(
-        r'(?:^|\n)(?:Thinking Process|Internal Reasoning|Chain of Thought)\s*:.*?(?=\n(?:\d+[:.])|\Z)',
-        '', text, flags=re.DOTALL | re.IGNORECASE
-    )
-
-    # Strip incomplete opening tags (model was cut off mid-think)
-    text = re.sub(r'<think[^>]*>.*', '', text, flags=re.DOTALL | re.IGNORECASE)
-
-    return text.strip()
-
-
 def _parse_glossary_from_text(text: str) -> Dict:
-    """Parse glossary from AI response text.
-    
-    Handles multiple formats:
-    - JSON wrapped in markdown code blocks
-    - Raw JSON objects
-    - JSON arrays of terms
-    - Slightly malformed JSON from local LLMs (auto-sanitized)
-    """
-    if not text or not text.strip():
-        return {"terms": []}
-
-    # Strip reasoning blocks first (Qwen, DeepSeek-R1, Gemma-thinking)
-    text = _strip_reasoning_blocks(text)
-
-    # Strip markdown code blocks
-    clean = text.strip()
-    if clean.startswith("```json"):
-        clean = clean[7:]
-    elif clean.startswith("```"):
-        clean = clean[3:]
-    if clean.endswith("```"):
-        clean = clean[:-3]
-    clean = clean.strip()
-
-    # Try 1: Direct JSON parse
-    try:
-        parsed = json.loads(clean)
-        if isinstance(parsed, dict) and "terms" in parsed:
-            return parsed
-        if isinstance(parsed, list):
-            return {"terms": parsed}
-        return {"terms": [parsed] if "term" in parsed else []}
-    except json.JSONDecodeError:
-        pass
-
-    # Try 2: Sanitize and re-parse (fixes common local LLM typos)
-    sanitized = _sanitize_json(clean)
-    try:
-        parsed = json.loads(sanitized)
-        if isinstance(parsed, dict) and "terms" in parsed:
-            return parsed
-        if isinstance(parsed, list):
-            return {"terms": parsed}
-        return {"terms": [parsed] if "term" in parsed else []}
-    except json.JSONDecodeError:
-        pass
-
-    # Try 3: Find a JSON object containing "terms"
-    terms_match = re.search(r'\{"terms"\s*:\s*\[.*?\]\s*\}', sanitized, re.DOTALL)
-    if terms_match:
-        try:
-            return json.loads(terms_match.group(0))
-        except json.JSONDecodeError:
-            pass
-
-    # Try 4: Find any JSON array
-    array_match = re.search(r'\[.*\]', sanitized, re.DOTALL)
-    if array_match:
-        try:
-            parsed = json.loads(array_match.group(0))
-            if isinstance(parsed, list):
-                return {"terms": parsed}
-        except json.JSONDecodeError:
-            pass
-
-    # Try 5: Parse individual term objects (extremely lenient fallback)
-    # Extracts each {...} block and tries to parse them one by one
-    term_objects = re.findall(r'\{[^{}]+\}', sanitized, re.DOTALL)
-    valid_terms = []
-    for obj_str in term_objects:
-        try:
-            obj = json.loads(_sanitize_json(obj_str))
-            if "term" in obj and "translation" in obj:
-                valid_terms.append(obj)
-        except json.JSONDecodeError:
-            continue
-    if valid_terms:
-        print(f"DEBUG: Recovered {len(valid_terms)} terms via object-by-object fallback")
-        return {"terms": valid_terms}
-
-    print(f"DEBUG: Failed to parse glossary JSON. Response preview: {text[:200]}")
-    return {"terms": []}
+    """Parse glossary from AI response text using shared utility."""
+    return parse_glossary_from_text(text)
 
 
 def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
@@ -477,7 +374,7 @@ def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
     current_idx: Optional[int] = None
 
     # Strip reasoning blocks before parsing (handles Qwen/DeepSeek think tags)
-    text = _strip_reasoning_blocks(text)
+    text = strip_reasoning_blocks(text)
 
     for line in text.split("\n"):
         stripped = line.strip()

@@ -79,6 +79,15 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
             } catch (e) {
                 console.error("Polling error", e);
                 stopPolling();
+                
+                // If backend restarted or job was lost, handle UI gracefully instead of getting stuck
+                setJob(prev => prev ? { 
+                    ...prev, 
+                    status: 'failed', 
+                    message: e.response?.status === 404 
+                        ? 'Backend restarted. The translation job was lost.' 
+                        : 'Connection to server lost.'
+                } : null);
             }
         }, 1500);
     };

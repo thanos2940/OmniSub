@@ -175,7 +175,12 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
                         <Book className="w-6 h-6 text-indigo-600" />
                         Glossary Editor
                     </h2>
-                    <p className="text-sm text-gray-500">Review and edit detected terms before translation.</p>
+                    <div className="flex items-center gap-3 mt-1">
+                        <p className="text-sm text-gray-500">Review and edit detected terms before translation.</p>
+                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                            Est. {Math.ceil(JSON.stringify(terms).length / 3.8 * 1.15)} Tokens
+                        </span>
+                    </div>
                 </div>
                 <div className="flex gap-3">
                     <input

@@ -3,7 +3,7 @@ import { X, Save, Settings, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
 
-const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave }) => {
+const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave, tokenSummary }) => {
     const [settings, setSettings] = useState({
         translation_model: 'gemini-2.5-flash',
         context_model: 'gemini-2.5-flash',
@@ -92,6 +92,70 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                         />
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Sampling Parameters</h3>
+                            <div className="space-y-4">
+                                {[
+                                    { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, default: 0.3, format: v => parseFloat(v).toFixed(2) },
+                                    { key: 'top_k',       label: 'Top-K',       min: 1, max: 100, step: 1, default: 40, format: v => v },
+                                    { key: 'top_p',       label: 'Top-P',       min: 0.1, max: 1, step: 0.01, default: 1.0, format: v => parseFloat(v).toFixed(2) },
+                                ].map(({ key, label, min, max, step, default: def, format }) => (
+                                    <div key={key} className="space-y-1.5">
+                                        <div className="flex justify-between">
+                                            <label className="text-sm text-gray-600 dark:text-gray-400">{label}</label>
+                                            <span className="text-xs font-mono font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-md">
+                                                {format(settings[key] ?? def)}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="range" min={min} max={max} step={step}
+                                            value={settings[key] ?? def}
+                                            onChange={(e) => handleChange(key, step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value, 10))}
+                                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-indigo-600 bg-gray-200 dark:bg-gray-700"
+                                        />
+                                    </div>
+                                ))}
+                                <p className="text-[10px] text-gray-400 italic">These settings also apply in the Translation Sandbox tab.</p>
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Context Budget Analysis</h3>
+                            {tokenSummary ? (
+                                <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100/50 dark:border-indigo-900/20 space-y-2">
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Glossary Cost:</span>
+                                        <span className="font-mono font-bold text-indigo-600">{tokenSummary.glossary_tokens} tokens</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Context Guide:</span>
+                                        <span className="font-mono font-bold text-indigo-600">{tokenSummary.context_tokens} tokens</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs">
+                                        <span className="text-gray-500">Base Instructions:</span>
+                                        <span className="font-mono font-bold text-indigo-600">{tokenSummary.base_instruction_tokens} tokens</span>
+                                    </div>
+                                    <div className="pt-2 border-t border-indigo-100/30 flex justify-between text-xs font-bold">
+                                        <span className="text-gray-700 dark:text-gray-300">Total Base Load:</span>
+                                        <span className="text-indigo-700 dark:text-indigo-400">{tokenSummary.total_static_tokens} tokens</span>
+                                    </div>
+                                    <div className="pt-1 flex justify-between text-[10px] text-gray-400 italic">
+                                        <span>+ Avg. Chunk (Ref: 200 lines):</span>
+                                        <span>~6,500 tokens</span>
+                                    </div>
+                                    <div className="pt-2 border-t border-indigo-200/30 flex justify-between text-sm font-black">
+                                        <span className="text-gray-900 dark:text-white uppercase tracking-tighter">Est. Total Chunk:</span>
+                                        <span className="text-indigo-600 dark:text-indigo-400">{tokenSummary.total_static_tokens + 6500} tokens</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-center text-gray-400 italic">Waiting for token summary...</p>
+                            )}
+                            <p className="text-[10px] text-gray-400 mt-2 italic px-1">
+                                Base Load is sent with every scene. Reducing glossary entries or context length saves context window space.
+                            </p>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Local LLM (LM Studio)</h3>
                             <div className="space-y-3">
                                 <div className="flex gap-2">
@@ -141,7 +205,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                             </div>
                                         )}
                                     </div>
-                                )}
+                                ) || null}
                             </div>
                         </div>
                     </div>

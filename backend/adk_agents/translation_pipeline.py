@@ -8,7 +8,7 @@ for complete subtitle translation with glossary enhancement.
 from google.adk.agents import SequentialAgent
 from .cartographer_agent import create_cartographer_agent
 from .translator_agent import create_translator_agent
-from typing import Dict
+from typing import Dict, Optional
 
 
 def create_translation_pipeline(
@@ -18,7 +18,10 @@ def create_translation_pipeline(
     context_guide: str = "",
     cartographer_model: str = "gemini-flash-latest",
     translator_model: str = "gemini-flash-latest",
-    skip_glossary_step: bool = False
+    skip_glossary_step: bool = False,
+    temperature: Optional[float] = None,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
 ) -> SequentialAgent:
     """
     Create sequential pipeline for full translation workflow.
@@ -45,6 +48,9 @@ def create_translation_pipeline(
         sub_agents.append(create_cartographer_agent(
             model_name=cartographer_model,
             target_language=target_language,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
         ))
     
     sub_agents.append(create_translator_agent(
@@ -52,6 +58,9 @@ def create_translation_pipeline(
         glossary=glossary,
         target_language=target_language,
         context_guide=context_guide,
+        temperature=temperature,
+        top_k=top_k,
+        top_p=top_p,
     ))
     
     # Sanitize project name to be a valid ADK agent name (no spaces)

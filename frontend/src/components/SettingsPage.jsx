@@ -1,9 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Info, Settings as SettingsIcon, BookOpen, Zap, Globe } from 'lucide-react';
+import { Save, Info, Sparkles, Settings as SettingsIcon, BookOpen, Zap, Globe, Play, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import ModelCombobox from './ModelCombobox';
 
 const SettingsPage = () => {
+    const [testLines, setTestLines] = useState([
+        "What does it matter? It's just a curse.",
+        "You don't understand the weight of this identity.",
+        "The cherry blossoms are falling early this year.",
+        "Wait! Don't go into the forbidden forest alone!"
+    ]);
+    const [testModel, setTestModel] = useState('');
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState(null);
+
+    const handleRunTest = async () => {
+        setIsTesting(true);
+        try {
+            // We use the first project found as context for the test
+            const projectsRes = await api.getProjects();
+            const projectName = projectsRes.data[0]?.show_name;
+            if (!projectName) {
+                alert("Please create at least one project first to provide glossary/language context.");
+                return;
+            }
+
+            const res = await api.testTranslation(projectName, {
+                lines: testLines,
+                temperature: settings.temperature,
+                top_k: settings.top_k,
+                top_p: settings.top_p,
+                model_name: testModel || undefined
+            });
+            setTestResult(res.data);
+        } catch (err) {
+            console.error("Test failed", err);
+        } finally {
+            setIsTesting(false);
+        }
+    };
     const [settings, setSettings] = useState({
         default_target_language: 'English',
         default_scan_model: 'gemini-2.5-flash',
@@ -102,6 +137,36 @@ const SettingsPage = () => {
                             value={settings.default_scan_model}
                             onChange={(v) => handleChange('default_scan_model', v)}
                         />
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Concurrent Scenes (Parallel Limit)
+                            </label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={settings.concurrent_scenes || 3}
+                                onChange={(e) => handleChange('concurrent_scenes', parseInt(e.target.value, 10))}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Lower this if using local LLMs to prevent GPU/RAM crashes (Default: 3).</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Max Lines per Scene (Chunk Size)
+                            </label>
+                            <input
+                                type="number"
+                                min="10"
+                                max="1000"
+                                value={settings.max_lines_per_scene || 200}
+                                onChange={(e) => handleChange('max_lines_per_scene', parseInt(e.target.value, 10))}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Split large scenes if they exceed this limit. 200 is recommended for most models.</p>
+                        </div>
                     </div>
                 </div>
 
@@ -123,7 +188,97 @@ const SettingsPage = () => {
                 </div>
             </div>
 
-            {/* Instructions */}
+            {/* Advanced Model Config */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-500" />
+                        Advanced Model Config
+                    </h2>
+                </div>
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Temperature */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Temperature</label>
+                                <span className="inline-block px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold font-mono">
+                                    {(settings.temperature ?? 0.3).toFixed(2)}
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max="2"
+                                step="0.05"
+                                value={settings.temperature ?? 0.3}
+                                onChange={(e) => handleChange('temperature', parseFloat(e.target.value))}
+                                className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                            <p className="text-xs text-gray-500">
+                                Controls creativity. **0.0 - 0.3** is best for consistent translations. **0.5+** adds variety but might ignore glossary terms.
+                            </p>
+                        </div>
+
+                        {/* Top-P */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top-P (Nucleus Sampling)</label>
+                                <span className="inline-block px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold font-mono">
+                                    {(settings.top_p ?? 1.0).toFixed(2)}
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.1"
+                                max="1"
+                                step="0.01"
+                                value={settings.top_p ?? 1.0}
+                                onChange={(e) => handleChange('top_p', parseFloat(e.target.value))}
+                                className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                            <p className="text-xs text-gray-500">
+                                Limits vocabulary to the most likely tokens. **0.9** is a safe choice for local models. **1.0** uses everything.
+                            </p>
+                        </div>
+
+                        {/* Top-K */}
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Top-K</label>
+                                <span className="inline-block px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-700 text-xs font-bold font-mono">
+                                    {settings.top_k ?? 40}
+                                </span>
+                            </div>
+                            <input
+                                type="range"
+                                min="1"
+                                max="100"
+                                step="1"
+                                value={settings.top_k ?? 40}
+                                onChange={(e) => handleChange('top_k', parseInt(e.target.value, 10))}
+                                className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            />
+                            <p className="text-xs text-gray-500">
+                                Filters the top K tokens. **40** is standard. Lowering this makes the model more predictable.
+                            </p>
+                        </div>
+
+                         <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30">
+                            <div className="flex gap-3">
+                                <Info className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                                <div className="space-y-1">
+                                    <p className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider">Expert Mode Tip</p>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                                        For Local Models (Gemma), a temperature of **0.5**, Top-P of **0.9**, and Top-K of **64** are usually optimal for the "Thinking" stage.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">

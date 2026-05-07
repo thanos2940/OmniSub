@@ -14,7 +14,8 @@ The local endpoint URL is resolved from (highest priority first):
 
 import os
 import re
-from typing import Optional
+from typing import Optional, Type
+from pydantic import BaseModel
 
 from google.adk.models.google_llm import Gemini
 from google.genai import types
@@ -72,13 +73,13 @@ def get_recommended_chunk_size(model_name: str) -> int:
 
     # Gemma 26B+ has a 128K context window — use much larger chunks
     if "gemma" in name_lower:
-        match = re.search(r'(\d+(?:\.\d+)?)\s*-?\s*b(?:\b|it|q)', name_lower)
-        if match and float(match.group(1)) >= 26:
-            return 350
-        elif match and float(match.group(1)) >= 14:
-            return 200
-        else:
-            return 80  # translategemma-4b and similar small models
+        # match = re.search(r'(\d+(?:\.\d+)?)\s*-?\s*b(?:\b|it|q)', name_lower)
+        # if match and float(match.group(1)) >= 26:
+        #     return 350
+        # elif match and float(match.group(1)) >= 14:
+        return 80
+        # else:
+        #     return 80  # translategemma-4b and similar small models
 
     match = re.search(r'(\d+(?:\.\d+)?)\s*-?\s*b(?:\b|it|q)', name_lower)
     if match:
@@ -116,13 +117,12 @@ _LOCAL_GEN_DEFAULTS = {
 }
 
 # Gemma-specific override: tuned for its architecture and vocab distribution
-# Also disables Gemma 4's built-in thinking mode (wastes tokens on translation)
 _GEMMA_GEN_DEFAULTS = {
-    "temperature": 0.1,       # Gemma over-generates at 0.3+
-    "repetition_penalty": 1.15,
+    "temperature": 0.4,       # Gemma over-generates at 0.3+
+    "repetition_penalty": 1.1,
     "top_k": 64,              # Gemma's own recommended default
-    "top_p": 0.95,
-    "enable_thinking": False, # Disable Gemma 4's thinking mode for speed
+    "top_p": 0.90,
+    "enable_thinking": True, 
 }
 
 
@@ -139,6 +139,9 @@ def create_model(
     model_name: str,
     base_url: Optional[str] = None,
     temperature: Optional[float] = None,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
+    response_schema: Optional[Type[BaseModel]] = None,
 ):
     """
     Create an ADK-compatible model instance.
@@ -149,13 +152,17 @@ def create_model(
                      - "local/mistral-7b" → LiteLlm
         base_url: Override for local LLM server URL.
         temperature: Optional generation temperature.
+        response_schema: Optional Pydantic model to enforce via manual JSON Schema injection.
 
     Returns:
         An ADK model object (Gemini or LiteLlm).
     """
+    os.environ["LITELLM_LOG"] = "INFO"
+
     gen_config = {}
-    if temperature is not None:
-        gen_config["temperature"] = temperature
+    if temperature is not None: gen_config["temperature"] = temperature
+    if top_k is not None: gen_config["top_k"] = top_k
+    if top_p is not None: gen_config["top_p"] = top_p
 
     if is_local_model(model_name):
         actual_model = model_name[len("local/"):]
@@ -164,10 +171,6 @@ def create_model(
         try:
             from google.adk.models.lite_llm import LiteLlm
             import litellm
-
-            # Critical fix for local models (like translategemma) that
-            # don't support a 'system' role as the first message.
-            litellm.push_system_message_to_user_message = True
         except ImportError:
             raise ImportError(
                 "litellm is required for local LLM support. "
@@ -178,23 +181,32 @@ def create_model(
         os.environ["OPENAI_API_BASE"] = resolved_url
         os.environ["OPENAI_API_KEY"] = "not-needed"
 
-        # Feature 2: Apply model-specific generation defaults
-        # Gemma gets its own tuned profile; other local models use generic defaults
+        # Applying model-specific defaults, but parameters passed in override them.
         if _is_gemma_model(model_name):
             extra_body = dict(_GEMMA_GEN_DEFAULTS)
-            if temperature is not None:
-                extra_body["temperature"] = temperature  # explicit override wins
         else:
             extra_body = dict(_LOCAL_GEN_DEFAULTS)
-            if temperature is not None:
-                extra_body["temperature"] = temperature
+        
+        # EXPLICIT OVERRIDES WIN
+        if temperature is not None: extra_body["temperature"] = temperature
+        if top_k is not None: extra_body["top_k"] = top_k
+        if top_p is not None: extra_body["top_p"] = top_p
+                
+        if response_schema is not None:
+            # We disable strict BNF grammars (json_schema) for local models
+            # because they frequently conflict with 'Internal Thinking' tokens.
+            extra_body["response_format"] = {"type": "json_object"}
+            # Help prevent stuck sampling loops by slightly increasing penalty
+            extra_body["repetition_penalty"] = extra_body.get("repetition_penalty", 1.0) * 1.05
 
         return LiteLlm(
             model=f"openai/{actual_model}",
             extra_body=extra_body,
+            timeout=1200,    
+            max_retries=0    
         )
     else:
-        # Standard Gemini model — gen_config only populated if temperature given
+        # Standard Gemini model
         kwargs = {"model": model_name, "retry_options": RETRY_CONFIG}
         if gen_config:
             kwargs["generation_config"] = gen_config

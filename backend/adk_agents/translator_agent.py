@@ -7,7 +7,7 @@ cultural adaptation, and natural dialogue flow.
 
 from google.adk.agents import Agent
 from .llm_factory import create_model
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def _build_glossary_context(glossary: Dict) -> str:
@@ -55,6 +55,9 @@ def _build_glossary_context(glossary: Dict) -> str:
         lines.append(f"{header}{tag_str}{desc_str}")
     
     return "\n".join(lines)
+    
+
+
 
 
 def _build_instruction(
@@ -76,13 +79,12 @@ def _build_instruction(
 
 **Target Language:** {target_language}
 {context_section}
+
 **Translation Guidelines:**
 1. Translate naturally and conversationally (subtitles must feel authentic to native speakers)
 2. Preserve speaker intent and emotional tone
-3. Adapt idioms to target culture (avoid literal translations if they sound awkward)
-4. Multi-line subtitles use `<br>` as a line break marker. Preserve these markers in your translation. Example:
-   - Input: `5: First part of the sentence,<br>second part of the sentence.`
-   - Output: `5: Μετάφραση πρώτου μέρους,<br>μετάφραση δεύτερου μέρους.`
+3. Adapt idioms to target culture (avoid literal translations)
+4. Multi-line subtitles use `<br>` as a line break marker. Preserve these markers.
 
 **CRITICAL: Glossary Consistency**
 Use these exact translations for recognized terms:
@@ -92,33 +94,29 @@ Use these exact translations for recognized terms:
 **Strict Grammar & Casing Rules:**
 1. **Gender Compliance:** If a glossary term has a specified gender (e.g., [neuter]), you MUST use the corresponding articles and adjectives in {target_language}.
    - Example for Greek: "mana" [neuter] -> "το μάνα" (NOT "η μάνα")
-   
+
 2. **Case Sensitivity:**
-   - **(case-sensitive):** Match the glossary term EXACTLY as shown.
-   - **(case-insensitive):** Adapt casing naturally based on sentence position.
+- **(case-sensitive):** Match the glossary term EXACTLY as shown.
+- **(case-insensitive):** Adapt casing naturally based on sentence position.
 
 3. **DO NOT TRANSLATE terms marked [DO NOT TRANSLATE — keep original].** Use the original term as-is, integrating it naturally into the {target_language} sentence structure.
 
 4. **No Expansion of Partial Matches:** Use the glossary translation ONLY if the source text matches the glossary term (subject to case-sensitivity). 
    - **Example:** If the glossary contains "Rin Tohsaka" but the subtitle line only says "Rin", do NOT translate it as "Rin Tohsaka" (unless the context guide says otherwise). Translate "Rin" as its own entity.
    - Respect the source text's choice of using a nickname, given name, or full name.
+**Strict Coverage Rule:**
+You MUST provide a translation for EVERY input line. Do not skip any.
 
-**Input Format:**
-Numbered subtitle lines:
-```
-1: First subtitle line
-2: Second subtitle line
-```
+**Output Format (STRICT TAGS):**
+Provide your output exactly in this format. No other text.
 
-**Output Format:**
-Return ONLY translated lines in same numbered format. Keep each entry on a SINGLE line (use `<br>` for line breaks within an entry):
-```
-1: Translated first line
-2: Translated line with<br>a line break
-```
+<translations>
+<line index="1">Translation here</line>
+<line index="2">Translation here</line>
+</translations>
 
-Do NOT include explanations, notes, or anything other than numbered translations.
-Do NOT skip any line numbers. Every input line must have a corresponding output line."""
+**CRITICAL:** Every input line number MUST have a matching `<line index="N">` tag inside the `<translations>` block.
+"""
 
 
 def _build_local_instruction(
@@ -126,39 +124,22 @@ def _build_local_instruction(
     glossary_context: str,
     context_guide: str = "",
 ) -> str:
-    """Compact, example-driven instruction for local models.
+    return f"""Translate subtitles into {target_language}. Use the Tag-Based format.
 
-    Local models respond significantly better to concrete few-shot examples
-    than to long abstract rule sets. This instruction:
-    - Strips verbose sections that waste tokens on small context windows
-    - Shows 3 concrete input → output pairs as format anchors
-    - Ends with a hard 'begin output now' signal to suppress preamble
-    """
-    context_section = f"\nShow Context: {context_guide[:300]}\n" if context_guide else ""
-    glossary_section = f"\nGlossary (use exact translations):\n{glossary_context}\n" if glossary_context and glossary_context != "(No glossary terms provided)" else ""
-
-    return f"""Translate subtitles to {target_language}. Output ONLY numbered lines. No explanations.
-{context_section}{glossary_section}
 Rules:
-- Translate naturally, preserve emotion and tone
-- Use <br> for line breaks within a subtitle entry
-- Follow glossary terms exactly (case-sensitive where marked)
-- Never skip a line number
+1. Provide finalized translations in <translations> tags.
+2. Every input line MUST have a <line index="N"> tag.
 
-Examples:
-Input:
-1: I missed you.
-2: Don't lie to me!
-3: We'll meet again<br>I promise.
-4: I said I don't want it, damnit.
+{context_section}{glossary_section}
 
-Output:
-1: Μου έλειψες.
-2: Μην μου λες ψέματα!
-3: Θα ξανασυναντηθούμε<br>Το υπόσχομαι.
-4: Είπα ότι δεν το θέλω, γαμώτο.
+Example Output:
 
-Begin output immediately. First line below:"""
+<translations>
+<line index="5">Καλή επιτυχία!</line>
+<line index="6">Μην με κοροϊδεύεις.</line>
+</translations>
+
+Translate these lines now:"""
 
 
 def create_translator_agent(
@@ -166,6 +147,9 @@ def create_translator_agent(
     glossary: Dict = None,
     target_language: str = "English",
     context_guide: str = "",
+    temperature: Optional[float] = None,
+    top_k: Optional[int] = None,
+    top_p: Optional[float] = None,
 ) -> Agent:
     """
     Create Translator Agent for context-aware subtitle translation.
@@ -187,24 +171,36 @@ def create_translator_agent(
     is_local = model_name.startswith("local/")
     is_gemma = "gemma" in model_name.lower()
 
-    if is_local:
-        instruction = _build_local_instruction(target_language, glossary_context, context_guide)
-        # Feature: Gemma 4 has native multilingual competency — steer it explicitly
-        if is_gemma and target_language:
+    # Always use the comprehensive instructions for modern models.
+    # We append grammatical steering for Gemma models specifically if needed.
+    instruction = _build_instruction(target_language, glossary_context, context_guide)
+    
+    if is_local and is_gemma:
+        # User defined trigger for Gemma thinking mode
+        
+        if target_language:
             lang_hint = (
                 f"You are natively fluent in {target_language}. "
                 f"Your {target_language} output must sound like a native speaker: "
                 f"use correct articles, natural word order, and idiomatic expressions. "
                 f"Never leave foreign words untranslated unless marked keep_original.\n\n"
             )
-            instruction = lang_hint + instruction
-    else:
-        instruction = _build_instruction(target_language, glossary_context, context_guide)
+            instruction = "<|think|> " + lang_hint + instruction
+    
+    # Use passed temperature or fallback to defaults
+    final_temp = temperature if temperature is not None else (0.5 if is_local and is_gemma else 0.3)
     
     return Agent(
         name="TranslatorAgent",
-        model=create_model(model_name, temperature=0.3),
+        model=create_model(
+            model_name, 
+            temperature=final_temp,
+            top_k=top_k,
+            top_p=top_p,
+            response_schema=None # We use raw Tag parsing now for maximum robustness
+        ),
         instruction=instruction,
         tools=[],
+        output_schema=None,
         output_key="translation_result"
     )

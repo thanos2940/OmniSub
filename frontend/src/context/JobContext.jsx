@@ -75,6 +75,8 @@ export const JobProvider = ({ children }) => {
                             pipeline_stage: s.pipeline_stage,
                             pipeline_mode: s.pipeline_mode,
                             cancelled: s.cancelled,
+                            scene_status: s.scene_status,
+                            sub_jobs: s.sub_jobs
                         };
                     } catch (err) {
                         console.error(`Failed to poll job ${job.id}`, err);

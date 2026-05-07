@@ -7,6 +7,8 @@ export const api = {
     getProjects: () => axios.get(`${API_URL}/projects`),
     createProject: (name, targetLanguage, parentProject = null, type = 'show') => axios.post(`${API_URL}/projects`, { name, target_language: targetLanguage, parent_project: parentProject, type }),
     getProject: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}`),
+    getProjectTokenSummary: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/token-summary`),
+    testTranslation: (name, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/test-translation`, data),
     updateProject: (name, data) => axios.put(`${API_URL}/projects/${encodeURIComponent(name)}`, data),
     importProjectData: (projectName, sourceProject, importGlossary = true, importContext = true) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/import`, { source_project: sourceProject, import_glossary: importGlossary, import_context: importContext }),
 

@@ -94,3 +94,67 @@ def reconstruct_srt(parsed_data: List[Dict]) -> str:
     
     # SRT files should end with a blank line for compatibility
     return "\n\n".join(output) + "\n"
+
+
+def timecode_to_ms(timecode: str) -> int:
+    """Convert SRT timecode HH:MM:SS,MMM to milliseconds."""
+    parts = timecode.replace(',', ':').split(':')
+    if len(parts) != 4:
+        return 0
+    h, m, s, ms = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
+    return (h * 3600 + m * 60 + s) * 1000 + ms
+
+
+def build_scene_ast(parsed_data: List[Dict], gap_threshold_ms: int = 3000, max_lines_per_scene: int = 250) -> List[Dict]:
+    """
+    Groups flat parsed SRT data into semantic Scene chunks.
+    A new scene starts if the gap between the end of one line and the start
+    of the next is greater than gap_threshold_ms, or if the current scene
+    exceeds max_lines_per_scene.
+    """
+    if not parsed_data:
+        return []
+
+    scenes = []
+    current_scene = {
+        "scene_id": 1,
+        "start_index": 0,
+        "end_index": 0,
+        "lines": []
+    }
+    
+    for i, entry in enumerate(parsed_data):
+        tc = entry.get("timecode", "")
+        tc_parts = tc.split("-->")
+        start_ms = 0
+        end_ms = 0
+        if len(tc_parts) == 2:
+            start_ms = timecode_to_ms(tc_parts[0].strip())
+            end_ms = timecode_to_ms(tc_parts[1].strip())
+            
+        entry["_start_ms"] = start_ms
+        entry["_end_ms"] = end_ms
+
+        if current_scene["lines"]:
+            prev_entry = current_scene["lines"][-1]
+            prev_end_ms = prev_entry.get("_end_ms", 0)
+            
+            gap = start_ms - prev_end_ms
+            
+            if gap > gap_threshold_ms or len(current_scene["lines"]) >= max_lines_per_scene:
+                current_scene["end_index"] = i
+                scenes.append(current_scene)
+                current_scene = {
+                    "scene_id": len(scenes) + 1,
+                    "start_index": i,
+                    "end_index": i,
+                    "lines": []
+                }
+                
+        current_scene["lines"].append(entry)
+
+    if current_scene["lines"]:
+        current_scene["end_index"] = len(parsed_data)
+        scenes.append(current_scene)
+
+    return scenes

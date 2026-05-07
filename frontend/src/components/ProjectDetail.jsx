@@ -3,7 +3,7 @@ import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import {
     ArrowLeft, Upload, Book, Sparkles, Save, Edit2, Trash2,
-    Settings, Check, Folder, Film, Tv, X, Languages,
+    Settings, Check, Folder, Film, Tv, X, Languages, Zap,
     FileText, RefreshCw, Download, Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,6 +13,7 @@ import ContextReviewModal from './ContextReviewModal';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import PipelineStepper from './PipelineStepper';
 import SimplePipelineWizard from './SimplePipelineWizard';
+import TranslationSandbox from './TranslationSandbox';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
 
@@ -22,6 +23,7 @@ const TABS = {
     GLOSSARY: 'glossary',
     CONTEXT: 'context',
     SUBPROJECTS: 'subprojects',
+    SANDBOX: 'sandbox',
 };
 
 const ProjectDetail = () => {
@@ -47,6 +49,7 @@ const ProjectDetail = () => {
     const [isDownloading, setIsDownloading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [tokenSummary, setTokenSummary] = useState(null);
 
     // Editing State
     const [editedContext, setEditedContext] = useState('');
@@ -71,13 +74,15 @@ const ProjectDetail = () => {
         setLoading(true);
         setError(null);
         try {
-            const [projRes, allProjRes] = await Promise.all([
+            const [projRes, allProjRes, tokenRes] = await Promise.all([
                 api.getProject(projectName),
-                api.getProjects()
+                api.getProjects(),
+                api.getProjectTokenSummary(projectName)
             ]);
             const projData = projRes.data;
             setProject(projData);
             setEditedContext(projData.context_guide || '');
+            setTokenSummary(tokenRes.data);
 
             if (projData.type === 'parent') {
                 setActiveTab(TABS.SUBPROJECTS);
@@ -207,8 +212,12 @@ const ProjectDetail = () => {
 
     const handleSaveGlossary = async (newGlossary) => {
         try {
-            await api.updateProject(projectName, { glossary: newGlossary });
+            const res = await api.updateProject(projectName, { glossary: newGlossary });
             setProject(prev => ({ ...prev, glossary: newGlossary }));
+            
+            if (res.data && res.data.job_id) {
+                addJob(res.data.job_id, 'retranslate_invalidated', `Updating scenes with altered glossary terms...`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
+            }
         } catch (err) {
             console.error('Failed to save glossary', err);
             toast.error('Failed to save glossary');
@@ -438,6 +447,7 @@ const ProjectDetail = () => {
             { id: TABS.EPISODES, label: isMovie ? 'Files' : 'Episodes', icon: Film, count: episodes.length },
             { id: TABS.GLOSSARY, label: 'Glossary', icon: Book, count: project.glossary?.terms?.length || 0 },
             { id: TABS.CONTEXT, label: 'Context Guide', icon: FileText },
+            { id: TABS.SANDBOX, label: 'Sandbox', icon: Zap },
         ];
 
     return (
@@ -711,7 +721,14 @@ const ProjectDetail = () => {
                         <motion.div key="context" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
                             {/* Action Bar */}
                             <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Context Guide</h2>
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Context Guide</h2>
+                                    {tokenSummary && (
+                                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                                            Est. {tokenSummary.context_tokens} Tokens
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-2">
                                     {renderJobButton(contextJobId, setContextJobId, 'Generating')}
                                     {!getJobStatus(contextJobId) && (
@@ -770,6 +787,19 @@ const ProjectDetail = () => {
                                     </div>
                                 )}
                             </div>
+                        </motion.div>
+                    )}
+
+                    {/* ======= SANDBOX TAB ======= */}
+                    {activeTab === TABS.SANDBOX && (
+                        <motion.div key="sandbox" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            <TranslationSandbox
+                                project={project}
+                                projectName={projectName}
+                                onSettingsChange={(updatedSettings) => {
+                                    setProject(prev => ({ ...prev, settings: { ...(prev.settings || {}), ...updatedSettings } }));
+                                }}
+                            />
                         </motion.div>
                     )}
 
@@ -873,7 +903,9 @@ const ProjectDetail = () => {
                         isOpen={isSettingsOpen}
                         onClose={() => setIsSettingsOpen(false)}
                         settings={project.settings}
+                        project={project}
                         onSave={handleSaveSettings}
+                        tokenSummary={tokenSummary}
                     />
                 )}
             </AnimatePresence>
