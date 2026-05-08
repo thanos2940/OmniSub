@@ -14,6 +14,8 @@ import ProjectSettingsModal from './ProjectSettingsModal';
 import PipelineStepper from './PipelineStepper';
 import SimplePipelineWizard from './SimplePipelineWizard';
 import TranslationSandbox from './TranslationSandbox';
+import TranslationComparisonModal from './TranslationComparisonModal';
+import JobProgressWidget from './JobProgressWidget';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
 
@@ -58,6 +60,7 @@ const ProjectDetail = () => {
     // Modal State
     const [glossaryReviewModal, setGlossaryReviewModal] = useState({ isOpen: false, newTerms: [], existingTerms: [] });
     const [contextReviewModal, setContextReviewModal] = useState({ isOpen: false, newContext: '', currentContext: '' });
+    const [comparisonModal, setComparisonModal] = useState({ isOpen: false, episodeName: '', currentLines: [], newTranslations: {} });
 
     // Job Tracking
     const [contextJobId, setContextJobId] = useState(null);
@@ -134,6 +137,22 @@ const ProjectDetail = () => {
             loadData();
             toast.success('Pipeline complete — all episodes translated');
             setPipelineJobId(null);
+        } else if (job.type === 'retranslate_compare') {
+            const epName = job.result?.episode_name;
+            const newTranslations = job.result?.new_translations;
+            if (epName && newTranslations) {
+                api.getEpisode(projectName, epName).then(res => {
+                    setComparisonModal({
+                        isOpen: true,
+                        episodeName: epName,
+                        currentLines: res.data.data,
+                        newTranslations
+                    });
+                }).catch(err => {
+                    console.error("Failed to load episode for comparison", err);
+                    toast.error("Failed to load comparison view");
+                });
+            }
         }
     }, [project, projectName, navigate, toast]);
 
@@ -284,6 +303,43 @@ const ProjectDetail = () => {
         } catch (err) {
             console.error('Failed to start translation', err);
             toast.error('Failed to start translation');
+        }
+    };
+
+    const handleClearTranslation = async (episodeName) => {
+        if (!window.confirm(`Clear translation for ${episodeName}?`)) return;
+        try {
+            await api.clearTranslation(projectName, episodeName);
+            toast.success(`Translation cleared for ${episodeName}`);
+            loadData();
+        } catch (err) {
+            console.error('Failed to clear translation', err);
+            toast.error('Failed to clear translation');
+        }
+    };
+
+    const handleRetranslateEpisode = async (episodeName) => {
+        try {
+            const model = project.settings?.translation_model || 'gemini-flash-latest';
+            const res = await api.retranslateEpisode(projectName, episodeName, model);
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'retranslate_compare', `Retranslating ${episodeName} (Review Mode)`, { projectId: projectName, episodeName });
+                toast.info(`Retranslation started for ${episodeName}. You'll be able to review and merge changes once complete.`);
+            }
+        } catch (err) {
+            console.error('Failed to start retranslation', err);
+            toast.error('Failed to start retranslation');
+        }
+    };
+
+    const handleMergeComparison = async (selectedLines) => {
+        try {
+            await api.mergeTranslation(projectName, comparisonModal.episodeName, selectedLines);
+            toast.success(`Merged ${Object.keys(selectedLines).length} lines for ${comparisonModal.episodeName}`);
+            loadData();
+        } catch (err) {
+            console.error('Failed to merge translations', err);
+            toast.error('Failed to merge translations');
         }
     };
 
@@ -683,6 +739,24 @@ const ProjectDetail = () => {
                                                         <Languages size={16} />
                                                         <span className="hidden sm:inline">Translate</span>
                                                     </button>
+                                                    {ep.translated && (
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => handleRetranslateEpisode(ep.name)}
+                                                                className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                                                                title="Retranslate & Compare"
+                                                            >
+                                                                <RefreshCw size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleClearTranslation(ep.name)}
+                                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                                title="Clear Translation"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                     <Link
                                                         to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`}
                                                         className="text-indigo-600 hover:text-indigo-700 font-medium text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
@@ -939,6 +1013,17 @@ const ProjectDetail = () => {
                     />
                 )}
             </AnimatePresence>
+            <TranslationComparisonModal 
+                isOpen={comparisonModal.isOpen}
+                onClose={() => setComparisonModal(prev => ({ ...prev, isOpen: false }))}
+                projectName={projectName}
+                episodeName={comparisonModal.episodeName}
+                currentLines={comparisonModal.currentLines}
+                newTranslations={comparisonModal.newTranslations}
+                onApply={handleMergeComparison}
+            />
+
+            <JobProgressWidget />
         </div>
     );
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
-import { ArrowLeft, Sparkles, Languages } from 'lucide-react';
+import { ArrowLeft, Sparkles, Languages, RefreshCw, Trash2 } from 'lucide-react';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
 
@@ -110,6 +110,33 @@ const EpisodeView = () => {
         }
     };
 
+    const handleClear = async () => {
+        if (!window.confirm(`Clear translation for ${episodeName}?`)) return;
+        try {
+            await api.clearTranslation(projectName, episodeName);
+            toast.success(`Translation cleared`);
+            loadData();
+        } catch (err) {
+            console.error('Failed to clear translation', err);
+            toast.error('Failed to clear translation');
+        }
+    };
+
+    const handleRetranslate = async () => {
+        try {
+            const settings = project?.settings || {};
+            const translationModel = settings.translation_model || 'gemini-flash-latest';
+            const res = await api.retranslateEpisode(projectName, episodeName, translationModel);
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'retranslate_compare', `Retranslating ${episodeName} (Review Mode)`, { projectId: projectName, episodeName });
+                toast.info(`Retranslation started. You'll be notified when it's ready for review.`);
+            }
+        } catch (err) {
+            console.error('Failed to start retranslation', err);
+            toast.error('Failed to start retranslation');
+        }
+    };
+
     const activeJob = Object.values(activeJobs).find(job => 
         job.status === 'running' && 
         job.type === 'translate_episode' && 
@@ -134,6 +161,28 @@ const EpisodeView = () => {
                         </div>
                     </div>
                     <div className="flex gap-3">
+                        {data.some(d => d.translated) && (
+                            <>
+                                <button
+                                    onClick={handleClear}
+                                    disabled={processing || !!activeJob}
+                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                                    title="Clear all translations"
+                                >
+                                    <Trash2 size={18} />
+                                    Clear
+                                </button>
+                                <button
+                                    onClick={handleRetranslate}
+                                    disabled={processing || !!activeJob}
+                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
+                                    title="Retranslate and compare"
+                                >
+                                    <RefreshCw size={18} />
+                                    Retranslate
+                                </button>
+                            </>
+                        )}
                         <button
                             onClick={handleEnhanceGlossary}
                             disabled={processing || !!activeJob}

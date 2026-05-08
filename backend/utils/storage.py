@@ -49,7 +49,8 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
         "type": "show",
         "settings": {
             "scan_model": "gemini-flash-lite-latest",
-            "translation_model": "gemini-flash-latest"
+            "translation_model": "gemini-flash-latest",
+            "apply_subtitle_edit_fixes": True
         }
     }
     

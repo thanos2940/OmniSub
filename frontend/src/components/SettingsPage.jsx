@@ -167,6 +167,39 @@ const SettingsPage = () => {
                             />
                             <p className="text-xs text-gray-500 mt-1">Split large scenes if they exceed this limit. 200 is recommended for most models.</p>
                         </div>
+
+                        <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Post-Processing (SubtitleEdit)</h3>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        SubtitleEdit Path
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settings.subtitle_edit_path || ''}
+                                        onChange={(e) => handleChange('subtitle_edit_path', e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        placeholder="P:\SubtitleEdit\SubtitleEdit.exe"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Path to the SubtitleEdit.exe for automated fixes.</p>
+                                </div>
+
+                                <div className="flex items-center gap-3 pt-6">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            className="sr-only peer"
+                                            checked={settings.apply_subtitle_edit_fixes || false}
+                                            onChange={(e) => handleChange('apply_subtitle_edit_fixes', e.target.checked)}
+                                        />
+                                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                                        <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">Auto-Apply Fixes & Split Long Lines</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

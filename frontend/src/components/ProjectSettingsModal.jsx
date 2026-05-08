@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Settings, AlertCircle } from 'lucide-react';
+import { X, Save, Settings, AlertCircle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
 
@@ -8,7 +8,9 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
         translation_model: 'gemini-2.5-flash',
         context_model: 'gemini-2.5-flash',
         glossary_model: 'gemini-2.5-flash',
-        local_llm_base_url: 'http://localhost:1234/v1'
+        local_llm_base_url: 'http://localhost:1234/v1',
+        auto_export_enabled: false,
+        auto_export_dir: ''
     });
     const [testStatus, setTestStatus] = useState(null); // 'testing', 'success', 'error'
     const [testError, setTestError] = useState(null);
@@ -96,8 +98,8 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             <div className="space-y-4">
                                 {[
                                     { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, default: 0.3, format: v => parseFloat(v).toFixed(2) },
-                                    { key: 'top_k',       label: 'Top-K',       min: 1, max: 100, step: 1, default: 40, format: v => v },
-                                    { key: 'top_p',       label: 'Top-P',       min: 0.1, max: 1, step: 0.01, default: 1.0, format: v => parseFloat(v).toFixed(2) },
+                                    { key: 'top_k', label: 'Top-K', min: 1, max: 100, step: 1, default: 40, format: v => v },
+                                    { key: 'top_p', label: 'Top-P', min: 0.1, max: 1, step: 0.01, default: 1.0, format: v => parseFloat(v).toFixed(2) },
                                 ].map(({ key, label, min, max, step, default: def, format }) => (
                                     <div key={key} className="space-y-1.5">
                                         <div className="flex justify-between">
@@ -156,6 +158,63 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                         </div>
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Auto Export</h3>
+                            <div className="space-y-4">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <div className="relative flex items-center justify-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={settings.auto_export_enabled || false}
+                                            onChange={(e) => handleChange('auto_export_enabled', e.target.checked)}
+                                            className="sr-only"
+                                        />
+                                        <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${settings.auto_export_enabled ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 group-hover:border-indigo-400'}`}>
+                                            {settings.auto_export_enabled && <Check size={14} className="text-white" />}
+                                        </div>
+                                    </div>
+                                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Enable automatic export on translation completion</span>
+                                </label>
+
+                                {settings.auto_export_enabled && (
+                                    <div className="space-y-1.5 pl-8 animate-in fade-in slide-in-from-top-2">
+                                        <label className="text-sm text-gray-600 dark:text-gray-400">Export Directory</label>
+                                        <input
+                                            type="text"
+                                            value={settings.auto_export_dir || ''}
+                                            onChange={(e) => handleChange('auto_export_dir', e.target.value)}
+                                            placeholder="e.g. C:\Downloads\Subtitles"
+                                            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                        />
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                                            Files will be saved as <code>OriginalName.langCode.srt</code>
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Post-Processing</h3>
+                            <label className="flex items-center gap-3 cursor-pointer group">
+                                <div className="relative flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.apply_subtitle_edit_fixes || false}
+                                        onChange={(e) => handleChange('apply_subtitle_edit_fixes', e.target.checked)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${settings.apply_subtitle_edit_fixes ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 group-hover:border-indigo-400'}`}>
+                                        {settings.apply_subtitle_edit_fixes && <Check size={14} className="text-white" />}
+                                    </div>
+                                </div>
+                                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Auto-Apply SubtitleEdit Fixes & Splits</span>
+                            </label>
+                            <p className="text-[10px] text-gray-400 mt-1 pl-8 italic">
+                                Runs "Fix Common Errors" and "Split Long Lines" via SubtitleEdit CLI after translation.
+                            </p>
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Local LLM (LM Studio)</h3>
                             <div className="space-y-3">
                                 <div className="flex gap-2">
@@ -168,18 +227,17 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                             className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
                                         />
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={handleTestConnection}
                                         disabled={testStatus === 'testing'}
-                                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                                            testStatus === 'success' ? 'bg-green-100 text-green-700' :
-                                            testStatus === 'error' ? 'bg-red-100 text-red-700' :
-                                            'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
-                                        }`}
+                                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${testStatus === 'success' ? 'bg-green-100 text-green-700' :
+                                                testStatus === 'error' ? 'bg-red-100 text-red-700' :
+                                                    'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-200'
+                                            }`}
                                     >
-                                        {testStatus === 'testing' ? 'Testing...' : 
-                                         testStatus === 'success' ? 'Connected!' : 
-                                         testStatus === 'error' ? 'Failed' : 'Test'}
+                                        {testStatus === 'testing' ? 'Testing...' :
+                                            testStatus === 'success' ? 'Connected!' :
+                                                testStatus === 'error' ? 'Failed' : 'Test'}
                                     </button>
                                 </div>
                                 <p className="text-xs text-gray-500 dark:text-gray-400">

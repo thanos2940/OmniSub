@@ -1,12 +1,14 @@
 {
   "default_target_language": "Greek",
-  "default_scan_model": "local/google/gemma-4-e4b",
-  "default_translation_model": "local/google/gemma-4-e4b",
+  "default_scan_model": "gemini-flash-lite-latest",
+  "default_translation_model": "gemini-flash-lite-latest",
   "api_key": "",
   "local_llm_base_url": "http://localhost:1234/v1",
   "concurrent_scenes": 1,
   "max_lines_per_scene": 50,
   "temperature": 1.0,
   "top_k": 64,
-  "top_p": 0.95
+  "top_p": 0.95,
+  "subtitle_edit_path": "P:\\SubtitleEdit\\SubtitleEdit.exe",
+  "apply_subtitle_edit_fixes": true
 }

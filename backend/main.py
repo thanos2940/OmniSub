@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 
 from utils.srt_parser import parse_srt, extract_text_only, reconstruct_srt, build_scene_ast, get_scene_context_hint
+from utils.subtitle_fixer import fix_subtitles_with_se
 from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text, parse_translations_from_text
 
 from utils import storage
@@ -152,6 +153,9 @@ class ConfirmContextRequest(BaseModel):
 class ConfirmGlossaryRequest(BaseModel):
     glossary: Dict
 
+
+class MergeTranslationRequest(BaseModel):
+    selected_lines: Dict[str, str]  # global_index -> new translation text
 
 class JobStatus(BaseModel):
     id: str
@@ -562,6 +566,95 @@ async def delete_episode(project_name: str, episode_name: str):
     if storage.delete_episode(project_name, episode_name):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Episode not found")
+
+
+@app.post("/projects/{project_name}/episodes/{episode_name}/clear")
+async def clear_episode_translation(project_name: str, episode_name: str):
+    data = storage.load_episode(project_name, episode_name)
+    if not data:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    
+    for line in data["data"]:
+        line["translated"] = ""
+    
+    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    metadata["translated"] = False
+    
+    storage.save_episode(project_name, episode_name, data["data"], metadata)
+    return {"status": "cleared"}
+
+
+@app.post("/projects/{project_name}/episodes/{episode_name}/retranslate")
+async def retranslate_episode(
+    project_name: str, 
+    episode_name: str, 
+    background_tasks: BackgroundTasks,
+    request: TranslateRequest
+):
+    validate_api_key()
+    job_id = create_job("retranslate_compare")
+    background_tasks.add_task(
+        _process_retranslation_for_comparison, job_id, project_name,
+        episode_name, request.model
+    )
+    return {"job_id": job_id}
+
+
+@app.post("/projects/{project_name}/episodes/{episode_name}/merge")
+async def merge_episode_translation(project_name: str, episode_name: str, request: MergeTranslationRequest):
+    data = storage.load_episode(project_name, episode_name)
+    if not data:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    
+    for idx_str, text in request.selected_lines.items():
+        try:
+            idx = int(idx_str)
+            if 0 <= idx < len(data["data"]):
+                data["data"][idx]["translated"] = text
+        except (ValueError, TypeError):
+            continue
+    
+    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    metadata["translated"] = True
+    
+    storage.save_episode(project_name, episode_name, data["data"], metadata)
+    
+    # Auto-export if enabled
+    project_metadata = storage.load_project_metadata(project_name)
+    if project_metadata:
+        project_settings = project_metadata.get("settings", {})
+        if project_settings.get("auto_export_enabled") and project_settings.get("auto_export_dir"):
+            export_dir = project_settings.get("auto_export_dir")
+            try:
+                os.makedirs(export_dir, exist_ok=True)
+                target_lang = project_metadata.get("target_language", "English")
+                lang_codes = {
+                    "Greek": "el", "English": "en", "Spanish": "es", 
+                    "French": "fr", "German": "de", "Italian": "it", 
+                    "Portuguese": "pt", "Russian": "ru", "Japanese": "ja", 
+                    "Korean": "ko", "Chinese": "zh"
+                }
+                lang_code = lang_codes.get(target_lang, "en")
+                
+                orig_filename = data.get("metadata", {}).get("original_filename")
+                if orig_filename:
+                    if orig_filename.endswith(".en.srt"):
+                        filename = orig_filename.replace(".en.srt", f".{lang_code}.srt")
+                    elif orig_filename.endswith(".srt"):
+                        filename = orig_filename.replace(".srt", f".{lang_code}.srt")
+                    else:
+                        filename = f"{orig_filename}.{lang_code}.srt"
+                else:
+                    filename = f"{episode_name}.{lang_code}.srt"
+                    
+                export_path = os.path.join(export_dir, filename)
+                srt_content = reconstruct_srt(data["data"])
+                with open(export_path, 'w', encoding='utf-8') as f:
+                    f.write(srt_content)
+            except Exception as export_err:
+                print(f"Failed to auto-export after merge: {export_err}")
+
+    return {"status": "merged"}
 
 
 # Glossary Operations
@@ -1744,7 +1837,47 @@ async def _process_batch_translation(
                 if i in translated_map:
                     item["translated"] = translated_map[i]
             
+            # Apply SubtitleEdit fixes if configured
+            project_settings = metadata.get("settings", {})
+            if project_settings.get("apply_subtitle_edit_fixes", global_config.get("apply_subtitle_edit_fixes")):
+                update_job(job_id, log=f"Running SubtitleEdit fixes for {episode_name}...")
+                parsed_srt = fix_subtitles_with_se(parsed_srt)
+            
             storage.save_episode(project_name, episode_name, parsed_srt)
+            
+            # Auto-export if enabled
+            project_settings = metadata.get("settings", {})
+            if project_settings.get("auto_export_enabled") and project_settings.get("auto_export_dir"):
+                export_dir = project_settings.get("auto_export_dir")
+                try:
+                    os.makedirs(export_dir, exist_ok=True)
+                    lang_codes = {
+                        "Greek": "el", "English": "en", "Spanish": "es", 
+                        "French": "fr", "German": "de", "Italian": "it", 
+                        "Portuguese": "pt", "Russian": "ru", "Japanese": "ja", 
+                        "Korean": "ko", "Chinese": "zh"
+                    }
+                    lang_code = lang_codes.get(target_lang, "en")
+                    
+                    orig_filename = episode_data.get("metadata", {}).get("original_filename")
+                    if orig_filename:
+                        if orig_filename.endswith(".en.srt"):
+                            filename = orig_filename.replace(".en.srt", f".{lang_code}.srt")
+                        elif orig_filename.endswith(".srt"):
+                            filename = orig_filename.replace(".srt", f".{lang_code}.srt")
+                        else:
+                            filename = f"{orig_filename}.{lang_code}.srt"
+                    else:
+                        filename = f"{episode_name}.{lang_code}.srt"
+                        
+                    export_path = os.path.join(export_dir, filename)
+                    srt_content = reconstruct_srt(parsed_srt)
+                    with open(export_path, 'w', encoding='utf-8') as f:
+                        f.write(srt_content)
+                    update_job(job_id, log=f"Auto-exported to {export_path}")
+                except Exception as export_err:
+                    update_job(job_id, log=f"Failed to auto-export: {export_err}")
+            
             results[episode_name] = "Success"
             
             progress = ((idx + 1) / total) * 100
@@ -2183,6 +2316,109 @@ async def _resume_pipeline(job_id: str, project_name: str):
     event = _pipeline_resume_events.get(job_id)
     if event:
         event.set()
+
+async def _process_retranslation_for_comparison(
+    job_id: str, project_name: str, episode_name: str, model: str
+):
+    """Retranslate an episode without overwriting, storing results in job state for review."""
+    update_job(job_id, status="running", progress=0.0, message=f"Retranslating {episode_name}...", log="Job started")
+    try:
+        metadata = storage.load_project_metadata(project_name)
+        if not metadata:
+            update_job(job_id, status="failed", message="Project not found")
+            return
+
+        glossary = metadata.get("glossary", {"terms": []})
+        target_lang = metadata.get("target_language", "English")
+        context_guide = metadata.get("context_guide", "")
+
+        global_config = storage.load_global_config()
+        
+        ep_data = storage.load_episode(project_name, episode_name)
+        if not ep_data:
+             update_job(job_id, status="failed", message="Episode not found")
+             return
+             
+        parsed_srt = ep_data["data"]
+        scenes = build_scene_ast(parsed_srt)
+        total_scenes = len(scenes)
+        
+        shared_agent = create_translation_pipeline(
+            project_name=project_name,
+            target_language=target_lang,
+            glossary=glossary,
+            context_guide=context_guide,
+            cartographer_model=model,
+            translator_model=model,
+            skip_glossary_step=True,
+            temperature=global_config.get("temperature"),
+            top_k=global_config.get("top_k"),
+            top_p=global_config.get("top_p"),
+        )
+        _eph_svc = get_ephemeral_session_service()
+        from google.adk.runners import Runner as _Runner
+
+        new_translations = {} 
+        semaphore = asyncio.Semaphore(3)
+
+        async def _translate_scene_task(scene: Dict, prev_scene_lines: List[Dict] = None):
+            scene_label = f"Scene {scene['scene_id']}"
+            update_job(job_id, scene_status={scene_label: "pending"})
+            
+            async with semaphore:
+                if jobs[job_id].cancelled: return
+                update_job(job_id, scene_status={scene_label: "running"})
+                
+                session_id = f"retrans_{uuid4().hex[:8]}"
+                runner = _Runner(agent=shared_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc)
+                await _eph_svc.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
+                
+                context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
+                source_texts = [line.get("original", "") for line in scene.get("lines", [])]
+                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
+                
+                response_text = ""
+                async for event in runner.run_async(
+                    user_id="default_user",
+                    session_id=session_id,
+                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+                ):
+                    if jobs[job_id].cancelled: return
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.text: response_text += part.text
+
+                response_text = strip_reasoning_blocks(response_text)
+                parsed_lines = parse_translations_from_text(response_text)
+                
+                for item in parsed_lines:
+                    actual_idx = item["index"] - 1
+                    if 0 <= actual_idx < len(scene.get("lines", [])):
+                        global_idx = scene["start_index"] + actual_idx
+                        if global_idx < len(parsed_srt):
+                            new_translations[str(global_idx)] = item["text"]
+                
+                update_job(job_id, scene_status={scene_label: "completed"})
+
+        # Sequential processing to maintain context_hint flow
+        prev_lines = None
+        for i, scene in enumerate(scenes):
+            if jobs[job_id].cancelled: break
+            await _translate_scene_task(scene, prev_lines)
+            prev_lines = scene.get("lines")
+            update_job(job_id, progress=(i+1)/total_scenes * 100.0)
+
+        if not jobs[job_id].cancelled:
+            update_job(
+                job_id, 
+                status="completed", 
+                progress=100.0, 
+                message="Retranslation complete", 
+                result={"new_translations": new_translations, "episode_name": episode_name}
+            )
+    except Exception as e:
+        update_job(job_id, status="failed", message=f"Retranslation error: {str(e)}", log=str(e))
+
 
 def _select_golden_ratio_files(episodes: List[str]) -> List[str]:
     """

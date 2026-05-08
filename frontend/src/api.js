@@ -37,6 +37,9 @@ export const api = {
     },
     scanEpisode: (projectName, episodeName, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/scan`, { model }),
     translateEpisode: (projectName, episodeName, model, enhanceGlossary = false) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translate`, { model, enhance_glossary: enhanceGlossary }),
+    clearTranslation: (projectName, episodeName) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/clear`),
+    retranslateEpisode: (projectName, episodeName, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/retranslate`, { model }),
+    mergeTranslation: (projectName, episodeName, selectedLines) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/merge`, { selected_lines: selectedLines }),
 
     // Batch Operations
     batchTranslate: (projectName, episodeNames, model, enhanceGlossary = false) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-translate`, { episode_names: episodeNames, model, enhance_glossary: enhanceGlossary }),
