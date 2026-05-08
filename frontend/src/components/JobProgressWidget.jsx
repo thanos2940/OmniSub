@@ -107,6 +107,27 @@ const JobProgressWidget = () => {
                                         )}
                                     </div>
 
+                                    {/* Episodes Progress */}
+                                    {(job.completed_episodes?.length > 0 || job.failed_episodes?.length > 0) && (
+                                        <div className="mt-2 mb-1 flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                                            <span>Episode Progress</span>
+                                            <span className="text-indigo-600 dark:text-indigo-400">
+                                                {job.completed_episodes?.length || 0} / {(job.completed_episodes?.length || 0) + (job.failed_episodes?.length || 0)}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Daily Limit Warning */}
+                                    {job.daily_limit_reached && (
+                                        <div className="mt-2 mb-1 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md flex items-start gap-2">
+                                            <AlertCircle size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                                            <div className="text-[10px] text-amber-700 dark:text-amber-400">
+                                                <p className="font-bold">Daily API Limit Reached</p>
+                                                <p>Remaining episodes queued. Check settings for RPM/RPD limits.</p>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Scenes Progress */}
                                     {job.scene_status && Object.keys(job.scene_status).length > 0 && (
                                         <div className="mt-2 flex flex-wrap gap-1">
@@ -114,6 +135,7 @@ const JobProgressWidget = () => {
                                                 let bgColor = 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300';
                                                 if (status === 'running') bgColor = 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-400';
                                                 if (status === 'completed') bgColor = 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+                                                if (status === 'failed') bgColor = 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border border-red-400';
                                                 
                                                 return (
                                                     <span key={sceneName} className={`text-[10px] px-1.5 py-0.5 rounded ${bgColor}`}>

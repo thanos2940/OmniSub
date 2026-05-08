@@ -27,6 +27,8 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 from utils.srt_parser import parse_srt, extract_text_only, reconstruct_srt, build_scene_ast, get_scene_context_hint
 from utils.subtitle_fixer import fix_subtitles_with_se
 from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text, parse_translations_from_text
+from utils.rate_limiter import RateLimiter, DailyLimitExhausted
+from utils.api_call_wrapper import rate_limited_call
 
 from utils import storage
 from utils.cache_manager import invalidate_cache as _invalidate_translation_cache
@@ -64,6 +66,9 @@ def validate_api_key():
 # Initialize ADK services
 adk_runner_factory = OmbiSubRunnerFactory()
 adk_session_manager = OmbiSubSessionManager()
+
+# Initialize Rate Limiter (Gemini Free Tier defaults)
+translation_rate_limiter = RateLimiter(requests_per_minute=15, daily_limit=1500)
 
 app = FastAPI(title="OmbiSub API", version="5.0")
 
@@ -171,6 +176,10 @@ class JobStatus(BaseModel):
     sub_jobs: Optional[List[str]] = None
     scene_status: Optional[Dict[str, str]] = None  # {scene_id: status}
     cancelled: bool = False
+    completed_episodes: List[str] = []
+    failed_episodes: List[str] = []
+    rate_limit_hits: int = 0
+    daily_limit_reached: bool = False
 
 
 jobs: Dict[str, JobStatus] = {}
@@ -282,6 +291,20 @@ async def get_settings():
 async def update_settings(settings: SettingsRequest):
     storage.save_global_config(settings.dict(exclude_unset=True))
     return {"status": "success"}
+
+
+# Rate Limiting Endpoints
+
+@app.get("/rate-limit/stats")
+async def get_rate_limit_stats():
+    return translation_rate_limiter.get_stats()
+
+
+@app.post("/rate-limit/configure")
+async def configure_rate_limit(rpm: int = 15, rpd: int = 1500):
+    translation_rate_limiter.requests_per_minute = rpm
+    translation_rate_limiter.daily_limit = rpd
+    return {"status": "updated", "rpm": rpm, "rpd": rpd}
 
 
 # Project Management
@@ -782,6 +805,32 @@ async def batch_translate(
         request.episode_names, request.model, request.enhance_glossary, False
     )
     return {"job_id": job_id}
+
+
+@app.post("/projects/{project_name}/batch-translate/estimate")
+async def estimate_batch(project_name: str, request: BatchTranslateRequest):
+    """Estimate API usage before starting a batch."""
+    episodes = request.episode_names
+    total_scenes = 0
+    
+    global_config = storage.load_global_config()
+    max_lines = global_config.get("max_lines_per_scene", 200)
+    
+    for ep_name in episodes:
+        data = storage.load_episode(project_name, ep_name)
+        if data:
+            scenes = build_scene_ast(data["data"], max_lines_per_scene=max_lines)
+            total_scenes += len(scenes)
+
+    estimate = translation_rate_limiter.estimate_requests_from_scenes(total_scenes)
+    return {
+        "total_episodes": len(episodes),
+        "total_scenes": total_scenes,
+        "estimated_api_calls": total_scenes,  # 1 call per scene
+        "estimated_minutes": round(estimate["estimated_minutes"], 1),
+        "exceeds_daily_limit": estimate["exceeds_daily"],
+        "daily_remaining": estimate["remaining_daily"],
+    }
 
 
 # Pipeline Operations
@@ -1671,13 +1720,160 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         update_job(job_id, status="failed", message=f"Pipeline error: {str(e)}", log=str(e))
 
 
+async def _translate_episode_atomic(
+    job_id: str,
+    project_name: str,
+    episode_name: str,
+    target_lang: str,
+    shared_agent: Any,
+    rate_limiter: RateLimiter,
+    semaphore: asyncio.Semaphore,
+    global_config: Dict,
+    total_episodes: int,
+    episode_idx: int,
+    start_progress: float
+) -> bool:
+    """
+    Translates an entire episode. If any part fails, the episode is NOT saved as translated.
+    Uses rate limiting and retries.
+    """
+    episode_data = storage.load_episode(project_name, episode_name)
+    if not episode_data:
+        update_job(job_id, log=f"Episode {episode_name} not found, skipping.")
+        return False
+    
+    parsed_srt = episode_data["data"]
+    max_lines = global_config.get("max_lines_per_scene", 200)
+    scenes = build_scene_ast(parsed_srt, gap_threshold_ms=3000, max_lines_per_scene=max_lines)
+    total_scenes = len(scenes)
+    
+    update_job(job_id, log=f"Translating {episode_name} ({total_scenes} scenes)")
+    
+    translated_map = {}
+    _eph_svc = get_ephemeral_session_service()
+    from google.adk.runners import Runner as _Runner
+    
+    async def _translate_scene_task(scene: Dict, prev_scene_lines: List[Dict] = None):
+        scene_label = f"Scene {scene['scene_id']}"
+        update_job(job_id, scene_status={scene_label: "pending"})
+
+        async with semaphore:
+            if jobs[job_id].cancelled:
+                return
+
+            update_job(job_id, scene_status={scene_label: "running"})
+            
+            # Inner function for the actual API call to be wrapped by rate_limited_call
+            async def _perform_translation():
+                session_id = f"scene_{uuid4().hex[:8]}"
+                runner = _Runner(agent=shared_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc)
+                await _eph_svc.create_session(
+                    session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
+                )
+
+                lines = scene.get("lines", [])
+                if not lines:
+                    return ""
+
+                context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
+                source_texts = [line.get("original", "") for line in lines]
+                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
+
+                response_text = ""
+                async for event in runner.run_async(
+                    user_id="default_user",
+                    session_id=session_id,
+                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+                ):
+                    if jobs[job_id].cancelled:
+                        raise asyncio.CancelledError()
+
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            if part.text:
+                                response_text += part.text
+                return response_text
+
+            try:
+                # Wrap the ADK runner call with rate limiting
+                response_text = await rate_limited_call(
+                    _perform_translation,
+                    rate_limiter=rate_limiter
+                )
+                
+                # Parse reasoning
+                reasoning_match = re.search(r'<internal_reasoning>(.*?)</internal_reasoning>', response_text, re.DOTALL)
+                if reasoning_match:
+                    reasoning_text = reasoning_match.group(1).strip()
+                    update_job(job_id, log=f"{episode_name} S{scene['scene_id']} Reasoning: {reasoning_text[:200]}...")
+                
+                response_text = strip_reasoning_blocks(response_text)
+                parsed_lines = parse_translations_from_text(response_text)
+
+                for item in parsed_lines:
+                    actual_idx = item["index"] - 1
+                    if 0 <= actual_idx < len(scene.get("lines", [])):
+                        global_idx = scene["start_index"] + actual_idx
+                        translated_map[global_idx] = item["text"]
+                
+                update_job(job_id, scene_status={scene_label: "completed"})
+                
+                # Update progress
+                completed_count = len([s for s in jobs[job_id].scene_status.items() if s[1] == "completed" and s[0].startswith("Scene")])
+                progress = start_progress + ((completed_count / total_scenes) * (100.0 / total_episodes))
+                update_job(job_id, progress=progress)
+                
+            except DailyLimitExhausted:
+                update_job(job_id, scene_status={scene_label: "failed"})
+                raise
+            except Exception as e:
+                update_job(job_id, scene_status={scene_label: "failed"}, log=f"Scene {scene['scene_id']} failed: {str(e)}")
+                raise
+
+    # Clear scene statuses for this episode
+    update_job(job_id, scene_status={f"Scene {s['scene_id']}": "pending" for s in scenes})
+    
+    # Run all scenes in parallel (limited by semaphore)
+    tasks = []
+    for i, scene in enumerate(scenes):
+        prev_scene_lines = scenes[i - 1]["lines"] if i > 0 else None
+        tasks.append(_translate_scene_task(scene, prev_scene_lines))
+    
+    await asyncio.gather(*tasks)
+    
+    if jobs[job_id].cancelled:
+        return False
+        
+    # Check if all scenes were translated
+    if len(translated_map) < len(parsed_srt):
+        missing = len(parsed_srt) - len(translated_map)
+        update_job(job_id, log=f"Episode {episode_name} has {missing} untranslated lines. Atomic failure.")
+        return False
+
+    # Apply translations to parsed_srt
+    for idx, text in translated_map.items():
+        parsed_srt[idx]["translated"] = text
+        
+    # Apply SubtitleEdit fixes if configured
+    if global_config.get("apply_subtitle_edit_fixes"):
+        update_job(job_id, log=f"Running SubtitleEdit fixes for {episode_name}...")
+        parsed_srt = fix_subtitles_with_se(parsed_srt)
+    
+    # Save the episode
+    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    metadata["translated"] = True
+    metadata["translation_status"] = "completed"
+    metadata["last_translation_attempt"] = datetime.now().isoformat()
+    
+    storage.save_episode(project_name, episode_name, parsed_srt, metadata)
+    return True
+
 async def _process_batch_translation(
     job_id: str, project_name: str, episode_names: List[str], 
     model: str, enhance_glossary_flag: bool, is_simple_pipeline: bool = False
 ):
     update_job(job_id, status="running", progress=0.0, message="Starting translation...", log="Job started")
     try:
-        # Load metadata for source of truth
         metadata = storage.load_project_metadata(project_name)
         if not metadata:
             update_job(job_id, status="failed", message="Project not found")
@@ -1691,8 +1887,6 @@ async def _process_batch_translation(
         concurrent_limit = global_config.get("concurrent_scenes", 3)
         semaphore = asyncio.Semaphore(concurrent_limit)
 
-        # Build the agent ONCE per batch job — all scenes share the same instruction
-        # string, so the local LLM server can reuse its KV-cached system prefix.
         shared_agent = create_translation_pipeline(
             project_name=project_name,
             target_language=target_lang,
@@ -1705,188 +1899,68 @@ async def _process_batch_translation(
             top_k=global_config.get("top_k"),
             top_p=global_config.get("top_p"),
         )
-        _eph_svc = get_ephemeral_session_service()
-        from google.adk.runners import Runner as _Runner
 
-        # Track total progress across multiple episodes
-        progress = 0.0
         total = len(episode_names)
-
-        async def _translate_scene_task(scene: Dict, target_lang: str, translated_map: Dict, parsed_srt: List[Dict], total_scenes: int, episode_name: str, prev_scene_lines: List[Dict] = None):
-            nonlocal progress
-            scene_label = f"Scene {scene['scene_id']}"
-            update_job(job_id, scene_status={scene_label: "pending"})
-
-            async with semaphore:
-                if jobs[job_id].cancelled:
-                    return
-
-                update_job(job_id, scene_status={scene_label: "running"})
-                completed_scenes = [s for s in jobs[job_id].scene_status.values() if s == "completed"]
-                update_job(job_id, message=f"Translating {episode_name} ({len(completed_scenes)}/{total_scenes} scenes done)...")
-
-                # Each scene gets its own ephemeral session on the shared agent
-                session_id = f"scene_{uuid4().hex[:8]}"
-                runner = _Runner(agent=shared_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc)
-                await _eph_svc.create_session(
-                    session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
-                )
-
-                lines = scene.get("lines", [])
-                if not lines:
-                    return
-
-                # One-line context hint from the end of the previous scene — zero overlap waste
-                context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
-                source_texts = [line.get("original", "") for line in lines]
-                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
-
-                response_text = ""
-                async for event in runner.run_async(
-                    user_id="default_user",
-                    session_id=session_id,
-                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-                ):
-                    if jobs[job_id].cancelled:
-                        update_job(job_id, scene_status={scene_label: "cancelled"})
-                        return
-
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if part.text:
-                                response_text += part.text
-
-                # Parse structured JSON output
-                # Extract and log internal reasoning for transparency
-                reasoning_match = re.search(r'<internal_reasoning>(.*?)</internal_reasoning>', response_text, re.DOTALL)
-                if reasoning_match:
-                    reasoning_text = reasoning_match.group(1).strip()
-                    update_job(job_id, log=f"Scene {scene['scene_id']} Reasoning: {reasoning_text[:300]}...")
-                
-                # Strip reasoning blocks just in case any escaped the schema wrapper
-                response_text = strip_reasoning_blocks(response_text)
-                
-                # Robust parsing using shared utility
-                parsed_lines = parse_translations_from_text(response_text)
-
-                for item in parsed_lines:
-                    # Output indices are 1-based, no overlap offset needed
-                    actual_idx = item["index"] - 1
-                    if 0 <= actual_idx < len(lines):
-                        global_idx = scene["start_index"] + actual_idx
-                        translated_map[global_idx] = item["text"]
-                        if global_idx < len(parsed_srt):
-                            parsed_srt[global_idx]["translated"] = item["text"]
-                
-                # Incrementally save the episode for the frontend Live View
-                storage.save_episode(project_name, episode_name, parsed_srt)
-                update_job(job_id, scene_status={scene_label: "completed"})
-                
-                # Update main job message after completion
-                completed_count = len([s for s in jobs[job_id].scene_status.values() if s == "completed"])
-                update_job(job_id, message=f"Translating {episode_name} ({completed_count}/{total_scenes} scenes done)...", progress=progress + ((completed_count/total_scenes) * (100/total)))
-
-        results = {}
-        total = len(episode_names)
+        completed_episodes = []
+        failed_episodes = []
         
+        # Pre-flight check
+        estimate = translation_rate_limiter.estimate_requests(episode_names)
+        if estimate["exceeds_daily"]:
+            update_job(job_id, log=f"Warning: Batch needs ~{estimate['total_requests']} requests, daily limit is {translation_rate_limiter.daily_limit}. Will process as many as possible.")
+
         for idx, episode_name in enumerate(episode_names):
             if jobs[job_id].cancelled:
                 update_job(job_id, status="cancelled", message="Cancelled by user")
                 return
 
-            update_job(job_id, message=f"Translating {episode_name}...", log=f"Processing {episode_name}")
+            update_job(job_id, message=f"Translating {episode_name} ({idx+1}/{total})...")
             
-            episode_data = storage.load_episode(project_name, episode_name)
-            if not episode_data:
-                results[episode_name] = "Not found"
-                continue
-            
-            parsed_srt = episode_data["data"]
-            
-            # 1. Semantic Chunking (AST)
-            max_lines = global_config.get("max_lines_per_scene", 200)
-            scenes = build_scene_ast(parsed_srt, gap_threshold_ms=3000, max_lines_per_scene=max_lines)
-            update_job(job_id, log=f"Split episode into {len(scenes)} Scenes based on temporal gaps.", scene_status={f"Scene {s['scene_id']}": "pending" for s in scenes})
-            
-            translated_map = {}
-            
-            # 2. Parallel Scene Translation
-            # Skip scenes that are already fully translated (resume support)
-            def _scene_complete(scene: Dict) -> bool:
-                return all(line.get("translated", "").strip() for line in scene.get("lines", []))
-
-            pending_scenes = [(i, s) for i, s in enumerate(scenes) if not _scene_complete(s)]
-            skipped = len(scenes) - len(pending_scenes)
-            if skipped:
-                update_job(job_id, log=f"Resuming {episode_name}: skipping {skipped} already-translated scene(s)")
-
-            tasks = []
-            total_scenes = len(scenes)
-            for i, scene in pending_scenes:
-                prev_scene_lines = scenes[i - 1]["lines"] if i > 0 else None
-                tasks.append(_translate_scene_task(scene, target_lang, translated_map, parsed_srt, total_scenes, episode_name, prev_scene_lines))
-
-            await asyncio.gather(*tasks)
-            
-            if jobs[job_id].cancelled:
-                update_job(job_id, status="cancelled", message="Cancelled by user")
-                return
-            
-            # 3. Final Reconstruct (Already handled progressively, but ensure clean merge)
-            for i, item in enumerate(parsed_srt):
-                if i in translated_map:
-                    item["translated"] = translated_map[i]
-            
-            # Apply SubtitleEdit fixes if configured
-            project_settings = metadata.get("settings", {})
-            if project_settings.get("apply_subtitle_edit_fixes", global_config.get("apply_subtitle_edit_fixes")):
-                update_job(job_id, log=f"Running SubtitleEdit fixes for {episode_name}...")
-                parsed_srt = fix_subtitles_with_se(parsed_srt)
-            
-            storage.save_episode(project_name, episode_name, parsed_srt)
-            
-            # Auto-export if enabled
-            project_settings = metadata.get("settings", {})
-            if project_settings.get("auto_export_enabled") and project_settings.get("auto_export_dir"):
-                export_dir = project_settings.get("auto_export_dir")
-                try:
-                    os.makedirs(export_dir, exist_ok=True)
-                    lang_codes = {
-                        "Greek": "el", "English": "en", "Spanish": "es", 
-                        "French": "fr", "German": "de", "Italian": "it", 
-                        "Portuguese": "pt", "Russian": "ru", "Japanese": "ja", 
-                        "Korean": "ko", "Chinese": "zh"
-                    }
-                    lang_code = lang_codes.get(target_lang, "en")
+            try:
+                success = await _translate_episode_atomic(
+                    job_id=job_id,
+                    project_name=project_name,
+                    episode_name=episode_name,
+                    target_lang=target_lang,
+                    shared_agent=shared_agent,
+                    rate_limiter=translation_rate_limiter,
+                    semaphore=semaphore,
+                    global_config=global_config,
+                    total_episodes=total,
+                    episode_idx=idx,
+                    start_progress=(idx / total) * 100.0
+                )
+                
+                if success:
+                    completed_episodes.append(episode_name)
+                    update_job(job_id, completed_episodes=completed_episodes)
+                else:
+                    failed_episodes.append(episode_name)
+                    update_job(job_id, failed_episodes=failed_episodes)
                     
-                    orig_filename = episode_data.get("metadata", {}).get("original_filename")
-                    if orig_filename:
-                        if orig_filename.endswith(".en.srt"):
-                            filename = orig_filename.replace(".en.srt", f".{lang_code}.srt")
-                        elif orig_filename.endswith(".srt"):
-                            filename = orig_filename.replace(".srt", f".{lang_code}.srt")
-                        else:
-                            filename = f"{orig_filename}.{lang_code}.srt"
-                    else:
-                        filename = f"{episode_name}.{lang_code}.srt"
-                        
-                    export_path = os.path.join(export_dir, filename)
-                    srt_content = reconstruct_srt(parsed_srt)
-                    with open(export_path, 'w', encoding='utf-8') as f:
-                        f.write(srt_content)
-                    update_job(job_id, log=f"Auto-exported to {export_path}")
-                except Exception as export_err:
-                    update_job(job_id, log=f"Failed to auto-export: {export_err}")
+            except DailyLimitExhausted:
+                update_job(job_id, daily_limit_reached=True, log="Daily API limit reached. Stopping batch.")
+                remaining = episode_names[idx:]
+                failed_episodes.extend(remaining)
+                update_job(job_id, failed_episodes=failed_episodes)
+                break
+            except Exception as e:
+                update_job(job_id, log=f"Episode {episode_name} failed: {str(e)}")
+                failed_episodes.append(episode_name)
+                update_job(job_id, failed_episodes=failed_episodes)
+
+        final_status = "completed" if not failed_episodes else "partial"
+        message = f"Translated {len(completed_episodes)}/{total} episodes."
+        if failed_episodes:
+            message += f" {len(failed_episodes)} failed or skipped."
             
-            results[episode_name] = "Success"
-            
-            progress = ((idx + 1) / total) * 100
-            update_job(job_id, progress=progress, log=f"Completed {episode_name}")
-        
         update_job(
-            job_id, status="completed", progress=100.0,
-            message="Translation completed",
-            result=results
+            job_id, status=final_status, progress=100.0,
+            message=message,
+            result={
+                "completed": completed_episodes,
+                "failed": failed_episodes
+            }
         )
     except Exception as e:
         update_job(job_id, status="failed", message=f"Error: {str(e)}", log=str(e))
@@ -1960,29 +2034,42 @@ async def _process_targeted_retranslation(job_id: str, project_name: str, affect
 
                 update_job(job_id, scene_status={scene_label: "running"})
 
-                session_id = f"scene_{uuid4().hex[:8]}"
-                runner = _Runner(agent=_retrans_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc_rt)
-                await _eph_svc_rt.create_session(
-                    session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
-                )
+                async def _perform_translation():
+                    session_id = f"scene_{uuid4().hex[:8]}"
+                    runner = _Runner(agent=_retrans_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc_rt)
+                    await _eph_svc_rt.create_session(
+                        session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
+                    )
 
-                lines = scene.get("lines", [])
-                source_texts = [line.get("original", "") for line in lines]
-                prompt = build_translation_prompt(source_texts, target_lang)
+                    lines = scene.get("lines", [])
+                    source_texts = [line.get("original", "") for line in lines]
+                    prompt = build_translation_prompt(source_texts, target_lang)
 
-                response_text = ""
-                async for event in runner.run_async(
-                    user_id="default_user",
-                    session_id=session_id,
-                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-                ):
-                    if jobs[job_id].cancelled:
-                        update_job(job_id, scene_status={scene_label: "cancelled"})
-                        return
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if part.text:
-                                response_text += part.text
+                    response_text = ""
+                    async for event in runner.run_async(
+                        user_id="default_user",
+                        session_id=session_id,
+                        new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+                    ):
+                        if jobs[job_id].cancelled:
+                            raise asyncio.CancelledError()
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if part.text:
+                                    response_text += part.text
+                    return response_text
+
+                try:
+                    response_text = await rate_limited_call(
+                        _perform_translation,
+                        rate_limiter=translation_rate_limiter
+                    )
+                except DailyLimitExhausted:
+                    update_job(job_id, daily_limit_reached=True, log="Daily API limit reached.")
+                    raise
+                except Exception as e:
+                    update_job(job_id, log=f"Scene translation failed: {str(e)}")
+                    raise
 
                 # Extract and log internal reasoning
                 reasoning_match = re.search(r'<internal_reasoning>(.*?)</internal_reasoning>', response_text, re.DOTALL)
@@ -2239,15 +2326,29 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
                             else:
                                 current_prompt = base_prompt
 
-                            response_text = ""
-                            async for event in ep_runner.run_async(
-                                user_id="default_user", session_id=ep_session_id,
-                                new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=current_prompt)])
-                            ):
-                                if event.content and event.content.parts:
-                                    for part in event.content.parts:
-                                        if part.text:
-                                            response_text += part.text
+                            async def _perform_chunk_translation():
+                                resp_text = ""
+                                async for event in ep_runner.run_async(
+                                    user_id="default_user", session_id=ep_session_id,
+                                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=current_prompt)])
+                                ):
+                                    if event.content and event.content.parts:
+                                        for part in event.content.parts:
+                                            if part.text:
+                                                resp_text += part.text
+                                return resp_text
+
+                            try:
+                                response_text = await rate_limited_call(
+                                    _perform_chunk_translation,
+                                    rate_limiter=translation_rate_limiter
+                                )
+                            except DailyLimitExhausted:
+                                update_job(job_id, daily_limit_reached=True, log="Daily API limit reached.")
+                                raise
+                            except Exception as e:
+                                update_job(job_id, log=f"Chunk translation failed: {str(e)}")
+                                raise
 
                             for item in parse_translations_from_text(response_text):
                                 idx = item["index"]
@@ -2369,24 +2470,31 @@ async def _process_retranslation_for_comparison(
                 if jobs[job_id].cancelled: return
                 update_job(job_id, scene_status={scene_label: "running"})
                 
-                session_id = f"retrans_{uuid4().hex[:8]}"
-                runner = _Runner(agent=shared_agent, app_name=f"OmbiSub_{session_id}", session_service=_eph_svc)
-                await _eph_svc.create_session(session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}")
-                
-                context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
-                source_texts = [line.get("original", "") for line in scene.get("lines", [])]
-                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
-                
-                response_text = ""
-                async for event in runner.run_async(
-                    user_id="default_user",
-                    session_id=session_id,
-                    new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
-                ):
-                    if jobs[job_id].cancelled: return
-                    if event.content and event.content.parts:
-                        for part in event.content.parts:
-                            if part.text: response_text += part.text
+                async def _perform_comparison_translation():
+                    resp_text = ""
+                    async for event in runner.run_async(
+                        user_id="default_user",
+                        session_id=session_id,
+                        new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+                    ):
+                        if jobs[job_id].cancelled:
+                            raise asyncio.CancelledError()
+                        if event.content and event.content.parts:
+                            for part in event.content.parts:
+                                if part.text: resp_text += part.text
+                    return resp_text
+
+                try:
+                    response_text = await rate_limited_call(
+                        _perform_comparison_translation,
+                        rate_limiter=translation_rate_limiter
+                    )
+                except DailyLimitExhausted:
+                    update_job(job_id, daily_limit_reached=True, log="Daily API limit reached.")
+                    raise
+                except Exception as e:
+                    update_job(job_id, log=f"Comparison translation failed: {str(e)}")
+                    raise
 
                 response_text = strip_reasoning_blocks(response_text)
                 parsed_lines = parse_translations_from_text(response_text)

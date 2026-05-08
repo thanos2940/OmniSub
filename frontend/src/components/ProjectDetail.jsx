@@ -391,8 +391,24 @@ const ProjectDetail = () => {
 
     const handleBatchTranslate = async () => {
         try {
-            const model = project.settings?.translation_model || 'gemini-flash-latest';
             const names = Array.from(selectedEpisodes);
+            
+            // Pre-flight check
+            const estimateRes = await api.estimateBatchTranslate(projectName, names);
+            const est = estimateRes.data;
+            
+            if (est.exceeds_daily) {
+                const proceed = window.confirm(
+                    `Warning: This batch will likely exceed your daily API limit.\n\n` +
+                    `Estimated Requests: ~${est.total_requests}\n` +
+                    `Daily Limit: ${est.daily_limit}\n` +
+                    `Current Usage: ${est.current_daily_count}\n\n` +
+                    `The job will process as many as possible and then pause. Proceed?`
+                );
+                if (!proceed) return;
+            }
+
+            const model = project.settings?.translation_model || 'gemini-flash-latest';
             const res = await api.batchTranslate(projectName, names, model);
             if (res.data.job_id) {
                 addJob(res.data.job_id, 'batch_translate', `Batch translating ${names.length} episodes`, { projectId: projectName });
@@ -405,17 +421,33 @@ const ProjectDetail = () => {
 
     const handleAutoTranslate = async () => {
         try {
+            const episodeNames = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : episodes.map(e => e.name);
+            
+            // Pre-flight check
+            const estimateRes = await api.estimateBatchTranslate(projectName, episodeNames);
+            const est = estimateRes.data;
+            
+            if (est.exceeds_daily) {
+                const proceed = window.confirm(
+                    `Warning: This batch will likely exceed your daily API limit.\n\n` +
+                    `Estimated Requests: ~${est.total_requests}\n` +
+                    `Daily Limit: ${est.daily_limit}\n` +
+                    `Current Usage: ${est.current_daily_count}\n\n` +
+                    `The job will process as many as possible and then pause. Proceed?`
+                );
+                if (!proceed) return;
+            }
+
             const model = project.settings?.translation_model || 'gemini-flash-latest';
-            const episodeNames = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null;
             const res = await api.autoTranslate(projectName, {
                 model,
-                episode_names: episodeNames,
+                episode_names: selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null,
                 skip_context: !!project.context_guide,
                 skip_glossary: project.glossary?.terms?.length > 0,
             });
             if (res.data.job_id) {
-                const label = episodeNames
-                    ? `Auto-translating ${episodeNames.length} episode(s)`
+                const label = selectedEpisodes.size > 0
+                    ? `Auto-translating ${selectedEpisodes.size} episode(s)`
                     : `Auto-translating all episodes`;
                 addJob(res.data.job_id, 'auto_translate', label, { projectId: projectName });
                 toast.info('Auto-translate started');

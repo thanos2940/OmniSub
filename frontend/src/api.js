@@ -103,4 +103,9 @@ export const api = {
     // Auto-translate (fire-and-forget, no review gates)
     autoTranslate: (projectName, options = {}) =>
         axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/auto-translate`, options),
+
+    // Rate Limiting
+    getRateLimitStats: () => axios.get(`${API_URL}/rate-limit/stats`),
+    updateRateLimitConfig: (config) => axios.post(`${API_URL}/rate-limit/configure`, config),
+    estimateBatchTranslate: (projectName, episodeNames) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-translate/estimate`, { episode_names: episodeNames }),
 };
