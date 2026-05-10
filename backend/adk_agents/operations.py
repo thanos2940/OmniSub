@@ -420,3 +420,67 @@ def _parse_numbered_output(text: str, expected_count: int) -> List[str]:
         lines_map.get(i, "").replace("<br>", "\n")
         for i in range(1, expected_count + 1)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Episode Summary Generation
+# ---------------------------------------------------------------------------
+
+async def generate_episode_summary_adk(
+    parsed_srt: List[Dict],
+    episode_name: str,
+    show_name: str,
+    model_name: str = "gemini-flash-latest",
+) -> str:
+    """Generate a compact episode summary for cross-episode context propagation.
+
+    Samples the translated (or original) text, then asks a lightweight agent
+    to produce a 2–3 sentence / ≤50-word summary focused on events and
+    character developments — not dialogue transcription.
+
+    Uses the translated text if available so the summary reflects the
+    target-language interpretation of the episode.
+
+    Args:
+        parsed_srt: Full translated episode data.
+        episode_name: Episode identifier (e.g. "S01E01 - Opening").
+        show_name: Human-readable show/movie title for context.
+        model_name: Model to use (Flash is sufficient for summarisation).
+
+    Returns:
+        Stripped summary string. Empty string on failure.
+    """
+    # Prefer translated text; fall back to original if not yet translated
+    lines = [
+        (entry.get("translated") or entry.get("original") or "").strip()
+        for entry in parsed_srt
+    ]
+    lines = [l for l in lines if l]
+
+    if not lines:
+        return ""
+
+    # Stratified sample — 60 lines spread across the episode
+    sampled = _stratified_sample(lines, total=60)
+    text_sample = "\n".join(sampled)
+
+    prompt = (
+        f'Summarize episode "{episode_name}" of "{show_name}" in 2-3 sentences (max 50 words).\n'
+        f"Focus on: key events, character developments, new terminology introduced.\n"
+        f"Do NOT transcribe dialogue — summarize what HAPPENED.\n\n"
+        f"Subtitle text:\n{text_sample}"
+    )
+
+    agent = Agent(
+        name="SummaryAgent",
+        model=create_model(model_name, temperature=0.2),
+        instruction=(
+            "Write extremely concise episode summaries for subtitle translation context. "
+            "Output ONLY the summary text — no labels, no preamble, no markdown."
+        ),
+        tools=[],
+    )
+
+    runner, session_id = await _create_session_and_runner(agent, "summary")
+    summary = await _collect_response_text(runner, session_id, prompt)
+    return summary.strip()

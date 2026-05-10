@@ -88,19 +88,46 @@ def _build_gemma_instruction(
     )
 
 
-def build_translation_prompt(lines: List[str], target_language: str, context_line: str = "") -> str:
+def build_translation_prompt(
+    lines: List[str],
+    target_language: str,
+    context_line: str = "",
+    few_shot_context: str = "",
+    priority_glossary: str = "",
+    character_context: str = "",
+    episode_context: str = "",
+) -> str:
     """Build a compact translation prompt for a batch of subtitle lines.
+
+    Prompt section ordering (most → least stable) for Gemini cache efficiency:
+        1. episode_context  — same for every scene in the episode (semi-stable)
+        2. priority_glossary — filtered per scene but often similar
+        3. character_context — changes only when different characters appear
+        4. few_shot_context  — varies per scene (TM examples)
+        5. context_line      — changes every scene (previous scene hint)
+        6. numbered lines    — always unique
+
+    Keeping stable sections at the front maximises Gemini implicit cache hits
+    across scenes within the same episode.
 
     Args:
         lines: Original subtitle text lines (no timecodes).
         target_language: Target language name.
         context_line: Optional one-line context from the end of the previous scene.
+        few_shot_context: Optional TM-retrieved example translations block.
+        priority_glossary: Optional filtered glossary terms for this scene.
+        character_context: Optional character profile block for this scene.
+        episode_context: Optional "Previously in this show:" block from past episodes.
     """
     numbered = "\n".join(
         f"{i + 1}| {line.replace(chr(10), '<br>')}" for i, line in enumerate(lines)
     )
     ctx = f"[prev] {context_line}\n" if context_line else ""
-    return f"Translate to {target_language}:\n\n{ctx}{numbered}"
+    fs = f"{few_shot_context}\n\n" if few_shot_context else ""
+    pg = f"{priority_glossary}\n\n" if priority_glossary else ""
+    ch = f"{character_context}\n\n" if character_context else ""
+    ep = f"{episode_context}\n\n" if episode_context else ""
+    return f"Translate to {target_language}:\n\n{ep}{pg}{ch}{fs}{ctx}{numbered}"
 
 
 def create_translator_agent(

@@ -29,6 +29,8 @@ from utils.subtitle_fixer import fix_subtitles_with_se
 from utils.llm_utils import strip_reasoning_blocks, parse_glossary_from_text, parse_translations_from_text
 from utils.rate_limiter import RateLimiter, DailyLimitExhausted
 from utils.api_call_wrapper import rate_limited_call
+from utils.translation_memory import TranslationMemory, filter_glossary_for_chunk, build_priority_glossary_block
+from utils.character_profiles import CharacterProfileManager
 
 from utils import storage
 from utils.cache_manager import invalidate_cache as _invalidate_translation_cache
@@ -144,6 +146,26 @@ class SettingsRequest(BaseModel):
     temperature: Optional[float] = None
     top_k: Optional[int] = None
     top_p: Optional[float] = None
+    # Translation Memory settings
+    tm_enabled: Optional[bool] = None
+    tm_similarity_threshold: Optional[float] = None
+    tm_exact_match_threshold: Optional[float] = None
+    # Character profiles
+    character_profiles_enabled: Optional[bool] = None
+    # Reviewer agent settings
+    enable_reviewer: Optional[bool] = None
+    review_model: Optional[str] = None
+    review_threshold: Optional[float] = None       # Below this avg score -> retranslate
+    review_max_pct: Optional[float] = None          # Max % of lines to review (0.0-1.0)
+    # Episode summary settings
+    episode_summaries_enabled: Optional[bool] = None
+    episode_summary_window: Optional[int] = None   # Number of past summaries to inject
+    # Bazarr integration settings
+    bazarr_url: Optional[str] = None
+    bazarr_api_key: Optional[str] = None
+    bazarr_enabled: Optional[bool] = None
+    bazarr_poll_interval: Optional[int] = None
+    bazarr_media_types: Optional[str] = None  # "series", "movies", "both"
 
 
 class ApiKeyRequest(BaseModel):
@@ -305,6 +327,576 @@ async def configure_rate_limit(rpm: int = 15, rpd: int = 1500):
     translation_rate_limiter.requests_per_minute = rpm
     translation_rate_limiter.daily_limit = rpd
     return {"status": "updated", "rpm": rpm, "rpd": rpd}
+
+
+# Translation Memory Endpoints
+
+@app.get("/projects/{project_name}/tm/stats")
+async def tm_stats(project_name: str):
+    """Get Translation Memory statistics for a project."""
+    try:
+        tm = TranslationMemory(project_name)
+        return tm.get_stats()
+    except Exception as e:
+        return {"error": str(e), "total_records": 0}
+
+
+@app.get("/projects/{project_name}/edit-stats")
+async def get_edit_stats(project_name: str):
+    """Show how many user edits have been recorded and their impact."""
+    tm = TranslationMemory(project_name)
+    stats = tm.get_stats()
+    return {
+        "total_records": stats.get("total_records", 0),
+        "user_edited_records": stats.get("user_edited_count", 0),
+        "edit_ratio": stats.get("user_edited_count", 0) / max(stats.get("total_records", 1), 1),
+    }
+
+
+@app.delete("/projects/{project_name}/tm")
+async def tm_clear(project_name: str):
+    """Clear all Translation Memory records for a project."""
+    try:
+        tm = TranslationMemory(project_name)
+        tm.clear()
+        return {"status": "cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear TM: {e}")
+
+
+@app.post("/projects/{project_name}/tm/search")
+async def tm_search(project_name: str, lines: List[str], top_k: int = 3, threshold: float = 0.80):
+    """Search Translation Memory for similar translations."""
+    try:
+        tm = TranslationMemory(project_name)
+        results = tm.search(lines, top_k=top_k, similarity_threshold=threshold)
+        return {"results": {str(k): v for k, v in results.items()}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TM search failed: {e}")
+
+
+# Character Profile Endpoints
+
+@app.get("/projects/{project_name}/characters")
+async def get_character_profiles(project_name: str):
+    """Get all character profiles for a project."""
+    mgr = CharacterProfileManager(project_name)
+    return mgr.get_all_as_dicts()
+
+
+@app.put("/projects/{project_name}/characters/{character_name}")
+async def update_character_profile(project_name: str, character_name: str, updates: Dict):
+    """Create or update a character profile."""
+    mgr = CharacterProfileManager(project_name)
+    mgr.update_profile(character_name, updates)
+    profile = mgr.get_profile(character_name)
+    return profile.to_dict() if profile else {"status": "updated"}
+
+
+@app.delete("/projects/{project_name}/characters/{character_name}")
+async def delete_character_profile(project_name: str, character_name: str):
+    """Delete a character profile."""
+    mgr = CharacterProfileManager(project_name)
+    if mgr.delete_profile(character_name):
+        return {"status": "deleted"}
+    raise HTTPException(status_code=404, detail=f"Character '{character_name}' not found")
+
+
+@app.post("/projects/{project_name}/characters/generate")
+async def generate_character_profiles(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    model: str = "gemini-flash-latest",
+):
+    """Auto-generate character profiles from existing episodes and glossary.
+
+    Uses an LLM to analyze subtitle text and determine character gender,
+    formality, speech patterns, and verbal tics. Results are merged with
+    any existing profiles (existing profiles are not overwritten).
+    """
+    validate_api_key()
+    job_id = create_job("generate_profiles")
+    background_tasks.add_task(
+        _process_profile_generation, job_id, project_name, model
+    )
+    return {"job_id": job_id}
+
+
+async def _process_profile_generation(job_id: str, project_name: str, model: str):
+    """Background task: generate character profiles from episode text."""
+    try:
+        update_job(job_id, status="running", progress=10.0, message="Analyzing characters...")
+
+        metadata = storage.load_project_metadata(project_name)
+        if not metadata:
+            update_job(job_id, status="failed", message="Project not found")
+            return
+
+        # Collect text from first few episodes for analysis
+        episodes = storage.list_episodes(project_name)
+        if not episodes:
+            update_job(job_id, status="failed", message="No episodes found")
+            return
+
+        # Use first 2-3 episodes for profile generation
+        sample_episodes = episodes[:3]
+        combined_lines = []
+        for ep_name in sample_episodes:
+            ep_data = storage.load_episode(project_name, ep_name)
+            if ep_data:
+                combined_lines.extend(
+                    entry.get("original", "") for entry in ep_data["data"]
+                )
+
+        if not combined_lines:
+            update_job(job_id, status="failed", message="No subtitle text found")
+            return
+
+        # Stratified sample for analysis
+        from adk_agents.operations import _stratified_sample
+        sampled = _stratified_sample(combined_lines, total=300)
+        subtitle_text = "\n".join(sampled)
+
+        # Get character names from glossary
+        glossary = metadata.get("glossary", {"terms": []})
+        character_names = [
+            t.get("term", "")
+            for t in glossary.get("terms", [])
+            if t.get("type") == "person" and t.get("term")
+        ]
+
+        update_job(job_id, progress=30.0, message="Running character analysis...",
+                   log=f"Analyzing {len(sampled)} lines across {len(sample_episodes)} episodes, {len(character_names)} known characters")
+
+        # Create and run the profile agent
+        from adk_agents.profile_agent import create_profile_agent, build_profile_prompt
+        from adk_agents.operations import _create_session_and_runner, _collect_response_text
+
+        agent = create_profile_agent(
+            model_name=model,
+            target_language=metadata.get("target_language", "Greek"),
+        )
+        runner, session_id = await _create_session_and_runner(agent, "profiles")
+        prompt = build_profile_prompt(
+            subtitle_text,
+            character_names,
+            show_name=metadata.get("show_name", project_name),
+        )
+
+        response_text = await rate_limited_call(
+            lambda: _collect_response_text(runner, session_id, prompt),
+            rate_limiter=translation_rate_limiter,
+        )
+
+        update_job(job_id, progress=70.0, message="Parsing profiles...")
+
+        # Parse JSON response
+        import re as _re
+        json_match = _re.search(r'\[.*\]', response_text, _re.DOTALL)
+        if not json_match:
+            update_job(job_id, status="failed", message="Failed to parse profile response",
+                       log=f"Response: {response_text[:500]}")
+            return
+
+        try:
+            profiles_data = json.loads(json_match.group())
+        except json.JSONDecodeError as e:
+            update_job(job_id, status="failed", message=f"Invalid JSON in response: {e}",
+                       log=f"Response: {response_text[:500]}")
+            return
+
+        # Merge with existing profiles (don't overwrite user edits)
+        mgr = CharacterProfileManager(project_name)
+        existing = mgr.load_all()
+        new_count = 0
+        updated_count = 0
+
+        for profile_dict in profiles_data:
+            name = profile_dict.get("name", "")
+            if not name:
+                continue
+
+            if name in existing:
+                # Only fill in fields that are currently empty/unknown
+                existing_profile = existing[name]
+                if existing_profile.gender == "unknown" and profile_dict.get("gender", "unknown") != "unknown":
+                    existing_profile.gender = profile_dict["gender"]
+                    updated_count += 1
+                if not existing_profile.speech_patterns and profile_dict.get("speech_patterns"):
+                    existing_profile.speech_patterns = profile_dict["speech_patterns"]
+                if not existing_profile.verbal_tics and profile_dict.get("verbal_tics"):
+                    existing_profile.verbal_tics = profile_dict["verbal_tics"]
+                if not existing_profile.formality and profile_dict.get("formality"):
+                    existing_profile.formality = profile_dict["formality"]
+            else:
+                from utils.character_profiles import CharacterProfile
+                existing[name] = CharacterProfile(
+                    name=name,
+                    gender=profile_dict.get("gender", "unknown"),
+                    formality=profile_dict.get("formality", "informal"),
+                    speech_patterns=profile_dict.get("speech_patterns", ""),
+                    verbal_tics=profile_dict.get("verbal_tics", []),
+                    episode_first_seen=sample_episodes[0] if sample_episodes else "",
+                )
+                new_count += 1
+
+        mgr.save_all(existing)
+
+        update_job(
+            job_id, status="completed", progress=100.0,
+            message=f"Generated {new_count} new profiles, updated {updated_count} existing",
+            result={"profiles": mgr.get_all_as_dicts()},
+            log=f"Total profiles: {len(existing)}",
+        )
+
+    except Exception as e:
+        update_job(job_id, status="failed", message=f"Error: {str(e)}", log=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Episode Summaries
+# ---------------------------------------------------------------------------
+
+@app.get("/projects/{project_name}/summaries")
+async def get_episode_summaries(project_name: str):
+    """Get all episode summaries for a project.
+
+    Returns a dict of {episode_name: summary_text} sorted by episode name.
+    """
+    metadata = storage.load_project_metadata(project_name)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from utils.episode_summaries import EpisodeSummaryManager
+    mgr = EpisodeSummaryManager(project_name)
+    all_summaries = mgr.load_all()
+    # Return sorted for frontend display
+    return {k: all_summaries[k] for k in sorted(all_summaries)}
+
+
+@app.put("/projects/{project_name}/summaries/{episode_name}")
+async def update_episode_summary(
+    project_name: str,
+    episode_name: str,
+    body: Dict,
+):
+    """Create or update an episode summary.
+
+    Expects JSON body: {"summary": "text here"}
+    Users can manually edit summaries to correct LLM inaccuracies or
+    add terminology notes that will propagate to future translations.
+    """
+    summary_text = body.get("summary", "").strip()
+    if not summary_text:
+        raise HTTPException(status_code=400, detail="summary field is required and must not be empty")
+
+    from utils.episode_summaries import EpisodeSummaryManager
+    mgr = EpisodeSummaryManager(project_name)
+    mgr.save_summary(episode_name, summary_text)
+    return {"status": "updated", "episode": episode_name}
+
+
+@app.delete("/projects/{project_name}/summaries/{episode_name}")
+async def delete_episode_summary(project_name: str, episode_name: str):
+    """Delete an episode's summary."""
+    from utils.episode_summaries import EpisodeSummaryManager
+    mgr = EpisodeSummaryManager(project_name)
+    if mgr.delete_summary(episode_name):
+        return {"status": "deleted"}
+    raise HTTPException(status_code=404, detail=f"No summary found for '{episode_name}'")
+
+
+@app.post("/projects/{project_name}/summaries/{episode_name}/generate")
+async def generate_summary_for_episode(
+    project_name: str,
+    episode_name: str,
+    background_tasks: BackgroundTasks,
+    model: str = "gemini-flash-latest",
+):
+    """Manually trigger summary generation for a specific translated episode.
+
+    Useful when summaries were not auto-generated (e.g. feature was disabled
+    at translation time) or when a summary needs to be regenerated.
+    """
+    validate_api_key()
+
+    data = storage.load_episode(project_name, episode_name)
+    if not data:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    job_id = create_job("generate_summary")
+    background_tasks.add_task(
+        _process_summary_generation, job_id, project_name, episode_name, model
+    )
+    return {"job_id": job_id}
+
+
+async def _process_summary_generation(
+    job_id: str,
+    project_name: str,
+    episode_name: str,
+    model: str,
+):
+    """Background task: generate a summary for one episode."""
+    try:
+        update_job(job_id, status="running", progress=20.0, message=f"Generating summary for {episode_name}...")
+
+        data = storage.load_episode(project_name, episode_name)
+        if not data:
+            update_job(job_id, status="failed", message="Episode not found")
+            return
+
+        proj_meta = storage.load_project_metadata(project_name)
+        show_name = proj_meta.get("show_name", project_name) if proj_meta else project_name
+
+        from adk_agents.operations import generate_episode_summary_adk
+        summary = await generate_episode_summary_adk(
+            data["data"],
+            episode_name,
+            show_name=show_name,
+            model_name=model,
+        )
+
+        if not summary:
+            update_job(job_id, status="failed", message="LLM returned empty summary")
+            return
+
+        from utils.episode_summaries import EpisodeSummaryManager
+        mgr = EpisodeSummaryManager(project_name)
+        mgr.save_summary(episode_name, summary)
+
+        update_job(
+            job_id,
+            status="completed",
+            progress=100.0,
+            message="Summary generated",
+            result={"episode": episode_name, "summary": summary},
+        )
+    except Exception as e:
+        update_job(job_id, status="failed", message=f"Error: {e}", log=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Review Queue
+# ---------------------------------------------------------------------------
+
+@app.get("/projects/{project_name}/review-queue")
+async def get_review_queue(project_name: str):
+    """Get all lines flagged for user review across all episodes.
+
+    Returns lines where the Reviewer Agent detected potential issues.
+    Each item includes the original, translated text, review scores,
+    and the reviewer's issues description.
+    """
+    metadata = storage.load_project_metadata(project_name)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    flagged = []
+    for ep_name in storage.list_episodes(project_name):
+        data = storage.load_episode(project_name, ep_name)
+        if not data:
+            continue
+        for i, line in enumerate(data["data"]):
+            if line.get("needs_review"):
+                flagged.append({
+                    "episode": ep_name,
+                    "index": i,
+                    "original": line.get("original", ""),
+                    "translated": line.get("translated", ""),
+                    "timecode": line.get("timecode", ""),
+                    "review_issues": line.get("review_issues", ""),
+                    "review_scores": line.get("review_scores", {}),
+                })
+
+    return {"items": flagged, "count": len(flagged)}
+
+
+@app.post("/projects/{project_name}/review-queue/resolve")
+async def resolve_review_item(
+    project_name: str,
+    episode_name: str,
+    line_index: int,
+):
+    """Mark a review-flagged line as resolved (user has verified it).
+
+    Clears the needs_review flag and review metadata for the line.
+    """
+    data = storage.load_episode(project_name, episode_name)
+    if not data:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    if line_index < 0 or line_index >= len(data["data"]):
+        raise HTTPException(status_code=400, detail="Invalid line index")
+
+    line = data["data"][line_index]
+    line.pop("needs_review", None)
+    line.pop("review_issues", None)
+    line.pop("review_scores", None)
+
+    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    storage.save_episode(project_name, episode_name, data["data"], metadata)
+
+    return {"status": "resolved", "episode": episode_name, "index": line_index}
+
+
+@app.post("/projects/{project_name}/review-queue/resolve-all")
+async def resolve_all_review_items(project_name: str):
+    """Mark all review-flagged lines as resolved across all episodes."""
+    resolved_count = 0
+    for ep_name in storage.list_episodes(project_name):
+        data = storage.load_episode(project_name, ep_name)
+        if not data:
+            continue
+
+        modified = False
+        for line in data["data"]:
+            if line.get("needs_review"):
+                line.pop("needs_review", None)
+                line.pop("review_issues", None)
+                line.pop("review_scores", None)
+                resolved_count += 1
+                modified = True
+
+        if modified:
+            metadata = storage.load_episode_metadata(project_name, ep_name) or {}
+            storage.save_episode(project_name, ep_name, data["data"], metadata)
+
+    return {"status": "resolved", "count": resolved_count}
+
+
+# Bazarr Integration
+
+from integrations.bazarr import BazarrConfig, test_connection as bazarr_test_connection
+from integrations.auto_translator import AutoTranslator
+
+_auto_translator: Optional[AutoTranslator] = None
+
+
+def _build_bazarr_config(global_config: Dict) -> BazarrConfig:
+    """Build BazarrConfig from global settings."""
+    return BazarrConfig(
+        base_url=global_config.get("bazarr_url", "http://localhost:6767"),
+        api_key=global_config.get("bazarr_api_key", ""),
+        target_language=global_config.get("default_target_language", "Greek"),
+        enabled=global_config.get("bazarr_enabled", False),
+        poll_interval_minutes=global_config.get("bazarr_poll_interval", 30),
+        media_types=global_config.get("bazarr_media_types", "both"),
+    )
+
+
+async def _start_auto_translator():
+    """Start the auto-translator if Bazarr is configured and enabled."""
+    global _auto_translator
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    if bazarr_config.enabled and bazarr_config.api_key:
+        _auto_translator = AutoTranslator(bazarr_config)
+        await _auto_translator.start()
+
+
+async def _stop_auto_translator():
+    """Stop the auto-translator if running."""
+    global _auto_translator
+    if _auto_translator:
+        await _auto_translator.stop()
+        _auto_translator = None
+
+
+@app.on_event("startup")
+async def on_startup():
+    """Start background services on server startup."""
+    await _start_auto_translator()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    """Stop background services on server shutdown."""
+    await _stop_auto_translator()
+
+
+@app.get("/integrations/bazarr/status")
+async def bazarr_status():
+    """Check Bazarr connection status and auto-translator state."""
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    result = {
+        "configured": bool(bazarr_config.api_key),
+        "enabled": bazarr_config.enabled,
+        "url": bazarr_config.base_url,
+        "target_language": bazarr_config.target_language,
+        "poll_interval_minutes": bazarr_config.poll_interval_minutes,
+        "media_types": bazarr_config.media_types,
+    }
+
+    # Add auto-translator stats if running
+    if _auto_translator:
+        result["auto_translator"] = _auto_translator.get_status()
+    else:
+        result["auto_translator"] = {"is_running": False}
+
+    return result
+
+
+@app.post("/integrations/bazarr/test")
+async def bazarr_test():
+    """Test the Bazarr connection with current settings."""
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    if not bazarr_config.api_key:
+        return {"connected": False, "error": "Bazarr API key not configured"}
+
+    return await bazarr_test_connection(bazarr_config)
+
+
+@app.post("/integrations/bazarr/scan-now")
+async def bazarr_scan_now(background_tasks: BackgroundTasks):
+    """Manually trigger a scan for missing subtitles and translate them."""
+    if not _auto_translator:
+        # Create a temporary instance for the manual scan
+        config = storage.load_global_config()
+        bazarr_config = _build_bazarr_config(config)
+        if not bazarr_config.api_key:
+            raise HTTPException(status_code=400, detail="Bazarr API key not configured")
+        temp_translator = AutoTranslator(bazarr_config)
+        background_tasks.add_task(temp_translator.scan_now)
+        return {"status": "scan_triggered", "note": "Using temporary translator (auto-translate not enabled)"}
+
+    background_tasks.add_task(_auto_translator.scan_now)
+    return {"status": "scan_triggered"}
+
+
+@app.get("/integrations/bazarr/preview")
+async def bazarr_preview():
+    """Preview what would be translated without triggering translation."""
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    if not bazarr_config.api_key:
+        raise HTTPException(status_code=400, detail="Bazarr API key not configured")
+
+    translator = _auto_translator or AutoTranslator(bazarr_config)
+    items = await translator.preview()
+    return {"items": items, "count": len(items)}
+
+
+@app.post("/integrations/bazarr/toggle")
+async def bazarr_toggle(enabled: bool):
+    """Enable or disable the auto-translator background service."""
+    config = storage.load_global_config()
+    config["bazarr_enabled"] = enabled
+    storage.save_global_config(config)
+
+    if enabled:
+        await _stop_auto_translator()
+        await _start_auto_translator()
+        return {"status": "enabled", "is_running": _auto_translator is not None and _auto_translator.is_running}
+    else:
+        await _stop_auto_translator()
+        return {"status": "disabled"}
 
 
 # Project Management
@@ -580,7 +1172,19 @@ async def upload_episode(project_name: str, episode_name: str, file: UploadFile)
 
 @app.post("/projects/{project_name}/episodes/{episode_name}/save")
 async def save_episode(project_name: str, episode_name: str, request: SaveEpisodeRequest):
+    # Load previous data to detect user edits for Translation Memory
+    previous = storage.load_episode(project_name, episode_name)
+
+    # Save new data
     storage.save_episode(project_name, episode_name, request.data)
+
+    # Record user edits in Translation Memory (non-blocking, best-effort)
+    if previous and previous.get("data"):
+        try:
+            _record_user_edits(project_name, episode_name, previous["data"], request.data)
+        except Exception:
+            pass  # Non-critical — don't fail the save
+
     return {"status": "success"}
 
 
@@ -1720,6 +2324,44 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         update_job(job_id, status="failed", message=f"Pipeline error: {str(e)}", log=str(e))
 
 
+def _record_user_edits(
+    project_name: str,
+    episode_name: str,
+    old_data: List[Dict],
+    new_data: List[Dict],
+):
+    """Detect user edits and store them in the Translation Memory as gold examples.
+
+    Called when the user saves an episode. Compares old vs new translations and
+    records any changes as high-priority TM entries so future translations
+    learn from user corrections.
+    """
+    edits_source = []
+    edits_target = []
+
+    for old_line, new_line in zip(old_data, new_data):
+        old_trans = (old_line.get("translated") or "").strip()
+        new_trans = (new_line.get("translated") or "").strip()
+        original = (new_line.get("original") or "").strip()
+
+        # Only record if translation actually changed, was non-empty before,
+        # and has a non-empty source line
+        if old_trans and new_trans and original and old_trans != new_trans:
+            edits_source.append(original)
+            edits_target.append(new_trans)
+
+    if edits_source:
+        config = storage.load_global_config()
+        if config.get("tm_enabled", True):
+            tm = TranslationMemory(project_name)
+            tm.add_translations(
+                edits_source,
+                edits_target,
+                episode_name,
+                is_user_edited=True,
+            )
+
+
 async def _translate_episode_atomic(
     job_id: str,
     project_name: str,
@@ -1735,24 +2377,70 @@ async def _translate_episode_atomic(
 ) -> bool:
     """
     Translates an entire episode. If any part fails, the episode is NOT saved as translated.
-    Uses rate limiting and retries.
+    Uses rate limiting, retries, and Translation Memory for efficiency.
     """
     episode_data = storage.load_episode(project_name, episode_name)
     if not episode_data:
         update_job(job_id, log=f"Episode {episode_name} not found, skipping.")
         return False
-    
+
     parsed_srt = episode_data["data"]
     max_lines = global_config.get("max_lines_per_scene", 200)
     scenes = build_scene_ast(parsed_srt, gap_threshold_ms=3000, max_lines_per_scene=max_lines)
     total_scenes = len(scenes)
-    
+
     update_job(job_id, log=f"Translating {episode_name} ({total_scenes} scenes)")
-    
+
     translated_map = {}
     _eph_svc = get_ephemeral_session_service()
     from google.adk.runners import Runner as _Runner
-    
+
+    # --- Translation Memory: load TM and check for exact matches ---
+    tm_enabled = global_config.get("tm_enabled", True)
+    tm = None
+    tm_exact_count = 0
+
+    if tm_enabled:
+        try:
+            tm = TranslationMemory(project_name)
+            all_source_lines = [line.get("original", "") for line in parsed_srt]
+            exact_threshold = global_config.get("tm_exact_match_threshold", 0.95)
+            exact_matches = tm.get_exact_matches(all_source_lines, threshold=exact_threshold)
+
+            # Pre-fill translated_map with exact matches (these skip the LLM)
+            for idx, match_info in exact_matches.items():
+                translated_map[idx] = match_info["target"]
+                parsed_srt[idx]["from_tm"] = True
+                parsed_srt[idx]["tm_user_edited"] = match_info["is_user_edited"]
+
+            tm_exact_count = len(exact_matches)
+            if tm_exact_count > 0:
+                update_job(job_id, log=f"{episode_name}: {tm_exact_count}/{len(parsed_srt)} lines reused from Translation Memory (skipped LLM)")
+        except Exception as e:
+            update_job(job_id, log=f"{episode_name}: TM lookup failed (non-critical): {e}")
+            tm = None
+
+    # --- Load glossary for per-scene filtering ---
+    project_meta = storage.load_project_metadata(project_name)
+    glossary = project_meta.get("glossary", {"terms": []}) if project_meta else {"terms": []}
+
+    # --- Load character profiles for per-scene context ---
+    profile_mgr = CharacterProfileManager(project_name)
+    profiles_enabled = global_config.get("character_profiles_enabled", True)
+
+    # --- Load rolling episode summaries for cross-episode context ---
+    episode_context = ""
+    if global_config.get("episode_summaries_enabled", True):
+        try:
+            from utils.episode_summaries import EpisodeSummaryManager
+            summary_mgr = EpisodeSummaryManager(project_name)
+            summary_window = global_config.get("episode_summary_window", 3)
+            episode_context = summary_mgr.get_recent_summaries(episode_name, window=summary_window)
+            if episode_context:
+                update_job(job_id, log=f"{episode_name}: Injecting context from {min(summary_window, len(summary_mgr.load_all()))} past episode(s).")
+        except Exception as e:
+            update_job(job_id, log=f"{episode_name}: Episode context load failed (non-critical): {e}")
+
     async def _translate_scene_task(scene: Dict, prev_scene_lines: List[Dict] = None):
         scene_label = f"Scene {scene['scene_id']}"
         update_job(job_id, scene_status={scene_label: "pending"})
@@ -1762,7 +2450,63 @@ async def _translate_episode_atomic(
                 return
 
             update_job(job_id, scene_status={scene_label: "running"})
-            
+
+            lines = scene.get("lines", [])
+            if not lines:
+                update_job(job_id, scene_status={scene_label: "completed"})
+                return
+
+            # Filter out lines already matched by TM exact matches
+            lines_to_translate = []
+            original_scene_indices = []  # position within the scene (0-based)
+            for j, line in enumerate(lines):
+                global_idx = scene["start_index"] + j
+                if global_idx not in translated_map:
+                    lines_to_translate.append(line)
+                    original_scene_indices.append(j)
+
+            if not lines_to_translate:
+                # All lines in this scene were TM-matched — skip API call
+                update_job(job_id, scene_status={scene_label: "completed"})
+                completed_count = len([s for s in jobs[job_id].scene_status.items() if s[1] == "completed" and s[0].startswith("Scene")])
+                progress = start_progress + ((completed_count / total_scenes) * (100.0 / total_episodes))
+                update_job(job_id, progress=progress)
+                return
+
+            # --- Build enhanced prompt with TM few-shot and priority glossary ---
+            source_texts = [line.get("original", "") for line in lines_to_translate]
+
+            # TM few-shot examples
+            few_shot_block = ""
+            if tm is not None:
+                try:
+                    tm_threshold = global_config.get("tm_similarity_threshold", 0.80)
+                    few_shot_block = tm.build_few_shot_block(
+                        source_texts,
+                        target_language=target_lang,
+                        max_examples=5,
+                        similarity_threshold=tm_threshold,
+                        exact_threshold=global_config.get("tm_exact_match_threshold", 0.95),
+                    )
+                except Exception:
+                    pass  # Non-critical
+
+            # Priority glossary for this scene (filtered from full glossary)
+            priority_block = ""
+            filtered = filter_glossary_for_chunk(glossary, source_texts)
+            if filtered.get("terms"):
+                priority_block = build_priority_glossary_block(filtered)
+
+            # Character profiles for this scene
+            character_block = ""
+            if profiles_enabled:
+                try:
+                    scene_profiles = profile_mgr.get_profiles_for_chunk(source_texts, glossary)
+                    if scene_profiles:
+                        character_block = profile_mgr.build_profile_context(scene_profiles)
+                except Exception:
+                    pass  # Non-critical
+
             # Inner function for the actual API call to be wrapped by rate_limited_call
             async def _perform_translation():
                 session_id = f"scene_{uuid4().hex[:8]}"
@@ -1771,13 +2515,16 @@ async def _translate_episode_atomic(
                     session_id=session_id, user_id="default_user", app_name=f"OmbiSub_{session_id}"
                 )
 
-                lines = scene.get("lines", [])
-                if not lines:
-                    return ""
-
                 context_hint = get_scene_context_hint(prev_scene_lines) if prev_scene_lines else ""
-                source_texts = [line.get("original", "") for line in lines]
-                prompt = build_translation_prompt(source_texts, target_lang, context_hint)
+                prompt = build_translation_prompt(
+                    source_texts,
+                    target_lang,
+                    context_hint,
+                    few_shot_context=few_shot_block,
+                    priority_glossary=priority_block,
+                    character_context=character_block,
+                    episode_context=episode_context,
+                )
 
                 response_text = ""
                 async for event in runner.run_async(
@@ -1800,29 +2547,33 @@ async def _translate_episode_atomic(
                     _perform_translation,
                     rate_limiter=rate_limiter
                 )
-                
+
                 # Parse reasoning
                 reasoning_match = re.search(r'<internal_reasoning>(.*?)</internal_reasoning>', response_text, re.DOTALL)
                 if reasoning_match:
                     reasoning_text = reasoning_match.group(1).strip()
                     update_job(job_id, log=f"{episode_name} S{scene['scene_id']} Reasoning: {reasoning_text[:200]}...")
-                
+
                 response_text = strip_reasoning_blocks(response_text)
                 parsed_lines = parse_translations_from_text(response_text)
 
+                # Map parsed output back to global indices.
+                # The LLM received lines numbered 1..N where N = len(lines_to_translate).
+                # original_scene_indices[k] is the scene-local position of the k-th sent line.
                 for item in parsed_lines:
-                    actual_idx = item["index"] - 1
-                    if 0 <= actual_idx < len(scene.get("lines", [])):
-                        global_idx = scene["start_index"] + actual_idx
+                    llm_idx = item["index"] - 1  # 0-based index into lines_to_translate
+                    if 0 <= llm_idx < len(original_scene_indices):
+                        scene_local_idx = original_scene_indices[llm_idx]
+                        global_idx = scene["start_index"] + scene_local_idx
                         translated_map[global_idx] = item["text"]
-                
+
                 update_job(job_id, scene_status={scene_label: "completed"})
-                
+
                 # Update progress
                 completed_count = len([s for s in jobs[job_id].scene_status.items() if s[1] == "completed" and s[0].startswith("Scene")])
                 progress = start_progress + ((completed_count / total_scenes) * (100.0 / total_episodes))
                 update_job(job_id, progress=progress)
-                
+
             except DailyLimitExhausted:
                 update_job(job_id, scene_status={scene_label: "failed"})
                 raise
@@ -1832,18 +2583,18 @@ async def _translate_episode_atomic(
 
     # Clear scene statuses for this episode
     update_job(job_id, scene_status={f"Scene {s['scene_id']}": "pending" for s in scenes})
-    
+
     # Run all scenes in parallel (limited by semaphore)
     tasks = []
     for i, scene in enumerate(scenes):
         prev_scene_lines = scenes[i - 1]["lines"] if i > 0 else None
         tasks.append(_translate_scene_task(scene, prev_scene_lines))
-    
+
     await asyncio.gather(*tasks)
-    
+
     if jobs[job_id].cancelled:
         return False
-        
+
     # Check if all scenes were translated
     if len(translated_map) < len(parsed_srt):
         missing = len(parsed_srt) - len(translated_map)
@@ -1853,19 +2604,97 @@ async def _translate_episode_atomic(
     # Apply translations to parsed_srt
     for idx, text in translated_map.items():
         parsed_srt[idx]["translated"] = text
-        
+
     # Apply SubtitleEdit fixes if configured
     if global_config.get("apply_subtitle_edit_fixes"):
         update_job(job_id, log=f"Running SubtitleEdit fixes for {episode_name}...")
         parsed_srt = fix_subtitles_with_se(parsed_srt)
-    
+
+    # --- Optional review pass (LLM-as-judge quality gate) ---
+    if global_config.get("enable_reviewer", False):
+        try:
+            from utils.review_pipeline import select_lines_for_review, run_review, apply_review_results
+
+            review_max_pct = global_config.get("review_max_pct", 0.25)
+            review_indices = select_lines_for_review(
+                parsed_srt, glossary, max_review_pct=review_max_pct,
+            )
+
+            if review_indices:
+                update_job(job_id, log=f"{episode_name}: Reviewing {len(review_indices)} flagged lines...")
+
+                review_model = global_config.get("review_model", "gemini-flash-latest")
+                review_threshold = global_config.get("review_threshold", 0.70)
+
+                review_results = await run_review(
+                    parsed_srt,
+                    review_indices,
+                    glossary,
+                    target_lang,
+                    model_name=review_model,
+                    retranslation_threshold=review_threshold,
+                    rate_limiter=rate_limiter,
+                )
+
+                if review_results:
+                    stats = apply_review_results(parsed_srt, review_results)
+                    update_job(
+                        job_id,
+                        log=f"{episode_name}: Review complete. "
+                            f"{stats['retranslated']} corrected, "
+                            f"{stats['flagged']} flagged for user review "
+                            f"(out of {stats['total_issues']} issues found)",
+                    )
+                else:
+                    update_job(job_id, log=f"{episode_name}: Review passed — no issues found.")
+            else:
+                update_job(job_id, log=f"{episode_name}: No lines selected for review (heuristic filter).")
+        except Exception as e:
+            # Review is non-critical — log the error and continue with saving
+            update_job(job_id, log=f"{episode_name}: Review failed (non-critical): {e}")
+
     # Save the episode
     metadata = storage.load_episode_metadata(project_name, episode_name) or {}
     metadata["translated"] = True
     metadata["translation_status"] = "completed"
     metadata["last_translation_attempt"] = datetime.now().isoformat()
-    
+
     storage.save_episode(project_name, episode_name, parsed_srt, metadata)
+
+    # --- TM: store new translations for future reuse ---
+    if tm is not None:
+        try:
+            source_lines = [line.get("original", "") for line in parsed_srt]
+            target_lines = [line.get("translated", "") for line in parsed_srt]
+            added = tm.add_translations(source_lines, target_lines, episode_name)
+            update_job(job_id, log=f"{episode_name}: Stored {added} lines in Translation Memory")
+        except Exception as e:
+            update_job(job_id, log=f"{episode_name}: TM storage failed (non-critical): {e}")
+
+    # --- Generate and store episode summary for future cross-episode context ---
+    if global_config.get("episode_summaries_enabled", True):
+        try:
+            from utils.episode_summaries import EpisodeSummaryManager
+            from adk_agents.operations import generate_episode_summary_adk
+
+            proj_meta = storage.load_project_metadata(project_name)
+            show_name = proj_meta.get("show_name", project_name) if proj_meta else project_name
+            summary_model = global_config.get("default_translation_model", "gemini-flash-latest")
+
+            summary = await generate_episode_summary_adk(
+                parsed_srt,
+                episode_name,
+                show_name=show_name,
+                model_name=summary_model,
+            )
+
+            if summary:
+                ep_summary_mgr = EpisodeSummaryManager(project_name)
+                ep_summary_mgr.save_summary(episode_name, summary)
+                update_job(job_id, log=f"{episode_name}: Summary stored for future context.")
+        except Exception as e:
+            update_job(job_id, log=f"{episode_name}: Summary generation failed (non-critical): {e}")
+
     return True
 
 async def _process_batch_translation(

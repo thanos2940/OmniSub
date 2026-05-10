@@ -9,7 +9,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
     const handleTranslationChange = (id, newText) => {
         if (onDataUpdate) {
             const newData = data.map(item =>
-                item.id === id ? { ...item, translated: newText } : item
+                item.id === id ? { ...item, translated: newText, is_edited: true } : item
             );
             onDataUpdate(newData);
         }
@@ -112,7 +112,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                 <div className="p-4 text-gray-700 border-r border-gray-100 leading-relaxed">
                                     {item.original}
                                 </div>
-                                <div className="p-0 bg-indigo-50/10 group-hover:bg-indigo-50/30 transition-colors relative">
+                                <div className={`p-0 transition-colors relative ${item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
                                     <textarea
                                         value={item.translated || ''}
                                         onChange={(e) => handleTranslationChange(item.id, e.target.value)}
@@ -123,6 +123,15 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                     {isLoading && !item.translated && (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                             <span className="text-indigo-400 italic animate-pulse">Translating...</span>
+                                        </div>
+                                    )}
+                                    {item.from_tm && (
+                                        <div className="absolute top-2 right-2 pointer-events-none flex items-center gap-1">
+                                            {item.tm_user_edited ? (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider shadow-sm" title="Reused from your previous edits">User Edit</span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider shadow-sm" title="Matched from Translation Memory">TM Match</span>
+                                            )}
                                         </div>
                                     )}
                                 </div>
