@@ -66,5 +66,14 @@ logs/
 Thumbs.db
 
 config.json
+
+# AI / Agents
 .claude/
-.claude/worktrees/unruffled-lederberg-f525af
+.agent/
+.antigravity/
+.gemini/
+.cursor/
+.cursorrules
+skills/
+*.skill
+graphify-out/
