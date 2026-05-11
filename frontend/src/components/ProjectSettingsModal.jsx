@@ -5,21 +5,38 @@ import ModelCombobox from './ModelCombobox';
 
 const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave, tokenSummary }) => {
     const [settings, setSettings] = useState({
-        translation_model: 'gemini-2.5-flash',
-        context_model: 'gemini-2.5-flash',
-        glossary_model: 'gemini-2.5-flash',
-        local_llm_base_url: 'http://localhost:1234/v1',
+        translation_model: '',
+        context_model: '',
+        glossary_model: '',
+        local_llm_base_url: 'http://localhost:11434',
         auto_export_enabled: false,
         auto_export_dir: ''
     });
     const [testStatus, setTestStatus] = useState(null); // 'testing', 'success', 'error'
     const [testError, setTestError] = useState(null);
     const [diagnostics, setDiagnostics] = useState(null);
+    const [parentProject, setParentProject] = useState('');
+    const [allProjects, setAllProjects] = useState([]);
+    const [globalSettings, setGlobalSettings] = useState(null);
+
+    useEffect(() => {
+        if (isOpen) {
+            import('../api').then(({ api }) => {
+                api.getProjects().then(res => setAllProjects(res.data.filter(p => p.name !== project?.name && p.type !== 'episode')));
+                api.getSettings().then(res => setGlobalSettings(res.data));
+            });
+        }
+    }, [isOpen, project]);
 
     useEffect(() => {
         const src = initialSettings || (project && project.settings);
         if (src) {
             setSettings(prev => ({ ...prev, ...src }));
+        }
+        if (project && project.parent_project) {
+            setParentProject(project.parent_project);
+        } else {
+            setParentProject('');
         }
     }, [project, initialSettings]);
 
@@ -28,7 +45,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
     };
 
     const handleSave = () => {
-        onSave(settings);
+        onSave(settings, parentProject || null);
         onClose();
     };
 
@@ -64,7 +81,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden"
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
                 >
                     <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
                         <div className="flex items-center gap-2">
@@ -76,22 +93,45 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                         </button>
                     </div>
 
-                    <div className="p-6 space-y-5">
+                    <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
                         <ModelCombobox
                             label="Translation Model"
                             value={settings.translation_model}
                             onChange={(v) => handleChange('translation_model', v)}
+                            placeholder={globalSettings ? `Global: ${globalSettings.default_translation_model}` : "Select model..."}
                         />
                         <ModelCombobox
                             label="Context Analysis Model"
                             value={settings.context_model}
                             onChange={(v) => handleChange('context_model', v)}
+                            placeholder={globalSettings ? `Global: ${globalSettings.default_context_model}` : "Select model..."}
                         />
                         <ModelCombobox
                             label="Glossary Generation Model"
                             value={settings.glossary_model}
                             onChange={(v) => handleChange('glossary_model', v)}
+                            placeholder={globalSettings ? `Global: ${globalSettings.default_glossary_model}` : "Select model..."}
                         />
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Project Organization</h3>
+                            <div className="space-y-1.5">
+                                <label className="text-sm text-gray-600 dark:text-gray-400">Parent Universe</label>
+                                <select
+                                    value={parentProject}
+                                    onChange={(e) => setParentProject(e.target.value)}
+                                    className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    <option value="">None (Standalone)</option>
+                                    {allProjects.map(p => (
+                                        <option key={p.name} value={p.name}>{p.name}</option>
+                                    ))}
+                                </select>
+                                <p className="text-[10px] text-gray-400 italic">
+                                    Link this project to a parent universe to share its glossary and context guide.
+                                </p>
+                            </div>
+                        </div>
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Sampling Parameters</h3>

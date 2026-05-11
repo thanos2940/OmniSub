@@ -108,4 +108,48 @@ export const api = {
     getRateLimitStats: () => axios.get(`${API_URL}/rate-limit/stats`),
     updateRateLimitConfig: (config) => axios.post(`${API_URL}/rate-limit/configure`, config),
     estimateBatchTranslate: (projectName, episodeNames) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-translate/estimate`, { episode_names: episodeNames }),
+
+    // Translation Memory
+    getTmStats: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/tm/stats`),
+    clearTm: (project) => axios.delete(`${API_URL}/projects/${encodeURIComponent(project)}/tm`),
+    // /edit-stats returns { total_records, user_edited_records, edit_ratio }
+    getEditStats: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/edit-stats`),
+
+    // Character Profiles
+    getCharacters: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/characters`),
+    updateCharacter: (project, name, data) => axios.put(`${API_URL}/projects/${encodeURIComponent(project)}/characters/${encodeURIComponent(name)}`, data),
+    deleteCharacter: (project, name) => axios.delete(`${API_URL}/projects/${encodeURIComponent(project)}/characters/${encodeURIComponent(name)}`),
+    // Returns { job_id } — use getJob() to poll for completion
+    generateCharacters: (project, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/characters/generate`, null, { params: { model } }),
+
+    // Review Queue
+    // GET returns { items: [...], count: N }
+    getReviewQueue: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue`),
+    // POST /review-queue/resolve?episode_name=X&line_index=N
+    resolveReviewItem: (project, episode, index) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue/resolve`, null, { params: { episode_name: episode, line_index: index } }),
+    resolveAllReviewItems: (project) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue/resolve-all`),
+
+    // Episode Summaries
+    // GET /summaries returns { episode_name: summary_text, ... }
+    getSummaries: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/summaries`),
+    // PUT /summaries/{episode} expects { summary: "text" }
+    updateSummary: (project, episode, summary) => axios.put(`${API_URL}/projects/${encodeURIComponent(project)}/summaries/${encodeURIComponent(episode)}`, { summary }),
+    deleteSummary: (project, episode) => axios.delete(`${API_URL}/projects/${encodeURIComponent(project)}/summaries/${encodeURIComponent(episode)}`),
+    // POST /summaries/{episode}/generate?model=X — returns { job_id }
+    generateSummary: (project, episode, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/summaries/${encodeURIComponent(episode)}/generate`, null, { params: { model } }),
+
+    // Bazarr Integration
+    getBazarrStatus: () => axios.get(`${API_URL}/integrations/bazarr/status`),
+    testBazarr: (settings) => axios.post(`${API_URL}/integrations/bazarr/test`, settings),
+    scanNow: (settings) => axios.post(`${API_URL}/integrations/bazarr/scan-now`, settings),
+    getBazarrPreview: () => axios.get(`${API_URL}/integrations/bazarr/preview`),
+    // POST /integrations/bazarr/toggle?enabled=true|false
+    toggleBazarr: (enabled) => axios.post(`${API_URL}/integrations/bazarr/toggle`, null, { params: { enabled } }),
+
+    // Bazarr Library & Sync
+    getBazarrLibrary: () => axios.get(`${API_URL}/integrations/bazarr/library`),
+    syncBazarr: () => axios.post(`${API_URL}/integrations/bazarr/sync`),
+    getBazarrProfiles: () => axios.get(`${API_URL}/integrations/bazarr/profiles`),
+    disableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/bazarr/library/${encodeURIComponent(project)}/disable`),
+    enableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/bazarr/library/${encodeURIComponent(project)}/enable`),
 };

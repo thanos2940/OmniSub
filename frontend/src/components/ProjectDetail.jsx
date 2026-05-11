@@ -4,7 +4,7 @@ import { api } from '../api';
 import {
     ArrowLeft, Upload, Book, Sparkles, Save, Edit2, Trash2,
     Settings, Check, Folder, Film, Tv, X, Languages, Zap,
-    FileText, RefreshCw, Download, Play
+    FileText, RefreshCw, Download, Play, Database, ShieldAlert
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlossaryEditor from './GlossaryEditor';
@@ -18,6 +18,10 @@ import TranslationComparisonModal from './TranslationComparisonModal';
 import JobProgressWidget from './JobProgressWidget';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
+import TMStatsPanel from './TMStatsPanel';
+import ReviewQueuePanel from './ReviewQueuePanel';
+import CharacterProfilesPanel from './CharacterProfilesPanel';
+import EpisodeSummariesPanel from './EpisodeSummariesPanel';
 
 // --- Tab Definitions ---
 const TABS = {
@@ -26,6 +30,7 @@ const TABS = {
     CONTEXT: 'context',
     SUBPROJECTS: 'subprojects',
     SANDBOX: 'sandbox',
+    ADVANCED: 'advanced',
 };
 
 const ProjectDetail = () => {
@@ -268,10 +273,18 @@ const ProjectDetail = () => {
         }
     };
 
-    const handleSaveSettings = async (newSettings) => {
+    const handleSaveSettings = async (newSettings, newParentProject) => {
         try {
-            await api.updateProject(projectName, { settings: newSettings });
-            setProject(prev => ({ ...prev, settings: newSettings }));
+            const updatePayload = { settings: newSettings };
+            if (newParentProject !== undefined) {
+                updatePayload.parent_project = newParentProject;
+            }
+            await api.updateProject(projectName, updatePayload);
+            setProject(prev => ({ 
+                ...prev, 
+                settings: newSettings, 
+                parent_project: newParentProject !== undefined ? newParentProject : prev.parent_project 
+            }));
         } catch (err) {
             console.error('Failed to save settings', err);
             toast.error('Failed to save settings');
@@ -347,15 +360,21 @@ const ProjectDetail = () => {
     const handleStartPipeline = async (mode = 'auto') => {
         try {
             const settings = project.settings || {};
+            
+            // Default to 'try to create if missing' (skip=false)
+            // The backend smart logic will skip if they already exist.
+            const skip_context = false;
+            const skip_glossary = false;
+
             const res = await api.startPipeline(projectName, {
                 mode,
-                skip_context: !!project.context_guide,
-                skip_glossary: project.glossary?.terms?.length > 0,
+                skip_context,
+                skip_glossary,
                 episode_names: selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null,
-                model: settings.translation_model || 'gemini-2.5-flash',
+                translation_model: settings.translation_model || null,
                 context_model: settings.context_model || null,
                 glossary_model: settings.glossary_model || null,
-                translation_model: settings.translation_model || null,
+                model: settings.translation_model || null, // fallback for legacy
             });
             if (res.data.job_id) {
                 addJob(res.data.job_id, 'pipeline', `Auto-Translate Pipeline`, { projectId: projectName });
@@ -438,12 +457,15 @@ const ProjectDetail = () => {
                 if (!proceed) return;
             }
 
-            const model = project.settings?.translation_model || 'gemini-flash-latest';
             const res = await api.autoTranslate(projectName, {
-                model,
+                translation_model: project.settings?.translation_model || null,
+                context_model: project.settings?.context_model || null,
+                glossary_model: project.settings?.glossary_model || null,
+                model: project.settings?.translation_model || null, // fallback for legacy
                 episode_names: selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null,
-                skip_context: !!project.context_guide,
-                skip_glossary: project.glossary?.terms?.length > 0,
+                skip_context: false, // Smart skip handled by backend
+                skip_glossary: false,
+                enhance_glossary: true,
             });
             if (res.data.job_id) {
                 const label = selectedEpisodes.size > 0
@@ -553,12 +575,14 @@ const ProjectDetail = () => {
             { id: TABS.SUBPROJECTS, label: 'Subprojects', icon: Folder, count: subprojects.length },
             { id: TABS.GLOSSARY, label: 'Glossary', icon: Book, count: project.glossary?.terms?.length || 0 },
             { id: TABS.CONTEXT, label: 'Context Guide', icon: FileText },
+            { id: TABS.ADVANCED, label: 'Advanced', icon: Database },
         ]
         : [
             { id: TABS.EPISODES, label: isMovie ? 'Files' : 'Episodes', icon: Film, count: episodes.length },
             { id: TABS.GLOSSARY, label: 'Glossary', icon: Book, count: project.glossary?.terms?.length || 0 },
             { id: TABS.CONTEXT, label: 'Context Guide', icon: FileText },
             { id: TABS.SANDBOX, label: 'Sandbox', icon: Zap },
+            { id: TABS.ADVANCED, label: 'Advanced', icon: Database },
         ];
 
     return (
@@ -586,6 +610,13 @@ const ProjectDetail = () => {
                                 </span>
                                 {project.target_language && (
                                     <span className="text-xs text-gray-500 dark:text-gray-400">→ {project.target_language}</span>
+                                )}
+                                {project.bazarr_total_episodes && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 rounded-full flex items-center gap-1 uppercase tracking-tight">
+                                            <Check size={10} /> {project.bazarr_translated_episodes}/{project.bazarr_total_episodes} in Bazarr
+                                        </span>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -747,7 +778,8 @@ const ProjectDetail = () => {
                                                         type="checkbox"
                                                         checked={selectedEpisodes.has(ep.name)}
                                                         onChange={() => handleSelectEpisode(ep.name)}
-                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                        disabled={ep.metadata?.bazarr_has_target}
+                                                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-30 disabled:cursor-not-allowed"
                                                     />
                                                     <div>
                                                         <div className="flex items-center gap-2">
@@ -756,6 +788,11 @@ const ProjectDetail = () => {
                                                             {ep.translated && (
                                                                 <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">
                                                                     <Check size={10} /> Translated
+                                                                </span>
+                                                            )}
+                                                            {ep.metadata?.bazarr_has_target && (
+                                                                <span className="flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 dark:bg-green-900/40 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-tight">
+                                                                    <Check size={10} /> In Bazarr
                                                                 </span>
                                                             )}
                                                         </div>
@@ -965,6 +1002,18 @@ const ProjectDetail = () => {
                                         <p className="text-sm mt-1">Create child projects from the main dashboard</p>
                                     </div>
                                 )}
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* ======= ADVANCED TAB ======= */}
+                    {activeTab === TABS.ADVANCED && (
+                        <motion.div key="advanced" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }}>
+                            <div className="space-y-6">
+                                <TMStatsPanel projectName={projectName} />
+                                <ReviewQueuePanel projectName={projectName} />
+                                <CharacterProfilesPanel projectName={projectName} projectSettings={project.settings} />
+                                <EpisodeSummariesPanel projectName={projectName} projectSettings={project.settings} />
                             </div>
                         </motion.div>
                     )}

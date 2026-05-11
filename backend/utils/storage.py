@@ -171,7 +171,9 @@ def load_global_config() -> Dict:
         return {
             "default_target_language": "English",
             "default_scan_model": "gemini-flash-lite-latest",
-            "default_translation_model": "gemini-flash-latest"
+            "default_translation_model": "gemini-flash-latest",
+            "default_context_model": "gemini-flash-latest",
+            "default_glossary_model": "gemini-flash-latest"
         }
     
     try:
@@ -206,3 +208,113 @@ def load_original_srt(project_name: str, episode_name: str) -> Optional[str]:
         return None
     with open(srt_file, 'r', encoding='utf-8') as f:
         return f.read()
+
+
+# ---------------------------------------------------------------------------
+# Bazarr Library Queries
+# ---------------------------------------------------------------------------
+
+def list_bazarr_projects() -> List[Dict]:
+    """Return metadata for all projects created by Bazarr sync.
+
+    Includes both enabled and disabled projects.  Each dict contains
+    the full project metadata plus:
+      - ``name``: the project directory name
+      - ``episode_count``: number of imported episodes
+      - ``translated_count``: number of episodes with translations
+    """
+    results = []
+    for p_name in list_projects():
+        meta = load_project_metadata(p_name)
+        if not meta or not meta.get("bazarr_source"):
+            continue
+
+        episodes = list_episodes(p_name)
+        
+        # Use pre-calculated stats from sync engine if available
+        meta_total = meta.get("bazarr_total_episodes")
+        meta_translated = meta.get("bazarr_translated_episodes")
+        
+        if meta_total is not None and meta_translated is not None:
+            # Stats are already in project.json, use them for performance
+            results.append({
+                **meta,
+                "name": p_name,
+                "episode_count": meta_total,
+                "translated_count": meta_translated,
+            })
+            continue
+
+        # Fallback: calculate manually (expensive)
+        translated = 0
+        for ep_name in episodes:
+            ep_meta = load_episode_metadata(p_name, ep_name)
+            if ep_meta and ep_meta.get("bazarr_has_target"):
+                translated += 1
+                continue
+                
+            ep = load_episode(p_name, ep_name)
+            if ep and any(
+                entry.get("translated") for entry in ep.get("data", [])
+            ):
+                translated += 1
+
+        results.append({
+            **meta,
+            "name": p_name,
+            "episode_count": len(episodes),
+            "translated_count": translated,
+        })
+
+    return results
+
+
+def get_bazarr_library() -> Dict:
+    """Return structured library data for the frontend.
+
+    Groups Bazarr projects by media type (series / movie) and
+    separates disabled entries into their own list.
+
+    Returns::
+
+        {
+            "series": [...],
+            "movies": [...],
+            "disabled": [...],
+            "last_sync": "2026-05-10T...",
+            "totals": { "series": 12, "movies": 8, "disabled": 2 }
+        }
+    """
+    all_projects = list_bazarr_projects()
+
+    series = []
+    movies = []
+    disabled = []
+
+    for proj in all_projects:
+        if proj.get("bazarr_disabled"):
+            disabled.append(proj)
+        elif proj.get("bazarr_media_type") == "movie":
+            movies.append(proj)
+        else:
+            series.append(proj)
+
+    # Find last sync timestamp across all projects
+    last_sync = None
+    for proj in all_projects:
+        ts = proj.get("bazarr_last_sync")
+        if ts and (last_sync is None or ts > last_sync):
+            last_sync = ts
+
+    return {
+        "series": sorted(series, key=lambda x: x.get("show_name", "")),
+        "movies": sorted(movies, key=lambda x: x.get("show_name", "")),
+        "disabled": sorted(disabled, key=lambda x: x.get("show_name", "")),
+        "last_sync": last_sync,
+        "totals": {
+            "series": len(series),
+            "movies": len(movies),
+            "disabled": len(disabled),
+        },
+    }
+

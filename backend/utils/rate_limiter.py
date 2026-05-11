@@ -29,6 +29,7 @@ class RateLimiter:
         self._daily_count = 0
         # Reset daily count every 24 hours (simplified)
         self._daily_reset = time.monotonic() + 86400
+        self._daily_exhausted = False
 
     async def acquire(self):
         """Acquire a token, waiting if necessary."""
@@ -37,10 +38,12 @@ class RateLimiter:
             now = time.monotonic()
             if now >= self._daily_reset:
                 self._daily_count = 0
+                self._daily_exhausted = False
                 self._daily_reset = now + 86400
 
             # Check daily limit
-            if self._daily_count >= self.daily_limit:
+            if self._daily_exhausted or self._daily_count >= self.daily_limit:
+                self._daily_exhausted = True # Ensure it stays latched
                 raise DailyLimitExhausted(self._daily_count, self.daily_limit, self._daily_reset)
 
             # Wait for backoff if active
@@ -73,6 +76,11 @@ class RateLimiter:
         self._backoff_until = now + delay
         # Temporarily halve tokens to slow down proactively
         self._tokens = self._tokens * 0.5
+
+    def trigger_daily_limit(self):
+        """Force the daily limit to be reached immediately."""
+        self._daily_exhausted = True
+        self._daily_count = max(self._daily_count, self.daily_limit)
 
     def estimate_requests(self, episode_names: List[str], avg_scenes_per_episode: float = 8) -> Dict:
         """Estimate usage for a list of episodes."""

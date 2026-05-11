@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Info, Sparkles, Settings as SettingsIcon, BookOpen, Zap, Globe, Play, RefreshCw } from 'lucide-react';
+import { Save, Info, Sparkles, Settings as SettingsIcon, BookOpen, Zap, Globe, Play, RefreshCw, Database, ShieldAlert, List, Link as LinkIcon, Activity, Plus, Trash2 } from 'lucide-react';
 import { api } from '../api';
 import ModelCombobox from './ModelCombobox';
 
@@ -47,10 +47,57 @@ const SettingsPage = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const [bazarrStatus, setBazarrStatus] = useState(null);
+    const [testingBazarr, setTestingBazarr] = useState(false);
+    const [scanningBazarr, setScanningBazarr] = useState(false);
 
     useEffect(() => {
         loadSettings();
+        loadBazarrStatus();
     }, []);
+
+    const loadBazarrStatus = async () => {
+        try {
+            const res = await api.getBazarrStatus();
+            setBazarrStatus(res.data);
+        } catch (e) {
+            console.error("Failed to load Bazarr status", e);
+        }
+    };
+
+    const handleTestBazarr = async () => {
+        setTestingBazarr(true);
+        try {
+            const res = await api.testBazarr({
+                bazarr_url: settings.bazarr_url,
+                bazarr_api_key: settings.bazarr_api_key
+            });
+            if (res.data.connected) {
+                setMessage({ type: 'success', text: `Bazarr connection successful! Version: ${res.data.version}` });
+            } else {
+                setMessage({ type: 'error', text: `Connection failed: ${res.data.error}` });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Failed to test Bazarr connection.' });
+        } finally {
+            setTestingBazarr(false);
+            setTimeout(() => setMessage(null), 5000);
+        }
+    };
+
+    const handleScanBazarr = async () => {
+        setScanningBazarr(true);
+        try {
+            await api.scanNow(settings);
+            setMessage({ type: 'success', text: 'Bazarr scan triggered successfully!' });
+            loadBazarrStatus();
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Failed to trigger Bazarr scan.' });
+        } finally {
+            setScanningBazarr(false);
+            setTimeout(() => setMessage(null), 5000);
+        }
+    };
 
     const loadSettings = async () => {
         try {
@@ -80,6 +127,23 @@ const SettingsPage = () => {
 
     const handleChange = (field, value) => {
         setSettings(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleAddMapping = () => {
+        const mappings = [...(settings.bazarr_path_mappings || []), { remote: '', local: '' }];
+        handleChange('bazarr_path_mappings', mappings);
+    };
+
+    const handleRemoveMapping = (index) => {
+        const mappings = [...(settings.bazarr_path_mappings || [])];
+        mappings.splice(index, 1);
+        handleChange('bazarr_path_mappings', mappings);
+    };
+
+    const handleUpdateMapping = (index, field, value) => {
+        const mappings = [...(settings.bazarr_path_mappings || [])];
+        mappings[index] = { ...mappings[index], [field]: value };
+        handleChange('bazarr_path_mappings', mappings);
     };
 
     if (loading) {
@@ -130,6 +194,18 @@ const SettingsPage = () => {
                             label="Default Translation Model"
                             value={settings.default_translation_model}
                             onChange={(v) => handleChange('default_translation_model', v)}
+                        />
+                        
+                        <ModelCombobox
+                            label="Default Context Model"
+                            value={settings.default_context_model}
+                            onChange={(v) => handleChange('default_context_model', v)}
+                        />
+
+                        <ModelCombobox
+                            label="Default Glossary Model"
+                            value={settings.default_glossary_model}
+                            onChange={(v) => handleChange('default_glossary_model', v)}
                         />
 
                         <ModelCombobox
@@ -201,23 +277,6 @@ const SettingsPage = () => {
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div className="p-6 bg-gray-50/50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                    <div className="text-sm">
-                        {message && (
-                            <span className={`font-medium ${message.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                {message.text}
-                            </span>
-                        )}
-                    </div>
-                    <button
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70"
-                    >
-                        {saving ? 'Saving...' : <><Save className="w-4 h-4" /> Save Changes</>}
-                    </button>
                 </div>
             </div>
 
@@ -312,6 +371,266 @@ const SettingsPage = () => {
                 </div>
             </div>
 
+            {/* Advanced AI Features */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Database className="w-5 h-5 text-indigo-500" />
+                        Advanced AI Features
+                    </h2>
+                </div>
+                <div className="p-6 space-y-8">
+                    {/* Translation Memory */}
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-md font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <BookOpen className="w-4 h-4 text-indigo-400" /> Translation Memory (TM)
+                            </h3>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer"
+                                    checked={settings.tm_enabled ?? true}
+                                    onChange={(e) => handleChange('tm_enabled', e.target.checked)}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-indigo-100 dark:border-indigo-900/30">
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Fuzzy Match Threshold</label>
+                                    <span className="text-xs font-mono text-indigo-600">{(settings.tm_similarity_threshold ?? 0.80).toFixed(2)}</span>
+                                </div>
+                                <input type="range" min="0.5" max="0.99" step="0.01" value={settings.tm_similarity_threshold ?? 0.80} onChange={(e) => handleChange('tm_similarity_threshold', parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                <p className="text-xs text-gray-500">Minimum similarity to use a TM entry as context.</p>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Exact Match Threshold</label>
+                                    <span className="text-xs font-mono text-indigo-600">{(settings.tm_exact_match_threshold ?? 0.95).toFixed(2)}</span>
+                                </div>
+                                <input type="range" min="0.8" max="1.0" step="0.01" value={settings.tm_exact_match_threshold ?? 0.95} onChange={(e) => handleChange('tm_exact_match_threshold', parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                                <p className="text-xs text-gray-500">Threshold to auto-replace without translating.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* AI Reviewer */}
+                    <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-md font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <ShieldAlert className="w-4 h-4 text-rose-400" /> AI Reviewer
+                            </h3>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={settings.enable_reviewer ?? false}
+                                    onChange={(e) => handleChange('enable_reviewer', e.target.checked)}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-rose-300 dark:peer-focus:ring-rose-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-rose-600"></div>
+                            </label>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pl-6 border-l-2 border-rose-100 dark:border-rose-900/30">
+                            <ModelCombobox label="Reviewer Model" value={settings.review_model} onChange={(v) => handleChange('review_model', v)} />
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Max Review %</label>
+                                    <span className="text-xs font-mono text-rose-600">{Math.round((settings.review_max_pct ?? 0.25) * 100)}%</span>
+                                </div>
+                                <input type="range" min="0.05" max="1.0" step="0.05" value={settings.review_max_pct ?? 0.25} onChange={(e) => handleChange('review_max_pct', parseFloat(e.target.value))} className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+                                <p className="text-xs text-gray-500">Max % of lines to flag per episode.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Episode Summaries */}
+                    <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-md font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <List className="w-4 h-4 text-emerald-400" /> Episode Summaries
+                            </h3>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer"
+                                    checked={settings.episode_summaries_enabled ?? true}
+                                    onChange={(e) => handleChange('episode_summaries_enabled', e.target.checked)}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                            </label>
+                        </div>
+                        <div className="pl-6 border-l-2 border-emerald-100 dark:border-emerald-900/30">
+                            <div className="w-1/2 space-y-2">
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Summary Context Window</label>
+                                <input type="number" min="1" max="10" value={settings.episode_summary_window ?? 3} onChange={(e) => handleChange('episode_summary_window', parseInt(e.target.value, 10))} className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-emerald-500 outline-none transition-all" />
+                                <p className="text-xs text-gray-500">Number of previous episode summaries to include as context.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Bazarr Integration */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <LinkIcon className="w-5 h-5 text-blue-500" />
+                        Bazarr Integration
+                    </h2>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={settings.bazarr_enabled ?? false}
+                            onChange={(e) => handleChange('bazarr_enabled', e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Bazarr URL</label>
+                            <input
+                                type="text"
+                                value={settings.bazarr_url ?? "http://localhost:6767"}
+                                onChange={(e) => handleChange('bazarr_url', e.target.value)}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                placeholder="http://localhost:6767"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Key</label>
+                            <input
+                                type="password"
+                                value={settings.bazarr_api_key ?? ""}
+                                onChange={(e) => handleChange('bazarr_api_key', e.target.value)}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                placeholder="Enter Bazarr API Key"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Poll Interval (Minutes)</label>
+                            <input
+                                type="number"
+                                min="5" max="120"
+                                value={settings.bazarr_poll_interval ?? 30}
+                                onChange={(e) => handleChange('bazarr_poll_interval', parseInt(e.target.value, 10))}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Media Types to Sync</label>
+                            <select
+                                value={settings.bazarr_media_types ?? "both"}
+                                onChange={(e) => handleChange('bazarr_media_types', e.target.value)}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            >
+                                <option value="series">Series Only</option>
+                                <option value="movies">Movies Only</option>
+                                <option value="both">Both</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Auto-Sync Interval (Minutes)</label>
+                            <input
+                                type="number"
+                                min="0" max="1440"
+                                value={settings.bazarr_sync_interval ?? 0}
+                                onChange={(e) => handleChange('bazarr_sync_interval', parseInt(e.target.value, 10))}
+                                className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">0 = manual only. How often to auto-sync the Bazarr library.</p>
+                        </div>
+                    </div>
+                    
+                    {/* Path Mappings */}
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Path Mappings</h3>
+                                <p className="text-xs text-gray-500">Map Bazarr's server paths to your local network paths.</p>
+                            </div>
+                            <button
+                                onClick={handleAddMapping}
+                                className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                            >
+                                <Plus size={14} /> Add Mapping
+                            </button>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            {(settings.bazarr_path_mappings || []).map((mapping, index) => (
+                                <div key={index} className="flex gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            value={mapping.remote}
+                                            onChange={(e) => handleUpdateMapping(index, 'remote', e.target.value)}
+                                            className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                            placeholder="Remote Path (e.g. E:\Shows)"
+                                        />
+                                    </div>
+                                    <div className="flex-shrink-0 pt-2 text-gray-400">→</div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            value={mapping.local}
+                                            onChange={(e) => handleUpdateMapping(index, 'local', e.target.value)}
+                                            className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                            placeholder="Local Path (e.g. \\Server\e\Shows)"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => handleRemoveMapping(index)}
+                                        className="p-2 text-gray-400 hover:text-rose-500 transition-colors"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                            
+                            {(settings.bazarr_path_mappings || []).length === 0 && (
+                                <div className="text-center py-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                                    <p className="text-xs text-gray-400 font-medium italic">No path mappings configured.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                        <button
+                            onClick={handleTestBazarr}
+                            disabled={testingBazarr}
+                            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-lg font-medium transition-all text-sm flex items-center gap-2"
+                        >
+                            {testingBazarr ? 'Testing...' : <><Activity className="w-4 h-4" /> Test Connection</>}
+                        </button>
+                        <button
+                            onClick={handleScanBazarr}
+                            disabled={scanningBazarr || !settings.bazarr_enabled}
+                            className="px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-medium transition-all text-sm flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {scanningBazarr ? 'Scanning...' : <><RefreshCw className="w-4 h-4" /> Scan Now</>}
+                        </button>
+                        
+                    </div>
+
+                    {bazarrStatus && settings.bazarr_enabled && (
+                        <div className="mt-6 bg-blue-50/50 dark:bg-blue-900/10 rounded-xl p-4 border border-blue-100 dark:border-blue-900/30 text-sm">
+                            <h4 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">Integration Status</h4>
+                            <div className="grid grid-cols-3 gap-4 text-blue-800 dark:text-blue-400">
+                                <div><span className="font-medium">Total Translated:</span> {bazarrStatus.translated_count || 0}</div>
+                                <div><span className="font-medium">Last Scan:</span> {bazarrStatus.last_scan_time ? new Date(bazarrStatus.last_scan_time).toLocaleString() : 'Never'}</div>
+                                <div><span className="font-medium">Current Item:</span> {bazarrStatus.current_item || 'Idle'}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -350,6 +669,38 @@ const SettingsPage = () => {
                             <h3 className="font-semibold text-gray-900 dark:text-white">Review & Export</h3>
                             <p className="text-sm">Use the editor to tweak translations if needed, then export the final SRT file.</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Sticky Save Bar */}
+            <div className="sticky bottom-8 z-10">
+                <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                        {message && (
+                            <div className={`px-4 py-2 rounded-xl text-sm font-medium animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                                message.type === 'success' 
+                                    ? 'bg-green-50 text-green-700 border border-green-100 dark:bg-green-900/20 dark:text-green-400 dark:border-green-900/30' 
+                                    : 'bg-red-50 text-red-700 border border-red-100 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/30'
+                            }`}>
+                                {message.text}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={loadSettings}
+                            className="px-6 py-2.5 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all"
+                        >
+                            Reset
+                        </button>
+                        <button
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold shadow-lg shadow-indigo-200 dark:shadow-none transition-all flex items-center gap-2 disabled:opacity-70 scale-100 active:scale-95"
+                        >
+                            {saving ? 'Saving...' : <><Save className="w-5 h-5" /> Save All Changes</>}
+                        </button>
                     </div>
                 </div>
             </div>

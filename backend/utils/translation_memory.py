@@ -12,6 +12,8 @@ sentence-transformers for embedding generation.
 import hashlib
 import time
 import logging
+import os
+import warnings
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
@@ -36,6 +38,13 @@ def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
     """
     if model_name not in _EMBEDDER_CACHE:
         try:
+            # Suppress HF Hub warnings and telemetry for a cleaner console experience
+            os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+            os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+            
+            # Specifically filter the 'unauthenticated requests' warning
+            warnings.filterwarnings("ignore", message=".*unauthenticated requests to the HF Hub.*")
+            
             from sentence_transformers import SentenceTransformer
             _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name)
             logger.info(f"Loaded embedding model: {model_name}")
@@ -415,10 +424,7 @@ def build_priority_glossary_block(
     lines = ["Priority glossary for this scene:"]
     for t in terms:
         src = t.get("term", "")
-        if t.get("keep_original", False):
-            tgt = f"[KEEP:{src}]"
-        else:
-            tgt = t.get("translation", src)
+        tgt = t.get("translation", src) if not t.get("keep_original", False) else src
         gender = t.get("gender", "")
         gender_tag = f" ({gender[0]})" if gender and gender != "n/a" else ""
         lines.append(f"  {src} -> {tgt}{gender_tag}")

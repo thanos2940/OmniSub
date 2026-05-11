@@ -13,7 +13,7 @@ from io import BytesIO
 from zipfile import ZipFile
 from datetime import datetime
 from uuid import uuid4
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile, BackgroundTasks
@@ -69,8 +69,8 @@ def validate_api_key():
 adk_runner_factory = OmbiSubRunnerFactory()
 adk_session_manager = OmbiSubSessionManager()
 
-# Initialize Rate Limiter (Gemini Free Tier defaults)
-translation_rate_limiter = RateLimiter(requests_per_minute=15, daily_limit=1500)
+# Initialize Rate Limiter (Gemini 3.1 Flash Lite Free Tier defaults)
+translation_rate_limiter = RateLimiter(requests_per_minute=15, daily_limit=500)
 
 app = FastAPI(title="OmbiSub API", version="5.0")
 
@@ -130,55 +130,74 @@ class PipelineRequest(BaseModel):
     skip_context: bool = False
     skip_glossary: bool = False
     episode_names: Optional[List[str]] = None
-    model: str = "gemini-2.5-flash"
+    model: Optional[str] = None
     context_model: Optional[str] = None
     glossary_model: Optional[str] = None
     translation_model: Optional[str] = None
 
 
 class SettingsRequest(BaseModel):
-    default_target_language: Optional[str] = None
-    default_scan_model: Optional[str] = None
-    default_translation_model: Optional[str] = None
-    local_llm_base_url: Optional[str] = None
-    concurrent_scenes: Optional[int] = None
-    max_lines_per_scene: Optional[int] = None
-    temperature: Optional[float] = None
-    top_k: Optional[int] = None
-    top_p: Optional[float] = None
+    default_target_language: Optional[str] = "English"
+    default_scan_model: Optional[str] = "gemini-flash-lite-latest"
+    default_translation_model: Optional[str] = "gemini-flash-latest"
+    default_context_model: Optional[str] = "gemini-flash-latest"
+    default_glossary_model: Optional[str] = "gemini-flash-latest"
+    local_llm_base_url: Optional[str] = "http://localhost:11434"
+    subtitle_edit_path: Optional[str] = ""
+    apply_subtitle_edit_fixes: Optional[bool] = False
+    concurrent_scenes: Optional[int] = 3
+    max_lines_per_scene: Optional[int] = 200
+    temperature: Optional[float] = 0.3
+    top_k: Optional[int] = 40
+    top_p: Optional[float] = 1.0
     # Translation Memory settings
-    tm_enabled: Optional[bool] = None
-    tm_similarity_threshold: Optional[float] = None
-    tm_exact_match_threshold: Optional[float] = None
+    tm_enabled: Optional[bool] = True
+    tm_similarity_threshold: Optional[float] = 0.80
+    tm_exact_match_threshold: Optional[float] = 0.95
     # Character profiles
-    character_profiles_enabled: Optional[bool] = None
+    character_profiles_enabled: Optional[bool] = True
     # Reviewer agent settings
-    enable_reviewer: Optional[bool] = None
-    review_model: Optional[str] = None
-    review_threshold: Optional[float] = None       # Below this avg score -> retranslate
-    review_max_pct: Optional[float] = None          # Max % of lines to review (0.0-1.0)
+    enable_reviewer: Optional[bool] = False
+    review_model: Optional[str] = "gemini-flash-latest"
+    review_threshold: Optional[float] = 0.7
+    review_max_pct: Optional[float] = 0.25
     # Episode summary settings
-    episode_summaries_enabled: Optional[bool] = None
-    episode_summary_window: Optional[int] = None   # Number of past summaries to inject
+    episode_summaries_enabled: Optional[bool] = True
+    episode_summary_window: Optional[int] = 3
     # Bazarr integration settings
-    bazarr_url: Optional[str] = None
-    bazarr_api_key: Optional[str] = None
-    bazarr_enabled: Optional[bool] = None
-    bazarr_poll_interval: Optional[int] = None
-    bazarr_media_types: Optional[str] = None  # "series", "movies", "both"
+    bazarr_url: Optional[str] = "http://localhost:6767"
+    bazarr_api_key: Optional[str] = ""
+    bazarr_enabled: Optional[bool] = False
+    bazarr_poll_interval: Optional[int] = 30
+    bazarr_media_types: Optional[str] = "both"
+    bazarr_path_mappings: Optional[List[Dict[str, str]]] = []
+    bazarr_sync_interval: Optional[int] = 0  # Minutes. 0 = manual only
 
 
 class ApiKeyRequest(BaseModel):
     api_key: str
 
 class SimplePipelineRequest(BaseModel):
-    model: str = "gemini-flash-latest"
+    model: Optional[str] = None
+    context_model: Optional[str] = None
+    glossary_model: Optional[str] = None
+    translation_model: Optional[str] = None
 
 class ConfirmContextRequest(BaseModel):
     context_guide: str
 
 class ConfirmGlossaryRequest(BaseModel):
     glossary: Dict
+
+
+class BazarrTestRequest(BaseModel):
+    bazarr_url: Optional[str] = None
+    bazarr_api_key: Optional[str] = None
+    bazarr_enabled: Optional[bool] = None
+    bazarr_poll_interval: Optional[int] = None
+    bazarr_media_types: Optional[str] = None
+    bazarr_path_mappings: Optional[List[Dict[str, str]]] = None
+    default_target_language: Optional[str] = None
 
 
 class MergeTranslationRequest(BaseModel):
@@ -237,7 +256,11 @@ def update_job(
     result: Dict = None,
     prompt: str = None,
     ai_response: str = None,
-    scene_status: Dict[str, str] = None
+    scene_status: Dict[str, str] = None,
+    completed_episodes: list = None,
+    failed_episodes: list = None,
+    rate_limit_hits: int = None,
+    daily_limit_reached: bool = None
 ):
     if job_id not in jobs:
         return
@@ -260,6 +283,14 @@ def update_job(
         if not job.scene_status:
             job.scene_status = {}
         job.scene_status.update(scene_status)
+    if completed_episodes is not None:
+        job.completed_episodes = completed_episodes
+    if failed_episodes is not None:
+        job.failed_episodes = failed_episodes
+    if rate_limit_hits is not None:
+        job.rate_limit_hits = rate_limit_hits
+    if daily_limit_reached is not None:
+        job.daily_limit_reached = daily_limit_reached
 
 
 @app.get("/jobs/{job_id}")
@@ -311,7 +342,15 @@ async def get_settings():
 
 @app.post("/settings")
 async def update_settings(settings: SettingsRequest):
-    storage.save_global_config(settings.dict(exclude_unset=True))
+    storage.save_global_config(settings.dict())
+    
+    # Apply rate limits immediately to the running limiter
+    if settings.tm_similarity_threshold is not None:
+        translation_rate_limiter.requests_per_minute = 15 # Default
+    # Note: We don't have explicit RPM/RPD in SettingsRequest yet, but if they were there, 
+    # we would sync them here. For now, let's just make sure the RPD is updated if 
+    # it was added to the config manually.
+    
     return {"status": "success"}
 
 
@@ -767,8 +806,9 @@ async def resolve_all_review_items(project_name: str):
 
 # Bazarr Integration
 
-from integrations.bazarr import BazarrConfig, test_connection as bazarr_test_connection
+from integrations.bazarr import BazarrConfig, test_connection as bazarr_test_connection, get_language_profiles as _get_language_profiles
 from integrations.auto_translator import AutoTranslator
+from integrations.sync_engine import BazarrSyncEngine, SyncResult
 
 _auto_translator: Optional[AutoTranslator] = None
 
@@ -782,6 +822,7 @@ def _build_bazarr_config(global_config: Dict) -> BazarrConfig:
         enabled=global_config.get("bazarr_enabled", False),
         poll_interval_minutes=global_config.get("bazarr_poll_interval", 30),
         media_types=global_config.get("bazarr_media_types", "both"),
+        path_mappings=global_config.get("bazarr_path_mappings", []),
     )
 
 
@@ -807,13 +848,19 @@ async def _stop_auto_translator():
 @app.on_event("startup")
 async def on_startup():
     """Start background services on server startup."""
+    global _scheduled_sync_task
     await _start_auto_translator()
+    _scheduled_sync_task = asyncio.create_task(_scheduled_sync_loop())
 
 
 @app.on_event("shutdown")
 async def on_shutdown():
     """Stop background services on server shutdown."""
+    global _scheduled_sync_task
     await _stop_auto_translator()
+    if _scheduled_sync_task:
+        _scheduled_sync_task.cancel()
+        _scheduled_sync_task = None
 
 
 @app.get("/integrations/bazarr/status")
@@ -841,9 +888,13 @@ async def bazarr_status():
 
 
 @app.post("/integrations/bazarr/test")
-async def bazarr_test():
-    """Test the Bazarr connection with current settings."""
+async def bazarr_test(request: Optional[BazarrTestRequest] = None):
+    """Test the Bazarr connection with current settings or provided settings."""
     config = storage.load_global_config()
+    if request:
+        # Merge provided settings into a temporary config dict
+        config.update(request.dict(exclude_unset=True))
+        
     bazarr_config = _build_bazarr_config(config)
 
     if not bazarr_config.api_key:
@@ -853,10 +904,26 @@ async def bazarr_test():
 
 
 @app.post("/integrations/bazarr/scan-now")
-async def bazarr_scan_now(background_tasks: BackgroundTasks):
+async def bazarr_scan_now(background_tasks: BackgroundTasks, request: Optional[BazarrTestRequest] = None):
     """Manually trigger a scan for missing subtitles and translate them."""
+    global _auto_translator
+    
+    # If settings are provided in the request, always use a temporary translator
+    # to ensure we use the unsaved settings.
+    if request:
+        config = storage.load_global_config()
+        config.update(request.dict(exclude_unset=True))
+        bazarr_config = _build_bazarr_config(config)
+        
+        if not bazarr_config.api_key:
+            raise HTTPException(status_code=400, detail="Bazarr API key not configured")
+            
+        temp_translator = AutoTranslator(bazarr_config)
+        background_tasks.add_task(temp_translator.scan_now)
+        return {"status": "scan_triggered", "note": "Using provided settings for this scan."}
+
     if not _auto_translator:
-        # Create a temporary instance for the manual scan
+        # Create a temporary instance for the manual scan using saved settings
         config = storage.load_global_config()
         bazarr_config = _build_bazarr_config(config)
         if not bazarr_config.api_key:
@@ -897,6 +964,176 @@ async def bazarr_toggle(enabled: bool):
     else:
         await _stop_auto_translator()
         return {"status": "disabled"}
+
+
+# ---------------------------------------------------------------------------
+# Bazarr Library & Sync Endpoints
+# ---------------------------------------------------------------------------
+
+_sync_task: Optional[asyncio.Task] = None
+
+
+@app.get("/integrations/bazarr/library")
+async def bazarr_library():
+    """Return the full Bazarr library grouped by series/movies/disabled.
+
+    Reads locally-stored project metadata — does NOT contact Bazarr.
+    """
+    return storage.get_bazarr_library()
+
+
+@app.post("/integrations/bazarr/sync")
+async def bazarr_sync(background_tasks: BackgroundTasks):
+    """Trigger a full Bazarr -> OmbiSub sync as a background job.
+
+    Creates/updates projects and imports English subtitle files.
+    Returns a job_id that can be polled via GET /jobs/{job_id}.
+    """
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    if not bazarr_config.api_key:
+        raise HTTPException(status_code=400, detail="Bazarr API key not configured")
+
+    job_id = create_job("bazarr_sync")
+    background_tasks.add_task(_run_bazarr_sync, job_id, bazarr_config)
+    return {"job_id": job_id}
+
+
+async def _run_bazarr_sync(job_id: str, config: BazarrConfig):
+    """Background task: execute the full sync."""
+    try:
+        update_job(job_id, status="running", progress=5.0, message="Starting Bazarr sync...")
+
+        engine = BazarrSyncEngine(config)
+
+        def progress_cb(progress=None, message=None):
+            update_job(job_id, progress=progress, message=message, log=message)
+
+        result = await engine.full_sync(progress_callback=progress_cb)
+
+        # Check for unreachable paths — warn user
+        if result.unreachable_paths:
+            paths_str = ", ".join(result.unreachable_paths)
+            update_job(
+                job_id,
+                log=f"WARNING: Unreachable paths detected: {paths_str}",
+            )
+
+        if result.errors:
+            for err in result.errors:
+                update_job(job_id, log=f"ERROR: {err}")
+
+        update_job(
+            job_id,
+            status="completed",
+            progress=100.0,
+            message=(
+                f"Sync complete: {result.new_projects} new projects, "
+                f"{result.new_episodes} new episodes, "
+                f"{result.updated_episodes} updated, "
+                f"{result.disabled_projects} disabled"
+            ),
+            result=result.to_dict(),
+        )
+    except Exception as e:
+        update_job(
+            job_id,
+            status="failed",
+            message=f"Sync failed: {str(e)}",
+            log=f"Fatal error: {str(e)}",
+        )
+
+
+@app.get("/integrations/bazarr/profiles")
+async def bazarr_profiles():
+    """Fetch language profiles from Bazarr."""
+    config = storage.load_global_config()
+    bazarr_config = _build_bazarr_config(config)
+
+    if not bazarr_config.api_key:
+        raise HTTPException(status_code=400, detail="Bazarr API key not configured")
+
+    profiles = await _get_language_profiles(bazarr_config)
+    return {"profiles": profiles}
+
+
+@app.post("/integrations/bazarr/library/{project_name}/disable")
+async def bazarr_disable_entry(project_name: str):
+    """Manually disable a Bazarr library entry.
+
+    Disabled entries remain visible but are excluded from automatic
+    batch translation processes.
+    """
+    meta = storage.load_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not meta.get("bazarr_source"):
+        raise HTTPException(status_code=400, detail="Not a Bazarr project")
+
+    meta["bazarr_disabled"] = True
+    meta["bazarr_disabled_at"] = datetime.now().isoformat()
+    storage.save_project_metadata(project_name, meta)
+    return {"status": "disabled", "project": project_name}
+
+
+@app.post("/integrations/bazarr/library/{project_name}/enable")
+async def bazarr_enable_entry(project_name: str):
+    """Re-enable a previously disabled Bazarr library entry."""
+    meta = storage.load_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not meta.get("bazarr_source"):
+        raise HTTPException(status_code=400, detail="Not a Bazarr project")
+
+    meta["bazarr_disabled"] = False
+    meta.pop("bazarr_disabled_at", None)
+    storage.save_project_metadata(project_name, meta)
+    return {"status": "enabled", "project": project_name}
+
+
+# Scheduled sync support
+_scheduled_sync_task: Optional[asyncio.Task] = None
+
+
+async def _scheduled_sync_loop():
+    """Background loop that runs sync at the configured interval."""
+    while True:
+        try:
+            config = storage.load_global_config()
+            interval_minutes = config.get("bazarr_sync_interval", 0)
+
+            if interval_minutes <= 0 or not config.get("bazarr_enabled"):
+                await asyncio.sleep(60)  # Re-check config every minute
+                continue
+
+            await asyncio.sleep(interval_minutes * 60)
+
+            # Re-read config in case it changed during sleep
+            config = storage.load_global_config()
+            if not config.get("bazarr_enabled") or config.get("bazarr_sync_interval", 0) <= 0:
+                continue
+
+            bazarr_config = _build_bazarr_config(config)
+            if not bazarr_config.api_key:
+                continue
+
+            engine = BazarrSyncEngine(bazarr_config)
+            result = await engine.full_sync()
+            logger.info(
+                f"Scheduled sync complete: "
+                f"{result.new_projects} new, {result.new_episodes} episodes"
+            )
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Scheduled sync error: {e}", exc_info=True)
+            await asyncio.sleep(300)  # Wait 5 min on error
+
+import logging as _logging
+logger = _logging.getLogger(__name__)
+
 
 
 # Project Management
@@ -1420,6 +1657,14 @@ async def estimate_batch(project_name: str, request: BatchTranslateRequest):
     global_config = storage.load_global_config()
     max_lines = global_config.get("max_lines_per_scene", 200)
     
+    # Filter episodes that already have target in Bazarr
+    filtered_episodes = []
+    for ep_name in episodes:
+        ep_meta = storage.load_episode_metadata(project_name, ep_name)
+        if not (ep_meta and ep_meta.get("bazarr_has_target")):
+            filtered_episodes.append(ep_name)
+    episodes = filtered_episodes
+
     for ep_name in episodes:
         data = storage.load_episode(project_name, ep_name)
         if data:
@@ -1618,6 +1863,9 @@ class AutoPipelineRequest(BaseModel):
     episode_names: Optional[List[str]] = None  # None = all episodes
     skip_context: bool = False
     skip_glossary: bool = False
+    enhance_glossary: bool = True
+    context_model: Optional[str] = None
+    glossary_model: Optional[str] = None
 
 
 @app.post("/projects/{project_name}/auto-translate")
@@ -1640,15 +1888,19 @@ async def start_auto_translate(
         raise HTTPException(status_code=404, detail="Project not found")
 
     global_config = storage.load_global_config()
-    model = request.model or global_config.get("default_translation_model", "gemini-flash-latest")
+    translation_model = request.model or global_config.get("default_translation_model", "gemini-flash-latest")
+    context_model = request.context_model or global_config.get("default_context_model", "gemini-flash-latest")
+    glossary_model = request.glossary_model or global_config.get("default_glossary_model", "gemini-flash-latest")
 
     job_id = create_job("auto_translate")
     jobs[job_id].pipeline_mode = "auto"
     jobs[job_id].pipeline_stage = "context"
     background_tasks.add_task(
         _process_auto_translate,
-        job_id, project_name, model,
+        job_id, project_name, 
+        translation_model, context_model, glossary_model,
         request.episode_names, request.skip_context, request.skip_glossary,
+        request.enhance_glossary,
     )
     return {"job_id": job_id}
 
@@ -1656,10 +1908,13 @@ async def start_auto_translate(
 async def _process_auto_translate(
     job_id: str,
     project_name: str,
-    model: str,
+    translation_model: str,
+    context_model: str,
+    glossary_model: str,
     episode_names: Optional[List[str]],
     skip_context: bool,
     skip_glossary: bool,
+    enhance_glossary: bool,
 ):
     """Fully automatic pipeline: context → glossary → translate, no pauses."""
     update_job(job_id, status="running", progress=0.0, message="Starting auto-translate...", log="Auto pipeline started")
@@ -1675,30 +1930,30 @@ async def _process_auto_translate(
         # ── Stage 1: Context guide ────────────────────────────────────────
         has_context = bool(metadata.get("context_guide", "").strip())
         if not skip_context and not has_context:
-            update_job(job_id, progress=5.0, message="Generating context guide...", log="Stage 1/3: context")
+            update_job(job_id, progress=5.0, message="Generating context guide...", log="Stage 1/3: context (missing, creating)")
             jobs[job_id].pipeline_stage = "context"
 
             text_lines = await _gather_project_text(project_name, episode_names)
-            enable_research = not is_local_model(model)
+            enable_research = not is_local_model(context_model)
 
             if enable_research:
                 research_data, _ = await research_project_adk(
                     metadata.get("show_name", project_name),
                     text_lines,
                     metadata.get("target_language", "English"),
-                    model_name=model,
+                    model_name=context_model,
                 )
                 context_guide, _ = await enhance_context_guide_adk(
                     research_data.get("findings", ""),
                     metadata.get("show_name", project_name),
-                    model_name=model,
+                    model_name=context_model,
                 )
             else:
                 # Local model: derive minimal context from show name only
                 context_guide, _ = await enhance_context_guide_adk(
                     f"Show: {metadata.get('show_name', project_name)}",
                     metadata.get("show_name", project_name),
-                    model_name=model,
+                    model_name=context_model,
                 )
 
             metadata["context_guide"] = context_guide
@@ -1706,7 +1961,8 @@ async def _process_auto_translate(
             storage.save_project_metadata(project_name, metadata)
             update_job(job_id, progress=25.0, log="Context guide saved")
         else:
-            update_job(job_id, progress=25.0, log="Context: skipped (already exists)" if has_context else "Context: skipped by request")
+            reason = "already exists" if has_context else "skipped by request"
+            update_job(job_id, progress=25.0, log=f"Context: {reason}")
 
         if jobs[job_id].cancelled:
             update_job(job_id, status="cancelled", message="Cancelled")
@@ -1715,18 +1971,18 @@ async def _process_auto_translate(
         # ── Stage 2: Glossary ────────────────────────────────────────────
         has_glossary = bool(metadata.get("glossary", {}).get("terms"))
         if not skip_glossary and not has_glossary:
-            update_job(job_id, progress=28.0, message="Building glossary...", log="Stage 2/3: glossary")
+            update_job(job_id, progress=28.0, message="Building glossary...", log="Stage 2/3: glossary (missing, creating)")
             jobs[job_id].pipeline_stage = "glossary"
 
             text_lines = await _gather_project_text(project_name, episode_names)
-            enable_research = not is_local_model(model) and not text_lines
+            enable_research = not is_local_model(glossary_model)
 
             result, _ = await generate_glossary_adk(
                 text_lines,
                 metadata.get("show_name", project_name),
                 metadata.get("target_language", "English"),
                 existing_glossary=metadata.get("glossary"),
-                model_name=model,
+                model_name=glossary_model,
                 enable_research=enable_research,
             )
             metadata["glossary"] = result
@@ -1734,7 +1990,8 @@ async def _process_auto_translate(
             storage.save_project_metadata(project_name, metadata)
             update_job(job_id, progress=50.0, log=f"Glossary: {len(result.get('terms', []))} terms")
         else:
-            update_job(job_id, progress=50.0, log="Glossary: skipped (already exists)" if has_glossary else "Glossary: skipped by request")
+            reason = "already exists" if has_glossary else "skipped by request"
+            update_job(job_id, progress=50.0, log=f"Glossary: {reason}")
 
         if jobs[job_id].cancelled:
             update_job(job_id, status="cancelled", message="Cancelled")
@@ -1751,7 +2008,12 @@ async def _process_auto_translate(
 
         # Reload metadata so translation sees any freshly-saved glossary/context
         metadata = storage.load_project_metadata(project_name)
-        await _process_batch_translation(job_id, project_name, episodes, model, enhance_glossary_flag=False)
+        await _process_batch_translation(
+            job_id, project_name, episodes, translation_model, 
+            enhance_glossary_flag=enhance_glossary,
+            context_model=context_model,
+            glossary_model=glossary_model
+        )
 
     except Exception as e:
         update_job(job_id, status="failed", message=f"Auto-translate error: {str(e)}", log=str(e))
@@ -1767,7 +2029,19 @@ async def start_simple_pipeline(
     job_id = create_job("simple_pipeline")
     jobs[job_id].pipeline_mode = "simple"
     jobs[job_id].pipeline_stage = "analyze"
-    background_tasks.add_task(_process_simple_pipeline, job_id, project_name, request.model)
+    global_config = storage.load_global_config()
+    translation_model = request.translation_model or request.model or global_config.get("default_translation_model", "gemini-flash-latest")
+    context_model = request.context_model or request.model or global_config.get("default_context_model", "gemini-flash-latest")
+    glossary_model = request.glossary_model or request.model or global_config.get("default_glossary_model", "gemini-flash-latest")
+
+    background_tasks.add_task(
+        _process_simple_pipeline, 
+        job_id, 
+        project_name, 
+        translation_model, 
+        context_model, 
+        glossary_model
+    )
     return {"job_id": job_id}
 
 
@@ -2248,7 +2522,13 @@ Existing terms (DO NOT duplicate): {existing_names}
         update_job(job_id, status="failed", message=f"Error: {str(e)}", log=str(e))
 
 
-async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
+async def _process_simple_pipeline(
+    job_id: str, 
+    project_name: str, 
+    translation_model: str,
+    context_model: str,
+    glossary_model: str
+):
     try:
         update_job(job_id, status="running", progress=5.0, message="Analyzing project context...")
         metadata = storage.load_project_metadata(project_name)
@@ -2259,7 +2539,7 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         update_job(job_id, log="Starting context analysis")
         
         from adk_agents.llm_factory import is_local_model
-        is_local = is_local_model(model)
+        is_local = is_local_model(context_model)
         
         # Get a small text sample for context if needed
         episodes = storage.list_episodes(project_name)
@@ -2271,12 +2551,12 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
 
         if not is_local:
             # Research + Enhance
-            research_data, _ = await research_project_adk(project_name, sample_text, target_lang, model)
-            context_guide, _ = await enhance_context_guide_adk(research_data.get("findings", ""), project_name, model)
+            research_data, _ = await research_project_adk(project_name, sample_text, target_lang, context_model)
+            context_guide, _ = await enhance_context_guide_adk(research_data.get("findings", ""), project_name, context_model)
         else:
             # Local model: Skip research, just generate guide from project name + sample
-            prompt = f"Analyze the following project and create a translation style guide.\\nProject: {project_name}\\nTarget Language: {target_lang}\\n\\nSample Text:\\n" + "\\n".join(sample_text[:50])
-            context_guide, _ = await enhance_context_guide_adk(prompt, project_name, model)
+            prompt = f"Analyze the following project and create a translation style guide.\nProject: {project_name}\nTarget Language: {target_lang}\n\nSample Text:\n" + "\n".join(sample_text[:50])
+            context_guide, _ = await enhance_context_guide_adk(prompt, project_name, context_model)
 
         update_job(job_id, progress=20.0, result={"context_guide": context_guide}, message="Awaiting context review...")
         await _pipeline_pause(job_id, "context", "Please review and confirm the generated context guide.")
@@ -2300,7 +2580,7 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         glossary_dict, _ = await generate_glossary_adk(
             combined_text[:2000], project_name, target_lang, 
             existing_glossary=metadata.get("glossary"),
-            model_name=model, enable_research=not is_local
+            model_name=glossary_model, enable_research=not is_local_model(glossary_model)
         )
         
         update_job(job_id, progress=50.0, result={"glossary": glossary_dict}, message="Awaiting glossary review...")
@@ -2312,12 +2592,16 @@ async def _process_simple_pipeline(job_id: str, project_name: str, model: str):
         jobs[job_id].pipeline_stage = "translate"
         update_job(job_id, status="running", progress=55.0, message="Translating episodes...")
         
-        # Reload metadata to get confirmed changes
+        # Reload metadata so translation sees any freshly-saved glossary/context
         metadata = storage.load_project_metadata(project_name)
         
         # Reuse existing batch translation logic
         await _process_batch_translation(
-            job_id, project_name, episodes, model, enhance_glossary_flag=False, is_simple_pipeline=True
+            job_id, project_name, episodes, translation_model, 
+            enhance_glossary_flag=False,
+            is_simple_pipeline=True,
+            context_model=context_model,
+            glossary_model=glossary_model
         )
 
     except Exception as e:
@@ -2349,6 +2633,10 @@ def _record_user_edits(
         if old_trans and new_trans and original and old_trans != new_trans:
             edits_source.append(original)
             edits_target.append(new_trans)
+            # Clear review flag — user has verified this line by editing it
+            new_line.pop("needs_review", None)
+            new_line.pop("review_issues", None)
+            new_line.pop("review_scores", None)
 
     if edits_source:
         config = storage.load_global_config()
@@ -2385,13 +2673,20 @@ async def _translate_episode_atomic(
         return False
 
     parsed_srt = episode_data["data"]
+    translated_map = {}
+
+    # Pre-fill translated_map for empty or whitespace-only original lines
+    # This prevents Atomic failure if the LLM skips them (which they usually do)
+    for i, entry in enumerate(parsed_srt):
+        if not entry.get("original", "").strip():
+            translated_map[i] = ""
+
     max_lines = global_config.get("max_lines_per_scene", 200)
     scenes = build_scene_ast(parsed_srt, gap_threshold_ms=3000, max_lines_per_scene=max_lines)
     total_scenes = len(scenes)
 
     update_job(job_id, log=f"Translating {episode_name} ({total_scenes} scenes)")
 
-    translated_map = {}
     _eph_svc = get_ephemeral_session_service()
     from google.adk.runners import Runner as _Runner
 
@@ -2699,7 +2994,9 @@ async def _translate_episode_atomic(
 
 async def _process_batch_translation(
     job_id: str, project_name: str, episode_names: List[str], 
-    model: str, enhance_glossary_flag: bool, is_simple_pipeline: bool = False
+    model: str, enhance_glossary_flag: bool, is_simple_pipeline: bool = False,
+    context_model: Optional[str] = None,
+    glossary_model: Optional[str] = None
 ):
     update_job(job_id, status="running", progress=0.0, message="Starting translation...", log="Job started")
     try:
@@ -2729,7 +3026,25 @@ async def _process_batch_translation(
             top_p=global_config.get("top_p"),
         )
 
+        # Filter out episodes that already have target in Bazarr
+        valid_episode_names = []
+        skipped_bazarr = 0
+        for ep_name in episode_names:
+            ep_meta = storage.load_episode_metadata(project_name, ep_name)
+            if ep_meta and ep_meta.get("bazarr_has_target"):
+                skipped_bazarr += 1
+                continue
+            valid_episode_names.append(ep_name)
+        
+        if skipped_bazarr > 0:
+            update_job(job_id, log=f"Skipped {skipped_bazarr} episodes that already have Greek subtitles in Bazarr.")
+        
+        episode_names = valid_episode_names
         total = len(episode_names)
+        if total == 0:
+            update_job(job_id, status="completed", message="All selected episodes already have translations in Bazarr.", progress=100.0)
+            return
+
         completed_episodes = []
         failed_episodes = []
         
@@ -2763,6 +3078,45 @@ async def _process_batch_translation(
                 if success:
                     completed_episodes.append(episode_name)
                     update_job(job_id, completed_episodes=completed_episodes)
+                    
+                    # --- Automated Glossary Enrichment ---
+                    if enhance_glossary_flag:
+                        try:
+                            update_job(job_id, log=f"{episode_name}: Extracting new glossary terms...")
+                            ep_data = storage.load_episode(project_name, episode_name)
+                            if ep_data:
+                                text_lines = extract_text_only(ep_data["data"])
+                                new_glossary, _ = await generate_glossary_adk(
+                                    text_lines,
+                                    metadata.get("show_name", project_name),
+                                    target_lang,
+                                    existing_glossary=metadata.get("glossary"),
+                                    model_name=glossary_model or model,
+                                    enable_research=False # Fast extraction
+                                )
+                                if new_glossary and new_glossary.get("terms"):
+                                    old_glossary = metadata.get("glossary", {"terms": []})
+                                    merged = _merge_glossaries(old_glossary, new_glossary)
+                                    metadata["glossary"] = merged
+                                    storage.save_project_metadata(project_name, metadata)
+                                    added_count = len(merged["terms"]) - len(old_glossary["terms"])
+                                    update_job(job_id, log=f"{episode_name}: Added {added_count} new terms to glossary.")
+                                    
+                                    # Re-create agent to pick up new glossary for next episodes
+                                    shared_agent = create_translation_pipeline(
+                                        project_name=project_name,
+                                        target_language=target_lang,
+                                        glossary=merged,
+                                        context_guide=context_guide,
+                                        cartographer_model=glossary_model or model,
+                                        translator_model=model,
+                                        skip_glossary_step=not enhance_glossary_flag,
+                                        temperature=global_config.get("temperature"),
+                                        top_k=global_config.get("top_k"),
+                                        top_p=global_config.get("top_p"),
+                                    )
+                        except Exception as e:
+                            update_job(job_id, log=f"{episode_name}: Glossary enrichment failed (non-critical): {e}")
                 else:
                     failed_episodes.append(episode_name)
                     update_job(job_id, failed_episodes=failed_episodes)
@@ -2987,9 +3341,10 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
             update_job(job_id, status="failed", message="Project not found")
             return
 
-        ctx_model = request.context_model or request.model
-        gls_model = request.glossary_model or request.model
-        tr_model = request.translation_model or request.model
+        global_config = storage.load_global_config()
+        ctx_model = request.context_model or request.model or global_config.get("default_context_model", "gemini-flash-latest")
+        gls_model = request.glossary_model or request.model or global_config.get("default_glossary_model", "gemini-flash-latest")
+        tr_model = request.translation_model or request.model or global_config.get("default_translation_model", "gemini-flash-latest")
         is_step = request.mode == "step"
 
         # --- Stage 1: Context Guide ---
@@ -3033,7 +3388,7 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
                 # Reload metadata in case user edited during review
                 metadata = storage.load_project_metadata(project_name)
         else:
-            update_job(job_id, progress=25.0, log="Skipping context (already exists)")
+            update_job(job_id, progress=25.0, log="Skipping context stage (skipped by request)")
 
         # --- Stage 2: Glossary ---
         if not request.skip_glossary:
@@ -3068,7 +3423,7 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
                     return
                 metadata = storage.load_project_metadata(project_name)
         else:
-            update_job(job_id, progress=50.0, log="Skipping glossary (already exists)")
+            update_job(job_id, progress=50.0, log="Skipping glossary stage (skipped by request)")
 
         # --- Stage 3: Translation ---
         if jobs[job_id].cancelled:
@@ -3386,6 +3741,29 @@ def _select_golden_ratio_files(episodes: List[str]) -> List[str]:
     return [episodes[i] for i in sorted_indices if 0 <= i < n]
 
 
+def _merge_glossaries(existing: Dict, new: Dict) -> Dict:
+    """Merge two glossaries, avoiding duplicates by term (case-insensitive)."""
+    if not existing:
+        return new or {"terms": []}
+    if not new:
+        return existing
+        
+    merged_terms = existing.get("terms", [])[:]
+    existing_terms_lower = {t.get("term", "").lower() for t in merged_terms}
+    
+    for term in new.get("terms", []):
+        if term.get("term", "").lower() not in existing_terms_lower:
+            merged_terms.append(term)
+            existing_terms_lower.add(term.get("term", "").lower())
+            
+    return {"terms": merged_terms}
+
+
 if __name__ == "__main__":
     import uvicorn
+    
+    # Sync rate limiter with config on startup
+    conf = storage.load_global_config()
+    # If config doesn't have these, use the 15/500 defaults already set
+    
     uvicorn.run(app, host="0.0.0.0", port=8000)

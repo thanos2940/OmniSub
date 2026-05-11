@@ -30,17 +30,18 @@ def _build_glossary_context(glossary: Dict) -> str:
         if not src:
             continue
 
+        flags = ["cs" if term.get("case_sensitive", True) else "ci"]
         if term.get("keep_original", False):
-            tgt = f"[KEEP:{src}]"
+            tgt = src
+            flags.append("ko")
         else:
             tgt = term.get("translation", src)
 
         t = _TYPE_ABBREV.get(term.get("type", ""), "")
         g = _GENDER_ABBREV.get(term.get("gender", "n/a"), "")
-        cs = "cs" if term.get("case_sensitive", True) else "ci"
 
         # Only emit non-empty fields
-        meta = "|".join(x for x in [t, g, cs] if x)
+        meta = "|".join(x for x in [t, g, *flags] if x)
         desc = term.get("description", "")
         row = f"{src}|{tgt}|{meta}" + (f"|{desc}" if desc else "")
         rows.append(row)
@@ -67,8 +68,7 @@ Rules:
 - Every input line number must have a matching N| line in output.
 - Preserve <br> line-break markers within a line.
 - Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
-- cs terms: match case exactly. ci terms: adapt casing naturally.
-- KEEP: terms must not be translated — use the original word.
+- Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
 {context_section}
 Glossary (source|translation|type|gender|case):

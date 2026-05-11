@@ -59,6 +59,33 @@ class BazarrConfig:
     poll_interval_minutes: int = 30
     auto_translate: bool = True             # Translate automatically or queue for review
     media_types: str = "both"               # "series", "movies", "both"
+    path_mappings: List[Dict[str, str]] = field(default_factory=list) # [{"remote": "E:\\", "local": "\\\\Server\\e\\"}]
+
+    def translate_path(self, remote_path: str) -> str:
+        """Translate a remote path from Bazarr to a local path based on mappings."""
+        if not remote_path:
+            return ""
+            
+        for mapping in self.path_mappings:
+            remote = mapping.get("remote", "")
+            local = mapping.get("local", "")
+            if remote and local and remote_path.lower().startswith(remote.lower()):
+                # Case-insensitive replacement of the prefix
+                translated = local + remote_path[len(remote):]
+                # Normalize slashes (Bazarr might use \ on Windows or / on Linux)
+                # If we are on Windows, we want \. If the mapping uses \, we follow.
+                if "\\" in local:
+                    translated = translated.replace("/", "\\")
+                else:
+                    translated = translated.replace("\\", "/")
+                return translated
+                
+        return remote_path
+
+    @property
+    def normalized_url(self) -> str:
+        """Base URL without trailing slash."""
+        return self.base_url.rstrip('/')
 
     @property
     def target_language_code2(self) -> str:
@@ -111,7 +138,7 @@ async def test_connection(config: BazarrConfig) -> Dict:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{config.base_url}/api/system/status",
+                f"{config.normalized_url}/api/system/status",
                 headers={"X-API-KEY": config.api_key},
             )
             if resp.status_code == 401:
@@ -181,7 +208,7 @@ async def _get_missing_series_subs(
 
     while True:
         resp = await client.get(
-            f"{config.base_url}/api/series",
+            f"{config.normalized_url}/api/series",
             headers=headers,
             params={"start": (page - 1) * page_size, "length": page_size},
         )
@@ -202,12 +229,19 @@ async def _get_missing_series_subs(
         series_id = series.get("sonarrSeriesId")
         series_title = series.get("title", "Unknown")
         series_type = series.get("seriesType", "standard")
+        series_languages = series.get("languages", [])
+        
         if not series_id:
+            continue
+            
+        # Filter: Only process if the target language is in the series language profile
+        if config.target_language not in series_languages:
+            logger.debug(f"Skipping series {series_title}: {config.target_language} not in language profile")
             continue
 
         try:
             resp = await client.get(
-                f"{config.base_url}/api/episodes",
+                f"{config.normalized_url}/api/episodes",
                 headers=headers,
                 params={"seriesid[]": series_id},
             )
@@ -233,8 +267,8 @@ async def _get_missing_series_subs(
                     items.append(MissingSubtitleItem(
                         title=series_title,
                         media_type="series",
-                        media_path=media_path,
-                        english_sub_path=english_sub["path"],
+                        media_path=config.translate_path(media_path),
+                        english_sub_path=config.translate_path(english_sub["path"]),
                         season=ep.get("season", 0),
                         episode=ep.get("episode", 0),
                         episode_title=ep.get("title", ""),
@@ -261,7 +295,7 @@ async def _get_missing_movie_subs(
 
     while True:
         resp = await client.get(
-            f"{config.base_url}/api/movies",
+            f"{config.normalized_url}/api/movies",
             headers=headers,
             params={"start": (page - 1) * page_size, "length": page_size},
         )
@@ -273,6 +307,14 @@ async def _get_missing_movie_subs(
             break
 
         for movie in data:
+            movie_title = movie.get("title", "Unknown")
+            movie_languages = movie.get("languages", [])
+            
+            # Filter: Only process if the target language is in the movie language profile
+            if config.target_language not in movie_languages:
+                logger.debug(f"Skipping movie {movie_title}: {config.target_language} not in language profile")
+                continue
+                
             subs = movie.get("subtitles", [])
             media_path = movie.get("path", "")
 
@@ -289,8 +331,8 @@ async def _get_missing_movie_subs(
                 items.append(MissingSubtitleItem(
                     title=movie.get("title", "Unknown"),
                     media_type="movie",
-                    media_path=media_path,
-                    english_sub_path=english_sub["path"],
+                    media_path=config.translate_path(media_path),
+                    english_sub_path=config.translate_path(english_sub["path"]),
                     radarr_id=movie.get("radarrId"),
                 ))
 
@@ -376,3 +418,150 @@ def make_episode_name(item: MissingSubtitleItem) -> str:
     else:
         # Movies: use the title, sanitized
         return make_project_name(item.title)
+
+
+# ---------------------------------------------------------------------------
+# Extended Bazarr API — Library & Sync Support
+# ---------------------------------------------------------------------------
+
+def get_subtitle_fingerprint(sub_path: str) -> Optional[str]:
+    """Return a change-detection fingerprint for a subtitle file.
+
+    Format: ``{mtime_ns}_{size}`` — changes whenever the file is
+    modified or replaced.  Returns None if the file is unreachable.
+    """
+    try:
+        p = Path(sub_path)
+        if not p.exists():
+            return None
+        stat = p.stat()
+        return f"{int(stat.st_mtime_ns)}_{stat.st_size}"
+    except OSError:
+        return None
+
+
+async def get_language_profiles(config: BazarrConfig) -> List[Dict]:
+    """Fetch all configured language profiles from Bazarr.
+
+    Each profile contains an ``id``, ``name``, and ``items`` list with
+    the languages that belong to it (including cutoff info).
+    """
+    headers = {"X-API-KEY": config.api_key}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(
+                f"{config.normalized_url}/api/system/languages/profiles",
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                return resp.json() or []
+    except Exception as e:
+        logger.error(f"Failed to fetch Bazarr language profiles: {e}")
+    return []
+
+
+async def get_all_series(config: BazarrConfig) -> List[Dict]:
+    """Fetch *all* series from Bazarr with full metadata.
+
+    Returns the raw Bazarr series objects (including ``languages``,
+    ``sonarrSeriesId``, ``title``, ``seriesType``, ``profileId``, etc.).
+    Pagination is handled internally.
+    """
+    headers = {"X-API-KEY": config.api_key}
+    all_series: List[Dict] = []
+    page_size = 50
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            start = 0
+            while True:
+                resp = await client.get(
+                    f"{config.normalized_url}/api/series",
+                    headers=headers,
+                    params={"start": start, "length": page_size},
+                )
+                if resp.status_code != 200:
+                    logger.error(f"Bazarr /api/series returned {resp.status_code}")
+                    break
+                data = resp.json().get("data", [])
+                if not data:
+                    break
+                all_series.extend(data)
+                if len(data) < page_size:
+                    break
+                start += page_size
+    except Exception as e:
+        logger.error(f"Failed to fetch Bazarr series: {e}")
+
+    return all_series
+
+
+async def get_all_movies(config: BazarrConfig) -> List[Dict]:
+    """Fetch *all* movies from Bazarr with full metadata."""
+    headers = {"X-API-KEY": config.api_key}
+    all_movies: List[Dict] = []
+    page_size = 50
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            start = 0
+            while True:
+                resp = await client.get(
+                    f"{config.normalized_url}/api/movies",
+                    headers=headers,
+                    params={"start": start, "length": page_size},
+                )
+                if resp.status_code != 200:
+                    logger.error(f"Bazarr /api/movies returned {resp.status_code}")
+                    break
+                data = resp.json().get("data", [])
+                if not data:
+                    break
+                all_movies.extend(data)
+                if len(data) < page_size:
+                    break
+                start += page_size
+    except Exception as e:
+        logger.error(f"Failed to fetch Bazarr movies: {e}")
+
+    return all_movies
+
+
+async def get_series_episodes(
+    config: BazarrConfig,
+    series_id: int,
+) -> List[Dict]:
+    """Fetch all episodes for a specific series from Bazarr."""
+    headers = {"X-API-KEY": config.api_key}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{config.normalized_url}/api/episodes",
+                headers=headers,
+                params={"seriesid[]": series_id},
+            )
+            if resp.status_code == 200:
+                return resp.json().get("data", [])
+    except Exception as e:
+        logger.error(f"Failed to fetch episodes for series {series_id}: {e}")
+    return []
+
+
+def check_path_reachable(path: str) -> bool:
+    """Quick check whether a filesystem path is reachable.
+
+    Useful for detecting unreachable UNC paths / NAS shares before
+    attempting heavy I/O during sync.
+    """
+    try:
+        p = Path(path)
+        # For UNC roots like \\Server\share, check the parent exists
+        if str(p).startswith("\\\\"):
+            # Check if the root share is accessible
+            parts = Path(path).parts
+            if len(parts) >= 2:
+                root = Path(parts[0]) / parts[1]
+                return root.exists()
+        return p.exists() or p.parent.exists()
+    except OSError:
+        return False

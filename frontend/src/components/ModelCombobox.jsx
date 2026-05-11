@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Wifi, WifiOff } from 'lucide-react';
 
-const ModelCombobox = ({ value, onChange, label, className = '' }) => {
+const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type model name...", className = '' }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [inputValue, setInputValue] = useState(value || '');
     const [geminiModels, setGeminiModels] = useState([]);
@@ -100,7 +100,7 @@ const ModelCombobox = ({ value, onChange, label, className = '' }) => {
                     onFocus={() => setIsOpen(true)}
                     onBlur={handleInputBlur}
                     onKeyDown={handleKeyDown}
-                    placeholder="Select or type model name..."
+                    placeholder={placeholder}
                     className="w-full px-4 py-2.5 pr-10 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
                 />
                 <button

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, ChevronRight, Home } from 'lucide-react';
+import { LayoutGrid, Settings, ChevronRight, Home, Library } from 'lucide-react';
 
 const TopBar = () => {
     const location = useLocation();
@@ -9,6 +9,7 @@ const TopBar = () => {
     // Simple parsing logic based on route structure: /project/:projectName/episode/:episodeName
     const projectName = pathSegments[0] === 'project' ? decodeURIComponent(pathSegments[1]) : null;
     const episodeName = pathSegments[2] === 'episode' ? decodeURIComponent(pathSegments[3]) : null;
+    const isLibrary = location.pathname === '/library';
 
     return (
         <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
@@ -29,6 +30,15 @@ const TopBar = () => {
                     <Link to="/" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all">
                         <Home size={16} />
                     </Link>
+
+                    {isLibrary && (
+                        <>
+                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
+                            <span className="px-2 py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                                Library
+                            </span>
+                        </>
+                    )}
 
                     {projectName && (
                         <>
@@ -55,6 +65,18 @@ const TopBar = () => {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2">
+                <Link
+                    to="/library"
+                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${
+                        isLibrary
+                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
+                            : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                    }`}
+                    title="Bazarr Library"
+                >
+                    <Library size={18} />
+                    <span className="hidden md:inline">Library</span>
+                </Link>
                 <Link
                     to="/settings"
                     className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"

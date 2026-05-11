@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Book, X } from 'lucide-react';
+import { Download, Book, X, AlertTriangle } from 'lucide-react';
 import GlossaryEditor from './GlossaryEditor';
 
 const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpdate, isLoading, project, projectName, episodeName, originalFilename }) => {
@@ -112,28 +112,33 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                 <div className="p-4 text-gray-700 border-r border-gray-100 leading-relaxed">
                                     {item.original}
                                 </div>
-                                <div className={`p-0 transition-colors relative ${item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
+                                <div className={`p-0 transition-colors relative ${item.needs_review ? 'bg-red-50/50 group-hover:bg-red-50/70 border-l-2 border-red-400' : item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
                                     <textarea
                                         value={item.translated || ''}
                                         onChange={(e) => handleTranslationChange(item.id, e.target.value)}
                                         placeholder={isLoading ? "Translating..." : "Not translated"}
                                         disabled={isLoading}
-                                        className="w-full h-full min-h-[80px] p-4 bg-transparent border-none outline-none resize-none text-gray-900 font-medium leading-relaxed focus:bg-white/50 focus:ring-2 focus:ring-indigo-500/20 transition-all placeholder:italic placeholder:text-gray-300 disabled:opacity-50"
+                                        className={`w-full h-full min-h-[80px] p-4 bg-transparent border-none outline-none resize-none text-gray-900 font-medium leading-relaxed focus:bg-white/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 disabled:opacity-50 ${item.needs_review ? 'focus:ring-red-500/20' : 'focus:ring-indigo-500/20'}`}
                                     />
                                     {isLoading && !item.translated && (
                                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                             <span className="text-indigo-400 italic animate-pulse">Translating...</span>
                                         </div>
                                     )}
-                                    {item.from_tm && (
-                                        <div className="absolute top-2 right-2 pointer-events-none flex items-center gap-1">
-                                            {item.tm_user_edited ? (
+                                    <div className="absolute top-2 right-2 pointer-events-none flex items-center gap-1 flex-wrap justify-end">
+                                        {item.needs_review && (
+                                            <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700 uppercase tracking-wider shadow-sm" title={item.review_issues || "Needs Review"}>
+                                                <AlertTriangle size={10} /> Review Flagged
+                                            </span>
+                                        )}
+                                        {item.from_tm && (
+                                            item.tm_user_edited ? (
                                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider shadow-sm" title="Reused from your previous edits">User Edit</span>
                                             ) : (
                                                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider shadow-sm" title="Matched from Translation Memory">TM Match</span>
-                                            )}
-                                        </div>
-                                    )}
+                                            )
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}

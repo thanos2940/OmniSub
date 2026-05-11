@@ -6,6 +6,7 @@ import JobProgressWidget from './components/JobProgressWidget';
 import TopBar from './components/TopBar';
 import SettingsPage from './components/SettingsPage';
 import EpisodeView from './components/EpisodeView';
+import BazarrLibrary from './components/BazarrLibrary';
 import ApiKeyModal from './components/ApiKeyModal';
 import { JobProvider } from './context/JobContext';
 import { ToastProvider } from './context/ToastContext';
@@ -53,6 +54,7 @@ function App() {
                                 <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
 
                                 <Route path="/settings" element={<SettingsPage />} />
+                                <Route path="/library" element={<BazarrLibrary />} />
                             </Routes>
                             <JobProgressWidget />
                         </div>

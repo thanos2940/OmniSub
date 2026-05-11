@@ -27,7 +27,7 @@ def strip_reasoning_blocks(text: str) -> str:
 
     # Markdown "Thinking Process:" header block — strip until the next heading or a line starting with a number (subtitle marker)
     text = re.sub(
-        r'(?:^|\n)(?:Thinking Process|Internal Reasoning|Chain of Thought)\s*:.*?(?=\n(?:\d+[:.])|\Z)',
+        r'(?:^|\n)(?:Thinking Process|Internal Reasoning|Chain of Thought)\s*:.*?(?=\n(?:\d+[:.|])|\Z)',
         '', text, flags=re.DOTALL | re.IGNORECASE
     )
 
