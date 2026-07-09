@@ -1,0 +1,16 @@
+[
+  {
+    "id": "greek-1",
+    "source": "Captain Reynolds, the ship is losing power.",
+    "reference": "Καπετάνιε Ρέινολντς, το σκάφος χάνει ενέργεια.",
+    "hypothesis": "Καπετάνιε Ρέινολντς, το σκάφος χάνει ενέργεια.",
+    "glossary": [{ "term": "Captain", "translation": "Καπετάνιε" }]
+  },
+  {
+    "id": "greek-2",
+    "source": "The Captain ordered a full retreat.",
+    "reference": "Ο Καπετάνιος διέταξε πλήρη υποχώρηση.",
+    "hypothesis": "Ο αρχηγός διέταξε πλήρη υποχώρηση.",
+    "glossary": [{ "term": "Captain", "translation": "Καπετάνιος" }]
+  }
+]

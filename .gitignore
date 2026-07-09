@@ -1,0 +1,116 @@
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-error.log
+yarn-debug.log*
+.pnpm-debug.log*
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# Backend Specific
+backend/omnisub_sessions.db
+backend/projects/
+backend/translation_memory/
+backend/test.srt
+backend/test_greek_save.py
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+# Runtime state (regenerated at startup; never tracked)
+backend/rate_limiter_state.json
+test_greek.json
+config.json
+
+# Electron App
+electron-app/node_modules/
+electron-app/dist/
+*.exe
+*.dmg
+*.AppImage
+
+# Docker
+*.tar.gz
+docker-compose.override.yml
+
+# Logs
+*.log
+logs/
+
+# IDEs & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local workspace / editor project files
+*.code-workspace
+*.code-workspace.bak
+
+# ─────────────────────────────────────────────
+# AI / Agent tooling & Conductor (local only — never commit)
+# ─────────────────────────────────────────────
+.claude/
+.agent/
+.agents/
+.antigravity/
+.antigravity-ide/
+.gemini/
+.cursor/
+.cursorrules
+.aider*
+.aider.tags.cache.v3/
+.copilot/
+skills/
+*.skill
+graphify-out/
+agents/
+conductor/
+
+# Markdown files (ignore all except READMEs)
+*.md
+!README.md
+**/*.md
+!**/README.md
+
+# Generated / draft docs (not ready for public)
+docs/
+
+# Secrets & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/

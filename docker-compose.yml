@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  omnisub:
+    build: .
+    container_name: omnisub-app
+    ports:
+      - "8000:8000"
+      - "5173:5173"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    volumes:
+      - ./backend/projects:/app/projects
+      - ./backend/omnisub_sessions.db:/app/omnisub_sessions.db
+    restart: unless-stopped
+    networks:
+      - omnisub-network
+
+networks:
+  omnisub-network:
+    driver: bridge

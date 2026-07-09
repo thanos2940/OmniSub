@@ -1,0 +1,322 @@
+"""
+Omnisub API - Subtitle Translation Platform
+
+FastAPI backend providing endpoints for project management, glossary creation,
+and AI-powered subtitle translation using ADK agents.
+"""
+
+import os
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+from typing import Dict, Optional
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
+
+from utils import storage
+from utils.rate_limiter import per_model_rate_limiter
+from routers.settings import has_api_key, validate_api_key
+
+from routers import (
+    projects,
+    episodes,
+    settings,
+    glossary_context,
+    pipeline,
+    integrations,
+    review,
+    translation_memory,
+    characters,
+    summaries,
+    queue,
+    jobs,
+    health,
+    dashboard,
+    blacklist,
+    consistency,
+    source_subs,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("omnisub.main")
+
+_scheduled_sync_task: Optional[asyncio.Task] = None
+_maintenance_task: Optional[asyncio.Task] = None
+_batch_task: Optional[asyncio.Task] = None
+
+
+async def _batch_loop():
+    """Drain BACKLOG items via the Gemini Batch API when enabled (Plan 01)."""
+    from services.batch_translator import batch_translator
+    while True:
+        try:
+            config = storage.load_global_config()
+            if config.get("batch_api_enabled", False):
+                await batch_translator.run_once(config)
+                await asyncio.sleep(30)
+            else:
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Batch loop error (non-critical): {e}", exc_info=True)
+            await asyncio.sleep(120)
+
+
+async def _maintenance_loop():
+    """Periodic housekeeping: evict old in-memory jobs."""
+    from utils.jobs_manager import evict_old_jobs
+    while True:
+        try:
+            await asyncio.sleep(180)
+            config = storage.load_global_config()
+            removed = evict_old_jobs(
+                max_age_seconds=config.get("job_retention_seconds", 1800),
+                max_jobs=config.get("job_registry_max", 500),
+            )
+            if removed:
+                logger.info(f"Maintenance: evicted {removed} old in-memory job(s)")
+            # Prune old telemetry rows (v2 D8) — cheap, bounded.
+            try:
+                from utils import telemetry
+                telemetry.prune(max_age_days=90)
+            except Exception:
+                pass
+            # Flush any debounced rate-limiter state to disk.
+            try:
+                per_model_rate_limiter.flush()
+            except Exception:
+                pass
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Maintenance loop error (non-critical): {e}")
+
+
+async def _scheduled_arr_sync_loop():
+    """Background loop that runs Sonarr/Radarr sync at the configured interval."""
+    from utils.translation_queue import TranslationQueue, PRIORITY_SYNC
+    from routers.integrations import _build_arr_engine
+
+    while True:
+        try:
+            config = storage.load_global_config()
+            interval_minutes = config.get("arr_sync_interval", 0)
+            sonarr_ok = config.get("sonarr_enabled") and config.get("sonarr_api_key")
+            radarr_ok = config.get("radarr_enabled") and config.get("radarr_api_key")
+
+            if interval_minutes <= 0 or (not sonarr_ok and not radarr_ok):
+                await asyncio.sleep(60)
+                continue
+
+            await asyncio.sleep(interval_minutes * 60)
+
+            config = storage.load_global_config()
+            engine = _build_arr_engine(config)
+            result = await engine.full_sync()
+            logger.info(
+                f"Scheduled arr sync complete: "
+                f"{result.new_projects} new, {result.new_episodes} episodes"
+            )
+
+            # Refresh the metadata index after a sync (Plan 03) — off the event loop.
+            try:
+                from utils import metadata_index
+                await asyncio.to_thread(metadata_index.backfill)
+            except Exception:
+                pass
+
+            # Queue missing subtitles for translation
+            queue = TranslationQueue()
+            
+            for project_name in storage.list_projects():
+                proj_meta = storage.load_project_metadata(project_name) or {}
+                if proj_meta.get("arr_disabled", False):
+                    continue
+                
+                episodes_list = storage.list_episodes(project_name)
+                for ep_name in episodes_list:
+                    ep_meta = storage.load_episode_metadata(project_name, ep_name)
+                    if ep_meta:
+                        original_srt_exists = storage.original_subtitle_exists(project_name, ep_name)
+                        needs_translation = (
+                            not storage.episode_has_target(ep_meta)
+                            or storage.episode_translation_is_stale(ep_meta)
+                        )
+                        if original_srt_exists and needs_translation:
+                            queue.enqueue(project_name, ep_name, priority=PRIORITY_SYNC)
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Scheduled arr sync error: {e}", exc_info=True)
+            await asyncio.sleep(300)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup tasks
+    # Load API key from config.json if not present in environment
+    if not os.environ.get("GOOGLE_API_KEY"):
+        try:
+            from routers.settings import get_api_key
+            key = get_api_key()
+            if key:
+                os.environ["GOOGLE_API_KEY"] = key
+                logger.info("Loaded GOOGLE_API_KEY from config.json")
+        except Exception as e:
+            logger.warning(f"Failed to load GOOGLE_API_KEY from config.json: {e}")
+
+    # Recover any queue items orphaned in 'running' by a previous crash/restart
+    try:
+        from utils.translation_queue import TranslationQueue
+        recovered = TranslationQueue().reset_orphaned_running()
+        if recovered:
+            logger.info(f"Recovered {recovered} orphaned 'running' queue item(s) → pending")
+    except Exception as e:
+        logger.warning(f"Orphaned-running recovery skipped (non-critical): {e}")
+
+    # Backfill the metadata index from files if empty (Plan 03).
+    # Runs in a thread — backfill is filesystem-heavy and must never block the event loop.
+    try:
+        from utils import metadata_index
+        if not metadata_index.is_populated():
+            n = await asyncio.to_thread(metadata_index.backfill)
+            if n:
+                logger.info(f"metadata_index: backfilled {n} episode(s)")
+    except Exception as e:
+        logger.warning(f"metadata_index backfill skipped (non-critical): {e}")
+
+    global _scheduled_sync_task, _maintenance_task, _batch_task
+    _scheduled_sync_task = asyncio.create_task(_scheduled_arr_sync_loop())
+    _maintenance_task = asyncio.create_task(_maintenance_loop())
+    _batch_task = asyncio.create_task(_batch_loop())
+
+    # Warm the global review-queue cache in the background (off the event loop) so the
+    # TopBar badge / Review page don't trigger a cold full-library scan on first poll.
+    try:
+        from routers.review import warm_global_review_cache
+        asyncio.create_task(warm_global_review_cache())
+    except Exception as e:
+        logger.warning(f"review cache warm skipped (non-critical): {e}")
+
+    # Start background translation worker
+    from services.background_worker import worker
+    worker.start()
+
+    # Run migration for messy Bazarr movie episode names on first boot
+    try:
+        from integrations.media_sync_engine import MediaSyncEngine
+        fixed = MediaSyncEngine.migrate_old_episode_names(storage)
+        if fixed:
+            logger.info(f"Migration: renamed episodes in {len(fixed)} projects: {fixed}")
+    except Exception as e:
+        logger.warning(f"Migration skipped (non-critical): {e}")
+
+    yield
+
+    # Shutdown tasks
+    if _scheduled_sync_task:
+        _scheduled_sync_task.cancel()
+        _scheduled_sync_task = None
+    if _maintenance_task:
+        _maintenance_task.cancel()
+        _maintenance_task = None
+    if _batch_task:
+        _batch_task.cancel()
+        _batch_task = None
+
+    # Stop background translation worker
+    from services.background_worker import worker
+    worker.stop()
+
+    # Persist any debounced rate-limiter state before exit.
+    try:
+        per_model_rate_limiter.flush()
+    except Exception:
+        pass
+
+    # Close shared HTTPX clients for Sonarr/Radarr
+    try:
+        from integrations.sonarr import close_client as close_sonarr_client
+        await close_sonarr_client()
+    except Exception:
+        pass
+    try:
+        from integrations.radarr import close_client as close_radarr_client
+        await close_radarr_client()
+    except Exception:
+        pass
+
+
+app = FastAPI(title="Omnisub API", version="5.0", lifespan=lifespan)
+
+# CORS: drive allowed origins from config. A non-empty list is spec-correct with
+# credentials; an empty/unset list falls back to wildcard WITHOUT credentials.
+_cors_origins = storage.load_global_config().get("cors_allow_origins") or []
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Register routers
+app.include_router(settings.router)
+app.include_router(review.router)
+app.include_router(projects.router)
+app.include_router(episodes.router)
+app.include_router(glossary_context.router)
+app.include_router(pipeline.router)
+app.include_router(integrations.router)
+app.include_router(translation_memory.router)
+app.include_router(characters.router)
+app.include_router(summaries.router)
+app.include_router(queue.router)
+app.include_router(jobs.router)
+app.include_router(health.router)
+app.include_router(dashboard.router)
+app.include_router(blacklist.router)
+app.include_router(consistency.router)
+app.include_router(source_subs.router)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring and container orchestration."""
+    return {
+        "status": "healthy",
+        "service": "Omnisub API",
+        "version": "5.0",
+        "adk_enabled": True,
+        "api_key_configured": has_api_key()
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    # Sync rate limiter with config on startup
+    conf = storage.load_global_config()
+    per_model_rate_limiter.load_config_and_state()
+    
+    uvicorn.run(app, host="0.0.0.0", port=8000)
