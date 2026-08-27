@@ -1,11 +1,12 @@
 import os
 import base64
 import logging
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 import httpx
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from utils import storage
 from utils.rate_limiter import translation_rate_limiter, per_model_rate_limiter
@@ -13,6 +14,57 @@ from routers.schemas import SettingsRequest, ApiKeyRequest
 
 router = APIRouter()
 logger = logging.getLogger("omnisub.settings")
+
+
+def _validate_subtitle_edit_path(path: str) -> None:
+    """Guard against subtitle_edit_path being turned into an arbitrary-executable
+    launcher: it's later passed straight to subprocess.run() (utils/subtitle_fixer.py)
+    whenever a user clicks "Fix Common Errors". Require an absolute path to an
+    existing SubtitleEdit*.exe rather than trusting whatever the client sends."""
+    if not path:
+        return
+    p = Path(path)
+    if not p.is_absolute():
+        raise HTTPException(status_code=422, detail="subtitle_edit_path must be an absolute path.")
+    if p.suffix.lower() != ".exe":
+        raise HTTPException(status_code=422, detail="subtitle_edit_path must point to an .exe file.")
+    if not p.name.lower().startswith("subtitleedit"):
+        raise HTTPException(
+            status_code=422,
+            detail="subtitle_edit_path must point to a SubtitleEdit*.exe executable.",
+        )
+    if not p.is_file():
+        raise HTTPException(status_code=422, detail=f"subtitle_edit_path does not exist: {path}")
+
+
+def _validate_ffmpeg_path(path: str) -> None:
+    """Same arbitrary-executable guard as subtitle_edit_path: this value is passed
+    straight to subprocess when extracting embedded subtitles.
+
+    Accepts either the ffmpeg executable itself or the directory holding it (ffprobe
+    is resolved as a sibling), so the user can point at a release folder. Empty means
+    "look on PATH", which is how the Docker image finds it.
+    """
+    if not path:
+        return
+    p = Path(path)
+    if not p.is_absolute():
+        raise HTTPException(status_code=422, detail="ffmpeg_path must be an absolute path.")
+    if p.is_dir():
+        names = ("ffmpeg.exe", "ffmpeg")
+        if not any((p / n).is_file() for n in names):
+            raise HTTPException(
+                status_code=422,
+                detail=f"ffmpeg_path directory does not contain an ffmpeg executable: {path}",
+            )
+        return
+    if not p.is_file():
+        raise HTTPException(status_code=422, detail=f"ffmpeg_path does not exist: {path}")
+    if not p.stem.lower().startswith("ffmpeg"):
+        raise HTTPException(
+            status_code=422,
+            detail="ffmpeg_path must point to an ffmpeg executable (or the folder containing it).",
+        )
 
 
 def obfuscate_api_key(api_key: str) -> str:
@@ -93,29 +145,106 @@ async def delete_api_key():
 
 
 
-@router.get("/settings")
+@router.post("/api/config/test-gemini-key")
+async def test_gemini_key(request: Optional[ApiKeyRequest] = None):
+    key = (request and request.api_key) or get_api_key()
+    if not key:
+        return {"valid": False, "error": "No API key provided or configured."}
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=key)
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents="Say 'OK'",
+            config=types.GenerateContentConfig(max_output_tokens=5, temperature=0.0)
+        )
+        return {"valid": True, "message": "Gemini API key is valid and connected successfully!"}
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
+
+
+# Keys whose real value is never sent back over the wire. GET masks them with
+# SECRET_SENTINEL (plus a `secrets_set` map so the UI can show "configured"
+# without knowing the value); POST drops any field still equal to the sentinel
+# so re-submitting the form untouched can't overwrite the stored secret.
+SECRET_KEYS = (
+    "api_key_obfuscated",
+    "sonarr_api_key",
+    "radarr_api_key",
+    "webhook_secret",
+    "discord_webhook_url",
+    "opensubtitles_api_key",
+    "api_key",
+)
+# Never returned at all, not even masked — there is no legitimate reason for a
+# client to see this, and it isn't a field anyone edits through /settings.
+_NEVER_RETURNED_KEYS = ("auth_password_hash",)
+SECRET_SENTINEL = "__SECRET_UNCHANGED__"
+
+
+@router.get("/api/settings")
 async def get_settings():
-    return storage.load_global_config()
+    config = storage.load_global_config()
+    secrets_set = {}
+    for key in SECRET_KEYS:
+        value = config.get(key)
+        secrets_set[key] = bool(value)
+        if value:
+            config[key] = SECRET_SENTINEL
+    for key in _NEVER_RETURNED_KEYS:
+        config.pop(key, None)
+    config["secrets_set"] = secrets_set
+    return config
 
 
-@router.post("/settings")
+@router.post("/api/settings")
 async def update_settings(settings: SettingsRequest):
     # Persist only the fields the client actually sent, so saving one setting
     # never resets the others to their schema defaults.
-    storage.save_global_config(settings.dict(exclude_unset=True))
+    payload = settings.model_dump(exclude_unset=True)
+    
+    # If api_key was supplied and changed, update GOOGLE_API_KEY environment & obfuscation
+    if "api_key" in payload:
+        raw_key = payload.pop("api_key", None)
+        if raw_key and raw_key != SECRET_SENTINEL:
+            os.environ["GOOGLE_API_KEY"] = raw_key
+            payload["api_key_obfuscated"] = obfuscate_api_key(raw_key)
+            
+    for key in SECRET_KEYS:
+        if payload.get(key) == SECRET_SENTINEL:
+            payload.pop(key)
+    if "subtitle_edit_path" in payload:
+        _validate_subtitle_edit_path(payload["subtitle_edit_path"])
+    if "ffmpeg_path" in payload:
+        _validate_ffmpeg_path(payload["ffmpeg_path"])
+    storage.save_global_config(payload)
     # Reload rate-limit config in case rpm/rpd or model limits changed.
     per_model_rate_limiter.load_config_and_state()
     return {"status": "success"}
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
 @router.post("/settings/browse-executable")
-async def browse_executable():
+async def browse_executable(request: Request):
     """Open a native Windows 'Open file' dialog (on the machine running the backend)
     so the user can pick an executable instead of typing its path.
 
     Returns ``{"path": <selected path or null>}``. Windows-only — this app runs the
-    backend locally, so the dialog appears on the user's own desktop.
+    backend locally, so the dialog appears on the user's own desktop. Restricted to
+    loopback callers: the dialog is only meaningful when the browser is on the same
+    machine as the server, and it would otherwise be a way to pop a native file
+    picker on someone else's screen from across the network.
     """
+    client_host = request.client.host if request.client else None
+    if client_host not in _LOOPBACK_HOSTS:
+        raise HTTPException(
+            status_code=403,
+            detail="This dialog only opens for requests from the server's own machine; type the path manually.",
+        )
+
     import sys
     if sys.platform != "win32":
         raise HTTPException(
@@ -180,17 +309,21 @@ async def list_all_models(base_url: Optional[str] = None):
 
     Response shape:
     {
-      "gemini": [{"value": "gemini-2.5-flash", "label": "Gemini 2.5 Flash", "group": "gemini"}, ...],
+      "gemini": [{"value": "gemini-flash-latest", "label": "Gemini Flash Latest", "group": "gemini"}, ...],
       "local":  [{"value": "local/my-model", "label": "my-model", "group": "local"}, ...],
       "local_endpoint": "http://localhost:1234/v1",
       "local_online": true | false
     }
     """
     gemini_models = [
-        {"value": "gemini-flash-lite-latest",     "label": "Gemini Flash Latest",  "group": "gemini"},
+        {"value": "gemini-flash-latest",     "label": "Gemini Flash Latest",  "group": "gemini"},
         {"value": "gemini-flash-lite-latest","label": "Gemini Flash Lite Latest",      "group": "gemini"},
-        {"value": "gemma-4-31b-it",     "label": "Gemma 31B",  "group": "gemini"},
-        {"value": "gemma-4-26b-a4b-it",     "label": "Gemma 26B",  "group": "gemini"},
+        {"value": "gemini-pro-latest",     "label": "Gemini Pro Latest",  "group": "gemini"},
+        {"value": "gemini-2.5-flash",        "label": "Gemini 2.5 Flash",  "group": "gemini"},
+        {"value": "gemini-2.5-pro",          "label": "Gemini 2.5 Pro",    "group": "gemini"},
+        {"value": "gemini-3.1-flash-lite",   "label": "Gemini 3.1 Flash Lite Preview",  "group": "gemini"},
+        {"value": "gemma-4-31b-it",          "label": "Gemma 31B",  "group": "gemini"},
+        {"value": "gemma-4-26b-a4b-it",      "label": "Gemma 26B",  "group": "gemini"},
     ]
 
     from adk_agents.llm_factory import _resolve_local_base_url

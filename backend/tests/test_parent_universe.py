@@ -243,3 +243,133 @@ def test_update_project_strips_inherited_context_block():
     # Resolving again yields exactly one parent block, not a compounded chain.
     resolved2 = client.get(f"/projects/{CHILD_NAME}").json()
     assert resolved2["context_guide"].count("--- Universe Context") == 1
+
+
+def test_suppressed_terms_prevent_resurrection():
+    """Child project with suppressed_terms must not inherit those specific parent terms."""
+    parent_meta = {
+        "show_name": "Parent Universe",
+        "target_language": "Greek",
+        "type": "parent",
+        "glossary": {
+            "terms": [
+                {"term": "Saber", "translation": "Σέιμπερ", "type": "person"},
+                {"term": "Fuyuki", "translation": "Φουγιούκι", "type": "location"}
+            ]
+        }
+    }
+    storage.create_project(PARENT_NAME, parent_meta)
+
+    child_meta = {
+        "show_name": "Child Show",
+        "target_language": "Greek",
+        "type": "show",
+        "parent_project": PARENT_NAME,
+        "suppressed_terms": ["fuyuki"],
+        "glossary": {"terms": []}
+    }
+    storage.create_project(CHILD_NAME, child_meta)
+
+    resolved = storage.load_resolved_project_metadata(CHILD_NAME)
+    terms = {t["term"].lower(): t for t in resolved["glossary"]["terms"]}
+
+    # Saber is inherited, but Fuyuki is suppressed!
+    assert "saber" in terms
+    assert "fuyuki" not in terms
+
+    # Restoring / unsuppressing Fuyuki
+    child_meta["suppressed_terms"] = []
+    storage.save_project_metadata(CHILD_NAME, child_meta)
+
+    resolved_after = storage.load_resolved_project_metadata(CHILD_NAME)
+    terms_after = {t["term"].lower(): t for t in resolved_after["glossary"]["terms"]}
+    assert "fuyuki" in terms_after
+
+
+def test_parent_deletion_unlinks_children():
+    """Deleting a parent project must safely clear parent_project references in child projects."""
+    storage.create_project(PARENT_NAME, {"target_language": "Greek", "type": "parent"})
+    storage.create_project(CHILD_NAME, {"target_language": "Greek", "parent_project": PARENT_NAME})
+
+    assert storage.load_project_metadata(CHILD_NAME).get("parent_project") == PARENT_NAME
+
+    storage.delete_project(PARENT_NAME)
+
+    child_meta = storage.load_project_metadata(CHILD_NAME)
+    assert child_meta is not None
+    assert child_meta.get("parent_project") is None
+
+
+def test_get_descendant_projects_multi_level():
+    """Verify recursive descendant discovery across multi-level project trees."""
+    grandchild_name = "_test_grandchild_universe"
+    try:
+        storage.create_project(PARENT_NAME, {"target_language": "Greek"})
+        storage.create_project(CHILD_NAME, {"target_language": "Greek", "parent_project": PARENT_NAME})
+        storage.create_project(grandchild_name, {"target_language": "Greek", "parent_project": CHILD_NAME})
+
+        descendants = storage.get_descendant_projects(PARENT_NAME)
+        assert CHILD_NAME in descendants
+        assert grandchild_name in descendants
+        assert len(descendants) == 2
+    finally:
+        storage.delete_project(grandchild_name)
+
+
+def test_sync_candidates_conflict_detection():
+    """When multiple child projects define the same term with different translations, candidate list flags conflicts."""
+    sibling_name = "_test_sibling_universe"
+    try:
+        storage.create_project(PARENT_NAME, {"target_language": "Greek", "type": "parent", "glossary": {"terms": []}})
+        storage.create_project(CHILD_NAME, {
+            "target_language": "Greek",
+            "parent_project": PARENT_NAME,
+            "glossary": {"terms": [{"term": "Excalibur", "translation": "Εξκάλιμπερ (Child A)", "type": "item"}]}
+        })
+        storage.create_project(sibling_name, {
+            "target_language": "Greek",
+            "parent_project": PARENT_NAME,
+            "glossary": {"terms": [{"term": "Excalibur", "translation": "Εξκάλιμπερ (Child B)", "type": "item"}]}
+        })
+
+        res = client.get(f"/projects/{PARENT_NAME}/sync-candidates")
+        assert res.status_code == 200
+        data = res.json()
+
+        # Should group by term into 1 item with has_conflict=True and 2 variants
+        excalibur_candidates = [t for t in data["glossary"] if t["term"].lower() == "excalibur"]
+        assert len(excalibur_candidates) == 1
+        assert excalibur_candidates[0]["has_conflict"] is True
+        assert len(excalibur_candidates[0]["variants"]) == 2
+    finally:
+        storage.delete_project(sibling_name)
+
+
+def test_promote_term_endpoint():
+    """Promoting a single term directly from a child project updates the parent universe."""
+    storage.create_project(PARENT_NAME, {"target_language": "Greek", "type": "parent", "glossary": {"terms": []}})
+    storage.create_project(CHILD_NAME, {
+        "target_language": "Greek",
+        "parent_project": PARENT_NAME,
+        "glossary": {"terms": [{"term": "Avalon", "translation": "Άβαλον", "type": "item"}]}
+    })
+
+    promote_payload = {
+        "term": "Avalon",
+        "translation": "Άβαλον",
+        "type": "item",
+        "gender": "neuter",
+        "case_sensitive": True,
+        "keep_original": False,
+        "description": "Everdistant Utopia"
+    }
+
+    res = client.post(f"/projects/{CHILD_NAME}/promote-term", json=promote_payload)
+    assert res.status_code == 200
+    assert res.json()["status"] == "promoted"
+
+    parent_meta = storage.load_project_metadata(PARENT_NAME)
+    parent_terms = {t["term"]: t for t in parent_meta["glossary"]["terms"]}
+    assert "Avalon" in parent_terms
+    assert parent_terms["Avalon"]["description"] == "Everdistant Utopia"
+

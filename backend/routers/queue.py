@@ -44,6 +44,9 @@ async def get_queue_status():
         "rate_limits": per_model_rate_limiter.get_all_stats(),
         "paused": global_config.get("queue_worker_paused", False),
         "concurrency": concurrency_manager.stats(),
+        # Embedded-subtitle extractions run on their own lane and are listed
+        # separately so the translation queue keeps its existing shape.
+        "extractions": queue.get_extractions(limit=50),
     }
 
 

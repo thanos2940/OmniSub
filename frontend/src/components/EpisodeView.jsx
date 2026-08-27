@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
-import { ArrowLeft, Sparkles, Languages, RefreshCw, RotateCcw, Trash2, X, Wand2 } from 'lucide-react';
+import { ArrowLeft, Sparkles, Languages, RefreshCw, RotateCcw, Trash2, X, Wand2, BookOpen } from 'lucide-react';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import TermHarvestModal from './TermHarvestModal';
 
 const EpisodeView = () => {
     const { projectName, episodeName } = useParams();
@@ -21,9 +22,15 @@ const EpisodeView = () => {
     const [originalFilename, setOriginalFilename] = useState(null);
     const [episodeMetadata, setEpisodeMetadata] = useState(null);
     const [dirty, setDirty] = useState(false);
+    const [harvestModalOpen, setHarvestModalOpen] = useState(false);
     const dirtyRef = React.useRef(false);
     useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
     const handledJobsRef = React.useRef(new Set());
+    // ETag from the last successful GET (docs/PLAN_structural_polish.md, Part A)
+    // — the 3s live-view poll below sends it back as If-None-Match so an
+    // unchanged episode short-circuits to a 304 instead of re-transferring the
+    // whole (potentially thousands-of-lines) payload.
+    const etagRef = React.useRef(null);
 
     const [selectedLang, setSelectedLang] = useState('');
 
@@ -78,6 +85,7 @@ const EpisodeView = () => {
     };
 
     useEffect(() => {
+        etagRef.current = null; // switching episodes — the old ETag doesn't apply
         loadData();
     }, [projectName, episodeName]);
 
@@ -137,15 +145,22 @@ const EpisodeView = () => {
         try {
             if (!silent) setLoading(true);
             const [epRes, projRes] = await Promise.all([
-                api.getEpisode(projectName, episodeName),
+                api.getEpisode(projectName, episodeName, etagRef.current),
                 api.getProject(projectName)
             ]);
-            setData(epRes.data.data);
-            setOriginalFilename(epRes.data.metadata?.original_filename);
-            setEpisodeMetadata(epRes.data.metadata || null);
             setProject(projRes.data);
             setGlossary(projRes.data.glossary || { terms: [] });
-            setDirty(false);
+            if (epRes.status === 304) {
+                // Unchanged since the last fetch — project data above may still
+                // have moved, but the (expensive) episode payload didn't.
+                setDirty(false);
+            } else {
+                etagRef.current = epRes.headers?.etag || null;
+                setData(epRes.data.data);
+                setOriginalFilename(epRes.data.metadata?.original_filename);
+                setEpisodeMetadata(epRes.data.metadata || null);
+                setDirty(false);
+            }
         } catch (err) {
             console.error("Failed to load episode data", err);
         } finally {
@@ -156,11 +171,11 @@ const EpisodeView = () => {
     const handleEnhanceGlossary = async () => {
         setProcessing(true);
         try {
-            await api.enhanceGlossary(projectName, { episode_names: [episodeName] });
-            const projRes = await api.getProject(projectName);
-            setProject(projRes.data);
-            setGlossary(projRes.data.glossary || { terms: [] });
-            toast.success('Glossary enhanced with terms from this episode!');
+            const res = await api.enhanceGlossary(projectName, { episode_names: [episodeName] });
+            if (res.data?.job_id) {
+                addJob(res.data.job_id, 'enhance_glossary', `AI: Enhance Glossary (${episodeName})`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
+                toast.info('Enhancing glossary in the background... Review results on the project glossary tab.');
+            }
         } catch (err) {
             console.error('Failed to enhance glossary', err);
             toast.error('Failed to enhance glossary');
@@ -445,6 +460,15 @@ const EpisodeView = () => {
                             Fix Source
                         </button>
                         <button
+                            onClick={() => setHarvestModalOpen(true)}
+                            disabled={processing || !!activeJob}
+                            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 shadow-sm"
+                            title="Harvest named entities and key terms from this episode"
+                        >
+                            <Sparkles size={16} />
+                            Harvest Terms
+                        </button>
+                        <button
                             onClick={handleEnhanceGlossary}
                             disabled={processing || !!activeJob}
                             className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50"
@@ -615,6 +639,22 @@ const EpisodeView = () => {
                     </div>
                 )}
             </AnimatePresence>
+
+            <TermHarvestModal
+                isOpen={harvestModalOpen}
+                onClose={() => setHarvestModalOpen(false)}
+                projectName={projectName}
+                parentProjectName={project?.parent_project}
+                episodeName={episodeName}
+                onTermsAdded={async (newTerms, directToUniverse) => {
+                    if (!directToUniverse) {
+                        const current = glossary?.terms || [];
+                        const merged = [...newTerms, ...current];
+                        await api.updateProject(projectName, { glossary: { terms: merged } });
+                        fetchData();
+                    }
+                }}
+            />
         </div>
     );
 };

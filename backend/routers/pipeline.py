@@ -2,10 +2,13 @@ import os
 import re
 import json
 import asyncio
+import logging
 from datetime import datetime
 from uuid import uuid4
 from typing import List, Dict, Optional, Any
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -922,3 +925,133 @@ async def _resume_pipeline(job_id: str, project_name: str):
     event = _pipeline_resume_events.get(job_id)
     if event:
         event.set()
+
+
+@router.post("/projects/{project_name}/pipeline/full-ingest")
+async def start_full_ingest_pipeline(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    request: Optional[AutoPipelineRequest] = None
+):
+    validate_api_key()
+    job_id = create_job("full_ingest_pipeline", project_name=project_name)
+    background_tasks.add_task(_process_full_ingest, job_id, project_name, request or AutoPipelineRequest())
+    return {"job_id": job_id}
+
+
+async def _process_full_ingest(job_id: str, project_name: str, request: AutoPipelineRequest):
+    update_job(job_id, status="running", progress=0.0, message="Starting Full Ingest Pipeline...", log="Initialized One-Click Ingest Pipeline")
+    try:
+        metadata = storage.load_project_metadata(project_name) or {}
+        global_config = storage.load_global_config()
+
+        ctx_model = resolve_model("context", metadata)
+        gls_model = resolve_model("glossary", metadata)
+        tr_model = resolve_model("translation", metadata)
+
+        # Stage 1: Probe containers and extract embedded ASS tracks
+        update_job(job_id, progress=10.0, message="Stage 1/4: Checking video containers for embedded ASS tracks...", log="Checking media files for ASS streams")
+        from integrations.embedded_subs import probe_subtitle_tracks, select_track, extract_subtitle_track, format_ass_sidecar_path, parse_keywords
+        from utils.source_clean import import_and_clean_srt
+
+        ep_names = storage.list_episodes(project_name)
+        extracted_count = 0
+
+        for ep_name in ep_names:
+            if jobs[job_id].cancelled:
+                return
+            ep_meta = storage.load_episode_metadata(project_name, ep_name) or {}
+            orig_fmt = (ep_meta.get("original_format") or ep_meta.get("original_extension") or "").lower()
+            media_path = ep_meta.get("arr_media_path") or ep_meta.get("bazarr_media_path")
+
+            if media_path and orig_fmt not in ("ass", "ssa") and os.path.isfile(media_path):
+                tracks = probe_subtitle_tracks(media_path, config=global_config)
+                if tracks:
+                    proj_settings = metadata.get("settings", {})
+                    keywords = parse_keywords(proj_settings.get("embedded_deprioritize_keywords") or global_config.get("embedded_deprioritize_keywords"))
+                    chosen_track = select_track(tracks, "ja", keywords=keywords)
+                    if chosen_track and chosen_track.is_ass:
+                        out_path = format_ass_sidecar_path(media_path)
+                        res = extract_subtitle_track(media_path, chosen_track.index, out_path, config=global_config)
+                        if res.success and res.extracted_content:
+                            import_and_clean_srt(
+                                project_name,
+                                ep_name,
+                                res.extracted_content,
+                                filename=os.path.basename(out_path),
+                                fingerprint=res.fingerprint,
+                                extra_metadata={
+                                    "embedded_extracted": True,
+                                    "embedded_track": chosen_track.to_dict(),
+                                    "original_format": "ass"
+                                }
+                            )
+                            extracted_count += 1
+
+        update_job(job_id, progress=30.0, message=f"Stage 1 complete: Demuxed {extracted_count} ASS track(s).", log=f"Demuxed {extracted_count} ASS track(s)")
+
+        # Stage 2: Context Guide
+        if not metadata.get("context_guide"):
+            update_job(job_id, progress=40.0, message="Stage 2/4: Generating project context guide...", log="Researching project context")
+            text_lines = await _gather_project_text(project_name, ep_names)
+            research_data, _ = await research_project_adk(
+                metadata.get("show_name", project_name),
+                text_lines,
+                metadata.get("target_language", "English"),
+                model_name=ctx_model
+            )
+            if jobs[job_id].cancelled:
+                return
+            enhanced_context, _ = await enhance_context_guide_adk(
+                research_data.get("findings", ""),
+                metadata.get("show_name", project_name),
+                target_language=metadata.get("target_language", "English"),
+                model_name=ctx_model
+            )
+            metadata["context_guide"] = enhanced_context
+            _invalidate_translation_cache(metadata)
+            storage.save_project_metadata(project_name, metadata)
+            await adk_session_manager.update_context(project_name, enhanced_context)
+
+        # Stage 3: Glossary
+        if not metadata.get("glossary") or len(metadata.get("glossary", {}).get("terms", [])) == 0:
+            update_job(job_id, progress=60.0, message="Stage 3/4: Building initial terminology glossary...", log="Generating glossary")
+            text_lines = await _gather_project_text(project_name, ep_names)
+            result, _ = await generate_glossary_adk(
+                text_lines,
+                metadata.get("show_name", project_name),
+                metadata.get("target_language", "English"),
+                model_name=gls_model,
+                enable_research=bool(not text_lines and metadata.get("show_name"))
+            )
+            metadata["glossary"] = result
+            _invalidate_translation_cache(metadata)
+            storage.save_project_metadata(project_name, metadata)
+            await adk_session_manager.update_glossary(project_name, result)
+
+        # Stage 4: Enqueue Untranslated Episodes
+        update_job(job_id, progress=80.0, message="Stage 4/4: Enqueuing pending episodes for translation...", log="Enqueuing batch translations")
+        from services.queue_service import enqueue_translation, PRIORITY_MANUAL
+        untranslated = []
+        for ep_name in ep_names:
+            ep_meta = storage.load_episode_metadata(project_name, ep_name) or {}
+            is_trans = ep_meta.get("translated", False)
+            if not is_trans:
+                untranslated.append(ep_name)
+                enqueue_translation(
+                    project_name,
+                    ep_name,
+                    PRIORITY_MANUAL,
+                    {"model": tr_model, "context_model": ctx_model, "glossary_model": gls_model}
+                )
+
+        update_job(
+            job_id,
+            status="completed",
+            progress=100.0,
+            message=f"Full Ingest complete. Demuxed {extracted_count} ASS track(s), enqueued {len(untranslated)} episode(s) for translation.",
+            log=f"Pipeline complete: {len(untranslated)} enqueued"
+        )
+    except Exception as e:
+        logger.error(f"Full Ingest pipeline failed: {e}", exc_info=True)
+        update_job(job_id, status="failed", message=f"Full Ingest error: {str(e)}", log=str(e))

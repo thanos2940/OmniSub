@@ -53,6 +53,16 @@ def _ends_terminal(text: str) -> bool:
     return bool(t) and t[-1] in _TERMINAL_CHARS
 
 
+def _script_issues(original: str, translated: str, target_lang_code: str) -> List[str]:
+    """Wrong-writing-system issues for this line (never raises)."""
+    try:
+        from utils.script_guard import foreign_issues
+        return foreign_issues(original, translated, target_lang_code)
+    except Exception as e:
+        logger.warning(f"Script guard failed (non-critical): {e}")
+        return []
+
+
 def _looks_truncated(original: str, translated: str, target_lang_code: str) -> bool:
     """Detect the 'half-translated long line' symptom.
 
@@ -120,6 +130,12 @@ def validate_lines(
         if check_latin and len(original.split()) >= 2 and _latin_ratio(translated) > 0.6:
             issues.append("line appears untranslated (mostly Latin characters)")
 
+        # Wrong writing system: a stray Hebrew/Arabic/CJK character or a
+        # transliteration fragment spliced into a target-language word. The
+        # unambiguous visual-twin cases were already repaired for free by the
+        # script-guard scrub, so whatever reaches here genuinely needs the source.
+        issues.extend(_script_issues(original, translated, target_lang_code))
+
         # Half-translated long line: a complete source rendered as a short
         # fragment that stops mid-clause (whole-episode split/shift bug).
         if _looks_truncated(original, translated, target_lang_code):
@@ -144,23 +160,20 @@ def validate_lines(
     return tickets[:max_tickets]
 
 
-def build_repair_prompt(
-    parsed_srt: List[Dict],
-    tickets: List[Dict],
-    target_lang_code: str,
-    target_lang_name: str,
-) -> str:
-    """One prompt fixing every ticketed line, with its source and the issue list."""
+def build_repair_prompt_items(items: List[Dict], target_lang_name: str) -> str:
+    """One prompt fixing every item in ``items``.
+
+    Each item is ``{"source": str, "current": str, "issues": [str, ...]}``. Item
+    numbering starts at 1 and is what the response is mapped back by, so the items
+    need no shared origin — the caller may gather them from one episode or from a
+    whole project, and either way they cost a single request.
+    """
     blocks = []
-    for n, t in enumerate(tickets, start=1):
-        idx = t["index"]
-        line = parsed_srt[idx]
-        cur = (line.get("translations", {}).get(target_lang_code)
-               or line.get("translated") or "")
+    for n, item in enumerate(items, start=1):
         blocks.append(
-            f"{n}| EN: {line.get('original', '')}\n"
-            f"   CURRENT: {cur}\n"
-            f"   ISSUES: {'; '.join(t['issues'])}"
+            f"{n}| EN: {item.get('source', '')}\n"
+            f"   CURRENT: {item.get('current', '')}\n"
+            f"   ISSUES: {'; '.join(item.get('issues') or [])}"
         )
     listing = "\n".join(blocks)
     return (
@@ -170,6 +183,25 @@ def build_repair_prompt(
         f"{listing}\n\n"
         f"Output ONLY numbered corrected lines, one per item:\n1| corrected line one\n2| corrected line two"
     )
+
+
+def build_repair_prompt(
+    parsed_srt: List[Dict],
+    tickets: List[Dict],
+    target_lang_code: str,
+    target_lang_name: str,
+) -> str:
+    """One prompt fixing every ticketed line of an episode."""
+    items = []
+    for t in tickets:
+        line = parsed_srt[t["index"]]
+        items.append({
+            "source": line.get("original", ""),
+            "current": (line.get("translations", {}).get(target_lang_code)
+                        or line.get("translated") or ""),
+            "issues": t["issues"],
+        })
+    return build_repair_prompt_items(items, target_lang_name)
 
 
 async def run_repair_pass(
@@ -215,6 +247,15 @@ async def run_repair_pass(
             parsed_srt[idx].setdefault("translations", {})[target_lang_code] = new_text
             if target_lang_code == primary_code:
                 parsed_srt[idx]["translated"] = new_text
+            # A returned line still carrying wrong-script characters is not a fix —
+            # keep the text (it is usually closer) but leave it flagged for a human
+            # rather than reporting a repair that didn't happen.
+            residual = _script_issues(parsed_srt[idx].get("original") or "",
+                                      new_text, target_lang_code)
+            if residual:
+                parsed_srt[idx]["needs_review"] = True
+                parsed_srt[idx]["review_issues"] = "; ".join(residual)
+                continue
             parsed_srt[idx].pop("needs_review", None)
             parsed_srt[idx].pop("review_issues", None)
             fixed += 1

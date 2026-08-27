@@ -29,23 +29,29 @@ const Slider = ({ label, value, min, max, step, onChange, format }) => (
 );
 
 const TranslationSandbox = ({ project, projectName, onSettingsChange }) => {
+    const [globalSettings, setGlobalSettings] = useState(null);
+
+    useEffect(() => {
+        api.getSettings().then(res => setGlobalSettings(res.data)).catch(() => {});
+    }, []);
+
     // ── Settings state — fully synced from project.settings ──
     const getSettings = useCallback(() => {
         const s = project?.settings || {};
         return {
-            temperature:       s.temperature       ?? 0.3,
-            top_k:             s.top_k             ?? 40,
-            top_p:             s.top_p             ?? 1.0,
-            translation_model: s.translation_model ?? 'gemini-2.5-flash',
+            temperature:       s.temperature       ?? globalSettings?.temperature       ?? 0.3,
+            top_k:             s.top_k             ?? globalSettings?.top_k             ?? 64,
+            top_p:             s.top_p             ?? globalSettings?.top_p             ?? 0.95,
+            translation_model: s.translation_model ?? globalSettings?.default_translation_model ?? 'gemini-2.5-flash',
         };
-    }, [project]);
+    }, [project, globalSettings]);
 
     const [localSettings, setLocalSettings] = useState(getSettings);
     const [settingsOpen, setSettingsOpen]   = useState(false);
     const [isSaving, setIsSaving]           = useState(false);
     const [savedOk, setSavedOk]             = useState(false);
 
-    // Re-sync if the parent project prop changes (e.g. after a Settings modal save)
+    // Re-sync if the parent project prop or globalSettings changes
     useEffect(() => {
         setLocalSettings(getSettings());
     }, [getSettings]);

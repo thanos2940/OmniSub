@@ -8,7 +8,11 @@ from utils.cache_manager import invalidate_cache as _invalidate_translation_cach
 from utils.jobs_manager import create_job
 from services.translation_service import _process_targeted_retranslation
 from adk_config import adk_runner_factory, adk_session_manager, get_ephemeral_session_service
-from routers.schemas import CreateProjectRequest, ImportRequest, TestTranslationRequest
+from routers.schemas import (
+    CreateProjectRequest, ImportRequest, TestTranslationRequest, PromoteTermRequest,
+    ArrSyncRequest, BatchPromoteTermsRequest, BatchSuppressTermsRequest,
+    BatchRevertTermsRequest, HarvestTermsRequest
+)
 from routers.settings import validate_api_key
 
 router = APIRouter()
@@ -274,6 +278,15 @@ async def update_project(project_name: str, data: Dict, background_tasks: Backgr
                     
     if glossary_changed or context_changed:
         _invalidate_translation_cache(metadata)
+        # Cascading invalidation to all child and grandchild descendant projects
+        descendant_names = storage.get_descendant_projects(project_name)
+        for desc_name in descendant_names:
+            desc_meta = storage.load_project_metadata(desc_name)
+            if desc_meta:
+                _invalidate_translation_cache(desc_meta)
+                resolved_desc = storage.load_resolved_project_metadata(desc_name)
+                if resolved_desc:
+                    await adk_session_manager.update_glossary(desc_name, resolved_desc.get("glossary", {"terms": []}))
         
     storage.save_project_metadata(project_name, metadata)
     await adk_session_manager.update_glossary(project_name, metadata.get("glossary", {"terms": []}))
@@ -311,6 +324,210 @@ async def update_project(project_name: str, data: Dict, background_tasks: Backgr
     return metadata
 
 
+@router.post("/projects/{project_name}/promote-term")
+async def promote_term_to_parent(project_name: str, request: PromoteTermRequest):
+    """Promote a single term from a child project directly to its parent universe."""
+    child_meta = storage.load_project_metadata(project_name)
+    if not child_meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    parent_name = child_meta.get("parent_project")
+    if not parent_name:
+        raise HTTPException(status_code=400, detail="Project has no parent universe to promote to")
+        
+    parent_meta = storage.load_project_metadata(parent_name)
+    if not parent_meta:
+        raise HTTPException(status_code=404, detail="Parent universe project not found")
+        
+    parent_glossary = parent_meta.get("glossary", {})
+    parent_terms = parent_glossary.get("terms", [])
+    
+    target_term_lower = request.term.lower().strip()
+    term_dict = {
+        "term": request.term.strip(),
+        "translation": request.translation.strip(),
+        "type": request.type or "other",
+        "gender": request.gender or "unknown",
+        "case_sensitive": True if request.case_sensitive is None else bool(request.case_sensitive),
+        "keep_original": bool(request.keep_original),
+        "description": request.description or "",
+    }
+    
+    # Check if term already exists in parent, update it or append
+    found = False
+    for i, pt in enumerate(parent_terms):
+        if pt.get("term", "").lower().strip() == target_term_lower:
+            parent_terms[i] = term_dict
+            found = True
+            break
+            
+    if not found:
+        parent_terms.append(term_dict)
+        
+    parent_meta["glossary"] = {"terms": parent_terms}
+    _invalidate_translation_cache(parent_meta)
+    storage.save_project_metadata(parent_name, parent_meta)
+    await adk_session_manager.update_glossary(parent_name, parent_meta["glossary"])
+    
+    # Also invalidate child and sibling caches
+    for desc_name in storage.get_descendant_projects(parent_name):
+        desc_meta = storage.load_project_metadata(desc_name)
+        if desc_meta:
+            _invalidate_translation_cache(desc_meta)
+            
+    return {"status": "promoted", "parent_project": parent_name, "term": term_dict}
+
+
+@router.post("/projects/{project_name}/promote-terms-batch")
+async def promote_terms_batch(project_name: str, request: BatchPromoteTermsRequest):
+    """Promote multiple terms from a child project to its parent universe project."""
+    child_meta = storage.load_project_metadata(project_name)
+    if not child_meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    parent_name = child_meta.get("parent_project")
+    if not parent_name:
+        raise HTTPException(status_code=400, detail="Project has no parent project configured")
+        
+    parent_meta = storage.load_project_metadata(parent_name)
+    if not parent_meta:
+        raise HTTPException(status_code=404, detail=f"Parent project '{parent_name}' not found")
+        
+    parent_terms = list(parent_meta.get("glossary", {}).get("terms", []))
+    parent_map = {t.get("term", "").lower().strip(): i for i, t in enumerate(parent_terms)}
+    
+    promoted_count = 0
+    for term_data in request.terms:
+        term_name = term_data.get("term", "").strip()
+        if not term_name:
+            continue
+        term_dict = {
+            "term": term_name,
+            "translation": term_data.get("translation", ""),
+            "type": term_data.get("type", "other"),
+            "gender": term_data.get("gender", "n/a"),
+            "description": term_data.get("description", ""),
+            "case_sensitive": term_data.get("case_sensitive", True),
+            "keep_original": term_data.get("keep_original", False),
+        }
+        term_lower = term_name.lower().strip()
+        if term_lower in parent_map:
+            parent_terms[parent_map[term_lower]] = term_dict
+        else:
+            parent_terms.append(term_dict)
+            parent_map[term_lower] = len(parent_terms) - 1
+        promoted_count += 1
+
+    parent_meta["glossary"] = {"terms": parent_terms}
+    _invalidate_translation_cache(parent_meta)
+    storage.save_project_metadata(parent_name, parent_meta)
+    await adk_session_manager.update_glossary(parent_name, parent_meta["glossary"])
+    
+    for desc_name in storage.get_descendant_projects(parent_name):
+        desc_meta = storage.load_project_metadata(desc_name)
+        if desc_meta:
+            _invalidate_translation_cache(desc_meta)
+            
+    return {"status": "promoted", "parent_project": parent_name, "count": promoted_count}
+
+
+@router.post("/projects/{project_name}/suppress-terms-batch")
+async def suppress_terms_batch(project_name: str, request: BatchSuppressTermsRequest):
+    """Add a batch of terms to a project's suppressed_terms list."""
+    meta = storage.load_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    suppressed = set(meta.get("suppressed_terms", []))
+    for t in request.terms:
+        t_clean = t.strip()
+        if t_clean:
+            suppressed.add(t_clean)
+            
+    meta["suppressed_terms"] = sorted(list(suppressed), key=str.lower)
+    _invalidate_translation_cache(meta)
+    storage.save_project_metadata(project_name, meta)
+    return {"status": "suppressed", "suppressed_terms": meta["suppressed_terms"]}
+
+
+@router.post("/projects/{project_name}/revert-terms-batch")
+async def revert_terms_batch(project_name: str, request: BatchRevertTermsRequest):
+    """Revert local overrides and/or unsuppress terms for a project."""
+    meta = storage.load_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    terms_to_revert = {t.lower().strip() for t in request.terms if t}
+    
+    # 1. Remove from local glossary terms
+    local_terms = meta.get("glossary", {}).get("terms", [])
+    filtered_terms = [t for t in local_terms if t.get("term", "").lower().strip() not in terms_to_revert]
+    meta["glossary"] = {"terms": filtered_terms}
+    
+    # 2. Remove from suppressed_terms if present
+    suppressed = set(meta.get("suppressed_terms", []))
+    suppressed = {s for s in suppressed if s.lower().strip() not in terms_to_revert}
+    meta["suppressed_terms"] = sorted(list(suppressed), key=str.lower)
+    
+    _invalidate_translation_cache(meta)
+    storage.save_project_metadata(project_name, meta)
+    return {"status": "reverted", "reverted_count": len(terms_to_revert)}
+
+
+@router.post("/projects/{project_name}/episodes/{episode_name}/harvest-terms")
+async def harvest_episode_terms_endpoint(
+    project_name: str,
+    episode_name: str,
+    request: Optional[HarvestTermsRequest] = None,
+):
+    """Harvest new named entities and specialized terms from a translated episode."""
+    from services.term_harvester import harvest_terms_for_episode
+    model = request.model if request else None
+    discovered = await harvest_terms_for_episode(project_name, episode_name, model_name=model)
+    return {"episode_name": episode_name, "terms": discovered}
+
+
+@router.post("/projects/{project_name}/harvest-terms")
+async def harvest_project_terms_endpoint(
+    project_name: str,
+    request: Optional[HarvestTermsRequest] = None,
+):
+    """Harvest terms across multiple episodes or dialogue text in a project."""
+    from services.term_harvester import harvest_terms_for_episode, harvest_terms_from_lines
+    meta = storage.load_resolved_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    model = request.model if request else None
+    discovered = []
+    
+    if request and request.episode_names:
+        for ep_name in request.episode_names:
+            ep_terms = await harvest_terms_for_episode(project_name, ep_name, model_name=model)
+            discovered.extend(ep_terms)
+    else:
+        # Scan recent/all translated episodes up to 3
+        episodes = storage.list_episodes(project_name)
+        translated_eps = []
+        for ep in episodes:
+            ep_data = storage.load_episode_data(project_name, ep)
+            if ep_data and any(x.get("translation") for x in ep_data):
+                translated_eps.append(ep)
+        for ep_name in translated_eps[:3]:
+            ep_terms = await harvest_terms_for_episode(project_name, ep_name, model_name=model)
+            discovered.extend(ep_terms)
+            
+    seen = set()
+    unique_terms = []
+    for t in discovered:
+        k = t.get("term", "").lower().strip()
+        if k and k not in seen:
+            seen.add(k)
+            unique_terms.append(t)
+            
+    return {"project_name": project_name, "terms": unique_terms}
+
+
 @router.delete("/projects/{project_name}")
 async def delete_project(project_name: str):
     if storage.delete_project(project_name):
@@ -337,18 +554,26 @@ async def import_project_data(project_name: str, request: ImportRequest):
 
 
 @router.post("/projects/{project_name}/sync")
-async def sync_project_endpoint(project_name: str, background_tasks: BackgroundTasks):
-    """Trigger a sync for a single project (show/movie) as a background job."""
+async def sync_project(
+    project_name: str,
+    background_tasks: BackgroundTasks,
+    request: Optional[ArrSyncRequest] = None,
+):
+    """Trigger a media file sync for a specific project as a background job."""
     metadata = storage.load_project_metadata(project_name)
     if not metadata:
         raise HTTPException(status_code=404, detail="Project not found")
         
     job_id = create_job("project_sync", project_name=project_name)
-    background_tasks.add_task(_run_project_sync, job_id, project_name)
+    background_tasks.add_task(_run_project_sync, job_id, project_name, request)
     return {"job_id": job_id}
 
 
-async def _run_project_sync(job_id: str, project_name: str):
+async def _run_project_sync(
+    job_id: str,
+    project_name: str,
+    sync_req: Optional[ArrSyncRequest] = None,
+):
     import logging
     logger = logging.getLogger(__name__)
     from utils.jobs_manager import update_job
@@ -356,9 +581,17 @@ async def _run_project_sync(job_id: str, project_name: str):
     from routers.integrations import _build_arr_engine
     
     try:
-        update_job(job_id, status="running", progress=5.0, message="Starting project sync...")
+        scan_ass = sync_req.scan_ass if sync_req is not None else True
+        extract_embedded = sync_req.extract_embedded_ass if (sync_req is not None and sync_req.extract_embedded_ass is not None) else None
+
+        update_job(
+            job_id,
+            status="running",
+            progress=5.0,
+            message=f"Starting project sync (ASS: {'enabled' if scan_ass else 'skipped'}, Embedded probe: {'disabled' if extract_embedded is False else 'enabled'})...",
+        )
         config = storage.load_global_config()
-        engine = _build_arr_engine(config)
+        engine = _build_arr_engine(config, scan_ass=scan_ass, extract_embedded_ass=extract_embedded)
 
         def progress_cb(progress=None, message=None):
             update_job(job_id, progress=progress, message=message, log=message)

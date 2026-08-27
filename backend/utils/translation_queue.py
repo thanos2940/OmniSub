@@ -4,13 +4,36 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Optional
 
+from utils.paths import DB_FILE
+
 # Priority constants
 PRIORITY_WEBHOOK = 0   # new download just landed
 PRIORITY_MANUAL  = 1   # user clicked Translate / Batch / Auto in the UI
 PRIORITY_SYNC    = 2   # scheduled sonarr/radarr gap-fill
 PRIORITY_BACKLOG = 3   # bulk "translate everything missing"
 
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
+# Work kinds. Each is drained by its own claim method so the lanes never steal
+# each other's items — an embedded-subtitle extraction can take minutes of full-file
+# I/O and must not occupy a translation slot (docs/PLAN_embedded_ass_extraction.md).
+KIND_TRANSLATION = "translation"
+KIND_EXTRACTION  = "extraction"
+
+
+def _unique_index_columns(conn) -> set:
+    """Every column covered by a UNIQUE index on translation_queue.
+
+    Used to detect whether the schema predates the ``kind``-aware UNIQUE constraint,
+    so the migration below is idempotent without a version table.
+    """
+    columns = set()
+    for index in conn.execute("PRAGMA index_list(translation_queue)").fetchall():
+        if not index["unique"]:
+            continue
+        for info in conn.execute(f'PRAGMA index_info("{index["name"]}")').fetchall():
+            if info["name"]:
+                columns.add(info["name"])
+    return columns
+
 
 class TranslationQueue:
     # Run the one-time legacy-pollution cleanup once per process, not on every
@@ -57,7 +80,7 @@ class TranslationQueue:
                     kind TEXT NOT NULL DEFAULT 'translation',
                     review_count INTEGER NOT NULL DEFAULT 0,
                     lang TEXT NOT NULL DEFAULT '',
-                    UNIQUE(project_name, episode_name, lang)
+                    UNIQUE(project_name, episode_name, lang, kind)
                 )
             """)
 
@@ -97,7 +120,38 @@ class TranslationQueue:
                     ALTER TABLE translation_queue_new RENAME TO translation_queue;
                     """
                 )
-                
+
+            # Widen UNIQUE to include `kind`. Without it an extraction row and a
+            # translation row for the same episode collide, and enqueue()'s
+            # IntegrityError fallback would silently reuse the extraction row for a
+            # translation request — leaving it stuck with kind='extraction' so the
+            # translation lane could never claim it. SQLite can't alter a UNIQUE
+            # constraint in place, so recreate + copy (same pattern as the lang
+            # migration above). Idempotent via the index inspection.
+            if "kind" not in _unique_index_columns(conn):
+                conn.executescript(
+                    """
+                    CREATE TABLE translation_queue_kindmig (
+                        id TEXT PRIMARY KEY, project_name TEXT NOT NULL, episode_name TEXT NOT NULL,
+                        priority INTEGER NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+                        last_error TEXT, created_at TEXT NOT NULL, started_at TEXT, completed_at TEXT,
+                        next_retry_at TEXT, options TEXT, logs TEXT, kind TEXT NOT NULL DEFAULT 'translation',
+                        review_count INTEGER NOT NULL DEFAULT 0, lang TEXT NOT NULL DEFAULT '',
+                        UNIQUE(project_name, episode_name, lang, kind)
+                    );
+                    INSERT INTO translation_queue_kindmig
+                        (id, project_name, episode_name, priority, status, attempts, last_error,
+                         created_at, started_at, completed_at, next_retry_at, options, logs, kind,
+                         review_count, lang)
+                        SELECT id, project_name, episode_name, priority, status, attempts, last_error,
+                               created_at, started_at, completed_at, next_retry_at, options, logs, kind,
+                               review_count, lang
+                        FROM translation_queue;
+                    DROP TABLE translation_queue;
+                    ALTER TABLE translation_queue_kindmig RENAME TO translation_queue;
+                    """
+                )
+
             # Create job_history table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS job_history (
@@ -139,22 +193,24 @@ class TranslationQueue:
 
             conn.commit()
 
-    def enqueue(self, project_name: str, episode_name: str, priority: int = 1, options: Optional[Dict] = None, lang: str = "") -> str:
+    def enqueue(self, project_name: str, episode_name: str, priority: int = 1, options: Optional[Dict] = None,
+                lang: str = "", kind: str = KIND_TRANSLATION) -> str:
         """Enqueue an episode (for target language ``lang``, '' = primary). Returns the item ID."""
         import json
         now_str = datetime.now(timezone.utc).isoformat()
         item_id = str(uuid.uuid4())
         options_str = json.dumps(options, ensure_ascii=False) if options else None
         lang = lang or ""
+        kind = kind or KIND_TRANSLATION
         try:
             with self._get_connection() as conn:
                 conn.execute(
                     """
                     INSERT INTO translation_queue
-                    (id, project_name, episode_name, priority, status, created_at, options, lang)
-                    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)
+                    (id, project_name, episode_name, priority, status, created_at, options, lang, kind)
+                    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)
                     """,
-                    (item_id, project_name, episode_name, priority, now_str, options_str, lang)
+                    (item_id, project_name, episode_name, priority, now_str, options_str, lang, kind)
                 )
                 conn.commit()
                 return item_id
@@ -162,8 +218,8 @@ class TranslationQueue:
             # Already enqueued, check if failed/paused/cancelled to reset back to pending
             with self._get_connection() as conn:
                 cursor = conn.execute(
-                    "SELECT id FROM translation_queue WHERE project_name = ? AND episode_name = ? AND lang = ?",
-                    (project_name, episode_name, lang)
+                    "SELECT id FROM translation_queue WHERE project_name = ? AND episode_name = ? AND lang = ? AND kind = ?",
+                    (project_name, episode_name, lang, kind)
                 )
                 row = cursor.fetchone()
                 existing_id = row["id"] if row else item_id
@@ -180,32 +236,44 @@ class TranslationQueue:
                         completed_at = NULL,
                         last_error = NULL,
                         logs = NULL
-                    WHERE project_name = ? AND episode_name = ? AND lang = ?
+                    WHERE project_name = ? AND episode_name = ? AND lang = ? AND kind = ?
                       AND status IN ('completed', 'failed', 'cancelled', 'paused_daily_limit', 'pending')
                     """,
-                    (priority, options_str, project_name, episode_name, lang)
+                    (priority, options_str, project_name, episode_name, lang, kind)
                 )
                 conn.commit()
                 return existing_id
 
     def claim_next(self, max_priority: Optional[int] = None) -> Optional[Dict]:
-        """Claim the next pending task atomically (status -> 'running', attempts += 1).
+        """Claim the next pending translation atomically (status -> 'running', attempts += 1).
 
         If ``max_priority`` is given, only items with ``priority <= max_priority`` are
         eligible (used by the off-peak scheduler to keep webhook/manual flowing while
         deferring sync/backlog).
         """
+        return self._claim(KIND_TRANSLATION, max_priority)
+
+    def claim_next_extraction(self, max_priority: Optional[int] = None) -> Optional[Dict]:
+        """Claim the next pending embedded-subtitle extraction.
+
+        Separate from ``claim_next`` so the extraction lane has its own concurrency
+        budget: extracting a muxed track streams the whole container, and letting one
+        occupy a translation slot would stall the queue for minutes.
+        """
+        return self._claim(KIND_EXTRACTION, max_priority)
+
+    def _claim(self, kind: str, max_priority: Optional[int] = None) -> Optional[Dict]:
         now_str = datetime.now(timezone.utc).isoformat()
         with self._get_connection() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 # Select the next pending item
                 prio_clause = "AND priority <= ?" if max_priority is not None else ""
-                params = [now_str] + ([max_priority] if max_priority is not None else [])
+                params = [kind, now_str] + ([max_priority] if max_priority is not None else [])
                 cursor = conn.execute(
                     f"""
                     SELECT * FROM translation_queue
-                    WHERE status = 'pending' AND kind = 'translation' AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                    WHERE status = 'pending' AND kind = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
                     {prio_clause}
                     ORDER BY priority ASC, created_at ASC
                     LIMIT 1
@@ -320,6 +388,34 @@ class TranslationQueue:
                 LIMIT ?
                 """,
                 (limit,)
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_extractions(self, limit: int = 50) -> List[Dict]:
+        """Pending/running/failed embedded-subtitle extractions, newest first.
+
+        Kept out of ``get_all`` so the translation queue UI keeps its existing shape
+        (review counts, per-scene progress) — extractions are surfaced as their own
+        list by the queue endpoint.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM translation_queue
+                WHERE kind = ?
+                ORDER BY
+                    CASE status
+                        WHEN 'running' THEN 1
+                        WHEN 'pending' THEN 2
+                        WHEN 'failed' THEN 3
+                        WHEN 'completed' THEN 4
+                        ELSE 5
+                    END,
+                    priority ASC,
+                    created_at DESC
+                LIMIT ?
+                """,
+                (KIND_EXTRACTION, limit)
             )
             return [dict(row) for row in cursor.fetchall()]
 

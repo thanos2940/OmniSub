@@ -170,6 +170,23 @@ async def full_health():
     except Exception as e:
         out["worker"] = _ok(False, str(e))
 
+    # ffmpeg (embedded subtitle extraction)
+    try:
+        from integrations.embedded_subs import tools_status
+        if not config.get("embedded_extraction_enabled", False):
+            out["ffmpeg"] = {"status": "skip", "detail": "embedded extraction disabled",
+                             "hint": "Enable it in Settings to extract subtitles muxed into media files."}
+        else:
+            status = tools_status(config)
+            out["ffmpeg"] = {
+                "status": "pass" if status["available"] else "fail",
+                "detail": status["ffmpeg"] or "ffmpeg/ffprobe not found",
+                "hint": "" if status["available"]
+                        else "Install ffmpeg or set ffmpeg_path in Settings — extraction is skipped without it.",
+            }
+    except Exception as e:
+        out["ffmpeg"] = _ok(False, str(e))
+
     # Disk
     try:
         usage = shutil.disk_usage(str(storage.PROJECTS_DIR))
@@ -187,7 +204,7 @@ async def full_health():
         "secured": bool(secret),
         "sonarr_url": f"/api/webhook/sonarr{suffix}",
         "radarr_url": f"/api/webhook/radarr{suffix}",
-        "hint": "" if secret else "Set a webhook_secret in Settings to require a token.",
+        "hint": "" if secret else "No webhook_secret set — Sonarr/Radarr webhooks will be rejected until you set one in Settings.",
     }
 
     statuses = [v.get("status") for v in out.values() if isinstance(v, dict)]

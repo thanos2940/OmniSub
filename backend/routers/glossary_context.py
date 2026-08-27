@@ -269,17 +269,11 @@ INSTRUCTIONS:
         
         existing_names = {t.get("term", "").lower() for t in existing_terms}
         new_terms = [t for t in new_glossary.get("terms", []) if t.get("term", "").lower() not in existing_names]
-        merged = {"terms": existing_terms + new_terms}
-        
-        await adk_session_manager.update_glossary(project_name, merged)
-        metadata["glossary"] = merged
-        _invalidate_translation_cache(metadata)
-        storage.save_project_metadata(project_name, metadata)
         
         update_job(
             job_id, status="completed", progress=100.0,
             message="Glossary enhanced",
-            log=f"Added {len(new_terms)} new terms for {target_language}",
+            log=f"Found {len(new_terms)} new candidate terms for {target_language}",
             result={"terms": new_terms}
         )
     except Exception as e:
@@ -383,21 +377,20 @@ async def _process_enhance_context(job_id: str, project_name: str, model: str, w
 @router.get("/projects/{project_name}/sync-candidates")
 async def get_sync_candidates(project_name: str):
     """Scan all child projects pointing to this parent.
-    Aggregates glossary terms and character profiles present in children but missing in parent.
+    Aggregates and groups glossary terms and character profiles present in children but missing in parent,
+    detecting translation or attribute conflicts across sibling shows.
     """
     parent_metadata = storage.load_project_metadata(project_name)
     if not parent_metadata:
         raise HTTPException(status_code=404, detail="Parent project not found")
         
-    parent_terms = {t.get("term", "").lower() for t in parent_metadata.get("glossary", {}).get("terms", []) if t.get("term")}
+    parent_terms = {t.get("term", "").lower().strip() for t in parent_metadata.get("glossary", {}).get("terms", []) if t.get("term")}
     
     parent_char_mgr = CharacterProfileManager(project_name)
-    parent_chars = {name.lower() for name in parent_char_mgr.load_all().keys()}
+    parent_chars = {name.lower().strip() for name in parent_char_mgr.load_all().keys()}
     
-    candidates = {
-        "glossary": [],
-        "characters": []
-    }
+    glossary_by_term: Dict[str, Dict] = {}
+    chars_by_name: Dict[str, Dict] = {}
     
     all_projects = storage.list_projects()
     for child_name in all_projects:
@@ -411,25 +404,69 @@ async def get_sync_candidates(project_name: str):
             # glossary terms
             child_terms = child_meta.get("glossary", {}).get("terms", [])
             for t in child_terms:
-                term_name = t.get("term", "")
-                if term_name and term_name.lower() not in parent_terms:
-                    candidates["glossary"].append({
+                term_name = (t.get("term") or "").strip()
+                if not term_name or term_name.lower() in parent_terms:
+                    continue
+                    
+                key = term_name.lower()
+                variant = {
+                    **t,
+                    "project": child_name,
+                    "inherited": False,
+                }
+                
+                if key not in glossary_by_term:
+                    glossary_by_term[key] = {
                         **t,
                         "project": child_name,
-                        "inherited": False
-                    })
+                        "projects": [child_name],
+                        "inherited": False,
+                        "has_conflict": False,
+                        "variants": [variant],
+                    }
+                else:
+                    existing = glossary_by_term[key]
+                    if child_name not in existing["projects"]:
+                        existing["projects"].append(child_name)
+                    existing["variants"].append(variant)
                     
+                    # Conflict if translations, types, or genders differ
+                    if (existing.get("translation", "").strip() != t.get("translation", "").strip() or
+                        existing.get("type", "") != t.get("type", "") or
+                        existing.get("gender", "") != t.get("gender", "")):
+                        existing["has_conflict"] = True
+
             # character profiles
             child_char_mgr = CharacterProfileManager(child_name)
             child_chars = child_char_mgr.load_all()
             for name, profile in child_chars.items():
-                if name.lower() not in parent_chars:
-                    p_dict = profile.to_dict()
-                    p_dict["project"] = child_name
-                    p_dict["inherited"] = False
-                    candidates["characters"].append(p_dict)
-                    
-    return candidates
+                if not name or name.lower().strip() in parent_chars:
+                    continue
+                c_key = name.lower().strip()
+                p_dict = profile.to_dict()
+                p_dict["project"] = child_name
+                p_dict["inherited"] = False
+                
+                if c_key not in chars_by_name:
+                    chars_by_name[c_key] = {
+                        **p_dict,
+                        "projects": [child_name],
+                        "has_conflict": False,
+                        "variants": [p_dict],
+                    }
+                else:
+                    existing_char = chars_by_name[c_key]
+                    if child_name not in existing_char["projects"]:
+                        existing_char["projects"].append(child_name)
+                    existing_char["variants"].append(p_dict)
+                    if (existing_char.get("gender") != p_dict.get("gender") or
+                        existing_char.get("formality") != p_dict.get("formality")):
+                        existing_char["has_conflict"] = True
+                        
+    return {
+        "glossary": list(glossary_by_term.values()),
+        "characters": list(chars_by_name.values()),
+    }
 
 
 @router.post("/projects/{project_name}/sync-import")
@@ -445,25 +482,31 @@ async def sync_import(project_name: str, request: SyncImportRequest):
     if request.terms:
         parent_glossary = parent_metadata.get("glossary", {})
         parent_terms = parent_glossary.get("terms", [])
-        parent_term_map = {t.get("term", "").lower(): t for t in parent_terms if t.get("term")}
+        parent_term_map = {t.get("term", "").lower().strip(): t for t in parent_terms if t.get("term")}
         
-        added_count = 0
         for term_entry in request.terms:
             term_name = term_entry.get("term", "")
             if not term_name:
                 continue
-            term_lower = term_name.lower()
+            term_lower = term_name.lower().strip()
             if term_lower not in parent_term_map:
                 t_copy = dict(term_entry)
-                t_copy.pop("project", None)
-                t_copy.pop("inherited", None)
-                t_copy.pop("inherited_from", None)
+                for drop_k in ("project", "projects", "inherited", "inherited_from", "has_conflict", "variants", "_uid"):
+                    t_copy.pop(drop_k, None)
                 parent_terms.append(t_copy)
+                parent_term_map[term_lower] = t_copy
                 added_count += 1
                 
         parent_metadata["glossary"] = {"terms": parent_terms}
+        _invalidate_translation_cache(parent_metadata)
         storage.save_project_metadata(project_name, parent_metadata)
         await adk_session_manager.update_glossary(project_name, parent_metadata["glossary"])
+        
+        # Cascade cache invalidation to all descendants
+        for desc_name in storage.get_descendant_projects(project_name):
+            desc_meta = storage.load_project_metadata(desc_name)
+            if desc_meta:
+                _invalidate_translation_cache(desc_meta)
         
     # Import character profiles
     if request.characters:
@@ -474,11 +517,10 @@ async def sync_import(project_name: str, request: SyncImportRequest):
             char_name = char_data.get("name", "")
             if not char_name:
                 continue
-            if char_name.lower() not in {n.lower() for n in parent_chars.keys()}:
+            if char_name.lower().strip() not in {n.lower().strip() for n in parent_chars.keys()}:
                 c_copy = dict(char_data)
-                c_copy.pop("project", None)
-                c_copy.pop("inherited", None)
-                c_copy.pop("inherited_from", None)
+                for drop_k in ("project", "projects", "inherited", "inherited_from", "has_conflict", "variants", "_uid"):
+                    c_copy.pop(drop_k, None)
                 
                 parent_chars[char_name] = CharacterProfile.from_dict(c_copy)
                 char_added_count += 1
@@ -487,8 +529,6 @@ async def sync_import(project_name: str, request: SyncImportRequest):
         
     return {
         "status": "imported",
-        # Report what actually changed (new entries), not what was requested — the
-        # rest were duplicates already present in the parent.
         "imported_terms": added_count,
         "imported_characters": char_added_count,
         "requested_terms": len(request.terms),

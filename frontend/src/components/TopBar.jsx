@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, ChevronRight, Home, Library, ShieldAlert, ListTodo, Gauge, HeartPulse } from 'lucide-react';
+import { LayoutGrid, Settings, ChevronRight, Home, Library, ShieldAlert, ListTodo, Gauge, HeartPulse, Lock, Search, Key } from 'lucide-react';
 import { api } from '../api';
 
 const TopBar = () => {
@@ -15,11 +15,13 @@ const TopBar = () => {
     const isQueue = location.pathname === '/queue';
 
     const [reviewCount, setReviewCount] = useState(0);
+    const [authEnabled, setAuthEnabled] = useState(true); // assume secured until checked, to avoid a flash
 
     useEffect(() => {
         const fetchCount = async () => {
+            if (document.hidden) return; // don't poll a backgrounded tab
             try {
-                const res = await api.getGlobalReviewQueue();
+                const res = await api.getGlobalReviewCount();
                 setReviewCount(res.data?.count || 0);
             } catch (e) {
                 console.error("Failed to fetch review count", e);
@@ -28,7 +30,15 @@ const TopBar = () => {
         fetchCount();
         const interval = setInterval(fetchCount, 15000);
         return () => clearInterval(interval);
-    }, [location.pathname]);
+        // Intentionally NOT keyed on location.pathname — the badge is global, so
+        // re-fetching on every navigation just added load without new information.
+    }, []);
+
+    useEffect(() => {
+        api.getAuthStatus()
+            .then(res => setAuthEnabled(!!res.data?.auth_enabled))
+            .catch(() => {});
+    }, []);
 
     return (
         <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
@@ -102,6 +112,36 @@ const TopBar = () => {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2">
+                {/* Command Palette Trigger */}
+                <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 border border-gray-200 dark:border-gray-700 rounded-xl transition-all mr-1 shadow-sm"
+                    title="Open Command Palette (Ctrl+K or ⌘K)"
+                >
+                    <Search size={14} className="text-gray-400" />
+                    <span>Search or jump to...</span>
+                    <kbd className="font-mono text-[10px] bg-white dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 font-bold">
+                        ⌘K
+                    </kbd>
+                </button>
+                <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-api-key-modal'))}
+                    className="p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 text-sm font-medium"
+                    title="Configure Google Gemini API Key"
+                >
+                    <Key size={18} />
+                    <span className="hidden lg:inline">API Key</span>
+                </button>
+                {!authEnabled && (
+                    <Link
+                        to="/settings"
+                        className="p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        title="This server is unsecured — click to set a username and password"
+                    >
+                        <Lock size={18} />
+                        <span className="hidden md:inline">Unsecured</span>
+                    </Link>
+                )}
                 <Link
                     to="/dashboard"
                     className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${location.pathname === '/dashboard'

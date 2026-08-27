@@ -3,15 +3,21 @@ version: '3.8'
 services:
   omnisub:
     build: .
-    container_name: omnisub-app
+    container_name: omnisub
     ports:
       - "8000:8000"
-      - "5173:5173"
     environment:
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - OMNISUB_DATA_DIR=/config
+      # Optional — the Gemini key can also be set later from the UI/setup wizard.
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
-      - ./backend/projects:/app/projects
-      - ./backend/omnisub_sessions.db:/app/omnisub_sessions.db
+      # All mutable state (config.json, omnisub*.db, projects/, translation_memory/)
+      # lives under one directory so it survives image rebuilds.
+      - ./config:/config
+      # Media library — must match the paths Sonarr/Radarr report in their API/
+      # webhooks (or be remapped via Settings -> Sonarr/Radarr -> path mappings).
+      # Uncomment and point at your actual media root:
+      # - /path/to/your/media:/media
     restart: unless-stopped
     networks:
       - omnisub-network

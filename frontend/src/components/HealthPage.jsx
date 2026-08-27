@@ -76,7 +76,7 @@ const HealthPage = () => {
                     <div className="flex items-start gap-3 py-3">
                         <StatusIcon status={data.webhooks.status} />
                         <div className="flex-1">
-                            <div className="font-semibold text-gray-900 dark:text-white">Webhooks {data.webhooks.secured ? '(secured)' : '(open)'}</div>
+                            <div className="font-semibold text-gray-900 dark:text-white">Webhooks {data.webhooks.secured ? '(secured)' : '(blocked — no secret set)'}</div>
                             {!data.webhooks.secured && <div className="text-xs text-amber-600 dark:text-amber-400">{data.webhooks.hint}</div>}
                             <div className="mt-2 space-y-1 font-mono text-xs text-gray-500 dark:text-gray-400">
                                 {['sonarr_url', 'radarr_url'].map(k => {

@@ -267,3 +267,48 @@ def test_is_daily_quota_error_bypasses_on_per_minute_overlap():
         "429 Quota exceeded for resource limit 'Generate requests per minute'. daily limit: 1500"
     )
     assert is_daily_quota_error(mixed_msg) is False
+
+
+def test_is_daily_quota_error_expanded_markers():
+    daily_err_1 = Exception("429 ResourceExhausted: You have exhausted your daily quota. Please wait until tomorrow.")
+    daily_err_2 = Exception("429 Quota exceeded for quota metric GenerateRequestsPerDayPerProjectPerModel")
+    daily_err_3 = Exception("429 Free tier limit reached. Daily limit: 1500")
+    
+    rpm_err_1 = Exception("429 Quota exceeded for GenerateContent requests per minute per region")
+    rpm_err_2 = Exception("429 ResourceExhausted: TPM limit exceeded")
+
+    assert is_daily_quota_error(daily_err_1) is True
+    assert is_daily_quota_error(daily_err_2) is True
+    assert is_daily_quota_error(daily_err_3) is True
+
+    assert is_daily_quota_error(rpm_err_1) is False
+    assert is_daily_quota_error(rpm_err_2) is False
+
+
+def test_trigger_daily_limit_aligns_probe_to_reset_boundary():
+    limiter = RateLimiter(requests_per_minute=15, daily_limit=1500)
+    future_reset = time.time() + 7200
+    limiter.trigger_daily_limit(reset_time=future_reset)
+
+    assert limiter._daily_exhausted is True
+    assert limiter._daily_reset == future_reset
+    assert limiter._next_daily_probe == future_reset
+    assert limiter.should_probe_daily() is False
+
+
+@pytest.mark.asyncio
+async def test_acquire_waits_for_backoff_until_without_token_consumption():
+    limiter = RateLimiter(requests_per_minute=15, daily_limit=1500)
+    limiter.report_rate_limit(retry_after=0.1)  # 100ms backoff
+    assert limiter._backoff_until > time.time()
+    
+    start_tokens = limiter._tokens
+    start_count = limiter._daily_count
+    
+    start = time.time()
+    await limiter.acquire()
+    duration = time.time() - start
+
+    assert duration >= 0.09
+    assert limiter._daily_count == start_count + 1
+

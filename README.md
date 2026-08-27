@@ -1,6 +1,9 @@
 # Omnisub
 
-Omnisub (a.k.a. OmbiSub) is a context-aware AI subtitle translator built to overcome the limitations of line-by-line machine translation. Before it translates a single line, it builds a **Spherical Context** for the whole project — a dynamic glossary, character profiles, episode summaries, a lore/context guide, and a translation memory — so terminology, character voice, and gender stay consistent across an entire series or movie. It solves the "amnesiac translation" problem where names, genders, and running jokes get mistranslated line-by-line by standard LLM prompts.
+[![CI](https://github.com/thanos2940/OmbiSub---Google-Seminar-Capstone-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/thanos2940/OmbiSub---Google-Seminar-Capstone-Project/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Omnisub is a context-aware AI subtitle translator built to overcome the limitations of line-by-line machine translation. Before it translates a single line, it builds a **Spherical Context** for the whole project — a dynamic glossary, character profiles, episode summaries, a lore/context guide, and a translation memory — so terminology, character voice, and gender stay consistent across an entire series or movie. It solves the "amnesiac translation" problem where names, genders, and running jokes get mistranslated line-by-line by standard LLM prompts.
 
 Omnisub is a monorepo:
 
@@ -114,7 +117,16 @@ The frontend will be available at `http://localhost:5173`.
 docker compose up --build
 ```
 
-This builds the frontend and serves it from the FastAPI backend in a single container.
+This builds the frontend and serves it from the FastAPI backend in a single container at `http://localhost:8000`.
+
+All mutable state — `config.json`, the queue/telemetry database, `projects/`,
+and `translation_memory/` — lives under one directory (`OMNISUB_DATA_DIR`),
+mounted as `./config:/config` in `docker-compose.yml`, so it survives image
+rebuilds. Edit `docker-compose.yml` to uncomment and point the `/media` volume
+at your actual media root before enabling Sonarr/Radarr sync or auto-export —
+the container path must match what Sonarr/Radarr report (or be remapped via
+**Settings → Sonarr/Radarr → path mappings**; the Health page has path
+diagnostics if a mount doesn't resolve).
 
 ### Tests
 
@@ -126,6 +138,36 @@ cd backend
 ../.venv/Scripts/python.exe -m eval.run_eval             # offline translation-quality regression eval
 ```
 
+### Securing your install
+
+Omnisub ships with authentication **disabled by default** on existing installs so
+upgrades never lock anyone out, but a fresh install is prompted to set credentials
+immediately. If you expose this server beyond your own machine (LAN, VPS, reverse
+proxy), set a username/password in **Settings → Security** (or via the setup
+wizard) before doing anything else — this generates the API key the frontend uses
+and a webhook secret that Sonarr/Radarr must include in their webhook URLs. Until
+credentials are set, both Settings and the top bar show a persistent warning.
+
+Other recommendations for a public-facing deployment:
+
+- Put Omnisub behind HTTPS (a reverse proxy such as Caddy, Traefik, or nginx).
+- Set `cors_allow_origins` in Settings to your actual frontend origin(s) instead of
+  leaving CORS wide open.
+- Don't expose the Sonarr/Radarr API keys stored in Omnisub's settings — they are
+  masked in the API response but are only as safe as your login credentials.
+
 ## Current Status
 
 **Status: Actively developed.** The core translation pipeline (context assembly, dynamic glossary, translation memory, QC funnel), the priority queue with Sonarr/Radarr sync and webhooks, SRT and ASS/SSA support, the side-by-side editor, and the review/queue UI are all functional and covered by an offline test suite. Local/hybrid model routing and export-time conformance (auto-balance/auto-split, font scaling) are implemented; Bazarr integration has been retired in favor of direct Sonarr/Radarr + filesystem sync.
+
+## Contributing
+
+Pull requests are welcome. CI runs the backend test suite and the frontend
+lint/build on every PR — please make sure both pass locally first (`cd backend &&
+../.venv/Scripts/python.exe -m pytest` and `cd frontend && npm run lint && npm run
+build`). Keep backend tests offline/network-free; the LLM seam is meant to be
+mocked, not called live.
+
+## License
+
+[MIT](LICENSE)

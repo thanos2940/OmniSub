@@ -81,6 +81,30 @@ def _second_person_rule(target_language: str) -> str:
     )
 
 
+def _morphological_guidance_rule(target_language: str) -> str:
+    """Explicit guidance on declensions, grammatical cases, and articles for glossary terms."""
+    lang = (target_language or "").strip().lower()
+    if lang in ("greek", "el", "ελληνικά"):
+        return (
+            '- GLOSSARY MORPHOLOGY & DECLENSIONS: Match glossary translations faithfully, but grammatically DECLINE '
+            'nouns, proper names, and adjectives to fit sentence syntax (Nominative, Genitive, Accusative, Vocative) '
+            'with appropriate definite/indefinite articles (ο/του/τον, η/της/την, το/του/το, etc.). Do NOT force the lemma/nominative '
+            'form where an inflected case is grammatically required.'
+        )
+    return (
+        f"- GLOSSARY MORPHOLOGY: Match glossary translations faithfully while inflecting grammatical cases, pluralization, "
+        f"and gender agreements as required by {target_language} sentence syntax."
+    )
+
+
+def _script_integrity_rule(target_language: str) -> str:
+    """Explicit script hygiene rule to prevent homoglyph contamination and broken characters."""
+    lang = (target_language or "").strip().lower()
+    if lang in ("greek", "el", "ελληνικά"):
+        return "- SCRIPT HYGIENE: Write ONLY in standard Modern Greek monotonic script (Α-Ω, α-ω with standard tonos ά, έ, ή, ί, ό, ύ, ώ). NEVER mix Latin, Cyrillic, or foreign alphabet characters inside Greek words."
+    return ""
+
+
 def _build_instruction(
     target_language: str,
     glossary_context: str,
@@ -91,6 +115,9 @@ def _build_instruction(
 
     context_section = f"\n{context_guide}\n" if context_guide else ""
     second_person = _second_person_rule(target_language)
+    morphology_rule = _morphological_guidance_rule(target_language)
+    script_rule = _script_integrity_rule(target_language)
+    script_line = f"\n{script_rule}" if script_rule else ""
 
     if structured:
         return f"""Translate subtitles to {target_language}. You MUST output valid JSON conforming to the requested schema.
@@ -102,7 +129,8 @@ Rules:
 - STRICT 1:1 MAPPING: Each input line index must appear EXACTLY ONCE in the output. Never split a translation across two JSON entries. The output array length MUST equal the input line count.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks. Never break a cue into multiple lines or entries; subtitle wrapping is applied automatically afterwards.
 - Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
-{second_person}
+- {morphology_rule}
+{second_person}{script_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
 - Do NOT output internal reasoning blocks or any text outside the JSON.
@@ -120,7 +148,8 @@ Rules:
 - The total number of output lines MUST equal the total number of input lines. No extra lines, no missing lines.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks; subtitle wrapping is applied automatically afterwards.
 - Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
-{second_person}
+- {morphology_rule}
+{second_person}{script_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
 {context_section}

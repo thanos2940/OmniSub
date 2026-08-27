@@ -52,6 +52,8 @@ def reconstruct_subtitle(
     filename: str = "",
     original_content: Optional[str] = None,
     font_scale: float = 1.0,
+    target_font: Optional[str] = None,
+    target_lang_code: Optional[str] = None,
 ) -> str:
     """Reconstruct a subtitle file from pipeline entries.
 
@@ -60,8 +62,16 @@ def reconstruct_subtitle(
 
     ``font_scale`` is forwarded to ``reconstruct_ass`` to adjust style font
     sizes for target languages whose glyphs render larger (e.g. Greek).
+    ``target_lang_code`` / ``target_font`` remap style font families to a font
+    with full Unicode coverage (e.g. Arial for Greek).
     """
     fmt = fmt or detect_format(filename, original_content or "")
     if fmt == ASS:
-        return ass_parser.reconstruct_ass(parsed_data, original_content, font_scale=font_scale)
+        return ass_parser.reconstruct_ass(
+            parsed_data,
+            original_content,
+            font_scale=font_scale,
+            target_font=target_font,
+            target_lang_code=target_lang_code,
+        )
     return srt_parser.reconstruct_srt(parsed_data)

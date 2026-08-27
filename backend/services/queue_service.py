@@ -7,23 +7,42 @@ from utils.translation_queue import (
     PRIORITY_WEBHOOK,
     PRIORITY_MANUAL,
     PRIORITY_SYNC,
-    PRIORITY_BACKLOG
+    PRIORITY_BACKLOG,
+    KIND_TRANSLATION,
+    KIND_EXTRACTION,
 )
 
 logger = logging.getLogger(__name__)
 
-def enqueue_translation(project_name: str, episode_name: str, priority: int, options: Optional[Dict] = None, lang: str = "") -> str:
-    """Enqueue an episode for translation (target language ``lang``, '' = primary) and wake the worker."""
-    queue = TranslationQueue()
-    item_id = queue.enqueue(project_name, episode_name, priority, options, lang)
 
-    # Trigger background worker to process new task
+def _wake_worker() -> None:
     try:
         from services.background_worker import worker
         worker.trigger()
     except ImportError as e:
         logger.warning(f"Could not trigger background worker (this is normal during startup or in tests): {e}")
 
+
+def enqueue_translation(project_name: str, episode_name: str, priority: int, options: Optional[Dict] = None, lang: str = "") -> str:
+    """Enqueue an episode for translation (target language ``lang``, '' = primary) and wake the worker."""
+    queue = TranslationQueue()
+    item_id = queue.enqueue(project_name, episode_name, priority, options, lang)
+    _wake_worker()
+    return item_id
+
+
+def enqueue_extraction(project_name: str, episode_name: str, priority: int, options: Dict) -> str:
+    """Enqueue an embedded-subtitle extraction and wake the worker.
+
+    ``options`` carries everything the worker needs to finish the job without
+    re-deriving it: ``media_path``, ``stream_index``, the chosen track's metadata,
+    the source language, and the ``import_metadata`` (arr_* fields) that the
+    resulting episode must be created with. Sync has all of that in hand at probe
+    time; the worker would otherwise have to call back into Sonarr/Radarr.
+    """
+    queue = TranslationQueue()
+    item_id = queue.enqueue(project_name, episode_name, priority, options, "", KIND_EXTRACTION)
+    _wake_worker()
     return item_id
 
 from utils.model_resolver import resolve_model

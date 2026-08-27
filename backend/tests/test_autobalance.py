@@ -295,8 +295,10 @@ def test_no_split_when_cue_too_short_to_share(env):
         encoding="utf-8")
     out = reconstruct_cleaned_srt("TP", "E06", data, "el")
     blocks = [b for b in out.strip().split("\n\n") if b.strip()]
-    # Not split (1s duration) — balanced 3-liner instead.
-    assert len(blocks) == 2  # long cue + the "Short" leftover from raw cue 2? no map -> untranslated
+    # Not split (1s duration) — balanced 3-liner instead. Exactly ONE block: the
+    # unmapped "Short" raw cue is dropped from the export (unmapped cues used to be
+    # emitted untranslated in English — see test_export_unmapped_cues.py).
+    assert len(blocks) == 1
     long_block = blocks[0]
     lines = long_block.splitlines()[2:]
     assert len(lines) == 3

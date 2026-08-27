@@ -288,8 +288,29 @@ def unify_layer_duplicates(entries: List[Dict], lang_code: Optional[str] = None)
     return rewritten
 
 
-def reconstruct_ass(parsed_data: List[Dict], original_content: Optional[str] = None,
-                    font_scale: float = 1.0) -> str:
+def _ass_target_font(lang_code: Optional[str], custom_font: Optional[str] = None) -> Optional[str]:
+    """Return the preferred font for the target language in ASS styling.
+
+    Greek (and other non-Latin scripts) require fonts with complete Unicode glyph
+    coverage. Custom fansub fonts in English releases (e.g. 'Fontin Sans Rg') lack
+    Greek letters like 'π' and 'μ', causing them to render as blank spaces in video players.
+    'Arial' is universally available across all operating systems, smart TVs, MPV,
+    VLC, MPC-HC, Plex, and Jellyfin with 100% Greek Unicode coverage and clean styling.
+    """
+    if custom_font:
+        return custom_font
+    if lang_code and str(lang_code).lower().strip() in ("el", "gre", "ell", "greek"):
+        return "Arial"
+    return None
+
+
+def reconstruct_ass(
+    parsed_data: List[Dict],
+    original_content: Optional[str] = None,
+    font_scale: float = 1.0,
+    target_font: Optional[str] = None,
+    target_lang_code: Optional[str] = None,
+) -> str:
     """Rebuild an .ass file, re-injecting translations into translatable events.
 
     When ``original_content`` is provided the original document (script info,
@@ -300,7 +321,13 @@ def reconstruct_ass(parsed_data: List[Dict], original_content: Optional[str] = N
     ``font_scale`` (default 1.0) multiplies every style's Fontsize. Use a value
     below 1.0 (e.g. 0.85) for target scripts like Greek that render visually
     larger than Latin at the same nominal size.
+
+    ``target_lang_code`` / ``target_font`` remaps style font families to a font
+    with full Unicode coverage (e.g. Arial for Greek), fixing missing characters
+    like 'π' and 'μ' in players.
     """
+    chosen_font = _ass_target_font(target_lang_code, target_font)
+
     if original_content:
         subs = pysubs2.SSAFile.from_string(original_content)
 
@@ -308,6 +335,12 @@ def reconstruct_ass(parsed_data: List[Dict], original_content: Optional[str] = N
         if font_scale != 1.0:
             for style in subs.styles.values():
                 style.fontsize = max(1, round(style.fontsize * font_scale))
+
+        # --- Remap styles to target font if language requires Unicode replacement ---
+        if chosen_font:
+            for style in subs.styles.values():
+                style.fontname = chosen_font
+                style.encoding = 1
 
         # An index can map to SEVERAL entries: export auto-splitting cuts an over-long
         # cue into parts that share the source event's duration. The first part reuses
@@ -338,8 +371,11 @@ def reconstruct_ass(parsed_data: List[Dict], original_content: Optional[str] = N
                 target = ev if part_no == 0 else _copy.copy(ev)
                 if meta.get("translatable"):
                     text = entry.get("translated") or entry.get("original", "")
+                    prefix = meta.get("prefix_tags", "")
+                    if chosen_font and "\\fn" in prefix:
+                        prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
                     target.text = (
-                        meta.get("prefix_tags", "")
+                        prefix
                         + _plain_to_ass_text(text)
                         + meta.get("suffix_tags", "")
                     )
@@ -353,16 +389,23 @@ def reconstruct_ass(parsed_data: List[Dict], original_content: Optional[str] = N
 
     # --- Fallback: no original document available -------------------------
     subs = pysubs2.SSAFile()
-    subs.styles["Default"] = pysubs2.SSAStyle()
+    default_style = pysubs2.SSAStyle()
+    if chosen_font:
+        default_style.fontname = chosen_font
+        default_style.encoding = 1
     if font_scale != 1.0:
-        for style in subs.styles.values():
-            style.fontsize = max(1, round(style.fontsize * font_scale))
+        default_style.fontsize = max(1, round(default_style.fontsize * font_scale))
+    subs.styles["Default"] = default_style
+
     for entry in parsed_data:
         meta = entry.get("_ass", {}) or {}
         if meta.get("translatable", True):
             text = entry.get("translated") or entry.get("original", "")
+            prefix = meta.get("prefix_tags", "")
+            if chosen_font and "\\fn" in prefix:
+                prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
             body = (
-                meta.get("prefix_tags", "")
+                prefix
                 + _plain_to_ass_text(text)
                 + meta.get("suffix_tags", "")
             )

@@ -15,6 +15,16 @@ class ImportRequest(BaseModel):
     import_context: bool = True
 
 
+class PromoteTermRequest(BaseModel):
+    term: str
+    translation: str
+    type: Optional[str] = "other"
+    gender: Optional[str] = "unknown"
+    case_sensitive: Optional[bool] = True
+    keep_original: Optional[bool] = False
+    description: Optional[str] = ""
+
+
 class ScanRequest(BaseModel):
     model: Optional[str] = None
 
@@ -75,9 +85,10 @@ class PipelineRequest(BaseModel):
 
 class SettingsRequest(BaseModel):
     ai_provider: Optional[str] = "cloud"  # "cloud", "local", "hybrid"
-    default_target_language: Optional[str] = "English"
+    default_target_language: Optional[str] = "Greek"
     default_scan_model: Optional[str] = "gemini-flash-lite-latest"
     default_translation_model: Optional[str] = "gemini-flash-lite-latest"
+    fallback_translation_model: Optional[str] = "gemini-3.1-flash-lite"
     default_context_model: Optional[str] = "gemini-flash-lite-latest"
     default_glossary_model: Optional[str] = "gemini-flash-lite-latest"
     local_llm_base_url: Optional[str] = "http://localhost:11434"
@@ -92,8 +103,8 @@ class SettingsRequest(BaseModel):
     concurrent_scenes: Optional[int] = 3
     max_lines_per_scene: Optional[int] = 200
     temperature: Optional[float] = 0.3
-    top_k: Optional[int] = 40
-    top_p: Optional[float] = 1.0
+    top_k: Optional[int] = 64
+    top_p: Optional[float] = 0.95
     tm_enabled: Optional[bool] = True
     tm_similarity_threshold: Optional[float] = 0.80
     tm_exact_match_threshold: Optional[float] = 0.95
@@ -114,7 +125,20 @@ class SettingsRequest(BaseModel):
     arr_sync_interval: Optional[int] = 0  # Minutes. 0 = manual only
     arr_source_language: Optional[str] = "en"
     arr_auto_translate: Optional[bool] = False  # Auto-translate on webhook
+    # --- Embedded ASS extraction (docs/PLAN_embedded_ass_extraction.md) ---
+    embedded_extraction_enabled: Optional[bool] = True
+    # Substrings that mark a track as signs/songs/partial. These DEPRIORITIZE a track,
+    # they never exclude it — some releases ship one track carrying signs, songs and
+    # dialogue together, and dropping it would make the episode silently unavailable.
+    embedded_deprioritize_keywords: Optional[str] = (
+        "signs, songs, s&s, signs & songs, forced, commentary, karaoke"
+    )
+    # Extraction streams the whole container, so parallel jobs over one share just
+    # slow each other down. Kept separate from concurrent_episodes on purpose.
+    embedded_extraction_concurrency: Optional[int] = 1
+    ffmpeg_path: Optional[str] = ""
     discord_webhook_url: Optional[str] = ""
+    api_key: Optional[str] = None
     # --- Worker / concurrency ---
     concurrent_episodes: Optional[int] = 2
     adaptive_concurrency_enabled: Optional[bool] = False   # Plan 10
@@ -184,6 +208,9 @@ class SettingsRequest(BaseModel):
     # D6 — QC funnel.
     glossary_enforce_enabled: Optional[bool] = True
     repair_pass_enabled: Optional[bool] = True
+    # Wrong-alphabet characters: fix the unambiguous visual twins for free, ticket
+    # the rest for the repair pass (utils/script_guard.py).
+    script_guard_enabled: Optional[bool] = True
     review_episode_sample_pct: Optional[float] = 1.0  # fraction of episodes the reviewer runs on
     # Source-echo alignment guard: whole-episode requests ask the model to echo the
     # first words of each source line; a mismatch drops the line to a safe gap.
@@ -197,10 +224,13 @@ class SettingsRequest(BaseModel):
     daily_budget_usd: Optional[float] = 0.0  # 0 = no cap
     # D12 — local lane: sequential scene order (quality over latency).
     sequential_scenes: Optional[bool] = False
+    # First-run setup wizard (docs/PLAN_onboarding_wizard.md) — not a secret,
+    # safe to expose through the generic settings endpoint.
+    setup_completed: Optional[bool] = False
 
 
 class ApiKeyRequest(BaseModel):
-    api_key: str
+    api_key: Optional[str] = None
 
 
 class SimplePipelineRequest(BaseModel):
@@ -254,3 +284,45 @@ class AutoPipelineRequest(BaseModel):
 class SyncImportRequest(BaseModel):
     terms: List[Dict] = []
     characters: List[Dict] = []
+
+
+class ExtractEmbeddedRequest(BaseModel):
+    stream_index: Optional[int] = None
+    force: bool = False
+    migrate_srt: bool = True
+    auto_translate: bool = False
+
+
+class BatchExtractEmbeddedRequest(BaseModel):
+    episode_names: Optional[List[str]] = None
+    force: bool = False
+    migrate_srt: bool = True
+
+
+class ProbeMediaTestRequest(BaseModel):
+    media_path: str
+
+
+class ArrSyncRequest(BaseModel):
+    scan_ass: bool = True
+    extract_embedded_ass: Optional[bool] = None
+    source: Optional[str] = "both"  # "both", "sonarr", "radarr"
+
+
+class BatchPromoteTermsRequest(BaseModel):
+    terms: List[Dict]
+
+
+class BatchSuppressTermsRequest(BaseModel):
+    terms: List[str]  # list of term names to suppress
+
+
+class BatchRevertTermsRequest(BaseModel):
+    terms: List[str]  # list of term names to revert (remove override and un-suppress)
+
+
+class HarvestTermsRequest(BaseModel):
+    episode_names: Optional[List[str]] = None
+    dialogue_text: Optional[str] = None
+    model: Optional[str] = None
+

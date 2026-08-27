@@ -27,15 +27,23 @@ class SubtitleScannerService:
     Args:
         source_lang_code: ISO 639-1 code for source language (default "en")
         target_lang_code: ISO 639-1 code for target language (default "el")
+        include_ass: Whether to scan for .ass / .ssa subtitle files alongside .srt
     """
 
     def __init__(
         self,
         source_lang_code: str = "en",
         target_lang_code: str = "el",
+        include_ass: bool = True,
     ):
         self.source_lang_code = source_lang_code
         self.target_lang_code = target_lang_code
+        self.include_ass = include_ass
+
+    @property
+    def supported_extensions(self):
+        return (".srt", ".ass", ".ssa") if self.include_ass else (".srt",)
+
 
     # ------------------------------------------------------------------
     # Public API
@@ -176,8 +184,11 @@ class SubtitleScannerService:
         target_matches = []
         for f in files:
             name = Path(str(f)).name
+            ext = Path(name).suffix.lower()
+            if ext not in self.supported_extensions:
+                continue
             if _matches_language(name, stem, self.source_lang_code):
-                source_matches.append((str(f), Path(name).suffix.lower()))
+                source_matches.append((str(f), ext))
             if _matches_language(name, stem, self.target_lang_code):
                 target_matches.append(str(f))
 

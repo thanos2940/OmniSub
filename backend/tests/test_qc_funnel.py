@@ -112,6 +112,41 @@ async def test_repair_pass_is_one_batched_call_and_applies_fixes():
     assert rows[1]["translations"]["el"] == "<i>Γεια</i> σου"
 
 
+def test_validator_flags_wrong_script_characters():
+    rows = [
+        _line("Major!", "Ταγματάρχה!"),                 # Hebrew he spliced in
+        _line("Can you hear me?", "Με ακούsheτε;"),      # Latin fragment in a Greek word
+        _line("Yes, of course.", "Ναι, φυσικά."),        # clean
+    ]
+    tickets = validate_lines(rows, "el")
+    assert [t["index"] for t in tickets] == [0, 1]
+    assert "writing system" in tickets[0]["issues"][0]
+    assert "mixes alphabets" in tickets[1]["issues"][0]
+
+
+@pytest.mark.asyncio
+async def test_repair_pass_does_not_accept_a_still_contaminated_fix():
+    """A 'corrected' line that still has wrong-script characters stays flagged."""
+    rows = [_line("Major!", "Ταγματάρχה!")]
+    tickets = validate_lines(rows, "el")
+    assert len(tickets) == 1
+
+    async def fake_generate(model_name, prompt, **kwargs):
+        return "1| Ταγματάρχה!!"          # model returned the same contamination
+
+    class _NoLimiter:
+        async def acquire(self):
+            return
+
+    with patch("adk_agents.llm_factory.generate", fake_generate):
+        fixed = await run_repair_pass(rows, tickets, "el", "Greek", "el",
+                                      "gemini-2.5-flash", _NoLimiter())
+
+    assert fixed == 0
+    assert rows[0]["needs_review"] is True
+    assert "writing system" in rows[0]["review_issues"]
+
+
 def test_repair_prompt_contains_sources_and_issues():
     rows = [_line("Stay close", "Stay close")]
     tickets = validate_lines(rows, "el")

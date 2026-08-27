@@ -133,7 +133,7 @@ def _extract_ngrams(text: str) -> List[str]:
 
 def save_suggestions(project_name: str, new_suggestions: List[Dict]):
     import json
-    suggestions_file = storage.PROJECTS_DIR / project_name / "suggestions.json"
+    suggestions_file = storage.project_dir(project_name) / "suggestions.json"
     existing = []
     if suggestions_file.exists():
         try:

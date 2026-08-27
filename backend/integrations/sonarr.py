@@ -94,10 +94,14 @@ async def get_all_series(config: SonarrConfig) -> List[Dict]:
             headers=config.headers,
             timeout=30.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Sonarr returned 401 Unauthorized for {config.normalized_url}. Please check your Sonarr API Key in Settings.")
         if resp.status_code != 200:
             logger.error(f"Sonarr /api/v3/series returned {resp.status_code}")
             resp.raise_for_status()
         return resp.json() or []
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch Sonarr series: {e}")
         raise
@@ -118,10 +122,14 @@ async def get_episodes(config: SonarrConfig, series_id: int) -> List[Dict]:
             params={"seriesId": series_id},
             timeout=30.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Sonarr returned 401 Unauthorized for {config.normalized_url}. Please check your Sonarr API Key in Settings.")
         if resp.status_code != 200:
             logger.error(f"Sonarr /api/v3/episode returned {resp.status_code}")
             return []
         return resp.json() or []
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch episodes for series {series_id}: {e}")
         return []
@@ -136,8 +144,12 @@ async def get_episode_file(config: SonarrConfig, episode_file_id: int) -> Option
             headers=config.headers,
             timeout=10.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Sonarr returned 401 Unauthorized for {config.normalized_url}. Please check your Sonarr API Key in Settings.")
         if resp.status_code == 200:
             return resp.json()
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch episode file {episode_file_id}: {e}")
     return None
@@ -152,8 +164,12 @@ async def get_series(config: SonarrConfig, series_id: int) -> Optional[Dict]:
             headers=config.headers,
             timeout=10.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Sonarr returned 401 Unauthorized for {config.normalized_url}. Please check your Sonarr API Key in Settings.")
         if resp.status_code == 200:
             return resp.json()
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch Sonarr series {series_id}: {e}")
     return None
@@ -169,9 +185,13 @@ async def get_episode_files(config: SonarrConfig, series_id: int) -> List[Dict]:
             params={"seriesId": series_id},
             timeout=30.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Sonarr returned 401 Unauthorized for {config.normalized_url}. Please check your Sonarr API Key in Settings.")
         if resp.status_code == 200:
             return resp.json() or []
         logger.error(f"Sonarr /api/v3/episodefile returned {resp.status_code}")
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch episode files for series {series_id}: {e}")
     return []

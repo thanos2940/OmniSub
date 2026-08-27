@@ -337,13 +337,21 @@ const ProjectList = () => {
                                 <Folder size={40} className="text-gray-400" />
                             </div>
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No projects yet</h3>
-                            <p className="text-gray-500 dark:text-gray-400 mb-6">Create your first project to start translating subtitles.</p>
-                            <button
-                                onClick={() => setIsCreating(true)}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-indigo-500/25 font-medium"
-                            >
-                                Create Project
-                            </button>
+                            <p className="text-gray-500 dark:text-gray-400 mb-6">Create your first project, or connect Sonarr/Radarr to import your existing library automatically.</p>
+                            <div className="flex items-center justify-center gap-3">
+                                <Link
+                                    to="/settings"
+                                    className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 px-6 py-2.5 rounded-xl transition-all font-medium"
+                                >
+                                    Connect Sonarr/Radarr
+                                </Link>
+                                <button
+                                    onClick={() => setIsCreating(true)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-indigo-500/25 font-medium"
+                                >
+                                    Create Project
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

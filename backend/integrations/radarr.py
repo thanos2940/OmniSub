@@ -93,10 +93,14 @@ async def get_all_movies(config: RadarrConfig) -> List[Dict]:
             headers=config.headers,
             timeout=30.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Radarr returned 401 Unauthorized for {config.normalized_url}. Please check your Radarr API Key in Settings.")
         if resp.status_code != 200:
             logger.error(f"Radarr /api/v3/movie returned {resp.status_code}")
             resp.raise_for_status()
         return resp.json() or []
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch Radarr movies: {e}")
         raise
@@ -111,8 +115,12 @@ async def get_movie(config: RadarrConfig, movie_id: int) -> Optional[Dict]:
             headers=config.headers,
             timeout=10.0,
         )
+        if resp.status_code == 401:
+            raise PermissionError(f"Radarr returned 401 Unauthorized for {config.normalized_url}. Please check your Radarr API Key in Settings.")
         if resp.status_code == 200:
             return resp.json()
+    except PermissionError:
+        raise
     except Exception as e:
         logger.error(f"Failed to fetch Radarr movie {movie_id}: {e}")
     return None

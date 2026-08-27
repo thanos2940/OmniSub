@@ -20,22 +20,31 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
         }
     }, [isOpen]);
 
+    const dedupeModels = (models) => {
+        const seen = new Set();
+        return (models || []).filter(m => {
+            if (!m || !m.value || seen.has(m.value)) return false;
+            seen.add(m.value);
+            return true;
+        });
+    };
+
     const loadModels = async () => {
         try {
             setLoading(true);
             const { api } = await import('../api');
             const { data } = await api.fetchAllModels();
-            setGeminiModels(data.gemini || []);
-            setLocalModels(data.local || []);
+            setGeminiModels(dedupeModels(data.gemini || []));
+            setLocalModels(dedupeModels(data.local || []));
             setLocalOnline(data.local_online ?? false);
         } catch {
             // fall back to minimal hardcoded list
-            setGeminiModels([
+            setGeminiModels(dedupeModels([
                 { value: 'gemini-flash-latest', label: 'Gemini Flash (latest)' },
                 { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite' },
                 { value: "gemma-4-31b-it", label: "Gemma 31B" },
                 { value: "gemma-4-26b-a4b-it", label: "Gemma 26B" }
-            ]);
+            ]));
         } finally {
             setLoading(false);
         }

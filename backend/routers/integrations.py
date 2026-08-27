@@ -15,14 +15,18 @@ from integrations.radarr import RadarrConfig, test_connection as radarr_test_con
 from integrations.media_sync_engine import MediaSyncEngine
 from integrations.path_resolver import PathResolver
 
-from routers.schemas import ArrTestRequest, PathTestRequest
+from routers.schemas import ArrTestRequest, PathTestRequest, ArrSyncRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _build_arr_engine(config: Dict) -> MediaSyncEngine:
-    """Build MediaSyncEngine from global settings."""
+def _build_arr_engine(
+    config: Dict,
+    scan_ass: bool = True,
+    extract_embedded_ass: Optional[bool] = None,
+) -> MediaSyncEngine:
+    """Build MediaSyncEngine from global settings with optional per-scan overrides."""
     resolver = PathResolver(config.get("arr_path_mappings", []))
     target_lang = config.get("default_target_language", "Greek")
     target_code = to_code(target_lang)
@@ -38,6 +42,13 @@ def _build_arr_engine(config: Dict) -> MediaSyncEngine:
         api_key=config.get("radarr_api_key", ""),
         enabled=config.get("radarr_enabled", False),
     )
+
+    embedded_enabled = (
+        extract_embedded_ass
+        if extract_embedded_ass is not None
+        else config.get("embedded_extraction_enabled", True)
+    )
+
     return MediaSyncEngine(
         sonarr_config=sonarr_cfg,
         radarr_config=radarr_cfg,
@@ -45,6 +56,10 @@ def _build_arr_engine(config: Dict) -> MediaSyncEngine:
         source_lang_code=source_code,
         target_lang_code=target_code,
         target_language=target_lang,
+        embedded_extraction=embedded_enabled,
+        embedded_keywords=config.get("embedded_deprioritize_keywords"),
+        embedded_auto_translate=config.get("arr_auto_translate", False),
+        scan_ass=scan_ass,
     )
 
 
@@ -118,41 +133,59 @@ async def arr_test_path(request: PathTestRequest):
 
 
 @router.post("/integrations/sonarr/sync")
-async def sonarr_sync(background_tasks: BackgroundTasks):
+async def sonarr_sync(
+    background_tasks: BackgroundTasks,
+    request: Optional[ArrSyncRequest] = None,
+):
     """Trigger a full Sonarr -> Omnisub sync as a background job."""
     config = storage.load_global_config()
     if not config.get("sonarr_api_key"):
         raise HTTPException(status_code=400, detail="Sonarr API key not configured")
     job_id = create_job("sonarr_sync", project_name="Sonarr Integration")
-    background_tasks.add_task(_run_arr_sync, job_id, "sonarr")
+    background_tasks.add_task(_run_arr_sync, job_id, "sonarr", request)
     return {"job_id": job_id}
 
 
 @router.post("/integrations/radarr/sync")
-async def radarr_sync(background_tasks: BackgroundTasks):
+async def radarr_sync(
+    background_tasks: BackgroundTasks,
+    request: Optional[ArrSyncRequest] = None,
+):
     """Trigger a full Radarr -> Omnisub sync as a background job."""
     config = storage.load_global_config()
     if not config.get("radarr_api_key"):
         raise HTTPException(status_code=400, detail="Radarr API key not configured")
     job_id = create_job("radarr_sync", project_name="Radarr Integration")
-    background_tasks.add_task(_run_arr_sync, job_id, "radarr")
+    background_tasks.add_task(_run_arr_sync, job_id, "radarr", request)
     return {"job_id": job_id}
 
 
 @router.post("/integrations/arr/sync")
-async def arr_sync_all(background_tasks: BackgroundTasks):
+async def arr_sync_all(
+    background_tasks: BackgroundTasks,
+    request: Optional[ArrSyncRequest] = None,
+):
     """Trigger a full sync against both Sonarr and Radarr."""
     job_id = create_job("arr_sync", project_name="Arr Integration")
-    background_tasks.add_task(_run_arr_sync, job_id, "both")
+    source = (request and request.source) or "both"
+    background_tasks.add_task(_run_arr_sync, job_id, source, request)
     return {"job_id": job_id}
 
 
-async def _run_arr_sync(job_id: str, source: str = "both"):
+async def _run_arr_sync(job_id: str, source: str = "both", sync_req: Optional[ArrSyncRequest] = None):
     """Background task: run MediaSyncEngine.full_sync()."""
     try:
-        update_job(job_id, status="running", progress=5.0, message=f"Starting {source} sync...")
+        scan_ass = sync_req.scan_ass if sync_req is not None else True
+        extract_embedded = sync_req.extract_embedded_ass if sync_req is not None else None
+
+        update_job(
+            job_id,
+            status="running",
+            progress=5.0,
+            message=f"Starting {source} sync (ASS: {'enabled' if scan_ass else 'skipped'}, Embedded probe: {'enabled' if extract_embedded else 'disabled'})...",
+        )
         config = storage.load_global_config()
-        engine = _build_arr_engine(config)
+        engine = _build_arr_engine(config, scan_ass=scan_ass, extract_embedded_ass=extract_embedded)
 
         # Override enabled flags based on requested source
         if source == "sonarr":
@@ -244,18 +277,21 @@ async def enqueue_project_missing(project_name: str):
     return {"status": "success", "enqueued_count": len(enqueued)}
 
 
-_webhook_warned = False
-
-
 def _verify_webhook_token(token: Optional[str], header_token: Optional[str]) -> None:
-    """Enforce the configured webhook secret. If unset, allow (back-compat) but warn once."""
-    global _webhook_warned
+    """Enforce the configured webhook secret.
+
+    main.py's lifespan generates a secret on first boot, so this should always
+    be set on a running instance; if it's ever empty (e.g. manually cleared),
+    reject rather than fall open — an unauthenticated webhook is a way to make
+    this server enqueue translation work or import media for anyone who finds
+    the URL.
+    """
     secret = (storage.load_global_config().get("webhook_secret") or "").strip()
     if not secret:
-        if not _webhook_warned:
-            logger.warning("Webhook endpoints are OPEN — set 'webhook_secret' in Settings to require a token.")
-            _webhook_warned = True
-        return
+        raise HTTPException(
+            status_code=401,
+            detail="No webhook secret configured — set one in Settings before using webhooks.",
+        )
     supplied = (token or header_token or "").strip()
     if supplied != secret:
         raise HTTPException(status_code=401, detail="Invalid or missing webhook token")

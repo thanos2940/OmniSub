@@ -1,14 +1,13 @@
 import logging
 from datetime import datetime, timezone
-from pathlib import Path
 import json
 import sqlite3
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+from utils.paths import DB_FILE
 
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
+logger = logging.getLogger(__name__)
 
 class JobStatus(BaseModel):
     id: str

@@ -3,7 +3,6 @@ Reviewer and User Correction Feedback Loop (Plan 28).
 """
 
 import sqlite3
-from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Dict, Tuple, Optional
 import logging
@@ -11,9 +10,9 @@ import logging
 from utils import storage
 from utils import blacklist
 from utils.translation_memory import TranslationMemory
+from utils.paths import DB_FILE
 
 logger = logging.getLogger(__name__)
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
 
 
 def _conn():

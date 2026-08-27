@@ -143,9 +143,16 @@ def import_and_clean_srt(
     options: Optional[Dict] = None,
     fingerprint: Optional[str] = None,
     target_srt_content: Optional[str] = None,
+    extra_metadata: Optional[Dict] = None,
 ) -> Dict:
     """Save raw SRT, parse, clean it based on config, save cleaned data and map,
     and return the metadata and line count.
+
+    ``extra_metadata`` is merged into the episode metadata *before* it is persisted.
+    Callers that enrich the result (the sync engine adding arr_media_path and friends)
+    must use this rather than saving a second time: an interruption between the two
+    writes leaves an episode that looks imported but has no media path, which no later
+    sync heals and which prune skips because arr_source is absent too.
     """
     global_config = storage.load_global_config()
     if options is None:
@@ -221,11 +228,14 @@ def import_and_clean_srt(
         
     ep_meta.pop("translation_failed", None)
     ep_meta.pop("translation_error", None)
-    
+
+    if extra_metadata:
+        ep_meta.update(extra_metadata)
+
     storage.save_episode(project_name, episode_name, cleaned_data, ep_meta)
 
     
-    cp = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "checkpoint.json"
+    cp = storage.episode_dir(project_name, episode_name) / "checkpoint.json"
     if cp.exists():
         try:
             cp.unlink()
@@ -418,11 +428,7 @@ def reconstruct_cleaned_srt(
     # Font-size scaling for ASS targets whose glyphs are wider than Latin.
     font_scale = _ass_font_scale(target_lang_code) if fmt in ("ass", "ssa") else 1.0
 
-    # After manual SubtitleEdit fixes, the cleaned cue list is authoritative — its
-    # line count/timecodes may no longer match the original raw file (long lines were
-    # split into new cues), so the raw-based remap below can't represent it. Emit the
-    # cue list directly instead, so the splits survive into the exported file.
-    if metadata.get("structure_authoritative"):
+    def _rows_from_cleaned():
         rows = []
         for i, entry in enumerate(cleaned_data):
             if target_lang_code:
@@ -435,18 +441,34 @@ def reconstruct_cleaned_srt(
                 "translated": txt,
                 "original": entry.get("original", ""),
             })
+        return rows
+
+    # After manual SubtitleEdit fixes, the cleaned cue list is authoritative — its
+    # line count/timecodes may no longer match the original raw file (long lines were
+    # split into new cues), so the raw-based remap below can't represent it. Emit the
+    # cue list directly instead, so the splits survive into the exported file.
+    if metadata.get("structure_authoritative"):
+        rows = _rows_from_cleaned()
         _autobalance_for_export(rows, fmt)
-        return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale)
+        return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
     if not raw_content:
         # Shallow-copy: cleaned_data is the caller's live row list (often the editor
         # data) and export-only balancing must not leak back into it.
         rows = [dict(e) for e in cleaned_data]
         _autobalance_for_export(rows, fmt)
-        return reconstruct_subtitle(rows, fmt=fmt, font_scale=font_scale)
+        return reconstruct_subtitle(rows, fmt=fmt, font_scale=font_scale, target_lang_code=target_lang_code)
 
     parsed_raw = parse_subtitle(raw_content, fmt=fmt)
     clean_to_orig_str = metadata.get("clean_to_orig_map", {})
+
+    # No map at all (episode imported before the map existed): the raw remap below
+    # would treat every original cue as unmapped. Emit the cleaned/translated cue
+    # list directly instead — it's the only structure we can trust here.
+    if not clean_to_orig_str:
+        rows = _rows_from_cleaned()
+        _autobalance_for_export(rows, fmt)
+        return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
     clean_to_orig = {int(k): normalize_orig_indexes(v) for k, v in clean_to_orig_str.items()}
 
@@ -462,37 +484,45 @@ def reconstruct_cleaned_srt(
     for orig_idx, orig_entry in enumerate(parsed_raw):
         if orig_idx in deleted_orig:
             continue
-            
+
         mapping = orig_to_clean.get(orig_idx)
-        if mapping is not None:
-            clean_idx = mapping["clean_idx"]
-            is_primary = mapping["is_primary"]
-            
-            if not is_primary:
-                # This original cue was merged into the primary cue, so skip it
-                continue
-                
-            if clean_idx < len(cleaned_data):
-                clean_entry = cleaned_data[clean_idx]
-                
-                # Apply merged timecode
-                if "timecode" in clean_entry:
-                    orig_entry["timecode"] = clean_entry["timecode"]
-                    
-                translation = ""
-                if target_lang_code:
-                    translation = clean_entry.get("translations", {}).get(target_lang_code, "")
-                    if not translation and clean_entry.get("translated"):
-                        # Fallback to translated if language matches or translations dict is missing it
-                        translation = clean_entry.get("translated")
-                else:
-                    translation = clean_entry.get("translated") or ""
-                orig_entry["translated"] = translation
-            else:
-                orig_entry["translated"] = ""
+        if mapping is None:
+            # This original cue has no cleaned counterpart: it was removed by source
+            # cleaning (SDH, karaoke/lyrics stripped to nothing) or absorbed into a
+            # merged cue by an older import whose map only recorded the primary index.
+            # DROP it. Keeping it would resurrect the untranslated English source text
+            # inside the translated subtitle — and for merged-away fragments, overlap
+            # the already-translated merged cue on screen (mixed EN+target output).
+            continue
+
+        clean_idx = mapping["clean_idx"]
+        is_primary = mapping["is_primary"]
+
+        if not is_primary:
+            # This original cue was merged into the primary cue, so skip it
+            continue
+
+        if clean_idx >= len(cleaned_data):
+            # Stale map pointing past the cleaned data — nothing trustworthy to
+            # emit for this cue; dropping beats exporting untranslated source text.
+            continue
+
+        clean_entry = cleaned_data[clean_idx]
+
+        # Apply merged timecode
+        if "timecode" in clean_entry:
+            orig_entry["timecode"] = clean_entry["timecode"]
+
+        translation = ""
+        if target_lang_code:
+            translation = clean_entry.get("translations", {}).get(target_lang_code, "")
+            if not translation and clean_entry.get("translated"):
+                # Fallback to translated if language matches or translations dict is missing it
+                translation = clean_entry.get("translated")
         else:
-            orig_entry["translated"] = ""
-            
+            translation = clean_entry.get("translated") or ""
+        orig_entry["translated"] = translation
+
         kept_entries.append(orig_entry)
 
     # Renumber sequentially so deletions don't leave gaps in cue numbering
@@ -509,7 +539,7 @@ def reconstruct_cleaned_srt(
     # kept_entries are freshly parsed from the raw file, so mutation is export-only.
     _autobalance_for_export(kept_entries, fmt)
 
-    return reconstruct_subtitle(kept_entries, fmt=fmt, original_content=raw_content, font_scale=font_scale)
+    return reconstruct_subtitle(kept_entries, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
 
 def align_and_carry_translations(

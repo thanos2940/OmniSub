@@ -22,6 +22,15 @@ ALLOWLIST = {
     "api_key_obfuscated",    # internal display helper
     "rate_limits",           # nested dict section, edited via its own endpoint
     "default",               # rate-limiter bucket key, not a setting
+    # Auth fields (docs/PLAN_auth_security.md) are deliberately NOT in
+    # SettingsRequest: they must never be settable via the generic POST
+    # /settings body (that would let an unauthenticated caller plant
+    # credentials or overwrite the API key). They're written only by
+    # routers/auth.py and read by its middleware in main.py.
+    "auth_enabled",
+    "auth_username",
+    "auth_password_hash",
+    "api_key",
 }
 
 KEY_RE = re.compile(r'(?:global_config|config|cfg)\.get\(\s*"([a-z][a-z0-9_]*)"')

@@ -130,9 +130,14 @@ def get_or_create_cache(
     if stored_name:
         invalidate_cache(metadata)
 
-    # Create new cache
+    # Create new cache with rate limiter pacing
     try:
+        from utils.rate_limiter import per_model_rate_limiter
+
+        limiter = per_model_rate_limiter.get_limiter(model_name)
+        limiter.acquire_sync()
         client = _get_client()
+
         cache = client.caches.create(
             model=model_name,
             config=genai_types.CreateCachedContentConfig(

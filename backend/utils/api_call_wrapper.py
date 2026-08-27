@@ -1,5 +1,7 @@
+import inspect
 import asyncio
 import logging
+import time
 from typing import Any, Callable, Awaitable
 import google.api_core.exceptions
 import re
@@ -51,6 +53,7 @@ def is_daily_quota_error(exception: Exception) -> bool:
         "tokens per minute",
         "tokensperminute",
         "tpm",
+        "rpm",
     )
     if any(m in msg for m in per_minute_markers):
         return False
@@ -61,8 +64,13 @@ def is_daily_quota_error(exception: Exception) -> bool:
         "per day",
         "per-day",
         "requestsperday",
+        "requests per day",
         "limit: 500",      # legacy free-tier daily ceiling phrasing
         "daily limit",
+        "daily quota",
+        "exhausted your daily",
+        "free tier limit",
+        "tomorrow",
     )
     return any(m in msg for m in daily_markers)
 
@@ -82,7 +90,11 @@ async def rate_limited_call(
         await rate_limiter.acquire()
         
         try:
-            res = await coro_factory()
+            res_or_coro = coro_factory()
+            if inspect.isawaitable(res_or_coro):
+                res = await res_or_coro
+            else:
+                res = res_or_coro
             if hasattr(rate_limiter, "clear_daily_exhausted_latch"):
                 rate_limiter.clear_daily_exhausted_latch()
             elif hasattr(rate_limiter, "clear_daily_limit"):
@@ -98,9 +110,11 @@ async def rate_limited_call(
             # latch the daily limit and stop instead of burning retries.
             if is_daily_quota_error(e):
                 logger.error("Daily API quota exceeded (detected from 429 response). Halting model for the day.")
-                rate_limiter.trigger_daily_limit()
+                reset_ts = time.time() + retry_after if retry_after > 60.0 else None
+                rate_limiter.trigger_daily_limit(reset_time=reset_ts)
                 from utils.rate_limiter import DailyLimitExhausted
-                raise DailyLimitExhausted(rate_limiter._daily_count, rate_limiter.daily_limit)
+                reset_time = getattr(rate_limiter, "_daily_reset", None)
+                raise DailyLimitExhausted(getattr(rate_limiter, "_daily_count", 0), getattr(rate_limiter, "daily_limit", 0), reset_time)
 
             logger.warning(f"Rate limit hit (429). Attempt {attempt + 1}/{max_retries + 1}. Retrying after {retry_after}s.")
             rate_limiter.report_rate_limit(retry_after)
@@ -149,9 +163,11 @@ async def rate_limited_call(
                 # Critical: Detect if this is a DAILY limit hit (response-driven)
                 if is_daily_quota_error(e):
                     logger.error("Daily API quota exceeded. Triggering global halt.")
-                    rate_limiter.trigger_daily_limit()
+                    reset_ts = time.time() + retry_after if retry_after > 60.0 else None
+                    rate_limiter.trigger_daily_limit(reset_time=reset_ts)
                     from utils.rate_limiter import DailyLimitExhausted
-                    raise DailyLimitExhausted(rate_limiter._daily_count, rate_limiter.daily_limit)
+                    reset_time = getattr(rate_limiter, "_daily_reset", None)
+                    raise DailyLimitExhausted(getattr(rate_limiter, "_daily_count", 0), getattr(rate_limiter, "daily_limit", 0), reset_time)
                 
                 logger.warning(f"Throttling (caught as {e_name}). Attempt {attempt + 1}/{max_retries + 1}. Retrying...")
                 rate_limiter.report_rate_limit(retry_after)

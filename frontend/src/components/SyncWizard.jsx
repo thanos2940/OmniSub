@@ -197,21 +197,62 @@ const SyncWizard = ({ projectName, onImported }) => {
                                     <th className="py-3 px-4">Term</th>
                                     <th className="py-3 px-4">Translation</th>
                                     <th className="py-3 px-4">Type</th>
-                                    <th className="py-3 px-4">Source Child Project</th>
+                                    <th className="py-3 px-4">Source Projects</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 dark:divide-gray-750 text-xs">
                                 {filteredGlossary.map((t, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/10">
+                                    <tr key={idx} className={`hover:bg-slate-50/50 dark:hover:bg-slate-900/10 ${t.has_conflict ? 'bg-amber-50/20 dark:bg-amber-950/20' : ''}`}>
                                         <td className="py-3 px-4">
                                             <button onClick={() => handleToggleSelectGlossary(t.term)} className="text-gray-400 hover:text-indigo-600">
                                                 {selectedGlossary.has(t.term) ? <CheckSquare size={16} className="text-indigo-650" /> : <Square size={16} />}
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{t.term}</td>
-                                        <td className="py-3 px-4 font-medium text-indigo-600 dark:text-indigo-400">{t.translation}</td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-gray-900 dark:text-white">{t.term}</span>
+                                                {t.has_conflict && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Different child shows offer conflicting translations for this term">
+                                                        Conflict
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 font-medium text-indigo-600 dark:text-indigo-400">
+                                            {t.variants && t.variants.length > 1 ? (
+                                                <select
+                                                    value={t.translation}
+                                                    onChange={(e) => {
+                                                        const chosen = t.variants.find(v => v.translation === e.target.value);
+                                                        if (chosen) {
+                                                            setCandidates(prev => ({
+                                                                ...prev,
+                                                                glossary: prev.glossary.map(item => (item.term === t.term ? { ...item, ...chosen } : item))
+                                                            }));
+                                                        }
+                                                    }}
+                                                    className="px-2 py-1 text-xs rounded border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-300 outline-none"
+                                                >
+                                                    {t.variants.map((v, vIdx) => (
+                                                        <option key={vIdx} value={v.translation}>
+                                                            {v.translation} ({v.project})
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                t.translation
+                                            )}
+                                        </td>
                                         <td className="py-3 px-4 text-gray-500 capitalize">{t.type}</td>
-                                        <td className="py-3 px-4 font-medium text-gray-650 dark:text-gray-400">{t.project}</td>
+                                        <td className="py-3 px-4 font-medium text-gray-650 dark:text-gray-400">
+                                            {t.projects && t.projects.length > 1 ? (
+                                                <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-[10px]">
+                                                    {t.projects.join(', ')}
+                                                </span>
+                                            ) : (
+                                                t.project || t.projects?.[0]
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -234,21 +275,38 @@ const SyncWizard = ({ projectName, onImported }) => {
                                     <th className="py-3 px-4">Character Name</th>
                                     <th className="py-3 px-4">Gender</th>
                                     <th className="py-3 px-4">Formality</th>
-                                    <th className="py-3 px-4">Source Child Project</th>
+                                    <th className="py-3 px-4">Source Projects</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50 dark:divide-gray-750 text-xs">
                                 {filteredCharacters.map((c, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/10">
+                                    <tr key={idx} className={`hover:bg-slate-50/50 dark:hover:bg-slate-900/10 ${c.has_conflict ? 'bg-amber-50/20 dark:bg-amber-950/20' : ''}`}>
                                         <td className="py-3 px-4">
                                             <button onClick={() => handleToggleSelectCharacter(c.name)} className="text-gray-400 hover:text-indigo-600">
                                                 {selectedCharacters.has(c.name) ? <CheckSquare size={16} className="text-indigo-650" /> : <Square size={16} />}
                                             </button>
                                         </td>
-                                        <td className="py-3 px-4 font-bold text-gray-900 dark:text-white">{c.name}</td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-bold text-gray-900 dark:text-white">{c.name}</span>
+                                                {c.has_conflict && (
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700" title="Different child shows offer conflicting profiles for this character">
+                                                        Conflict
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="py-3 px-4 text-gray-500 capitalize">{c.gender}</td>
                                         <td className="py-3 px-4 text-gray-500 capitalize">{c.formality}</td>
-                                        <td className="py-3 px-4 font-medium text-gray-650 dark:text-gray-400">{c.project}</td>
+                                        <td className="py-3 px-4 font-medium text-gray-650 dark:text-gray-400">
+                                            {c.projects && c.projects.length > 1 ? (
+                                                <span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-[10px]">
+                                                    {c.projects.join(', ')}
+                                                </span>
+                                            ) : (
+                                                c.project || c.projects?.[0]
+                                            )}
+                                        </td>
                                     </tr>
                                 ))}
                             </tbody>

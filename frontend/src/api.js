@@ -8,7 +8,43 @@ const API_URL =
     import.meta.env.VITE_API_URL ??
     (import.meta.env.DEV ? 'http://localhost:8000' : '');
 
+// Auth (docs/PLAN_auth_security.md): every call in this file goes through the
+// single global `axios` instance (verified — no other file imports axios
+// directly), so registering interceptors here once covers the whole app.
+// There's no dedicated `client` instance on purpose: the existing ~90 call
+// sites below stay untouched.
+export const AUTH_STORAGE_KEY = 'omnisub_api_key';
+
+axios.interceptors.request.use((config) => {
+    const key = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (key) {
+        config.headers = config.headers || {};
+        config.headers['X-Api-Key'] = key;
+    }
+    return config;
+});
+
+axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error?.response?.status === 401) {
+            window.dispatchEvent(new CustomEvent('omnisub:unauthorized'));
+        }
+        return Promise.reject(error);
+    }
+);
+
 export const api = {
+    // Auth
+    getAuthStatus: () => axios.get(`${API_URL}/api/auth/status`),
+    login: (username, password) => axios.post(`${API_URL}/api/auth/login`, { username, password }),
+    setCredentials: (username, password, regenerateApiKey = false) =>
+        axios.post(`${API_URL}/api/auth/credentials`, { username, password, regenerate_api_key: regenerateApiKey }),
+    disableAuth: () => axios.post(`${API_URL}/api/auth/disable`),
+
+    // Setup wizard (docs/PLAN_onboarding_wizard.md)
+    getSetupStatus: () => axios.get(`${API_URL}/api/setup/status`),
+
     // Projects
     getProjects: () => axios.get(`${API_URL}/projects`),
     createProject: (name, targetLanguage, parentProject = null, type = 'show') => axios.post(`${API_URL}/projects`, { name, target_language: targetLanguage, parent_project: parentProject, type }),
@@ -16,10 +52,15 @@ export const api = {
     getProjectTokenSummary: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/token-summary`),
     testTranslation: (name, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/test-translation`, data),
     updateProject: (name, data, globalSave = false) => axios.put(`${API_URL}/projects/${encodeURIComponent(name)}`, data, { params: { global_save: globalSave } }),
-    syncProject: (projectName) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/sync`),
+    syncProject: (projectName, options = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/sync`, options),
     importProjectData: (projectName, sourceProject, importGlossary = true, importContext = true) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/import`, { source_project: sourceProject, import_glossary: importGlossary, import_context: importContext }),
     getSyncCandidates: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/sync-candidates`),
-    syncImport: (project, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/sync-import`, data),
+    promoteTerm: (projectName, termData) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/promote-term`, termData),
+    promoteTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/promote-terms-batch`, { terms }),
+    suppressTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/suppress-terms-batch`, { terms }),
+    revertTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/revert-terms-batch`, { terms }),
+    harvestEpisodeTerms: (projectName, episodeName, model = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/harvest-terms`, { model }),
+    harvestProjectTerms: (projectName, episodeNames = null, model = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/harvest-terms`, { episode_names: episodeNames, model }),
     checkProjectMissing: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/check-missing`),
     translateProjectMissing: (name) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/translate-missing`),
 
@@ -33,7 +74,16 @@ export const api = {
 
     // Episodes
     getEpisodes: (projectName) => axios.get(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes`),
-    getEpisode: (projectName, episodeName) => axios.get(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}`),
+    // `etag` is optional — pass the value of a previous response's ETag header
+    // to let an unchanged episode short-circuit to a 304 (EpisodeView.jsx's
+    // live-view poll does this; see docs/PLAN_structural_polish.md Part A).
+    getEpisode: (projectName, episodeName, etag = null) => axios.get(
+        `${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}`,
+        {
+            headers: etag ? { 'If-None-Match': etag } : {},
+            validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
+        }
+    ),
     saveEpisode: (projectName, episodeName, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/save`, { data }),
     updateEpisodeMetadata: (projectName, episodeName, metadata) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/metadata`, { metadata }),
     deleteEpisode: (projectName, episodeName) => axios.delete(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}`),
@@ -92,6 +142,7 @@ export const api = {
     
     // Pipeline
     startPipeline: (projectName, options = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/pipeline/start`, options),
+    startFullIngestPipeline: (projectName) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/pipeline/full-ingest`),
     continuePipeline: (projectName, jobId) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/pipeline/${jobId}/continue`),
 
     // Downloads
@@ -102,7 +153,7 @@ export const api = {
         let filename = `${episodeName}.srt`;
         const cd = response.headers['content-disposition'] || response.headers['Content-Disposition'];
         if (cd) {
-            const m = /filename\*?=(?:UTF-8'')?"?([^\";]+)"?/i.exec(cd);
+            const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(cd);
             if (m && m[1]) {
                 try { filename = decodeURIComponent(m[1]); } catch { filename = m[1]; }
             }
@@ -118,13 +169,14 @@ export const api = {
     },
 
     // Global Settings
-    getSettings: () => axios.get(`${API_URL}/settings`),
-    updateSettings: (settings) => axios.post(`${API_URL}/settings`, settings),
+    getSettings: () => axios.get(`${API_URL}/api/settings`),
+    updateSettings: (settings) => axios.post(`${API_URL}/api/settings`, settings),
 
     // API Key Management
     getApiKeyStatus: () => axios.get(`${API_URL}/api/config/api-key`),
     setApiKey: (apiKey) => axios.post(`${API_URL}/api/config/api-key`, { api_key: apiKey }),
     deleteApiKey: () => axios.delete(`${API_URL}/api/config/api-key`),
+    testGeminiKey: (apiKey = null) => axios.post(`${API_URL}/api/config/test-gemini-key`, apiKey ? { api_key: apiKey } : {}),
 
     // Model Registry (unified: Gemini + local discovery)
     fetchAllModels: (baseUrl = null) => axios.get(`${API_URL}/api/models`, { params: { base_url: baseUrl } }),
@@ -157,11 +209,18 @@ export const api = {
     // GET returns { items: [...], count: N }
     getReviewQueue: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue`),
     getGlobalReviewQueue: () => axios.get(`${API_URL}/projects/review-queue`),
+    // Lightweight badge count — no flagged-line data, just the number.
+    getGlobalReviewCount: () => axios.get(`${API_URL}/projects/review-queue/count`),
     // POST /review-queue/resolve?episode_name=X&line_index=N&translated_text=...
     resolveReviewItem: (project, episode, index, translatedText) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue/resolve`, null, { params: { episode_name: episode, line_index: index, ...(translatedText != null ? { translated_text: translatedText } : {}) } }),
     resolveAllReviewItems: (project) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue/resolve-all`),
     // POST /review-queue/save-line?episode_name=X&line_index=N&translated_text=...
     saveReviewLine: (project, episode, index, translatedText) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue/save-line`, null, { params: { episode_name: episode, line_index: index, translated_text: translatedText } }),
+    // Wrong-alphabet contamination. The scan is a read-only preview; the repair runs as
+    // a job — free look-alike fixes first, then the rest in batched requests (~60 lines
+    // per call across the whole project, not one call per episode).
+    scanScriptGuard: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/scan`),
+    repairScriptGuard: (project, { model = null, useLlm = true, exportFiles = true } = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/repair`, { model, use_llm: useLlm, export: exportFiles }),
 
     // Episode Summaries
     // GET /summaries returns { episode_name: summary_text, ... }
@@ -177,9 +236,9 @@ export const api = {
     testSonarr: (settings) => axios.post(`${API_URL}/integrations/sonarr/test`, settings),
     testRadarr: (settings) => axios.post(`${API_URL}/integrations/radarr/test`, settings),
     testPath: (remotePath, pathMappings) => axios.post(`${API_URL}/integrations/arr/test-path`, { remote_path: remotePath, path_mappings: pathMappings }),
-    syncSonarr: () => axios.post(`${API_URL}/integrations/sonarr/sync`),
-    syncRadarr: () => axios.post(`${API_URL}/integrations/radarr/sync`),
-    syncArrAll: () => axios.post(`${API_URL}/integrations/arr/sync`),
+    syncSonarr: (options = {}) => axios.post(`${API_URL}/integrations/sonarr/sync`, options),
+    syncRadarr: (options = {}) => axios.post(`${API_URL}/integrations/radarr/sync`, options),
+    syncArrAll: (options = {}) => axios.post(`${API_URL}/integrations/arr/sync`, options),
 
     // Arr Library & Sync
     getArrLibrary: () => axios.get(`${API_URL}/integrations/arr/library`),
@@ -225,5 +284,17 @@ export const api = {
     acceptFeedbackSuggestion: (project, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/feedback/suggestions/accept`, data),
     measureConformance: (project, text, timecode) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/conformance/measure`, { text, timecode }),
     blacklistAndRetry: (project, episode, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/blacklist-retry`, data),
+
+    // Embedded ASS Subtitle Lookup & Extraction
+    probeEpisodeEmbedded: (project, episode, forceRefresh = false) =>
+        axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/probe`, { params: { force_refresh: forceRefresh }, timeout: 120000 }),
+    extractEpisodeEmbedded: (project, episode, options = {}) =>
+        axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/extract`, options, { timeout: 600000 }),
+    getProjectEmbeddedStatus: (project) =>
+        axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/embedded/status`),
+    batchExtractEmbedded: (project, options = {}) =>
+        axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/embedded/extract-all`, options, { timeout: 600000 }),
+    testMediaProbe: (mediaPath) =>
+        axios.post(`${API_URL}/api/settings/test-media-probe`, { media_path: mediaPath }, { timeout: 120000 }),
 };
 

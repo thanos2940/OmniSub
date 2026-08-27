@@ -77,7 +77,7 @@ def test_inline_request_carries_system_instruction_and_thinking():
         response_schema=SceneTranslationResponse, expected_count=1,
         structured=True, index_map=[0],
     )
-    inline = BatchTranslator._to_inline_request(req, "gemini-2.5-flash")
+    inline = BatchTranslator._to_inline_request(req, "gemini-3.1-flash-lite")
     assert inline.config.system_instruction == "SYS RULES"
     # The SDK normalizes dict contents into typed Content objects.
     assert inline.contents[0].parts[0].text == "translate me"

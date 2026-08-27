@@ -35,25 +35,20 @@ def mock_storage():
 def test_resolve_model_cloud_default(mock_storage):
     """Test cloud provider returns default cloud models."""
     metadata = {"settings": {"ai_provider": "cloud"}}
-    assert resolve_model("translation", metadata) == "gemini-flash-lite-latest"
-    assert resolve_model("scan", metadata) == "gemini-flash-lite-latest"
+    assert resolve_model("translation", metadata, check_exhaustion=False) == "gemini-flash-lite-latest"
+    assert resolve_model("scan", metadata, check_exhaustion=False) == "gemini-flash-lite-latest"
 
 def test_resolve_model_local_default(mock_storage):
     """Test local provider returns local models."""
     metadata = {"settings": {"ai_provider": "local"}}
-    # Should prefix with local/
-    assert resolve_model("translation", metadata) == "local/mistral-7b"
-    assert resolve_model("scan", metadata) == "local/gemma-2b"
+    assert resolve_model("translation", metadata, check_exhaustion=False) == "local/mistral-7b"
+    assert resolve_model("scan", metadata, check_exhaustion=False) == "local/gemma-2b"
 
 def test_resolve_model_hybrid_default(mock_storage):
-    """Test hybrid provider uses local for translation and cloud for scan (mocking roles)."""
+    """Test hybrid provider uses local for translation and cloud for scan."""
     metadata = {"settings": {"ai_provider": "hybrid"}}
-    
-    # Translation -> Local (per preference)
-    assert resolve_model("translation", metadata) == "local/mistral-7b"
-    
-    # Review -> Cloud (per preference)
-    assert resolve_model("review", metadata) == "gemini-pro"
+    assert resolve_model("translation", metadata, check_exhaustion=False) == "local/mistral-7b"
+    assert resolve_model("review", metadata, check_exhaustion=False) == "gemini-pro"
 
 def test_resolve_model_explicit_override(mock_storage):
     """Test that explicit project settings override provider defaults."""
@@ -63,8 +58,7 @@ def test_resolve_model_explicit_override(mock_storage):
             "local_translation_model": "custom-local-model"
         }
     }
-    # Local provider uses local_translation_model
-    assert resolve_model("translation", metadata) == "local/custom-local-model"
+    assert resolve_model("translation", metadata, check_exhaustion=False) == "local/custom-local-model"
 
 
 def test_resolve_model_empty_string_fallback(mock_storage):
@@ -75,6 +69,24 @@ def test_resolve_model_empty_string_fallback(mock_storage):
             "translation_model": ""
         }
     }
-    assert resolve_model("translation", metadata) == "gemini-flash-lite-latest"
+    assert resolve_model("translation", metadata, check_exhaustion=False) == "gemini-flash-lite-latest"
+
+
+def test_resolve_model_fallback_on_daily_exhaustion(mock_storage, monkeypatch):
+    """Test that if primary model is daily exhausted, resolve_model returns configured fallback model."""
+    from utils.rate_limiter import per_model_rate_limiter
+    limiter = per_model_rate_limiter.get_limiter("gemini-flash-lite-latest")
+    limiter.trigger_daily_limit()
+
+    metadata = {
+        "settings": {
+            "ai_provider": "cloud",
+            "translation_model": "gemini-flash-lite-latest",
+            "fallback_translation_model": "gemini-3.1-flash-lite"
+        }
+    }
+    assert resolve_model("translation", metadata) == "gemini-3.1-flash-lite"
+    limiter.clear_daily_limit()
+
 
 

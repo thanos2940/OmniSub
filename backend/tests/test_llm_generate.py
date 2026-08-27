@@ -9,13 +9,13 @@ async def test_generate_cloud_path():
     with patch("services.cached_translator.generate_cached", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = "Cloud Response"
 
-        resp = await generate("gemini-2.5-flash", "Hello", role="translation")
+        resp = await generate("gemini-3.1-flash-lite", "Hello", role="translation")
 
         assert resp == "Cloud Response"
         mock_gen.assert_called_once()
         _, kwargs = mock_gen.call_args
         assert kwargs["user_prompt"] == "Hello"
-        assert kwargs["model"] == "gemini-2.5-flash"
+        assert kwargs["model"] == "gemini-3.1-flash-lite"
         # D2: mechanical role -> thinking disabled.
         assert kwargs["thinking_budget"] == 0
         assert kwargs["role"] == "translation"

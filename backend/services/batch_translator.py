@@ -136,7 +136,8 @@ class BatchTranslator:
             cfg_kwargs["response_mime_type"] = "application/json"
             cfg_kwargs["response_schema"] = req.response_schema
         budget = resolve_thinking_budget("translation")
-        if budget is not None and (budget > 0 or "pro" not in model.lower()):
+        is_thinking_model = "2.5" in model or "3." in model or "thinking" in model.lower()
+        if is_thinking_model and budget is not None and (budget > 0 or "pro" not in model.lower()):
             try:
                 cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
             except Exception:
@@ -201,6 +202,16 @@ class BatchTranslator:
         try:
             from utils.alignment_audit import flag_drift
             flag_drift(rows, plan.target_code)
+        except Exception:
+            pass
+
+        # Script guard (zero-token): fix the unambiguous wrong-alphabet characters
+        # outright, then flag whatever is left — with no repair pass here, the
+        # review queue is the only place the rest can surface.
+        try:
+            from utils.script_guard import scrub_rows, flag_rows
+            scrub_rows(rows, plan.target_code, plan.target_code if plan.is_primary else None)
+            flag_rows(rows, plan.target_code)
         except Exception:
             pass
         gap_pct = (gap / total) if total else 1.0

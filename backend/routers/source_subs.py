@@ -40,7 +40,7 @@ async def upload_source(project: str, episode: str, file: UploadFile):
     ep_meta["arr_source_origin"] = "manual"
     storage.save_episode_metadata(project, episode, ep_meta)
 
-    cp = storage.PROJECTS_DIR / project / "episodes" / episode / "checkpoint.json"
+    cp = storage.episode_dir(project, episode) / "checkpoint.json"
     if cp.exists():
         try:
             cp.unlink()

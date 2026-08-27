@@ -437,7 +437,7 @@ async def _translate_episode_atomic(
                 translated_map[i] = entry.get("translated")
 
     _cp_name = f"checkpoint.{lang_suffix}.json" if lang_suffix else "checkpoint.json"
-    checkpoint_path = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / _cp_name
+    checkpoint_path = storage.episode_dir(project_name, episode_name) / _cp_name
     # Throttle the per-scene full data.json rewrite: the checkpoint already captures
     # incremental progress for recovery, so data.json only needs occasional refreshes for
     # the live view (and a final write at the end). Avoids rewriting the whole file on
@@ -1132,7 +1132,23 @@ async def _translate_episode_atomic(
     else:
         qc_stages["glossary_enforce"] = "skipped"
 
-    # Stage 1b+2 — validators (tags, untranslated-Latin) → one batched repair call.
+    # Stage 1a2 — script guard (zero tokens): rewrite visual-twin characters from
+    # the wrong alphabet (Latin 'v' for Greek 'ν', 'Tόνι' for 'Τόνι'). Ambiguous
+    # contamination is deliberately left for the validators below to ticket.
+    if global_config.get("script_guard_enabled", True):
+        try:
+            from utils.script_guard import scrub_rows
+            _n_script = scrub_rows(parsed_srt, target_lang_code, primary_code)
+            if _n_script:
+                update_job(job_id, log=f"{episode_name}: script guard fixed {_n_script} wrong-alphabet character(s).")
+            qc_stages["script_guard"] = f"ok ({_n_script} fixed)"
+        except Exception as e:
+            qc_stages["script_guard"] = f"failed: {e}"
+            update_job(job_id, log=f"{episode_name}: script guard failed (non-critical): {e}")
+    else:
+        qc_stages["script_guard"] = "skipped"
+
+    # Stage 1b+2 — validators (tags, untranslated-Latin, wrong script) → one batched repair call.
     if global_config.get("repair_pass_enabled", True):
         try:
             from utils.qc_funnel import validate_lines, run_repair_pass
@@ -1357,15 +1373,15 @@ async def _process_batch_translation(
     force: bool = False
 ):
     update_job(job_id, status="running", progress=0.0, message="Starting translation...", log="Job started")
-    global_config = storage.load_global_config()
-    if not model:
-        model = global_config.get("default_translation_model", "gemini-flash-lite-latest")
-    active_model_var.set(model)
     try:
         metadata = storage.load_project_metadata(project_name)
         if not metadata:
             update_job(job_id, status="failed", message="Project not found")
             return
+
+        from utils.model_resolver import resolve_model
+        model = resolve_model("translation", metadata, model_override=model)
+        active_model_var.set(model)
 
         glossary = metadata.get("glossary", {"terms": []})
         target_lang = metadata.get("target_language", "English")
@@ -1433,7 +1449,7 @@ async def _process_batch_translation(
                         ep_meta.pop("translation_error", None)
                         storage.save_episode(project_name, ep_name, ep_data["data"], ep_meta)
                     # Delete checkpoint so it starts fresh
-                    checkpoint_path = storage.PROJECTS_DIR / project_name / "episodes" / ep_name / "checkpoint.json"
+                    checkpoint_path = storage.episode_dir(project_name, ep_name) / "checkpoint.json"
                     if checkpoint_path.exists():
                         checkpoint_path.unlink()
                     update_job(job_id, log=f"{ep_name}: Cleared existing translation for force retranslation.")
@@ -1654,7 +1670,7 @@ async def _process_targeted_retranslation(job_id: str, project_name: str, affect
                 max_lines = global_config.get("max_lines_per_scene", 200)
                 scenes = build_scene_ast(parsed_srt, gap_threshold_ms=3000, max_lines_per_scene=max_lines)
                 
-                checkpoint_path = storage.PROJECTS_DIR / project_name / "episodes" / ep_name / "checkpoint.json"
+                checkpoint_path = storage.episode_dir(project_name, ep_name) / "checkpoint.json"
                 checkpoint_map = {}
                 if checkpoint_path.exists():
                     try:

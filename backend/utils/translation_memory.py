@@ -14,21 +14,21 @@ import time
 import logging
 import os
 import warnings
-from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
+from utils.paths import TRANSLATION_MEMORY_DIR as TM_DIR
 
-TM_DIR = Path(__file__).resolve().parent.parent / "translation_memory"
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Singleton embedding model cache
 # ---------------------------------------------------------------------------
 
 _EMBEDDER_CACHE: Dict[str, object] = {}
+_EMBEDDING_VECTOR_CACHE: Dict[str, np.ndarray] = {}
 
 
 def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
@@ -38,16 +38,26 @@ def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
     """
     if model_name not in _EMBEDDER_CACHE:
         try:
-            # Suppress HF Hub warnings and telemetry for a cleaner console experience
             os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
             os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
             
-            # Specifically filter the 'unauthenticated requests' warning
             warnings.filterwarnings("ignore", message=".*unauthenticated requests to the HF Hub.*")
             
+            device = "cpu"
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = "cuda"
+                    logger.info("Using CUDA GPU acceleration for embeddings.")
+                else:
+                    cpu_threads = max(1, min(2, (os.cpu_count() or 4) // 2))
+                    torch.set_num_threads(cpu_threads)
+            except Exception as e:
+                logger.debug(f"Device detection fallback to CPU: {e}")
+
             from sentence_transformers import SentenceTransformer
-            _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name)
-            logger.info(f"Loaded embedding model: {model_name}")
+            _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name, device=device)
+            logger.info(f"Loaded embedding model '{model_name}' on device '{device}' (threads capped at {cpu_threads if device == 'cpu' else 'GPU'}).")
         except ImportError:
             logger.warning(
                 "sentence-transformers not installed. "
@@ -56,6 +66,42 @@ def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
             )
             return None
     return _EMBEDDER_CACHE[model_name]
+
+
+def encode_texts_cached(embedder, texts: List[str]) -> np.ndarray:
+    """Encode texts into normalized embedding vectors with RAM caching.
+    
+    Identical subtitle lines across episodes are served from memory instantly
+    with zero CPU/GPU encoding overhead. Uncached lines are encoded in a single batch.
+    """
+    if not texts:
+        return np.array([])
+
+    cached_vectors: Dict[int, np.ndarray] = {}
+    uncached_indices: List[int] = []
+    uncached_texts: List[str] = []
+
+    for i, t in enumerate(texts):
+        h = _text_hash(t)
+        if h in _EMBEDDING_VECTOR_CACHE:
+            cached_vectors[i] = _EMBEDDING_VECTOR_CACHE[h]
+        else:
+            uncached_indices.append(i)
+            uncached_texts.append(t)
+
+    if uncached_texts:
+        new_embeddings = embedder.encode(
+            uncached_texts,
+            show_progress_bar=False,
+            normalize_embeddings=True
+        )
+        for idx, text, vec in zip(uncached_indices, uncached_texts, new_embeddings):
+            h = _text_hash(text)
+            _EMBEDDING_VECTOR_CACHE[h] = vec
+            cached_vectors[idx] = vec
+
+    result_list = [cached_vectors[i] for i in range(len(texts))]
+    return np.array(result_list)
 
 
 def _text_hash(text: str) -> str:
@@ -167,8 +213,8 @@ class TranslationMemory:
         sources = [p[0] for p in pairs]
         targets = [p[1] for p in pairs]
 
-        # Batch embed all source lines
-        embeddings = embedder.encode(sources, show_progress_bar=False, normalize_embeddings=True)
+        # Batch embed all source lines with RAM caching
+        embeddings = encode_texts_cached(embedder, sources)
 
         now = datetime.now().isoformat()
         records = []
@@ -284,8 +330,8 @@ class TranslationMemory:
         indices = [il[0] for il in indexed_lines]
         texts = [il[1] for il in indexed_lines]
 
-        # Batch embed
-        embeddings = embedder.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+        # Batch embed with RAM caching
+        embeddings = encode_texts_cached(embedder, texts)
 
         results: Dict[int, List[Dict]] = {}
 

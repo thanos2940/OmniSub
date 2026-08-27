@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Settings, AlertCircle, Check } from 'lucide-react';
+import { X, Save, Settings, AlertCircle, Check, Film, Sparkles, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
 
@@ -13,9 +13,11 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
         auto_export_dir: '',
         apply_subtitle_edit_fixes: true,
         translate_all_source_formats: false,
+        prefer_ass_format: 'auto',
+        embedded_deprioritize_keywords: '',
         temperature: 0.3,
-        top_k: 40,
-        top_p: 1.0
+        top_k: 64,
+        top_p: 0.95
     });
     const [testStatus, setTestStatus] = useState(null); // 'testing', 'success', 'error'
     const [testError, setTestError] = useState(null);
@@ -29,10 +31,25 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
         if (isOpen) {
             import('../api').then(({ api }) => {
                 api.getProjects().then(res => setAllProjects(res.data.filter(p => p.name !== project?.name && p.type !== 'episode')));
-                api.getSettings().then(res => setGlobalSettings(res.data));
+                api.getSettings().then(res => {
+                    const g = res.data;
+                    setGlobalSettings(g);
+                    // If project settings didn't specify values, use global settings
+                    const src = initialSettings || (project && project.settings) || {};
+                    setSettings(prev => ({
+                        ...prev,
+                        temperature: src.temperature ?? g.temperature ?? 0.3,
+                        top_k: src.top_k ?? g.top_k ?? 64,
+                        top_p: src.top_p ?? g.top_p ?? 0.95,
+                        translation_model: src.translation_model ?? g.default_translation_model ?? '',
+                        context_model: src.context_model ?? g.default_context_model ?? '',
+                        glossary_model: src.glossary_model ?? g.default_glossary_model ?? '',
+                        ...src
+                    }));
+                });
             });
         }
-    }, [isOpen, project]);
+    }, [isOpen, project, initialSettings]);
 
     useEffect(() => {
         const src = initialSettings || (project && project.settings);
@@ -121,6 +138,12 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             placeholder={globalSettings ? `Global: ${globalSettings.default_translation_model}` : "Select model..."}
                         />
                         <ModelCombobox
+                            label="Fallback Translation Model"
+                            value={settings.fallback_translation_model}
+                            onChange={(v) => handleChange('fallback_translation_model', v)}
+                            placeholder={globalSettings ? `Global: ${globalSettings.fallback_translation_model || 'None'}` : "Select fallback model..."}
+                        />
+                        <ModelCombobox
                             label="Context Analysis Model"
                             value={settings.context_model}
                             onChange={(v) => handleChange('context_model', v)}
@@ -188,9 +211,9 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Sampling Parameters</h3>
                             <div className="space-y-4">
                                 {[
-                                    { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, default: 0.3, format: v => parseFloat(v).toFixed(2) },
-                                    { key: 'top_k', label: 'Top-K', min: 1, max: 100, step: 1, default: 40, format: v => v },
-                                    { key: 'top_p', label: 'Top-P', min: 0.1, max: 1, step: 0.01, default: 1.0, format: v => parseFloat(v).toFixed(2) },
+                                    { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, default: globalSettings?.temperature ?? 0.3, format: v => parseFloat(v).toFixed(2) },
+                                    { key: 'top_k', label: 'Top-K', min: 1, max: 100, step: 1, default: globalSettings?.top_k ?? 64, format: v => v },
+                                    { key: 'top_p', label: 'Top-P', min: 0.1, max: 1, step: 0.01, default: globalSettings?.top_p ?? 0.95, format: v => parseFloat(v).toFixed(2) },
                                 ].map(({ key, label, min, max, step, default: def, format }) => (
                                     <div key={key} className="space-y-1.5">
                                         <div className="flex justify-between">
@@ -305,9 +328,51 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             </p>
                         </div>
 
-                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
-                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Subtitle Formats</h3>
-                            <label className="flex items-center gap-3 cursor-pointer group">
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                    <Film size={16} className="text-purple-500" />
+                                    Subtitle Formats & Embedded ASS
+                                </h3>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Require .ass Subtitles Preference</label>
+                                <select
+                                    value={settings.prefer_ass_format ?? 'auto'}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        handleChange('prefer_ass_format', v);
+                                        if (v === 'always') handleChange('translate_all_source_formats', true);
+                                    }}
+                                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                >
+                                    <option value="auto">Auto — enabled for anime series</option>
+                                    <option value="always">Always — prioritize embedded .ass on all media</option>
+                                    <option value="never">Never — stick with standalone subtitle files</option>
+                                </select>
+                                <p className="text-[10px] text-gray-400 mt-1 italic">
+                                    When active, episodes without <span className="font-mono">.ass</span> will probe linked video files to extract high-fidelity ASS subtitle streams, preserving original fonts and styling.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                                    Track Deprioritization Keywords (Optional Project Override)
+                                </label>
+                                <input
+                                    type="text"
+                                    value={settings.embedded_deprioritize_keywords || ''}
+                                    onChange={(e) => handleChange('embedded_deprioritize_keywords', e.target.value)}
+                                    placeholder="signs, songs, op, ed, kara, title, insert"
+                                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-xs transition-all"
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1 italic">
+                                    Comma-separated stream title words that rank a track below main dialogue. Leave empty to use global setting.
+                                </p>
+                            </div>
+
+                            <label className="flex items-center gap-3 cursor-pointer group pt-1">
                                 <div className="relative flex items-center justify-center">
                                     <input
                                         type="checkbox"
@@ -319,10 +384,10 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                         {settings.translate_all_source_formats && <Check size={14} className="text-white" />}
                                     </div>
                                 </div>
-                                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Translate all source subtitle formats</span>
+                                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Translate all source subtitle formats (Dual-format SRT & ASS)</span>
                             </label>
-                            <p className="text-[10px] text-gray-400 mt-1 pl-8 italic">
-                                Translate alternate formats (e.g. SRT, ASS) if present in the source files.
+                            <p className="text-[10px] text-gray-400 -mt-2 pl-8 italic">
+                                Translates sibling formats (e.g. SRT alongside extracted ASS), preserving both for media players.
                             </p>
                         </div>
 

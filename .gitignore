@@ -53,6 +53,14 @@ backend/test_greek_save.py
 backend/rate_limiter_state.json
 test_greek.json
 config.json
+!backend/config.example.json
+
+# Scratch/manual-test output (not part of the test suite — see backend/pytest.ini)
+backend/test_output/
+
+# Built frontend copied in by the Docker frontend-builder stage — never tracked.
+backend/static/
+backend/test_data/
 
 # Electron App
 electron-app/node_modules/

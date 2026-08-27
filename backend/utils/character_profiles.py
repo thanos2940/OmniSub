@@ -20,12 +20,11 @@ Storage:
 import json
 import logging
 from dataclasses import dataclass, field, asdict, replace
-from pathlib import Path
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from utils import storage
 
-PROJECTS_DIR = Path(__file__).resolve().parent.parent / "projects"
+logger = logging.getLogger(__name__)
 
 # Bookkeeping fields that are never user-settable overrides.
 _OVERRIDE_IGNORE_FIELDS = ("name", "inherited", "inherited_from", "overridden_fields")
@@ -79,7 +78,7 @@ class CharacterProfileManager:
 
     def __init__(self, project_name: str):
         self._project = project_name
-        self._file = PROJECTS_DIR / project_name / "character_profiles.json"
+        self._file = storage.project_dir(project_name) / "character_profiles.json"
 
     def load_all(self) -> Dict[str, CharacterProfile]:
         """Load all character profiles. Returns {name: CharacterProfile}."""

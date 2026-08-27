@@ -14,9 +14,61 @@ import threading
 from pathlib import Path
 from typing import List, Dict, Optional, Any, Tuple
 
+from utils.paths import PROJECTS_DIR, CONFIG_FILE
+
 logger = logging.getLogger(__name__)
 
-PROJECTS_DIR = Path(__file__).resolve().parent.parent / "projects"
+# Characters/values that must never appear in a project or episode name once it's
+# used as a filesystem path segment. Blocks both traversal (path separators, "..")
+# and Windows-specific gotchas (reserved device names, trailing dots/spaces).
+_INVALID_NAME_CHARS = set('<>:"/\\|?*\x00')
+_RESERVED_WINDOWS_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
+
+
+def safe_name(name: str) -> str:
+    """Validate a project/episode name for safe use as a single filesystem path
+    segment. Raises ValueError on anything that could traverse out of PROJECTS_DIR
+    or collide with a reserved Windows device name. Returns the name unchanged
+    (never mutates it) so call sites can use it as a drop-in guard."""
+    if not name or name != name.strip() or name in (".", ".."):
+        raise ValueError(f"Invalid name: {name!r}")
+    if set(name) & _INVALID_NAME_CHARS:
+        raise ValueError(f"Invalid name: {name!r}")
+    if name.split(".")[0].upper() in _RESERVED_WINDOWS_NAMES:
+        raise ValueError(f"Invalid name: {name!r}")
+    return name
+
+
+def _safe_project_dir(project_name: str) -> Path:
+    """Resolve a project's directory, guaranteed to stay inside PROJECTS_DIR."""
+    candidate = (PROJECTS_DIR / safe_name(project_name)).resolve()
+    root = PROJECTS_DIR.resolve()
+    if candidate != root and not candidate.is_relative_to(root):
+        raise ValueError(f"Path escapes projects directory: {project_name!r}")
+    return candidate
+
+
+def _safe_episode_dir(project_name: str, episode_name: str) -> Path:
+    """Resolve an episode's directory, guaranteed to stay inside PROJECTS_DIR."""
+    candidate = (_safe_project_dir(project_name) / "episodes" / safe_name(episode_name)).resolve()
+    root = PROJECTS_DIR.resolve()
+    if not candidate.is_relative_to(root):
+        raise ValueError(f"Path escapes projects directory: {episode_name!r}")
+    return candidate
+
+
+# Public aliases for other modules (``storage.project_dir(name)`` /
+# ``storage.episode_dir(project, episode)``) — defined as aliases rather than
+# renaming the originals so the many in-module call sites above that assign to a
+# local variable literally named ``project_dir``/``episode_dir`` don't shadow the
+# function within their own scope (which would raise UnboundLocalError).
+project_dir = _safe_project_dir
+episode_dir = _safe_episode_dir
+
 
 _arr_library_cache = None
 
@@ -56,16 +108,20 @@ def get_project_setting(metadata: Dict, key: str, default_val=None) -> Any:
     If the project setting matches the old hardcoded default models, it falls back
     to the global configuration defaults.
     """
-    project_settings = metadata.get("settings", {})
+    project_settings = metadata.get("settings", {}) if isinstance(metadata, dict) else {}
     global_config = load_global_config()
     
     global_key_map = {
         "translation_model": "default_translation_model",
+        "fallback_translation_model": "fallback_translation_model",
         "scan_model": "default_scan_model",
         "context_model": "default_context_model",
         "glossary_model": "default_glossary_model",
         "review_model": "review_model",
-        "ai_provider": "ai_provider"
+        "ai_provider": "ai_provider",
+        "temperature": "temperature",
+        "top_k": "top_k",
+        "top_p": "top_p",
     }
     
     val = project_settings.get(key)
@@ -80,12 +136,12 @@ def get_project_setting(metadata: Dict, key: str, default_val=None) -> Any:
         )
         if is_default_model:
             g_key = global_key_map.get(key)
-            if g_key and g_key in global_config:
+            if g_key and g_key in global_config and global_config[g_key]:
                 return global_config[g_key]
         return val
         
     g_key = global_key_map.get(key, key)
-    if g_key in global_config:
+    if g_key in global_config and global_config[g_key] is not None:
         return global_config[g_key]
         
     return default_val
@@ -198,11 +254,28 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
         Complete project metadata
     """
     ensure_projects_dir()
-    project_dir = PROJECTS_DIR / project_name
+    project_dir = _safe_project_dir(project_name)
     project_dir.mkdir(exist_ok=True)
     (project_dir / "episodes").mkdir(exist_ok=True)
     
     global_config = load_global_config()
+    default_settings = {
+        "apply_subtitle_edit_fixes": global_config.get("apply_subtitle_edit_fixes", True),
+        "inherit_glossary": True,
+        "inherit_context": True,
+        "inherit_characters": True,
+        "temperature": global_config.get("temperature", 0.3),
+        "top_k": global_config.get("top_k", 64),
+        "top_p": global_config.get("top_p", 0.95),
+        "translation_model": global_config.get("default_translation_model", "gemini-2.5-flash"),
+        "fallback_translation_model": global_config.get("fallback_translation_model", "gemini-2.5-flash"),
+        "scan_model": global_config.get("default_scan_model", "gemini-2.5-flash"),
+        "context_model": global_config.get("default_context_model", "gemini-2.5-flash"),
+        "glossary_model": global_config.get("default_glossary_model", "gemini-2.5-flash"),
+        "review_model": global_config.get("review_model", "gemini-2.5-flash"),
+        "ai_provider": global_config.get("ai_provider", "cloud"),
+    }
+    
     default_metadata = {
         "show_name": project_name,
         "target_language": global_config.get("default_target_language", "English"),
@@ -210,16 +283,16 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
         "context_guide": "",
         "parent_project": None,
         "type": "show",
-        "settings": {
-            "apply_subtitle_edit_fixes": global_config.get("apply_subtitle_edit_fixes", True),
-            "inherit_glossary": True,
-            "inherit_context": True,
-            "inherit_characters": True
-        }
+        "settings": default_settings,
     }
     
     if metadata:
+        passed_settings = metadata.get("settings")
         default_metadata.update(metadata)
+        if passed_settings and isinstance(passed_settings, dict):
+            merged_settings = dict(default_settings)
+            merged_settings.update(passed_settings)
+            default_metadata["settings"] = merged_settings
     
     save_project_metadata(project_name, default_metadata)
     return default_metadata
@@ -227,7 +300,7 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
 
 def load_project_metadata(project_name: str) -> Optional[Dict]:
     """Load project metadata from JSON file."""
-    project_file = PROJECTS_DIR / project_name / "project.json"
+    project_file = _safe_project_dir(project_name) / "project.json"
     if not project_file.exists():
         return None
     
@@ -271,24 +344,30 @@ def load_resolved_project_metadata(project_name: str, _seen: Optional[set] = Non
     inherit_context = settings.get("inherit_context", True)
     
     # Merge glossary: child terms override parent terms (case-insensitive term match)
+    suppressed_terms = {t.lower().strip() for t in meta.get("suppressed_terms", []) if t}
     if inherit_glossary:
         parent_glossary = parent_meta.get("glossary", {})
         parent_terms = parent_glossary.get("terms", [])
+        parent_term_map = {t.get("term", "").lower().strip(): t for t in parent_terms if t.get("term")}
         
         child_glossary = meta.get("glossary", {})
         child_terms = child_glossary.get("terms", [])
-        
-        child_term_map = {t.get("term", "").lower(): t for t in child_terms if t.get("term")}
+        child_term_map = {t.get("term", "").lower().strip(): t for t in child_terms if t.get("term")}
         
         merged_terms = []
         for pt in parent_terms:
             term_name = pt.get("term", "")
             if not term_name:
                 continue
-            if term_name.lower() in child_term_map:
+            term_lower = term_name.lower().strip()
+            if term_lower in suppressed_terms:
+                continue
+            if term_lower in child_term_map:
                 continue
             pt_copy = dict(pt)
             pt_copy["inherited"] = True
+            pt_copy["is_override"] = False
+            pt_copy["upstream_modified"] = False
             if "inherited_from" not in pt_copy:
                 pt_copy["inherited_from"] = parent_name
             merged_terms.append(pt_copy)
@@ -296,6 +375,24 @@ def load_resolved_project_metadata(project_name: str, _seen: Optional[set] = Non
         for ct in child_terms:
             ct_copy = dict(ct)
             ct_copy["inherited"] = False
+            term_lower = ct.get("term", "").lower().strip()
+            if term_lower in parent_term_map:
+                ct_copy["is_override"] = True
+                ct_copy["inherited_from"] = parent_name
+                parent_def = parent_term_map[term_lower]
+                ct_copy["parent_term"] = dict(parent_def)
+                # Check if upstream parent differs from child definition
+                is_diff = (
+                    parent_def.get("translation", "") != ct.get("translation", "") or
+                    parent_def.get("type", "") != ct.get("type", "") or
+                    parent_def.get("gender", "") != ct.get("gender", "") or
+                    parent_def.get("description", "") != ct.get("description", "") or
+                    parent_def.get("keep_original", False) != ct.get("keep_original", False)
+                )
+                ct_copy["upstream_modified"] = is_diff
+            else:
+                ct_copy["is_override"] = False
+                ct_copy["upstream_modified"] = False
             merged_terms.append(ct_copy)
             
         meta["glossary"] = {"terms": merged_terms}
@@ -304,6 +401,8 @@ def load_resolved_project_metadata(project_name: str, _seen: Optional[set] = Non
         if "glossary" in meta and "terms" in meta["glossary"]:
             for term in meta["glossary"]["terms"]:
                 term["inherited"] = False
+                term["is_override"] = False
+                term["upstream_modified"] = False
         
     if inherit_context:
         parent_context = parent_meta.get("context_guide", "")
@@ -332,19 +431,50 @@ def strip_inherited_context(context_guide: Optional[str]) -> str:
     return context_guide[:idx].rstrip() if idx != -1 else context_guide
 
 
+def get_descendant_projects(project_name: str) -> List[str]:
+    """Find all projects that directly or indirectly inherit from project_name."""
+    descendants = []
+    direct_children = []
+    for p in list_projects():
+        if p == project_name:
+            continue
+        meta = load_project_metadata(p)
+        if meta and meta.get("parent_project") == project_name:
+            direct_children.append(p)
+    
+    for child in direct_children:
+        descendants.append(child)
+        descendants.extend(get_descendant_projects(child))
+        
+    return list(dict.fromkeys(descendants))
+
+
 def save_project_metadata(project_name: str, metadata: Dict) -> None:
     """Save project metadata to JSON file."""
     invalidate_arr_library_cache()
-    project_file = PROJECTS_DIR / project_name / "project.json"
+    project_file = _safe_project_dir(project_name) / "project.json"
     with open(project_file, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, indent=2, ensure_ascii=False)
 
 
 def delete_project(project_name: str) -> bool:
-    """Delete a project and all its data."""
+    """Delete a project and all its data. Safely unlinks any child projects pointing to it."""
     invalidate_arr_library_cache()
     _invalidate_episodes_list_cache(project_name)
-    project_dir = PROJECTS_DIR / project_name
+    
+    # Decouple any children referencing this project as their parent
+    for p in list_projects():
+        if p == project_name:
+            continue
+        try:
+            meta = load_project_metadata(p)
+            if meta and meta.get("parent_project") == project_name:
+                meta["parent_project"] = None
+                save_project_metadata(p, meta)
+        except Exception:
+            pass
+
+    project_dir = _safe_project_dir(project_name)
     if project_dir.exists():
         shutil.rmtree(project_dir)
         try:
@@ -358,7 +488,7 @@ def delete_project(project_name: str) -> bool:
 
 def list_episodes(project_name: str) -> List[str]:
     """List all episode names for a project."""
-    episodes_dir = PROJECTS_DIR / project_name / "episodes"
+    episodes_dir = _safe_project_dir(project_name) / "episodes"
     if not episodes_dir.exists():
         return []
     return sorted([d.name for d in episodes_dir.iterdir() if d.is_dir()])
@@ -375,7 +505,7 @@ def save_episode(project_name: str, episode_name: str, data: List[Dict], metadat
     review_count = sum(1 for l in data if l.get("needs_review")) if data else 0
     lock = get_episode_lock(project_name, episode_name)
     with lock:
-        episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+        episode_dir = _safe_episode_dir(project_name, episode_name)
         episode_dir.mkdir(parents=True, exist_ok=True)
 
         write_json_atomic(episode_dir / "data.json", {"data": data})
@@ -417,7 +547,7 @@ def save_episode_metadata(project_name: str, episode_name: str, metadata: Dict, 
     _invalidate_episodes_list_cache(project_name)
     lock = get_episode_lock(project_name, episode_name)
     with lock:
-        episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+        episode_dir = _safe_episode_dir(project_name, episode_name)
         episode_dir.mkdir(parents=True, exist_ok=True)
         write_json_atomic(episode_dir / "metadata.json", metadata)
 
@@ -429,7 +559,7 @@ def save_episode_metadata(project_name: str, episode_name: str, metadata: Dict, 
 
 def load_episode_metadata(project_name: str, episode_name: str) -> Optional[Dict]:
     """Load episode metadata only."""
-    metadata_file = PROJECTS_DIR / project_name / "episodes" / episode_name / "metadata.json"
+    metadata_file = _safe_episode_dir(project_name, episode_name) / "metadata.json"
     if not metadata_file.exists():
         return None
 
@@ -444,7 +574,7 @@ def load_episode_metadata(project_name: str, episode_name: str) -> Optional[Dict
 
 def load_episode(project_name: str, episode_name: str) -> Optional[Dict]:
     """Load episode data and metadata."""
-    episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+    episode_dir = _safe_episode_dir(project_name, episode_name)
     data_file = episode_dir / "data.json"
 
     if not data_file.exists():
@@ -493,7 +623,7 @@ def delete_episode(project_name: str, episode_name: str) -> bool:
     """Delete an episode and its data."""
     invalidate_arr_library_cache()
     _invalidate_episodes_list_cache(project_name)
-    episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+    episode_dir = _safe_episode_dir(project_name, episode_name)
     if episode_dir.exists():
         shutil.rmtree(episode_dir)
         update_project_stats_on_change(project_name)
@@ -504,6 +634,38 @@ def delete_episode(project_name: str, episode_name: str) -> bool:
             pass
         return True
     return False
+
+
+def rename_episode(project_name: str, old_name: str, new_name: str) -> bool:
+    """Rename an episode folder in place, keeping its data, translations and metadata.
+
+    Used when an episode's primary source format changes (an ``.ass`` appears next to
+    the ``.srt`` an episode was imported from): the existing episode is moved to its
+    dual-format sibling name rather than being overwritten by the new format. Refuses
+    to clobber an existing target.
+    """
+    invalidate_arr_library_cache()
+    _invalidate_episodes_list_cache(project_name)
+    old_dir = _safe_episode_dir(project_name, old_name)
+    new_dir = _safe_episode_dir(project_name, new_name)
+    if not old_dir.exists() or new_dir.exists():
+        return False
+    try:
+        old_dir.rename(new_dir)
+    except OSError as e:
+        logger.warning(f"Could not rename episode {project_name}/{old_name} -> {new_name}: {e}")
+        return False
+
+    # Move the index entry with it, or the old name lingers as a phantom episode
+    # until the next full backfill.
+    try:
+        from utils import metadata_index
+        metadata_index.remove(project_name, old_name)
+    except Exception:
+        pass
+    _index_episode(project_name, new_name, load_episode_metadata(project_name, new_name) or {})
+    update_project_stats_on_change(project_name)
+    return True
 
 
 def update_project_stats_on_change(project_name: str) -> None:
@@ -577,8 +739,6 @@ def update_project_stats_on_change(project_name: str) -> None:
 
 # Global Configuration
 
-CONFIG_FILE = Path(__file__).resolve().parent.parent / "config.json"
-
 _config_defaults_cache: Optional[Dict] = None
 
 
@@ -629,7 +789,7 @@ def save_original_subtitle(project_name: str, episode_name: str, content: str, f
     Check for its presence under any valid extension (.srt, .ass, .ssa),
     and save the format mapping in metadata (using original_extension and original_format keys).
     """
-    episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+    episode_dir = _safe_episode_dir(project_name, episode_name)
     episode_dir.mkdir(parents=True, exist_ok=True)
 
     ext = "srt"
@@ -681,7 +841,7 @@ def load_original_subtitle(project_name: str, episode_name: str) -> Tuple[Option
     if meta:
         ext = meta.get("original_extension")
 
-    episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+    episode_dir = _safe_episode_dir(project_name, episode_name)
 
     if ext in ["srt", "ass", "ssa"]:
         subtitle_file = episode_dir / f"original.{ext}"
@@ -707,7 +867,7 @@ def load_original_srt(project_name: str, episode_name: str) -> Optional[str]:
 
 def original_subtitle_exists(project_name: str, episode_name: str) -> bool:
     """Check if an original subtitle file exists with any valid extension (srt, ass, ssa)."""
-    episode_dir = PROJECTS_DIR / project_name / "episodes" / episode_name
+    episode_dir = _safe_episode_dir(project_name, episode_name)
     # Check metadata first
     meta = load_episode_metadata(project_name, episode_name)
     if meta:
@@ -832,7 +992,7 @@ def get_project_line_frequencies(project_name: str) -> Dict[str, int]:
     frequencies = Counter()
     episodes = list_episodes(project_name)
     for ep_name in episodes:
-        episode_dir = PROJECTS_DIR / project_name / "episodes" / ep_name
+        episode_dir = _safe_episode_dir(project_name, ep_name)
         data_file = episode_dir / "data.json"
         if not data_file.exists():
             continue

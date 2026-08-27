@@ -11,6 +11,12 @@ v2 additions:
 import asyncio
 
 
+def _supports_thinking(model: str) -> bool:
+    """Only Gemini 2.5+ and 3.x models (or explicitly named thinking models) support thinking_config."""
+    m = (model or "").lower()
+    return "2.5" in m or "3." in m or "thinking" in m
+
+
 def _supports_thinking_budget_zero(model: str) -> bool:
     """gemini-2.5-pro cannot fully disable thinking; flash/flash-lite can."""
     return "pro" not in (model or "").lower()
@@ -38,7 +44,7 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
         kwargs["response_schema"] = response_schema
 
     # Thinking budget (D2): 0 disables thinking on flash/flash-lite; None = model default.
-    if thinking_budget is not None and thinking_budget >= 0:
+    if _supports_thinking(model) and thinking_budget is not None and thinking_budget >= 0:
         if thinking_budget > 0 or _supports_thinking_budget_zero(model):
             try:
                 kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=thinking_budget)
@@ -47,9 +53,17 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
 
     cfg = types.GenerateContentConfig(**kwargs)
 
-    resp = await asyncio.to_thread(
-        client.models.generate_content, model=model, contents=user_prompt, config=cfg
-    )
+    from utils.api_call_wrapper import rate_limited_call
+    from utils.rate_limiter import per_model_rate_limiter
+
+    limiter = per_model_rate_limiter.get_limiter(model)
+
+    async def _do_call():
+        return await asyncio.to_thread(
+            client.models.generate_content, model=model, contents=user_prompt, config=cfg
+        )
+
+    resp = await rate_limited_call(_do_call, rate_limiter=limiter)
 
     # Telemetry (D8) — never let it break the call.
     try:

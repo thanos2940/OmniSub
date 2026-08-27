@@ -8,10 +8,10 @@ Two session services:
   that are completely stateless. Avoids a SQLite write for every scene chunk.
 """
 
-from google.adk.sessions import DatabaseSessionService, InMemorySessionService
 from pathlib import Path
+from google.adk.sessions import DatabaseSessionService, InMemorySessionService
 
-SESSION_DB_PATH = Path(__file__).parent.parent / "omnisub_sessions.db"
+from utils.paths import SESSIONS_DB_FILE as SESSION_DB_PATH
 
 _session_service = None
 _memory_session_service = None
@@ -21,8 +21,9 @@ def get_session_service() -> DatabaseSessionService:
     """Persistent SQLite session service for project-level state."""
     global _session_service
     if _session_service is None:
+        db_path_posix = Path(SESSION_DB_PATH).resolve().as_posix()
         _session_service = DatabaseSessionService(
-            db_url=f"sqlite+aiosqlite:///{SESSION_DB_PATH}"
+            db_url=f"sqlite+aiosqlite:///{db_path_posix}"
         )
     return _session_service
 

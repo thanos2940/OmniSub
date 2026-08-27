@@ -5,7 +5,7 @@ import {
     ArrowLeft, Upload, Book, Sparkles, Save, Edit2, Trash2,
     Settings, Check, Folder, Film, Tv, X, Languages, Zap,
     FileText, RefreshCw, RotateCcw, Download, Play, Database, ShieldAlert, Search, FolderOutput,
-    ChevronDown, ChevronRight, Globe, Wand2
+    ChevronDown, ChevronRight, Globe, Wand2, SpellCheck, LayoutGrid, List, Wrench
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlossaryEditor from './GlossaryEditor';
@@ -24,6 +24,8 @@ import ReviewQueuePanel from './ReviewQueuePanel';
 import CharacterProfilesPanel from './CharacterProfilesPanel';
 import EpisodeSummariesPanel from './EpisodeSummariesPanel';
 import SyncWizard from './SyncWizard';
+import EmbeddedTracksModal from './EmbeddedTracksModal';
+import SyncOptionsModal from './SyncOptionsModal';
 
 // --- Tab Definitions ---
 const TABS = {
@@ -65,10 +67,13 @@ const ProjectDetail = () => {
 
     // Selection & UI State
     const [selectedEpisodes, setSelectedEpisodes] = useState(new Set());
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem('omnisub_view_mode') || 'cards');
+    const lastSelectedEpRef = useRef(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [tokenSummary, setTokenSummary] = useState(null);
+    const [syncModalOpen, setSyncModalOpen] = useState(false);
 
     // Editing State
     const [editedContext, setEditedContext] = useState('');
@@ -83,6 +88,8 @@ const ProjectDetail = () => {
     const [applyFixesModal, setApplyFixesModal] = useState({ isOpen: false });
     const [applyFixesTrack, setApplyFixesTrack] = useState('both');
     const [checkMissingModal, setCheckMissingModal] = useState({ isOpen: false, results: null, loading: false });
+    const [scriptFixModal, setScriptFixModal] = useState({ isOpen: false, results: null, loading: false });
+    const [embeddedTracksModal, setEmbeddedTracksModal] = useState({ isOpen: false, episodeName: null });
 
     // Sync State
     const [syncingProject, setSyncingProject] = useState(false);
@@ -186,6 +193,10 @@ const ProjectDetail = () => {
                     toast.error("Failed to load comparison view");
                 });
             }
+        } else if (job.type === 'batch_extract_embedded') {
+            loadData();
+            const extracted = result?.extracted ?? 0;
+            toast.success(`Embedded ASS extraction complete: ${extracted} episode(s) extracted`);
         }
     }, [project, projectName, navigate, toast]);
 
@@ -209,7 +220,7 @@ const ProjectDetail = () => {
             if (job.type === 'enhance_context' || job.type === 'create_context' || job.type === 'enhance_glossary' || job.type === 'create_glossary' || job.type === 'pipeline') continue;
             const isHighlighted = location.state?.highlightJobId === job.id;
             const isUnhandled = !handledJobsRef.current.has(job.id);
-            if ((isHighlighted || isUnhandled) && (job.result || job.type === 'translate_episode' || job.type === 'batch_translate' || job.type === 'translate_missing')) {
+            if ((isHighlighted || isUnhandled) && (job.result || job.type === 'translate_episode' || job.type === 'batch_translate' || job.type === 'translate_missing' || job.type === 'batch_extract_embedded')) {
                 handleJobComplete(job);
                 handledJobsRef.current.add(job.id);
                 try { localStorage.setItem(storageKey, JSON.stringify([...handledJobsRef.current])); } catch { }
@@ -268,9 +279,13 @@ const ProjectDetail = () => {
         }
     };
 
-    const handleSaveGlossary = async (newGlossary, globalSave = false) => {
+    const handleSaveGlossary = async (newGlossary, globalSave = false, suppressedTerms = null) => {
         try {
-            const res = await api.updateProject(projectName, { glossary: newGlossary }, globalSave);
+            const payload = { glossary: newGlossary };
+            if (suppressedTerms !== null) {
+                payload.suppressed_terms = suppressedTerms;
+            }
+            const res = await api.updateProject(projectName, payload, globalSave);
             const projRes = await api.getProject(projectName);
             setProject(projRes.data);
             toast.success(globalSave ? 'Glossary updated globally!' : 'Glossary updated locally!');
@@ -341,21 +356,6 @@ const ProjectDetail = () => {
     };
 
     // --- Episode Actions ---
-    const handleSelectAll = () => {
-        setSelectedEpisodes(prev => {
-            const allSelected = filteredEpisodes.length > 0 && filteredEpisodes.every(ep => prev.has(ep.name));
-            return allSelected ? new Set() : new Set(filteredEpisodes.map(ep => ep.name));
-        });
-    };
-
-    const handleSelectEpisode = (name) => {
-        setSelectedEpisodes(prev => {
-            const next = new Set(prev);
-            next.has(name) ? next.delete(name) : next.add(name);
-            return next;
-        });
-    };
-
     const handleExportSelectedToPath = async () => {
         const names = Array.from(selectedEpisodes);
         if (names.length === 0) return;
@@ -408,12 +408,22 @@ const ProjectDetail = () => {
         }
     };
 
-    const handleSyncProject = async () => {
+    const handleSyncProject = (options = {}) => {
+        const cleanOptions = (options && typeof options === 'object' && !options.nativeEvent && !options._reactName && !options.target)
+            ? options
+            : {};
+        handleStartProjectSync(cleanOptions);
+    };
+
+    const handleStartProjectSync = async (options = {}) => {
+        const cleanOptions = (options && typeof options === 'object' && !options.nativeEvent && !options._reactName && !options.target)
+            ? options
+            : {};
         setSyncingProject(true);
         try {
-            const res = await api.syncProject(projectName);
-            if (res.data.job_id) {
-                addJob(res.data.job_id, 'project_sync', `Syncing project ${project.show_name}`, { projectId: projectName });
+            const res = await api.syncProject(projectName, cleanOptions);
+            if (res.data?.job_id) {
+                addJob(res.data.job_id, 'project_sync', `Syncing project ${project?.show_name || projectName}`, { projectId: projectName });
                 toast.info("Project sync started in the background");
             } else {
                 toast.success("Project synced successfully!");
@@ -450,6 +460,33 @@ const ProjectDetail = () => {
         } catch (err) {
             console.error("Failed to translate missing lines", err);
             toast.error("Failed to start translating missing lines");
+        }
+    };
+
+    const handleScanScriptFix = async () => {
+        setScriptFixModal({ isOpen: true, results: null, loading: true });
+        try {
+            const res = await api.scanScriptGuard(projectName);
+            setScriptFixModal({ isOpen: true, results: res.data, loading: false });
+        } catch (err) {
+            console.error('Failed to scan for wrong-alphabet text', err);
+            toast.error(err?.response?.data?.detail || 'Failed to scan translations');
+            setScriptFixModal({ isOpen: false, results: null, loading: false });
+        }
+    };
+
+    const handleRunScriptFix = async (useLlm) => {
+        setScriptFixModal(prev => ({ ...prev, isOpen: false }));
+        try {
+            const res = await api.repairScriptGuard(projectName, { useLlm });
+            if (res.data?.job_id) {
+                addJob(res.data.job_id, 'script_repair', 'Fixing wrong-alphabet characters', { projectId: projectName });
+                toast.info(useLlm ? 'Fixing wrong-alphabet text in batched requests…'
+                    : 'Applying free look-alike fixes…');
+            }
+        } catch (err) {
+            console.error('Failed to start script repair', err);
+            toast.error(err?.response?.data?.detail || 'Failed to start the fix');
         }
     };
 
@@ -535,6 +572,19 @@ const ProjectDetail = () => {
         } catch (err) {
             console.error('Failed to start pipeline', err);
             toast.error('Failed to start pipeline');
+        }
+    };
+
+    const handleStartFullIngest = async () => {
+        try {
+            const res = await api.startFullIngestPipeline(projectName);
+            if (res.data.job_id) {
+                addJob(res.data.job_id, 'full_ingest_pipeline', `Full Ingest: ${project?.show_name || projectName}`, { projectId: projectName });
+                toast.info('Full Ingest Pipeline started: demuxing ASS, aligning context & queueing translation!');
+            }
+        } catch (err) {
+            console.error('Failed to start full ingest pipeline', err);
+            toast.error('Failed to start full ingest pipeline');
         }
     };
 
@@ -686,6 +736,21 @@ const ProjectDetail = () => {
         }
     };
 
+    const handleBatchExtractEmbedded = async () => {
+        try {
+            const selected = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null;
+            const res = await api.batchExtractEmbedded(projectName, { episode_names: selected, force: false, migrate_srt: true });
+            if (res.data?.job_id) {
+                const countLabel = selected ? `${selected.length} selected` : 'all eligible';
+                addJob(res.data.job_id, 'batch_extract_embedded', `Extracting embedded ASS tracks (${countLabel})`, { projectId: projectName });
+                toast.info(`Started batch embedded ASS extraction for ${countLabel} episode(s)...`);
+            }
+        } catch (err) {
+            console.error('Failed to start batch extraction', err);
+            toast.error(err.response?.data?.detail || 'Failed to start batch extraction');
+        }
+    };
+
     const handleConfirmApplyFixes = async () => {
         const names = Array.from(selectedEpisodes);
         if (names.length === 0) return;
@@ -797,8 +862,11 @@ const ProjectDetail = () => {
 
         if (episodeFilterStatus === 'all') return true;
         const isSynced = !!(ep.metadata?.arr_has_target || ep.metadata?.bazarr_has_target);
+        const isAss = ['ass', 'ssa'].includes((ep.metadata?.original_format || ep.metadata?.original_extension || '').toLowerCase());
         if (episodeFilterStatus === 'translated') return ep.translated;
         if (episodeFilterStatus === 'untranslated') return !ep.translated;
+        if (episodeFilterStatus === 'ass') return isAss;
+        if (episodeFilterStatus === 'srt') return !isAss;
         if (episodeFilterStatus === 'failed') return ep.metadata?.translation_failed;
         if (episodeFilterStatus === 'synced') return isSynced;
         if (episodeFilterStatus === 'unsynced') return !isSynced;
@@ -834,14 +902,190 @@ const ProjectDetail = () => {
         if (next.has(s)) next.delete(s); else next.add(s);
         return next;
     });
-    const handleSelectSeason = (group) => {
+    const handleSelectEpisode = (epName, e = null) => {
+        const shiftKey = e?.shiftKey;
         setSelectedEpisodes(prev => {
-            const allSelected = group.episodes.length > 0 && group.episodes.every(ep => prev.has(ep.name));
             const next = new Set(prev);
-            if (allSelected) group.episodes.forEach(ep => next.delete(ep.name));
-            else group.episodes.forEach(ep => next.add(ep.name));
+            if (shiftKey && lastSelectedEpRef.current && lastSelectedEpRef.current !== epName) {
+                const epNames = filteredEpisodes.map(ep => ep.name);
+                const fromIdx = epNames.indexOf(lastSelectedEpRef.current);
+                const toIdx = epNames.indexOf(epName);
+                if (fromIdx !== -1 && toIdx !== -1) {
+                    const [start, end] = fromIdx < toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+                    for (let i = start; i <= end; i++) {
+                        next.add(epNames[i]);
+                    }
+                }
+            } else {
+                if (next.has(epName)) next.delete(epName);
+                else next.add(epName);
+            }
+            lastSelectedEpRef.current = epName;
             return next;
         });
+    };
+
+    const handleSelectAll = () => {
+        setSelectedEpisodes(prev => {
+            const allSelected = filteredEpisodes.length > 0 && filteredEpisodes.every(ep => prev.has(ep.name));
+            if (allSelected) return new Set();
+            return new Set(filteredEpisodes.map(ep => ep.name));
+        });
+    };
+
+    const renderEpisodeTable = (episodeList) => {
+        const allSelected = episodeList.length > 0 && episodeList.every(ep => selectedEpisodes.has(ep.name));
+        return (
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
+                <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr className="bg-gray-50/80 dark:bg-gray-750/80 border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                            <th className="py-3 px-4 w-10">
+                                <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    onChange={() => {
+                                        setSelectedEpisodes(prev => {
+                                            const next = new Set(prev);
+                                            if (allSelected) episodeList.forEach(ep => next.delete(ep.name));
+                                            else episodeList.forEach(ep => next.add(ep.name));
+                                            return next;
+                                        });
+                                    }}
+                                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </th>
+                            <th className="py-3 px-4">Episode</th>
+                            <th className="py-3 px-4">Format</th>
+                            <th className="py-3 px-4">Lines</th>
+                            <th className="py-3 px-4">Status</th>
+                            <th className="py-3 px-4">Sync</th>
+                            <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                        {episodeList.map((ep) => {
+                            const isSelected = selectedEpisodes.has(ep.name);
+                            const isAss = ['ass', 'ssa'].includes((ep.metadata?.original_format || ep.metadata?.original_extension || '').toLowerCase());
+                            const isSibling = !!ep.metadata?.arr_secondary_of;
+                            const isSynced = !!(ep.metadata?.arr_has_target || ep.metadata?.bazarr_has_target);
+                            return (
+                                <tr
+                                    key={ep.name}
+                                    onClick={(e) => {
+                                        if (e.target.tagName !== 'BUTTON' && e.target.tagName !== 'A' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'SVG' && e.target.tagName !== 'PATH') {
+                                            handleSelectEpisode(ep.name, e);
+                                        }
+                                    }}
+                                    className={`hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer ${
+                                        isSelected ? 'bg-indigo-50/60 dark:bg-indigo-950/30' : ''
+                                    }`}
+                                >
+                                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={(e) => handleSelectEpisode(ep.name, e.nativeEvent)}
+                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-gray-900 dark:text-white">{ep.name}</span>
+                                            {ep.metadata?.episode_title && (
+                                                <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-xs" title={ep.metadata.episode_title}>
+                                                    {ep.metadata.episode_title}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tight ${
+                                                isAss ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                            }`}>
+                                                {isAss ? 'ASS' : 'SRT'}
+                                            </span>
+                                            {ep.metadata?.embedded_extracted && (
+                                                <span className="text-[10px] font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-300 px-1.5 py-0.5 rounded-full uppercase tracking-tight flex items-center gap-0.5">
+                                                    <Film size={9} /> #{ep.metadata?.embedded_track?.index ?? ''}
+                                                </span>
+                                            )}
+                                            {isSibling && (
+                                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 dark:bg-indigo-900/30 dark:text-indigo-300 px-1 py-0.2 rounded">
+                                                    Sibling
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="py-3 px-4 font-mono text-xs text-gray-500 dark:text-gray-400">
+                                        {ep.line_count}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        {ep.translated ? (
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded-full">
+                                                <Check size={11} /> Done
+                                            </span>
+                                        ) : ep.metadata?.translation_failed ? (
+                                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 bg-rose-50 dark:bg-rose-900/30 px-2 py-0.5 rounded-full" title={ep.metadata?.translation_error}>
+                                                <ShieldAlert size={11} /> Failed
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+                                                Pending
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="py-3 px-4">
+                                        {isSynced ? (
+                                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 dark:bg-green-900/40 dark:text-green-400 px-2 py-0.5 rounded-full uppercase tracking-tight">
+                                                <Check size={10} /> Synced
+                                            </span>
+                                        ) : (
+                                            <span className="text-[11px] text-gray-400 dark:text-gray-500">—</span>
+                                        )}
+                                    </td>
+                                    <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            {(ep.metadata?.arr_media_path || ep.metadata?.bazarr_media_path) && (
+                                                <button
+                                                    onClick={() => setEmbeddedTracksModal({ isOpen: true, episodeName: ep.name })}
+                                                    className="p-1 text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-md transition-colors"
+                                                    title="Inspect & extract embedded tracks"
+                                                >
+                                                    <Film size={14} />
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => handleTranslateEpisodeClick(ep.name)}
+                                                className="px-2 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-md transition-colors"
+                                            >
+                                                {ep.translated ? 'Retranslate' : 'Translate'}
+                                            </button>
+                                            {ep.translated && (ep.metadata?.arr_media_path || ep.metadata?.bazarr_media_path) && (
+                                                <button
+                                                    onClick={() => handleExportToPath(ep.name)}
+                                                    className="p-1 text-emerald-600 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30 rounded-md transition-colors"
+                                                    title="Export subtitle to media directory"
+                                                >
+                                                    <FolderOutput size={14} />
+                                                </button>
+                                            )}
+                                            <Link
+                                                to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`}
+                                                className="px-2 py-1 text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors"
+                                            >
+                                                Edit
+                                            </Link>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        );
     };
 
     const renderEpisodeRow = (ep) => {
@@ -858,8 +1102,8 @@ const ProjectDetail = () => {
                     <input
                         type="checkbox"
                         checked={selectedEpisodes.has(ep.name)}
-                        onChange={() => handleSelectEpisode(ep.name)}
-                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        onChange={(e) => handleSelectEpisode(ep.name, e.nativeEvent)}
+                        className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                     />
                     <div>
                         <div className="flex items-center gap-2">
@@ -885,6 +1129,14 @@ const ProjectDetail = () => {
                             {ep.metadata?.episode_title && (
                                 <span className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[260px]">{ep.metadata.episode_title}</span>
                             )}
+                            {ep.metadata?.embedded_extracted && (
+                                <span
+                                    className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/40 dark:text-purple-300 px-2 py-0.5 rounded-full uppercase tracking-tight"
+                                    title={`Extracted from embedded stream #${ep.metadata?.embedded_track?.index ?? '?'}: ${ep.metadata?.embedded_track?.title || 'Dialogue'}`}
+                                >
+                                    <Film size={10} /> Muxed #{ep.metadata?.embedded_track?.index ?? ''}
+                                </span>
+                            )}
                             {ep.translated && (
                                 <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full">
                                     <Check size={10} /> Translated
@@ -908,6 +1160,15 @@ const ProjectDetail = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
+                    {(ep.metadata?.arr_media_path || ep.metadata?.bazarr_media_path) && (
+                        <button
+                            onClick={() => setEmbeddedTracksModal({ isOpen: true, episodeName: ep.name })}
+                            className="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+                            title="Inspect & extract embedded subtitle tracks from media container"
+                        >
+                            <Film size={16} />
+                        </button>
+                    )}
                     <button
                         onClick={() => handleTranslateEpisodeClick(ep.name)}
                         className="flex items-center gap-1.5 text-gray-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium"
@@ -995,6 +1256,9 @@ const ProjectDetail = () => {
 
     const renderEpisodesList = (list) => {
         if (!list) return null;
+        if (viewMode === 'table') {
+            return renderEpisodeTable(list);
+        }
         const { bases, siblingsByBase, standaloneSiblings } = arrangeEpisodes(list);
 
         return (
@@ -1078,61 +1342,191 @@ const ProjectDetail = () => {
                                 <button
                                     onClick={handleAutoTranslate}
                                     disabled={isPipelineActive || isSimplePipelineActive || hasActiveTranslateJob || episodes.length === 0}
-                                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-2xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0"
+                                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/30 hover:-translate-y-0.5 active:translate-y-0"
                                     title={hasActiveTranslateJob ? 'A translation job is already running for this project' : (selectedEpisodes.size > 0 ? `Auto-translate ${selectedEpisodes.size} selected episode(s)` : 'Auto-translate all episodes')}
                                 >
-                                    <Sparkles size={18} />
-                                    {selectedEpisodes.size > 0 ? `Translate (${selectedEpisodes.size})` : 'Translate All'}
+                                    <Sparkles size={16} />
+                                    <span>{selectedEpisodes.size > 0 ? `Translate (${selectedEpisodes.size})` : 'Translate All'}</span>
+                                    <ChevronDown size={14} className="opacity-80" />
                                 </button>
-                                {/* Dropdown for guided / legacy modes */}
-                                <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 translate-y-1 group-hover:translate-y-0">
-                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">More Options</div>
+                                {/* Dropdown for Translate & Pipeline modes */}
+                                <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 translate-y-1 group-hover:translate-y-0 overflow-hidden">
+                                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50/50 dark:bg-gray-750/50 border-b border-gray-100 dark:border-gray-700">
+                                        Translate & Pipelines
+                                    </div>
+                                    <button
+                                        onClick={handleAutoTranslate}
+                                        disabled={isPipelineActive || isSimplePipelineActive || hasActiveTranslateJob || episodes.length === 0}
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors disabled:opacity-50"
+                                    >
+                                        <Zap size={15} className="text-amber-500" />
+                                        <div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Auto-Translate (Fast)</div>
+                                            <div className="text-[11px] text-gray-400">Direct LLM queue execution</div>
+                                        </div>
+                                    </button>
                                     <button
                                         onClick={() => setIsSimplePipelineActive(true)}
                                         disabled={isPipelineActive || isSimplePipelineActive}
-                                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 transition-colors disabled:opacity-50"
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors disabled:opacity-50"
                                     >
-                                        <Sparkles size={14} className="text-indigo-400" />
+                                        <Sparkles size={15} className="text-indigo-500" />
                                         <div>
-                                            <div className="font-medium">Guided Pipeline</div>
-                                            <div className="text-xs text-gray-400">Review context & glossary first</div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Guided Pipeline Wizard</div>
+                                            <div className="text-[11px] text-gray-400">Review context & glossary first</div>
                                         </div>
                                     </button>
                                     <button
                                         onClick={() => handleStartPipeline('step')}
                                         disabled={isPipelineActive}
-                                        className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700 flex items-center gap-2 transition-colors rounded-b-2xl disabled:opacity-50"
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60 disabled:opacity-50"
                                     >
-                                        <RefreshCw size={14} className="text-gray-400" />
+                                        <RefreshCw size={15} className="text-purple-500" />
                                         <div>
-                                            <div className="font-medium">Step-by-Step Pipeline</div>
-                                            <div className="text-xs text-gray-400">Manual approval at each stage</div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Step-by-Step Pipeline</div>
+                                            <div className="text-[11px] text-gray-400">Manual approval per stage</div>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={handleStartFullIngest}
+                                        disabled={isPipelineActive || isSimplePipelineActive || hasActiveTranslateJob || episodes.length === 0}
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60 disabled:opacity-50"
+                                    >
+                                        <Zap size={15} className="text-amber-500" />
+                                        <div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Full Ingest Pipeline (1-Click)</div>
+                                            <div className="text-[11px] text-gray-400">Demux ASS → Context → Glossary → Translate</div>
+                                        </div>
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab(TABS.SANDBOX)}
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60"
+                                    >
+                                        <Play size={15} className="text-emerald-500" />
+                                        <div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Translation Sandbox</div>
+                                            <div className="text-[11px] text-gray-400">Test prompt & models live</div>
                                         </div>
                                     </button>
                                 </div>
                             </div>
                         )}
-                        {(project.arr_source || project.bazarr_source) && (
+
+                        {/* Media & Sync Hub */}
+                        <div className="relative group">
                             <button
-                                onClick={handleSyncProject}
-                                disabled={syncingProject}
-                                className="flex items-center gap-1.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all font-medium text-sm disabled:opacity-50"
-                                title={isMovie ? "Sync Movie" : "Sync Show"}
+                                className="flex items-center gap-1.5 text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-all font-medium text-sm shadow-sm"
+                                title="Sync with Sonarr/Radarr/Bazarr and media tools"
                             >
-                                <RefreshCw className={`w-5 h-5 ${syncingProject ? 'animate-spin' : ''}`} />
-                                <span className="hidden sm:inline">Sync {isMovie ? 'Movie' : 'Show'}</span>
+                                <Film size={16} className="text-purple-500" />
+                                <span className="hidden sm:inline">Media & Sync</span>
+                                <ChevronDown size={14} className="opacity-70" />
                             </button>
-                        )}
+                            <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 translate-y-1 group-hover:translate-y-0 overflow-hidden">
+                                <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50/50 dark:bg-gray-750/50 border-b border-gray-100 dark:border-gray-700">
+                                    Media Sync Hub
+                                </div>
+                                {(project.arr_source || project.bazarr_source) && (
+                                    <button
+                                        onClick={() => handleSyncProject({ extract_embedded_ass: true, scan_ass: true })}
+                                        disabled={syncingProject}
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors disabled:opacity-50"
+                                    >
+                                        <RefreshCw size={15} className={`text-blue-500 ${syncingProject ? 'animate-spin' : ''}`} />
+                                        <div>
+                                            <div className="font-semibold text-gray-900 dark:text-gray-100">Sync with {isMovie ? 'Radarr' : 'Sonarr'}/Bazarr</div>
+                                            <div className="text-[11px] text-gray-400">Import new episodes and extract embedded subtitles</div>
+                                        </div>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={handleBatchExtractEmbedded}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60"
+                                >
+                                    <Film size={15} className="text-purple-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">Extract Embedded Subtitles</div>
+                                        <div className="text-[11px] text-gray-400">Probe and demux video containers (.ass & .srt)</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={handleExportSelectedToPath}
+                                    disabled={selectedEpisodes.size === 0 && !episodes.some(e => e.translated)}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60 disabled:opacity-50"
+                                >
+                                    <FolderOutput size={15} className="text-emerald-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">Export to Media Disk</div>
+                                        <div className="text-[11px] text-gray-400">Save sidecar subtitles to files</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Quality & Tools Hub */}
+                        <div className="relative group">
+                            <button
+                                className="flex items-center gap-1.5 text-gray-700 dark:text-gray-200 hover:text-indigo-600 dark:hover:text-indigo-400 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition-all font-medium text-sm shadow-sm"
+                                title="Quality assurance, text sanitization, and SubtitleEdit fixes"
+                            >
+                                <Wrench size={16} className="text-amber-500" />
+                                <span className="hidden sm:inline">Quality & Tools</span>
+                                <ChevronDown size={14} className="opacity-70" />
+                            </button>
+                            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-30 translate-y-1 group-hover:translate-y-0 overflow-hidden">
+                                <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50/50 dark:bg-gray-750/50 border-b border-gray-100 dark:border-gray-700">
+                                    Quality Control
+                                </div>
+                                <button
+                                    onClick={handleCheckMissing}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors"
+                                >
+                                    <Search size={15} className="text-indigo-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">Check Missing Line Gaps</div>
+                                        <div className="text-[11px] text-gray-400">Audit untranslated dialogue cues</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={handleScanScriptFix}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60"
+                                >
+                                    <SpellCheck size={15} className="text-rose-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">Sanitize Script Characters</div>
+                                        <div className="text-[11px] text-gray-400">Fix Greek/Latin homoglyphs</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setApplyFixesModal({ isOpen: true })}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60"
+                                >
+                                    <Wand2 size={15} className="text-purple-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">SubtitleEdit Auto-Fixes</div>
+                                        <div className="text-[11px] text-gray-400">Run common fixes & line-splits</div>
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setSyncModalOpen(true)}
+                                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700/70 flex items-center gap-2.5 transition-colors border-t border-gray-100 dark:border-gray-700/60"
+                                >
+                                    <RefreshCw size={15} className="text-blue-500" />
+                                    <div>
+                                        <div className="font-semibold text-gray-900 dark:text-gray-100">Sync with Media Files</div>
+                                        <div className="text-[11px] text-gray-400">Scan for new episodes & subtitles</div>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Settings Button */}
                         <button
-                            onClick={handleCheckMissing}
-                            className="flex items-center gap-1.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-all font-medium text-sm"
-                            title="Check for missing lines of existing translations"
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="p-2.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/60 rounded-xl transition-all shadow-sm"
+                            title="Project Settings"
                         >
-                            <Search className="w-5 h-5" />
-                            <span className="hidden sm:inline">Check Gaps</span>
-                        </button>
-                        <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-all" title="Project Settings">
-                            <Settings size={22} />
+                            <Settings size={20} />
                         </button>
                     </div>
                 </div>
@@ -1222,38 +1616,59 @@ const ProjectDetail = () => {
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Search & Filter Bar */}
-                                        <div className="flex flex-col md:flex-row gap-3 mb-4">
-                                            <div className="relative flex-1">
+                                        {/* Search, Filter & View Switcher Bar */}
+                                        <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 mb-4">
+                                            <div className="relative flex-1 min-w-[200px]">
                                                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                                                 <input
                                                     type="text"
-                                                    placeholder="Search episodes..."
+                                                    placeholder="Search episodes by name or title..."
                                                     value={episodeSearchQuery}
                                                     onChange={(e) => setEpisodeSearchQuery(e.target.value)}
                                                     className="w-full pl-9 pr-4 py-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                                 />
                                             </div>
-                                            <div className="flex gap-2">
-                                                {[
-                                                    { id: 'all', label: 'All' },
-                                                    { id: 'translated', label: 'Translated' },
-                                                    { id: 'untranslated', label: 'Pending' },
-                                                    { id: 'failed', label: 'Failed' },
-                                                    { id: 'synced', label: 'Synced' },
-                                                    { id: 'unsynced', label: 'Not Synced' }
-                                                ].map(btn => (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <div className="flex gap-1 bg-gray-100/80 dark:bg-gray-800/90 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                                                    {[
+                                                        { id: 'all', label: 'All' },
+                                                        { id: 'untranslated', label: 'Pending' },
+                                                        { id: 'translated', label: 'Translated' },
+                                                        { id: 'ass', label: 'ASS' },
+                                                        { id: 'srt', label: 'SRT' },
+                                                        { id: 'synced', label: 'Synced' },
+                                                        { id: 'failed', label: 'Failed' },
+                                                    ].map(btn => (
+                                                        <button
+                                                            key={btn.id}
+                                                            onClick={() => setEpisodeFilterStatus(btn.id)}
+                                                            className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all ${episodeFilterStatus === btn.id
+                                                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                                                }`}
+                                                        >
+                                                            {btn.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Card / Table View Toggle */}
+                                                <div className="flex items-center bg-gray-100/80 dark:bg-gray-800/90 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
                                                     <button
-                                                        key={btn.id}
-                                                        onClick={() => setEpisodeFilterStatus(btn.id)}
-                                                        className={`px-3 py-2 text-xs font-medium rounded-xl border transition-all ${episodeFilterStatus === btn.id
-                                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
-                                                                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                                                            }`}
+                                                        onClick={() => { setViewMode('cards'); localStorage.setItem('omnisub_view_mode', 'cards'); }}
+                                                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'cards' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                        title="Card View"
                                                     >
-                                                        {btn.label}
+                                                        <LayoutGrid size={15} />
                                                     </button>
-                                                ))}
+                                                    <button
+                                                        onClick={() => { setViewMode('table'); localStorage.setItem('omnisub_view_mode', 'table'); }}
+                                                        className={`p-1.5 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                                                        title="Dense Table View"
+                                                    >
+                                                        <List size={15} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -1284,6 +1699,14 @@ const ProjectDetail = () => {
                                                     >
                                                         <FolderOutput size={13} />
                                                         Export to Disk
+                                                    </button>
+                                                    <button
+                                                        onClick={handleBatchExtractEmbedded}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800 rounded-lg transition-colors"
+                                                        title="Scan video files and extract embedded ASS tracks for selected episodes"
+                                                    >
+                                                        <Film size={13} />
+                                                        Extract ASS
                                                     </button>
                                                     <button
                                                         onClick={() => setSelectedEpisodes(new Set())}
@@ -1408,6 +1831,9 @@ const ProjectDetail = () => {
                                     isSaving={false}
                                     hideSaveButton={false}
                                     onUpdateTermsInScenes={handleUpdateTermsInScenes}
+                                    projectName={projectName}
+                                    parentProject={project.parent_project}
+                                    suppressedTerms={project.suppressed_terms || []}
                                 />
                             </motion.div>
                         )}
@@ -1573,6 +1999,9 @@ const ProjectDetail = () => {
                             </button>
                             <button onClick={handleBatchExportToPath} className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600 rounded-full transition-colors" title="Export Selected to Original Path">
                                 <FolderOutput size={20} />
+                            </button>
+                            <button onClick={handleBatchExtractEmbedded} className="p-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-600 rounded-full transition-colors" title="Extract Embedded ASS from Media for Selected Episodes">
+                                <Film size={20} />
                             </button>
                             <button onClick={() => setApplyFixesModal({ isOpen: true })} className="p-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 text-teal-600 rounded-full transition-colors" title="Apply SubtitleEdit common fixes (source / translation / both)">
                                 <Wand2 size={20} />
@@ -1931,6 +2360,123 @@ const ProjectDetail = () => {
                         </motion.div>
                     </div>
                 )}
+                {scriptFixModal.isOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setScriptFixModal({ isOpen: false, results: null, loading: false })}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            transition={{ type: 'spring', duration: 0.3 }}
+                            className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-150 dark:border-gray-700 max-w-2xl w-full overflow-hidden z-10 flex flex-col max-h-[85vh]"
+                        >
+                            <div className="px-6 py-4 border-b border-gray-150 dark:border-gray-750 flex justify-between items-center bg-gray-50/50 dark:bg-gray-850/50">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    <SpellCheck className="text-indigo-600 dark:text-indigo-400" />
+                                    Wrong-Alphabet Characters
+                                </h3>
+                                <button
+                                    onClick={() => setScriptFixModal({ isOpen: false, results: null, loading: false })}
+                                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                                {scriptFixModal.loading ? (
+                                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                                        <RefreshCw className="w-8 h-8 text-indigo-600 dark:text-indigo-400 animate-spin" />
+                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Scanning translations for characters from other alphabets...</p>
+                                    </div>
+                                ) : scriptFixModal.results ? (
+                                    (scriptFixModal.results.chars_fixed === 0 && scriptFixModal.results.lines_flagged === 0) ? (
+                                        <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                                            <div className="w-12 h-12 bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center">
+                                                <Check className="w-6 h-6" />
+                                            </div>
+                                            <h4 className="text-base font-bold text-gray-900 dark:text-white">Nothing to fix</h4>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm">Every translation in this show uses the target alphabet.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/20 p-4">
+                                                    <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{scriptFixModal.results.chars_fixed}</div>
+                                                    <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 mt-0.5">look-alike characters</div>
+                                                    <div className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-1">Fixed for free — no model request.</div>
+                                                </div>
+                                                <div className="rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-4">
+                                                    <div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{scriptFixModal.results.lines_flagged}</div>
+                                                    <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 mt-0.5">lines need the model</div>
+                                                    <div className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">
+                                                        Sent together in ~{scriptFixModal.results.estimated_requests} request{scriptFixModal.results.estimated_requests === 1 ? '' : 's'} for the whole show.
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {scriptFixModal.results.samples?.length > 0 && (
+                                                <div className="border border-gray-150 dark:border-gray-700 rounded-2xl overflow-hidden">
+                                                    <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-900/50 border-b border-gray-150 dark:border-gray-700 text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                                                        Examples
+                                                    </div>
+                                                    <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto">
+                                                        {scriptFixModal.results.samples.map((s, i) => (
+                                                            <div key={i} className="p-3 text-xs space-y-1">
+                                                                <div className="text-gray-400 font-mono">{s.episode}</div>
+                                                                <div className="text-gray-800 dark:text-gray-200">{s.current}</div>
+                                                                <div className="text-gray-400 italic">{s.source}</div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                                Affects {scriptFixModal.results.episodes_affected} episode(s). Changed episodes are saved and re-exported next to their media. Anything the model can't clean stays flagged in the review queue.
+                                            </p>
+                                        </div>
+                                    )
+                                ) : null}
+                            </div>
+
+                            <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-805/50 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
+                                {scriptFixModal.results?.chars_fixed > 0 && scriptFixModal.results?.lines_flagged > 0 && (
+                                    <button
+                                        onClick={() => handleRunScriptFix(false)}
+                                        className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                                        title="Apply only the free look-alike fixes and flag the rest for review"
+                                    >
+                                        Free fixes only
+                                    </button>
+                                )}
+                                {(scriptFixModal.results?.chars_fixed > 0 || scriptFixModal.results?.lines_flagged > 0) && (
+                                    <button
+                                        onClick={() => handleRunScriptFix(scriptFixModal.results.lines_flagged > 0)}
+                                        className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition-all flex items-center gap-1.5"
+                                    >
+                                        <Sparkles size={16} />
+                                        {scriptFixModal.results.lines_flagged > 0
+                                            ? `Fix All (~${scriptFixModal.results.estimated_requests} request${scriptFixModal.results.estimated_requests === 1 ? '' : 's'})`
+                                            : 'Fix All'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setScriptFixModal({ isOpen: false, results: null, loading: false })}
+                                    className="px-5 py-2 bg-white dark:bg-gray-800 border border-gray-250 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl text-sm font-bold text-gray-700 dark:text-gray-300 transition-colors"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
             </AnimatePresence>
             <TranslationComparisonModal
                 isOpen={comparisonModal.isOpen}
@@ -1940,6 +2486,22 @@ const ProjectDetail = () => {
                 currentLines={comparisonModal.currentLines}
                 newTranslations={comparisonModal.newTranslations}
                 onApply={handleMergeComparison}
+            />
+
+            <EmbeddedTracksModal
+                isOpen={embeddedTracksModal.isOpen}
+                onClose={() => setEmbeddedTracksModal({ isOpen: false, episodeName: null })}
+                projectName={projectName}
+                episodeName={embeddedTracksModal.episodeName}
+                onExtractionComplete={() => loadData()}
+            />
+
+            <SyncOptionsModal
+                isOpen={syncModalOpen}
+                onClose={() => setSyncModalOpen(false)}
+                onConfirm={handleStartProjectSync}
+                isProjectSpecific={true}
+                projectName={project?.show_name || projectName}
             />
 
             <JobProgressWidget />

@@ -82,8 +82,45 @@ class BackgroundTranslationWorker:
             return None
         return config.get("worker_schedule_priority_cutoff", 1)
 
+    def _dispatch_extractions(self, extraction_tasks: set, global_config: dict,
+                              max_priority: Optional[int]) -> None:
+        """Fill the embedded-extraction lane up to its own concurrency cap.
+
+        Kept separate from the translation lane on purpose (plan D-F): extracting a
+        muxed subtitle streams the *entire* container, so on a network share it is a
+        multi-minute, full-file read. Sharing ``concurrent_episodes`` would let one
+        extraction stall translation for the duration; and running several at once
+        over one link just makes all of them slower, hence the default cap of 1.
+
+        ``max_priority`` is the same off-peak ceiling translations obey, which gives
+        the user a way to confine heavy reads to the off-peak window.
+        """
+        if not global_config.get("embedded_extraction_enabled", False):
+            return
+        try:
+            cap = max(1, int(global_config.get("embedded_extraction_concurrency", 1) or 1))
+        except (TypeError, ValueError):
+            cap = 1
+
+        while len(extraction_tasks) < cap:
+            item = self.queue.claim_next_extraction(max_priority=max_priority)
+            if not item:
+                return
+            logger.info(
+                f"Background worker claiming extraction {item['id']}: "
+                f"{item['project_name']} - {item['episode_name']}"
+            )
+            task = asyncio.create_task(self._process_extraction_item(item, global_config))
+            extraction_tasks.add(task)
+
+            def _extraction_done(t, _tasks=extraction_tasks):
+                _tasks.discard(t)
+                self.trigger()
+            task.add_done_callback(_extraction_done)
+
     async def _run_loop(self):
         active_tasks = set()
+        extraction_tasks = set()
         while not self._shutdown_event.is_set():
             try:
                 global_config = storage.load_global_config()
@@ -134,6 +171,11 @@ class BackgroundTranslationWorker:
                 # or above the priority cutoff (webhook/manual); defer sync/backlog.
                 max_priority = self._schedule_ceiling(global_config)
 
+                # Embedded-subtitle extractions run on their own lane, dispatched before
+                # the translation concurrency gate below so a full translation slate can
+                # never keep them from starting.
+                self._dispatch_extractions(extraction_tasks, global_config, max_priority)
+
                 # If we are at max concurrency, wait for some task to finish
                 if len(active_tasks) >= concurrent_episodes:
                     done, _ = await asyncio.wait(active_tasks, return_when=asyncio.FIRST_COMPLETED)
@@ -173,15 +215,216 @@ class BackgroundTranslationWorker:
                 task.add_done_callback(clean_task)
 
             except asyncio.CancelledError:
-                # Cancel all running tasks on shutdown
-                for t in active_tasks:
+                # Cancel all running tasks on shutdown (both lanes — an in-flight
+                # ffmpeg would otherwise keep the process alive until its timeout).
+                for t in active_tasks | extraction_tasks:
                     t.cancel()
-                if active_tasks:
-                    await asyncio.gather(*active_tasks, return_exceptions=True)
+                if active_tasks or extraction_tasks:
+                    await asyncio.gather(*(active_tasks | extraction_tasks), return_exceptions=True)
                 break
             except Exception as e:
                 logger.error(f"Error in background worker loop: {e}", exc_info=True)
                 await asyncio.sleep(30)
+
+    async def _process_extraction_item(self, item: dict, global_config: dict):
+        """Extract one embedded ASS track to a sidecar and import it as an episode.
+
+        The job deliberately ends with a normal ``<stem>.<lang>.ass`` file on disk
+        (plan D-A): from the import call onwards this is the same path a hand-placed
+        sidecar takes, so fingerprinting, prune safety, dual-format siblings and
+        export all work without knowing extraction happened.
+        """
+        import json
+        item_id = item["id"]
+        project_name = item["project_name"]
+        episode_name = item["episode_name"]
+        attempts = item["attempts"]
+        job_id = f"extract_{item_id}"
+
+        from utils.jobs_manager import JobStatus, jobs, update_job
+        from integrations import embedded_subs
+        from integrations.media_sync_engine import MediaSyncEngine
+        from utils import media_probe_cache
+
+        jobs[job_id] = JobStatus(
+            id=job_id, status="running", progress=0.0,
+            message=f"Extracting embedded subtitle for {episode_name}...", logs=[],
+            project_name=project_name, episode_name=episode_name,
+        )
+
+        loop = asyncio.get_running_loop()
+        media_path = None
+        try:
+            options = {}
+            if item.get("options"):
+                try:
+                    options = json.loads(item["options"])
+                except Exception:
+                    pass
+
+            media_path = options.get("media_path")
+            stream_index = options.get("stream_index")
+            source_lang = options.get("source_lang_code") or "en"
+            import_metadata = options.get("import_metadata") or {}
+            track_info = options.get("track") or {}
+            track_codec = track_info.get("codec") or "ass"
+            output_fmt = options.get("output_format") or ("ass" if track_codec.lower() in ("ass", "ssa") else "srt")
+
+            if not media_path or stream_index is None:
+                raise ValueError("Extraction item is missing media_path or stream_index.")
+            if not Path(media_path).exists():
+                raise FileNotFoundError(f"Media file is not reachable: {media_path}")
+
+            sidecar = embedded_subs.sidecar_path_for(media_path, source_lang, ext=output_fmt)
+
+            if sidecar.exists():
+                # A previous attempt (or the user) already produced it. Re-extracting
+                # would re-read the whole container for nothing.
+                update_job(job_id, log=f"Sidecar already present at {sidecar.name}; skipping extraction.")
+                content = await loop.run_in_executor(None, MediaSyncEngine._read_file, str(sidecar))
+                if not content:
+                    raise RuntimeError(f"Existing sidecar could not be read: {sidecar}")
+            else:
+                update_job(
+                    job_id, progress=5.0,
+                    log=f"Extracting stream {stream_index} [{output_fmt.upper()}] "
+                        f"({track_info.get('title') or 'untitled'}) from {Path(media_path).name}...",
+                )
+                track = embedded_subs.SubtitleTrack(
+                    index=int(stream_index),
+                    codec=track_codec,
+                    language=track_info.get("language") or "",
+                    title=track_info.get("title") or "",
+                )
+                content = await embedded_subs.extract_track(media_path, track, config=global_config)
+
+                if not embedded_subs.looks_like_usable_sub(content, ext=output_fmt):
+                    raise RuntimeError(
+                        f"Extracted stream {stream_index} [{output_fmt.upper()}] contains no dialogue events — "
+                        "refusing to write an empty sidecar."
+                    )
+                await loop.run_in_executor(None, embedded_subs.write_sidecar, sidecar, content)
+                update_job(job_id, progress=60.0, log=f"Wrote {sidecar.name}.")
+
+            # Webhook-queued extractions can be the first thing that ever touches this
+            # show, so the project may not exist yet. It travels with the job rather
+            # than being created at enqueue time, which would race this handler.
+            if not storage.load_project_metadata(project_name) and options.get("project_metadata"):
+                await loop.run_in_executor(
+                    None, storage.create_project, project_name, options["project_metadata"]
+                )
+                update_job(job_id, log=f"Created project '{project_name}'.")
+
+            # Re-scan now that the sidecar exists: this resolves the target subtitle
+            # exactly the way sync would, so a pre-existing translation on disk is
+            # seeded instead of being re-translated from scratch.
+            project_meta = storage.load_project_metadata(project_name) or {}
+            tgt_code = get_lang_code(project_meta.get("target_language", "Greek"))
+            scanner = SubtitleScannerService(source_lang_code=source_lang, target_lang_code=tgt_code)
+            scan = await loop.run_in_executor(None, scanner.scan_media_file, media_path)
+
+            existing_meta = storage.load_episode_metadata(project_name, episode_name)
+
+            # On an ass-preferring project the episode may already exist, imported from
+            # an .srt. The .ass we just extracted outranks it, so move the old episode to
+            # its dual-format sibling name instead of overwriting its translations.
+            if existing_meta:
+                migrated_sibling = await loop.run_in_executor(
+                    None, MediaSyncEngine._migrate_primary_format_flip,
+                    project_name, episode_name, scan, existing_meta,
+                )
+                if migrated_sibling:
+                    update_job(job_id, log=f"Moved the previous {Path(existing_meta.get('arr_sub_path') or '').suffix.lstrip('.') or 'srt'} "
+                                           f"episode to '{migrated_sibling}' to keep its translations.")
+                    existing_meta = None
+
+            target_content = None
+            if scan.has_target_sub and scan.target_sub_path:
+                already_translated = bool(
+                    existing_meta and (existing_meta.get("translated")
+                                       or existing_meta.get("translation_status") == "completed")
+                )
+                if not already_translated:
+                    target_content = await loop.run_in_executor(
+                        None, MediaSyncEngine._read_file, scan.target_sub_path
+                    )
+
+            fingerprint = MediaSyncEngine._fingerprint(str(sidecar))
+            extra_metadata = {
+                "arr_source": True,
+                "arr_sub_path": str(sidecar),
+                "arr_media_path": media_path,
+                "arr_has_target": scan.has_target_sub,
+                "arr_target_path": scan.target_sub_path if scan.has_target_sub else None,
+                # Recorded so a wrong track pick is diagnosable rather than silent.
+                "embedded_extracted": True,
+                "embedded_track": track_info,
+                "embedded_track_candidates": options.get("candidates") or [],
+                **import_metadata,
+            }
+
+            from utils.source_clean import import_and_clean_srt
+
+            def _do_import():
+                import_and_clean_srt(
+                    project_name,
+                    episode_name,
+                    content,
+                    filename=sidecar.name,
+                    fingerprint=fingerprint,
+                    target_srt_content=target_content,
+                    extra_metadata=extra_metadata,
+                )
+            await loop.run_in_executor(None, _do_import)
+
+            update_job(job_id, status="completed", progress=100.0,
+                       message=f"Extracted and imported {sidecar.name}.")
+            self.queue.update_status(
+                item_id, status="completed",
+                completed_at=datetime.now(timezone.utc).isoformat(),
+                logs=jobs[job_id].logs if job_id in jobs else None,
+            )
+            logger.info(f"Extracted embedded subtitle for {project_name}/{episode_name} -> {sidecar}")
+
+            if options.get("auto_translate"):
+                from services.queue_service import enqueue_translation
+                enqueue_translation(project_name, episode_name, item.get("priority", 2))
+
+        except asyncio.CancelledError:
+            # Shutdown: leave the item claimable again on the next start.
+            self.queue.update_status(item_id, status="pending", started_at=None)
+            raise
+
+        except Exception as e:
+            tb = traceback.format_exc()
+            logger.error(f"Error extracting embedded subtitle for item {item_id}: {e}\n{tb}")
+            if job_id in jobs:
+                update_job(job_id, log=f"Extraction error: {e}")
+            job_logs = jobs[job_id].logs if job_id in jobs else None
+
+            # The cached track list may be what's wrong (stale probe, re-muxed file):
+            # drop it so the next sync re-reads the container instead of re-queuing
+            # the same bad stream index.
+            if media_path:
+                try:
+                    media_probe_cache.invalidate(media_path)
+                except Exception:
+                    pass
+
+            delays = [300, 1800, 7200]
+            if attempts >= len(delays):
+                self.queue.update_status(item_id, status="failed", error=f"{e}\n\n{tb}", logs=job_logs)
+                if job_id in jobs:
+                    update_job(job_id, status="failed", message=f"Extraction failed permanently: {e}")
+            else:
+                delay = delays[min(attempts - 1, len(delays) - 1)]
+                next_retry = datetime.fromtimestamp(
+                    datetime.now(timezone.utc).timestamp() + delay, timezone.utc
+                ).isoformat()
+                self.queue.update_status(item_id, status="pending", error=f"{e}\n\n{tb}",
+                                         next_retry_at=next_retry, logs=job_logs)
+                if job_id in jobs:
+                    update_job(job_id, status="pending", message=f"Extraction failed, retry at {next_retry}: {e}")
 
     async def _process_item(self, item: dict, global_config: dict):
         item_id = item["id"]
@@ -323,7 +566,7 @@ class BackgroundTranslationWorker:
                     storage.save_episode(project_name, episode_name, ep_data["data"], ep_meta)
                 
                 # Delete checkpoint
-                checkpoint_path = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "checkpoint.json"
+                checkpoint_path = storage.episode_dir(project_name, episode_name) / "checkpoint.json"
                 if checkpoint_path.exists():
                     try:
                         checkpoint_path.unlink()
@@ -360,8 +603,7 @@ class BackgroundTranslationWorker:
             from utils.model_resolver import resolve_model
             from adk_agents.llm_factory import is_local_model
             from utils.rate_limiter import no_op_rate_limiter
-            model_name = options.get("model") or resolve_model("translation", project_meta) \
-                or global_config.get("default_translation_model", "gemini-flash-lite-latest")
+            model_name = resolve_model("translation", project_meta, model_override=options.get("model"))
 
             # Local models are unmetered: bypass the Gemini rate limiter and the
             # daily-quota latch entirely (a concrete limiter would throttle them at the
@@ -409,9 +651,10 @@ class BackgroundTranslationWorker:
                     first_ep_text = "\n".join([line.get("original", "") for line in ep_data["data"][:200]])
                 
                 from adk_agents.operations import generate_glossary_adk
+                glossary_model = resolve_model("glossary", project_meta)
                 glossary, _ = await generate_glossary_adk(
                     first_ep_text, project_name, target_lang_name,
-                    model_name=global_config.get("default_glossary_model", "gemini-flash-lite-latest")
+                    model_name=glossary_model
                 )
                 project_meta["glossary"] = glossary
                 storage.save_project_metadata(project_name, project_meta)

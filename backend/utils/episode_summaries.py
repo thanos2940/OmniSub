@@ -16,12 +16,11 @@ Storage:
 
 import json
 import logging
-from pathlib import Path
 from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+from utils import storage
 
-PROJECTS_DIR = Path(__file__).resolve().parent.parent / "projects"
+logger = logging.getLogger(__name__)
 
 
 class EpisodeSummaryManager:
@@ -34,7 +33,7 @@ class EpisodeSummaryManager:
 
     def __init__(self, project_name: str):
         self._project = project_name
-        self._file = PROJECTS_DIR / project_name / "episode_summaries.json"
+        self._file = storage.project_dir(project_name) / "episode_summaries.json"
 
     # ------------------------------------------------------------------
     # CRUD

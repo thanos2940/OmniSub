@@ -11,12 +11,11 @@ save, and callers fall back to a filesystem scan when the index is empty/unavail
 
 import sqlite3
 import logging
-from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+from utils.paths import DB_FILE
 
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
+logger = logging.getLogger(__name__)
 
 
 def _conn():
@@ -96,6 +95,23 @@ def list_with_review(project: Optional[str] = None) -> List[Tuple[str, str]]:
     except Exception as e:
         logger.warning(f"metadata_index list_with_review failed: {e}")
         return []
+
+
+def count_review(project: Optional[str] = None) -> int:
+    """Total needs_review lines across the library — a single indexed SUM(), so the
+    TopBar badge can poll a count without loading (or serializing) any episode data."""
+    try:
+        with _conn() as c:
+            sql = "SELECT COALESCE(SUM(needs_review), 0) AS n FROM episodes_index WHERE disabled = 0"
+            params: list = []
+            if project is not None:
+                sql += " AND project = ?"
+                params.append(project)
+            row = c.execute(sql, params).fetchone()
+            return int(row["n"]) if row else 0
+    except Exception as e:
+        logger.warning(f"metadata_index count_review failed: {e}")
+        return 0
 
 
 def upsert(project: str, episode: str, meta: Dict, original_exists: bool, disabled: bool) -> None:

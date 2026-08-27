@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Info, Sparkles, Settings as SettingsIcon, BookOpen, Zap, Globe, Play, RefreshCw, Database, ShieldAlert, List, Link as LinkIcon, Activity, Plus, Trash2, Tv, Film, FolderOpen } from 'lucide-react';
-import { api } from '../api';
+import { Save, Info, Sparkles, Settings as SettingsIcon, BookOpen, Zap, Globe, Play, RefreshCw, Database, ShieldAlert, ShieldCheck, Lock, Copy, Eye, EyeOff, List, Link as LinkIcon, Activity, Plus, Trash2, Tv, Film, FolderOpen, Key } from 'lucide-react';
+import { api, AUTH_STORAGE_KEY } from '../api';
 import ModelCombobox from './ModelCombobox';
 import { useLocation } from 'react-router-dom';
+import { QUALITY_PRESETS, activePresetFor } from './settings/presets';
+import SyncOptionsModal from './SyncOptionsModal';
+
+// GET /settings masks secret fields (sonarr/radarr api keys, webhook secret,
+// discord webhook url) with this sentinel so the real value never round-trips
+// to the browser. An untouched field still holds this string; strip it before
+// using the value for anything other than an unmodified save (the backend
+// already drops it there, falling back to the stored secret).
+const SECRET_SENTINEL = '__SECRET_UNCHANGED__';
+const unmask = (value) => (value === SECRET_SENTINEL ? undefined : value);
 
 const SettingsPage = () => {
     const [testLines, setTestLines] = useState([
@@ -52,15 +62,53 @@ const SettingsPage = () => {
     const [testingSonarr, setTestingSonarr] = useState(false);
     const [testingRadarr, setTestingRadarr] = useState(false);
     const [syncingArr, setSyncingArr] = useState(false);
+    const [syncModalOpen, setSyncModalOpen] = useState(false);
     const [diagnosticPath, setDiagnosticPath] = useState('');
     const [isTestingPath, setIsTestingPath] = useState(false);
     const [diagnosticResult, setDiagnosticResult] = useState(null);
+
+    // Media Probe Diagnostic Tool (Embedded ASS)
+    const [probeTestPath, setProbeTestPath] = useState('');
+    const [probeTestLoading, setProbeTestLoading] = useState(false);
+    const [probeTestResult, setProbeTestResult] = useState(null);
+    const [probeTestError, setProbeTestError] = useState(null);
+
+    const handleRunMediaProbeTest = async () => {
+        if (!probeTestPath.trim()) return;
+        setProbeTestLoading(true);
+        setProbeTestError(null);
+        setProbeTestResult(null);
+        try {
+            const res = await api.testMediaProbe(probeTestPath.trim());
+            setProbeTestResult(res.data);
+        } catch (err) {
+            console.error('Media probe test failed', err);
+            setProbeTestError(err.response?.data?.detail || err.message || 'Media probe test failed');
+        } finally {
+            setProbeTestLoading(false);
+        }
+    };
+
+    // Security section (docs/PLAN_auth_security.md) — a separate form from the
+    // main settings object: auth fields aren't part of SettingsRequest and are
+    // only ever written through /api/auth/*, never the generic POST /settings.
+    const [authUsername, setAuthUsername] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
+    const [authPasswordConfirm, setAuthPasswordConfirm] = useState('');
+    const [savingAuth, setSavingAuth] = useState(false);
+    const [authMessage, setAuthMessage] = useState(null);
+    const [showApiKey, setShowApiKey] = useState(false);
+    const [regenerateKeyOnSave, setRegenerateKeyOnSave] = useState(false);
     const [browsing, setBrowsing] = useState(false);
     const location = useLocation();
     const [testingLocalLLM, setTestingLocalLLM] = useState(false);
     const [hasGeminiKey, setHasGeminiKey] = useState(false);
     const [geminiKeyInput, setGeminiKeyInput] = useState('');
     const [updatingGeminiKey, setUpdatingGeminiKey] = useState(false);
+    const [showGeminiKey, setShowGeminiKey] = useState(false);
+    const [showSonarrKey, setShowSonarrKey] = useState(false);
+    const [showRadarrKey, setShowRadarrKey] = useState(false);
+    const [testingGeminiKey, setTestingGeminiKey] = useState(false);
 
     const checkApiKeyStatus = async () => {
         try {
@@ -69,6 +117,24 @@ const SettingsPage = () => {
         } catch (err) {
             console.error("Failed to check Gemini API Key status", err);
             setHasGeminiKey(false);
+        }
+    };
+
+    const handleTestGeminiKey = async () => {
+        setTestingGeminiKey(true);
+        try {
+            const keyToTest = geminiKeyInput.trim() || null;
+            const res = await api.testGeminiKey(keyToTest);
+            if (res.data?.valid) {
+                setMessage({ type: 'success', text: res.data.message || 'Gemini API connection successful!' });
+            } else {
+                setMessage({ type: 'error', text: `Gemini API key verification failed: ${res.data?.error || 'Unknown error'}` });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: `Failed to test Gemini API key: ${err.response?.data?.detail || err.message}` });
+        } finally {
+            setTestingGeminiKey(false);
+            setTimeout(() => setMessage(null), 5000);
         }
     };
 
@@ -91,6 +157,7 @@ const SettingsPage = () => {
     };
 
     const handleDeleteGeminiKey = async () => {
+        if (!window.confirm("Are you sure you want to remove the Gemini API key?")) return;
         setUpdatingGeminiKey(true);
         try {
             await api.deleteApiKey();
@@ -175,6 +242,15 @@ const SettingsPage = () => {
         checkApiKeyStatus();
     }, []);
 
+    // Prefill the username field once we know the current one, so "change
+    // password" doesn't force retyping it. Only runs while the field is still
+    // untouched (empty) so it doesn't clobber in-progress typing on reload.
+    useEffect(() => {
+        if (settings.auth_username && !authUsername) {
+            setAuthUsername(settings.auth_username);
+        }
+    }, [settings.auth_username]);
+
     useEffect(() => {
         if (!loading) {
             const params = new URLSearchParams(location.search);
@@ -225,7 +301,7 @@ const SettingsPage = () => {
         try {
             const res = await api.testSonarr({
                 url: settings.sonarr_url,
-                api_key: settings.sonarr_api_key
+                api_key: unmask(settings.sonarr_api_key)
             });
             if (res.data.connected) {
                 setMessage({ type: 'success', text: `Sonarr connection successful! Version: ${res.data.version || 'Unknown'}` });
@@ -245,7 +321,7 @@ const SettingsPage = () => {
         try {
             const res = await api.testRadarr({
                 url: settings.radarr_url,
-                api_key: settings.radarr_api_key
+                api_key: unmask(settings.radarr_api_key)
             });
             if (res.data.connected) {
                 setMessage({ type: 'success', text: `Radarr connection successful! Version: ${res.data.version || 'Unknown'}` });
@@ -260,10 +336,20 @@ const SettingsPage = () => {
         }
     };
 
-    const handleSyncArr = async () => {
+    const handleOpenSyncModal = () => {
+        setSyncModalOpen(true);
+    };
+
+    const handleStartSyncWithOptions = async (options) => {
         setSyncingArr(true);
         try {
-            await api.syncArrAll();
+            if (options.source === 'sonarr') {
+                await api.syncSonarr(options);
+            } else if (options.source === 'radarr') {
+                await api.syncRadarr(options);
+            } else {
+                await api.syncArrAll(options);
+            }
             setMessage({ type: 'success', text: 'Sonarr/Radarr library sync triggered successfully!' });
             loadArrStatus();
         } catch (err) {
@@ -289,7 +375,15 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            await api.updateSettings(settings);
+            const payload = { ...settings };
+            if (geminiKeyInput.trim()) {
+                payload.api_key = geminiKeyInput.trim();
+            }
+            await api.updateSettings(payload);
+            if (geminiKeyInput.trim()) {
+                setHasGeminiKey(true);
+                setGeminiKeyInput('');
+            }
             setMessage({ type: 'success', text: 'Settings saved successfully!' });
             setTimeout(() => setMessage(null), 3000);
         } catch (error) {
@@ -304,52 +398,60 @@ const SettingsPage = () => {
         setSettings(prev => ({ ...prev, [field]: value }));
     };
 
-    // Quality presets (v2): set a coherent group of quality flags in one click so
-    // users don't have to discover the right combination of ~10 individual toggles.
-    const QUALITY_PRESETS = {
-        fast: {
-            label: 'Fast', desc: 'Whole-episode request, minimal extra passes — quickest, cheapest drafts.',
-            values: {
-                episode_request_mode: 'auto', tm_enabled: true, glossary_enforce_enabled: true,
-                repair_pass_enabled: false, intra_episode_reconcile_enabled: false,
-                character_profiles_enabled: false, episode_summaries_enabled: false,
-                conformance_enabled: false, condense_enabled: false, enable_reviewer: false,
-                sequential_scenes: false, new_terms_suggest_enabled: true,
-            },
-        },
-        balanced: {
-            label: 'Balanced', desc: 'Whole-episode + deterministic QC + one repair call. No extra LLM review cost.',
-            values: {
-                episode_request_mode: 'auto', tm_enabled: true, glossary_enforce_enabled: true,
-                repair_pass_enabled: true, intra_episode_reconcile_enabled: true,
-                character_profiles_enabled: true, episode_summaries_enabled: true,
-                conformance_enabled: true, condense_enabled: false, enable_reviewer: false,
-                sequential_scenes: false, new_terms_suggest_enabled: true,
-            },
-        },
-        best: {
-            label: 'Best', desc: 'Every quality pass on, including the sampled LLM reviewer (slower, costs more).',
-            values: {
-                episode_request_mode: 'auto', tm_enabled: true, glossary_enforce_enabled: true,
-                repair_pass_enabled: true, intra_episode_reconcile_enabled: true,
-                character_profiles_enabled: true, episode_summaries_enabled: true,
-                conformance_enabled: true, condense_enabled: true, enable_reviewer: true,
-                sequential_scenes: false, new_terms_suggest_enabled: true,
-            },
-        },
+    // Single unified action: /api/auth/credentials always requires both username
+    // and password together (there's no separate "just rotate the key" endpoint),
+    // so offer one form with an explicit "also regenerate the API key" checkbox
+    // rather than a second button that would silently reset the password as a
+    // side effect of trying to rotate the key.
+    const handleSetCredentials = async () => {
+        setAuthMessage(null);
+        if (!authUsername.trim()) {
+            setAuthMessage({ type: 'error', text: 'Enter a username.' });
+            return;
+        }
+        if (authPassword.length < 8) {
+            setAuthMessage({ type: 'error', text: 'Password must be at least 8 characters.' });
+            return;
+        }
+        if (authPassword !== authPasswordConfirm) {
+            setAuthMessage({ type: 'error', text: 'Passwords do not match.' });
+            return;
+        }
+        setSavingAuth(true);
+        try {
+            const res = await api.setCredentials(authUsername.trim(), authPassword, regenerateKeyOnSave);
+            // Always adopt whatever key comes back — if regenerateKeyOnSave was
+            // false this is just the existing key, so it's a harmless no-op;
+            // if true, this keeps the current browser session logged in.
+            localStorage.setItem(AUTH_STORAGE_KEY, res.data.api_key);
+            setAuthPassword('');
+            setAuthPasswordConfirm('');
+            setRegenerateKeyOnSave(false);
+            setAuthMessage({ type: 'success', text: 'Credentials saved.' });
+            loadSettings();
+        } catch (err) {
+            setAuthMessage({ type: 'error', text: err.response?.data?.detail || 'Failed to save credentials.' });
+        } finally {
+            setSavingAuth(false);
+        }
     };
 
+    const copyApiKey = () => {
+        const key = localStorage.getItem(AUTH_STORAGE_KEY);
+        if (key) {
+            navigator.clipboard.writeText(key);
+            setAuthMessage({ type: 'success', text: 'API key copied to clipboard.' });
+        }
+    };
+
+    // Quality presets (v2): set a coherent group of quality flags in one click so
+    // users don't have to discover the right combination of ~10 individual toggles.
     const applyQualityPreset = (name) => {
         const preset = QUALITY_PRESETS[name];
         if (preset) setSettings(prev => ({ ...prev, ...preset.values }));
     };
 
-    const activePreset = (() => {
-        for (const [name, preset] of Object.entries(QUALITY_PRESETS)) {
-            if (Object.entries(preset.values).every(([k, v]) => settings[k] === v)) return name;
-        }
-        return null;
-    })();
+    const activePreset = activePresetFor(settings);
 
     const handleAddMapping = () => {
         const mappings = [...(settings.arr_path_mappings || []), { remote: '', local: '' }];
@@ -368,6 +470,19 @@ const SettingsPage = () => {
         handleChange('arr_path_mappings', mappings);
     };
 
+    // Setup wizard (docs/PLAN_onboarding_wizard.md): flip the flag back off and
+    // reload — App.jsx's own setup-status check picks it up on next mount and
+    // shows the wizard, same as a fresh install. Simpler than lifting wizard
+    // state up through App.jsx just for this one re-entry path.
+    const handleRerunWizard = async () => {
+        try {
+            await api.updateSettings({ setup_completed: false });
+            window.location.reload();
+        } catch (e) {
+            console.error('Failed to restart setup wizard', e);
+        }
+    };
+
     if (loading) {
         return <div className="p-8 text-center text-gray-500">Loading settings...</div>;
     }
@@ -378,11 +493,96 @@ const SettingsPage = () => {
                 <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none">
                     <SettingsIcon className="text-white" size={24} />
                 </div>
-                <div>
+                <div className="flex-1">
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Global Settings</h1>
                     <p className="text-gray-500 dark:text-gray-400">Configure default behavior for all projects.</p>
                 </div>
+                <button
+                    onClick={handleRerunWizard}
+                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap"
+                >
+                    Run setup wizard again
+                </button>
             </header>
+
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                        <Lock className="w-5 h-5 text-rose-500" />
+                        Security
+                    </h2>
+                </div>
+                <div className="p-6 space-y-4">
+                    {settings.auth_enabled ? (
+                        <div className="flex items-start gap-2 text-sm text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
+                            <ShieldCheck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>Secured — signed in as <strong>{settings.auth_username}</strong>. Every request except a small allowlist (health check, login, webhooks) requires the API key below.</span>
+                        </div>
+                    ) : (
+                        <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <span>This server is unsecured — anyone who can reach it can read settings and control translations. Set a username and password below if it's reachable beyond your own machine.</span>
+                        </div>
+                    )}
+
+                    {settings.auth_enabled && (
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">API Key</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type={showApiKey ? 'text' : 'password'}
+                                    readOnly
+                                    value={localStorage.getItem(AUTH_STORAGE_KEY) || ''}
+                                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 font-mono outline-none"
+                                />
+                                <button type="button" onClick={() => setShowApiKey(s => !s)} className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" title={showApiKey ? 'Hide' : 'Show'}>
+                                    {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                                <button type="button" onClick={copyApiKey} className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" title="Copy">
+                                    <Copy size={16} />
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">Sent as the <code>X-Api-Key</code> header. This is this browser's copy — scripts/integrations need their own.</p>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Username</label>
+                            <input type="text" value={authUsername} onChange={(e) => setAuthUsername(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none" autoComplete="username" />
+                        </div>
+                        <div />
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">{settings.auth_enabled ? 'New password' : 'Password'}</label>
+                            <input type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="At least 8 characters" className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none" autoComplete="new-password" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Confirm password</label>
+                            <input type="password" value={authPasswordConfirm} onChange={(e) => setAuthPasswordConfirm(e.target.value)} className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none" autoComplete="new-password" />
+                        </div>
+                    </div>
+
+                    {settings.auth_enabled && (
+                        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                            <input type="checkbox" checked={regenerateKeyOnSave} onChange={(e) => setRegenerateKeyOnSave(e.target.checked)} />
+                            Also regenerate the API key (signs out every other session/script using the current one)
+                        </label>
+                    )}
+
+                    {authMessage && (
+                        <p className={`text-sm ${authMessage.type === 'error' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{authMessage.text}</p>
+                    )}
+
+                    <button
+                        type="button"
+                        onClick={handleSetCredentials}
+                        disabled={savingAuth}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                    >
+                        {savingAuth ? 'Saving...' : settings.auth_enabled ? 'Update credentials' : 'Secure this server'}
+                    </button>
+                </div>
+            </div>
 
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50">
@@ -421,26 +621,55 @@ const SettingsPage = () => {
                         </div>
 
                         {/* Google Gemini API Key Input */}
-                        <div className="space-y-4">
-                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                Google Gemini API Key
-                            </label>
+                        <div className="space-y-3 p-4 rounded-xl bg-gray-50/80 dark:bg-gray-700/40 border border-gray-200/80 dark:border-gray-600/80">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                                    <Key className="w-3.5 h-3.5 text-indigo-500" />
+                                    Google Gemini API Key
+                                </label>
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
+                                    hasGeminiKey
+                                        ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                                        : 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60'
+                                }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${hasGeminiKey ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                                    {hasGeminiKey ? 'Active & Configured' : 'Not Configured'}
+                                </span>
+                            </div>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
-                                    <ShieldAlert className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                                     <input
-                                        type="password"
+                                        type={showGeminiKey ? "text" : "password"}
                                         value={geminiKeyInput}
                                         onChange={(e) => setGeminiKeyInput(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-mono"
-                                        placeholder={hasGeminiKey ? "API Key Configured" : "Enter Google Gemini API Key"}
+                                        className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm font-mono"
+                                        placeholder={hasGeminiKey ? "•••••••••••••••• (Leave blank to keep current key, or enter new key)" : "Paste your Google Gemini API key (AIza...)"}
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowGeminiKey(!showGeminiKey)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+                                        title={showGeminiKey ? "Hide key" : "Show key"}
+                                    >
+                                        {showGeminiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                                    </button>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={handleTestGeminiKey}
+                                    disabled={testingGeminiKey || (!geminiKeyInput.trim() && !hasGeminiKey)}
+                                    className="shrink-0 px-3.5 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-xl font-medium transition-all text-xs flex items-center gap-1.5 disabled:opacity-50"
+                                    title="Test Gemini API connection"
+                                >
+                                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                    {testingGeminiKey ? 'Testing...' : 'Test Key'}
+                                </button>
                                 <button
                                     type="button"
                                     onClick={handleSaveGeminiKey}
                                     disabled={updatingGeminiKey || !geminiKeyInput.trim()}
-                                    className="shrink-0 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-all text-sm disabled:opacity-50"
+                                    className="shrink-0 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-all text-xs disabled:opacity-50 shadow-sm"
                                 >
                                     {updatingGeminiKey ? 'Saving...' : 'Save Key'}
                                 </button>
@@ -449,13 +678,23 @@ const SettingsPage = () => {
                                         type="button"
                                         onClick={handleDeleteGeminiKey}
                                         disabled={updatingGeminiKey}
-                                        className="shrink-0 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/20 dark:hover:bg-rose-900/40 dark:text-rose-400 rounded-xl font-medium transition-all text-sm disabled:opacity-50"
+                                        className="shrink-0 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/20 dark:hover:bg-rose-900/40 dark:text-rose-400 rounded-xl font-medium transition-all text-xs disabled:opacity-50"
+                                        title="Remove configured key"
                                     >
-                                        Delete Key
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs text-gray-500">Configure key for Google Gemini model access.</p>
+                            <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
+                                <span>Used by the translator, glossary extractor, and scene analyzer.</span>
+                                <button
+                                    type="button"
+                                    onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-api-key-modal'))}
+                                    className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+                                >
+                                    Open API Key Manager ↗
+                                </button>
+                            </div>
                         </div>
 
                         {/* Local Endpoint */}
@@ -558,6 +797,12 @@ const SettingsPage = () => {
                             label="Default Translation Model"
                             value={settings.default_translation_model}
                             onChange={(v) => handleChange('default_translation_model', v)}
+                        />
+
+                        <ModelCombobox
+                            label="Fallback Translation Model"
+                            value={settings.fallback_translation_model || ''}
+                            onChange={(v) => handleChange('fallback_translation_model', v)}
                         />
 
                         <ModelCombobox
@@ -664,6 +909,185 @@ const SettingsPage = () => {
                                         <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                                         <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">Auto-Apply Fixes & Split Long Lines</span>
                                     </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Embedded Subtitles (ffmpeg)</h3>
+                            <p className="text-xs text-gray-500">
+                                When a media file has no subtitle sitting next to it, look for an <span className="font-mono">.ass</span> track
+                                muxed inside the container and extract it automatically. Extraction runs in the background queue — it reads the
+                                whole media file, so it is slow on network shares and never blocks translation.
+                            </p>
+
+                            <div className="flex items-center gap-3">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={settings.embedded_extraction_enabled || false}
+                                        onChange={(e) => handleChange('embedded_extraction_enabled', e.target.checked)}
+                                    />
+                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                                    <span className="ml-3 text-sm font-medium text-gray-900 dark:text-gray-300">Extract embedded .ass tracks</span>
+                                </label>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        ffmpeg Path
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settings.ffmpeg_path || ''}
+                                        onChange={(e) => handleChange('ffmpeg_path', e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        placeholder="Leave empty to use ffmpeg from PATH"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Path to <span className="font-mono">ffmpeg.exe</span> or the folder containing it (<span className="font-mono">ffprobe</span> is found alongside it). Empty = look on PATH.</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Concurrent Extractions
+                                    </label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="8"
+                                        value={settings.embedded_extraction_concurrency ?? 1}
+                                        onChange={(e) => handleChange('embedded_extraction_concurrency', parseInt(e.target.value, 10))}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Separate from the translation worker. Keep at 1 for network shares — parallel extractions compete for the same bandwidth. (Default: 1).</p>
+                                </div>
+
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Lower-Priority Track Keywords
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={settings.embedded_deprioritize_keywords ?? ''}
+                                        onChange={(e) => handleChange('embedded_deprioritize_keywords', e.target.value)}
+                                        className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        placeholder="signs, songs, s&s, signs &amp; songs, forced, commentary, karaoke"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Comma-separated. Tracks whose title contains one of these are picked <span className="font-semibold">last</span>, not skipped —
+                                        so a release whose only track is labelled &quot;Signs &amp; Songs&quot; but also carries the dialogue still works.
+                                        A full dialogue track always wins when one exists.
+                                    </p>
+                                </div>
+
+                                {/* Interactive Video File Probe Test Tool */}
+                                <div className="md:col-span-2 pt-4 border-t border-gray-100 dark:border-gray-700/80">
+                                    <div className="p-4 bg-gray-50 dark:bg-gray-750 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <h4 className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                                                    <Film size={14} className="text-purple-500" />
+                                                    Test Video File Subtitle Probe
+                                                </h4>
+                                                <p className="text-xs text-gray-400 mt-0.5">
+                                                    Inspect all muxed subtitle streams and test suitability ranking on any local video container (MKV/MP4).
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={probeTestPath}
+                                                onChange={(e) => setProbeTestPath(e.target.value)}
+                                                placeholder="e.g. D:\Anime\Show\Show.S01E01.mkv"
+                                                className="flex-1 px-3 py-2 text-xs font-mono rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleRunMediaProbeTest}
+                                                disabled={probeTestLoading || !probeTestPath.trim()}
+                                                className="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm"
+                                            >
+                                                <RefreshCw size={13} className={probeTestLoading ? 'animate-spin' : ''} />
+                                                {probeTestLoading ? 'Probing...' : 'Probe Container'}
+                                            </button>
+                                        </div>
+
+                                        {probeTestError && (
+                                            <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-lg text-xs text-rose-700 dark:text-rose-300">
+                                                {probeTestError}
+                                            </div>
+                                        )}
+
+                                        {probeTestResult && (
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex items-center justify-between text-xs text-gray-500 bg-white dark:bg-gray-800 p-2.5 rounded-lg border border-gray-150 dark:border-gray-700">
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300 truncate max-w-sm" title={probeTestResult.media_path}>
+                                                        {probeTestResult.media_filename} ({probeTestResult.file_size_mb} MB)
+                                                    </span>
+                                                    <span className="font-mono">
+                                                        {probeTestResult.ass_tracks_count} ASS track(s) / {probeTestResult.total_tracks} total
+                                                    </span>
+                                                </div>
+
+                                                {probeTestResult.tracks?.length === 0 ? (
+                                                    <p className="text-xs text-gray-400 italic">No subtitle streams found in file.</p>
+                                                ) : (
+                                                    <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                                                        {probeTestResult.tracks.map((t) => (
+                                                            <div
+                                                                key={t.index}
+                                                                className={`p-2.5 rounded-lg border text-xs flex items-center justify-between gap-3 ${
+                                                                    t.is_recommended
+                                                                        ? 'border-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20'
+                                                                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                                                    <span className="font-mono font-bold bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-[11px]">
+                                                                        #{t.index}
+                                                                    </span>
+                                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                                                        t.is_ass
+                                                                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                                                                            : t.is_image
+                                                                                ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                                                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                                                    }`}>
+                                                                        {t.codec}
+                                                                    </span>
+                                                                    <span className="font-semibold uppercase text-gray-600 dark:text-gray-300">
+                                                                        {t.language || 'und'}
+                                                                    </span>
+                                                                    <span className="truncate max-w-[200px] text-gray-700 dark:text-gray-200 font-medium">
+                                                                        {t.title || 'Untitled'}
+                                                                    </span>
+                                                                    {t.frames > 0 && (
+                                                                        <span className="text-gray-400">({t.frames} cues)</span>
+                                                                    )}
+                                                                </div>
+
+                                                                <div>
+                                                                    {t.is_recommended ? (
+                                                                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 rounded-full">
+                                                                            ★ Recommended
+                                                                        </span>
+                                                                    ) : t.penalized ? (
+                                                                        <span className="text-[11px] font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full">
+                                                                            Signs / Deprioritized
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -931,7 +1355,8 @@ const SettingsPage = () => {
                 <div className="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-5">
                     {[
                         ['glossary_enforce_enabled', 'Glossary enforcement', 'Zero-token pass that fixes glossary names left untranslated in the output.'],
-                        ['repair_pass_enabled', 'QC repair pass', 'Validators (tags, untranslated lines) → one batched repair call per episode.'],
+                        ['repair_pass_enabled', 'QC repair pass', 'Validators (tags, untranslated lines, wrong alphabet) → one batched repair call per episode.'],
+                        ['script_guard_enabled', 'Script guard', 'Zero-token pass that fixes look-alike letters from the wrong alphabet (Latin "v" for Greek "ν"). Ambiguous cases go to the repair pass.', true],
                         ['intra_episode_reconcile_enabled', 'Intra-episode consistency', 'Align recurring term renderings within an episode after translation.'],
                         ['new_terms_suggest_enabled', 'Harvest new glossary terms', 'Collect new proper nouns from the translation response (zero extra calls).'],
                         ['sequential_scenes', 'Sequential scenes', 'Scene mode only: translate scenes in order so each sees the previous one (slower).'],
@@ -1007,7 +1432,8 @@ const SettingsPage = () => {
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Webhook secret (token required on /api/webhook/*)</label>
-                        <input type="password" value={settings.webhook_secret ?? ''} onChange={(e) => handleChange('webhook_secret', e.target.value)} placeholder="leave blank = webhooks open" className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none" />
+                        <input type="password" value={settings.webhook_secret ?? ''} onChange={(e) => handleChange('webhook_secret', e.target.value)} placeholder="auto-generated — append ?token=... to your Sonarr/Radarr webhook URL" className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 outline-none" />
+                        <p className="text-xs text-gray-500 mt-1">Required — a secret is generated automatically on first boot. If you clear and save this field, webhook calls are rejected until a new secret is set (they are never left open).</p>
                     </div>
                 </div>
             </div>
@@ -1052,13 +1478,23 @@ const SettingsPage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">API Key</label>
-                                    <input
-                                        type="password"
-                                        value={settings.sonarr_api_key ?? ""}
-                                        onChange={(e) => handleChange('sonarr_api_key', e.target.value)}
-                                        className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                        placeholder="Enter Sonarr API Key"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type={showSonarrKey ? "text" : "password"}
+                                            value={settings.sonarr_api_key ?? ""}
+                                            onChange={(e) => handleChange('sonarr_api_key', e.target.value)}
+                                            className="w-full pl-3 pr-9 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
+                                            placeholder="Enter Sonarr API Key"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowSonarrKey(!showSonarrKey)}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5"
+                                            title={showSonarrKey ? "Hide key" : "Show key"}
+                                        >
+                                            {showSonarrKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={handleTestSonarr}
@@ -1100,13 +1536,23 @@ const SettingsPage = () => {
                                 </div>
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">API Key</label>
-                                    <input
-                                        type="password"
-                                        value={settings.radarr_api_key ?? ""}
-                                        onChange={(e) => handleChange('radarr_api_key', e.target.value)}
-                                        className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                                        placeholder="Enter Radarr API Key"
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type={showRadarrKey ? "text" : "password"}
+                                            value={settings.radarr_api_key ?? ""}
+                                            onChange={(e) => handleChange('radarr_api_key', e.target.value)}
+                                            className="w-full pl-3 pr-9 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-purple-500 outline-none transition-all font-mono"
+                                            placeholder="Enter Radarr API Key"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowRadarrKey(!showRadarrKey)}
+                                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5"
+                                            title={showRadarrKey ? "Hide key" : "Show key"}
+                                        >
+                                            {showRadarrKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                                        </button>
+                                    </div>
                                 </div>
                                 <button
                                     onClick={handleTestRadarr}
@@ -1152,7 +1598,7 @@ const SettingsPage = () => {
                         </div>
                         <div className="flex justify-end">
                             <button
-                                onClick={handleSyncArr}
+                                onClick={handleOpenSyncModal}
                                 disabled={syncingArr || (!settings.sonarr_enabled && !settings.radarr_enabled)}
                                 className="px-5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold transition-all text-sm flex items-center gap-2 disabled:opacity-50"
                             >
@@ -1413,7 +1859,7 @@ const SettingsPage = () => {
                             Discord Webhook URL
                         </label>
                         <input
-                            type="text"
+                            type="password"
                             value={settings.discord_webhook_url || ''}
                             onChange={(e) => handleChange('discord_webhook_url', e.target.value)}
                             className="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
@@ -1496,6 +1942,11 @@ const SettingsPage = () => {
                     </div>
                 </div>
             </div>
+            <SyncOptionsModal
+                isOpen={syncModalOpen}
+                onClose={() => setSyncModalOpen(false)}
+                onConfirm={handleStartSyncWithOptions}
+            />
         </div>
     );
 };

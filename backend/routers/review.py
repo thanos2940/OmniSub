@@ -5,9 +5,10 @@ from typing import Dict, List, Optional
 from pathlib import Path
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from utils import storage
+from utils.jobs_manager import create_job
 from utils.srt_parser import reconstruct_srt
 from utils.language_codes import to_code
 
@@ -138,6 +139,18 @@ def _invalidate_global_review_cache():
 async def get_global_review_queue(force: bool = False):
     """Get all lines flagged for user review across all projects (cached, off-loop, single-flight)."""
     return await _refresh_global_review_cache(force=force)
+
+
+@router.get("/projects/review-queue/count")
+async def get_global_review_count():
+    """Just the badge number — a single indexed SUM() over the metadata index, no
+    episode data loaded or serialized. The TopBar polls this instead of the full
+    /review-queue (which returns every flagged line's text/scores) so navigating
+    the app doesn't repeatedly transfer the whole flagged-line list to render one
+    number."""
+    from utils import metadata_index
+    count = await asyncio.to_thread(metadata_index.count_review, None)
+    return {"count": count}
 
 
 @router.get("/projects/{project_name}/review-queue")
@@ -345,7 +358,7 @@ async def get_feedback_suggestions(project_name: str, min_freq: int = 2):
     db_suggestions = get_glossary_suggestions(project_name, min_freq=min_freq)
     
     file_suggestions = []
-    suggestions_file = storage.PROJECTS_DIR / project_name / "suggestions.json"
+    suggestions_file = storage.project_dir(project_name) / "suggestions.json"
     if suggestions_file.exists():
         try:
             import json
@@ -406,7 +419,7 @@ async def accept_feedback_suggestion(project_name: str, req: AcceptSuggestionReq
     proj_meta["glossary"] = glossary
     storage.save_project_metadata(project_name, proj_meta)
     
-    suggestions_file = storage.PROJECTS_DIR / project_name / "suggestions.json"
+    suggestions_file = storage.project_dir(project_name) / "suggestions.json"
     if suggestions_file.exists():
         try:
             import json
@@ -424,6 +437,71 @@ async def accept_feedback_suggestion(project_name: str, req: AcceptSuggestionReq
     invalidate_cache(project_name)
     
     return {"status": "success", "term": req.term}
+
+
+class ScriptGuardRepairRequest(BaseModel):
+    model: Optional[str] = None    # defaults to the project's "reconciliation" role model
+    use_llm: bool = True           # False = deterministic pass only, zero requests
+    export: bool = True            # re-export changed episodes next to their media
+    chunk_size: Optional[int] = None
+
+
+@router.get("/projects/{project_name}/script-guard/scan")
+async def script_guard_scan(project_name: str):
+    """Report wrong-alphabet contamination in a project's stored translations.
+
+    Read-only preview for the "Fix Text" action: how much is repairable for free,
+    how many lines need the model, and how many requests that will take. Nothing is
+    written — :func:`repair_project_scripts` does the writing.
+    """
+    from services.script_repair_service import DEFAULT_CHUNK_SIZE, collect_project_issues
+
+    proj_meta = storage.load_project_metadata(project_name)
+    if not proj_meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+    target_code = to_code(proj_meta.get("target_language", "Greek"))
+
+    found = await asyncio.to_thread(collect_project_issues, project_name, target_code)
+    tickets = found["tickets"]
+
+    per_episode: Dict[str, Dict[str, int]] = {}
+    for t in tickets:
+        per_episode.setdefault(t["episode"], {"episode": t["episode"], "flagged": 0})["flagged"] += 1
+
+    return {
+        "project": project_name,
+        "chars_fixed": found["chars_fixed"],          # repairable deterministically
+        "lines_flagged": len(tickets),                 # need one batched model call
+        "estimated_requests": -(-len(tickets) // DEFAULT_CHUNK_SIZE),   # ceil
+        "episodes_affected": len(found["episodes"]),
+        "episodes": sorted(per_episode.values(), key=lambda e: e["episode"]),
+        "samples": [
+            {"episode": t["episode"], "current": t["current"][:120], "source": t["source"][:120]}
+            for t in tickets[:8]
+        ],
+    }
+
+
+@router.post("/projects/{project_name}/script-guard/repair")
+async def script_guard_repair(project_name: str, req: ScriptGuardRepairRequest,
+                              background_tasks: BackgroundTasks):
+    """Fix wrong-alphabet characters across a whole project, as a background job.
+
+    Visual twins are rewritten for free; everything else is gathered across *all*
+    episodes and repaired in batched requests (~60 lines each), so a show costs a
+    handful of calls rather than one per episode or per line.
+    """
+    if not storage.load_project_metadata(project_name):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from services.script_repair_service import DEFAULT_CHUNK_SIZE, repair_project_scripts
+
+    job_id = create_job("script_repair", project_name=project_name)
+    background_tasks.add_task(
+        repair_project_scripts, job_id, project_name, req.model,
+        req.chunk_size or DEFAULT_CHUNK_SIZE, req.export, req.use_llm,
+    )
+    return {"job_id": job_id}
 
 
 @router.post("/projects/{project_name}/conformance/measure")

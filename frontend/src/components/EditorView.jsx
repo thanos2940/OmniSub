@@ -5,25 +5,43 @@ import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';
 
+function getDurationSeconds(timecode) {
+    if (!timecode || !timecode.includes('-->')) return 0;
+    try {
+        const [startStr, endStr] = timecode.split('-->').map(s => s.trim());
+        const parseTc = (t) => {
+            const parts = t.replace(',', '.').split(':');
+            if (parts.length === 3) {
+                return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+            }
+            return 0;
+        };
+        const duration = parseTc(endStr) - parseTc(startStr);
+        return duration > 0 ? duration : 0;
+    } catch {
+        return 0;
+    }
+}
+
 // Memoized row: only re-renders when its own `item` (or isLoading/selected) changes. With
 // stable callbacks below, editing one line no longer re-renders the whole episode — big win
 // for long episodes where the old inline data.map() rebuilt every row on each keystroke.
 const SubtitleRow = React.memo(function SubtitleRow({
     item, idx, isLoading, projectName, episodeName, selected,
-    onChangeTranslation, onResolved, onUpdateTm, onToggleSelect, onDeleteLine,
+    onChangeTranslation, onResolved, onUpdateTm, onToggleSelect, onDeleteLine, onSave
 }) {
     const selectCell = (
-        <div className="p-2 pt-4 border-r border-gray-100 flex flex-col items-center gap-1.5">
+        <div className="p-2 pt-4 border-r border-gray-100 dark:border-gray-700 flex flex-col items-center gap-1.5">
             <input
                 type="checkbox"
                 checked={selected}
                 onChange={() => onToggleSelect(item.id)}
-                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
             />
-            <span className="text-[10px] font-mono text-gray-300 select-none">{idx + 1}</span>
+            <span className="text-[10px] font-mono text-gray-300 dark:text-gray-600 select-none">{idx + 1}</span>
             <button
                 onClick={() => onDeleteLine(idx)}
-                className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all"
                 title="Delete this line permanently"
             >
                 <Trash2 size={13} />
@@ -37,12 +55,22 @@ const SubtitleRow = React.memo(function SubtitleRow({
     const isPassthrough = !!(assMeta && assMeta.translatable === false);
     const passthroughKind = isPassthrough ? (assMeta.kind || 'effect') : null;
 
+    // Reading speed metrics
+    const durationSec = getDurationSeconds(item.timecode);
+    const translatedText = item.translated || '';
+    const charCount = translatedText.length;
+    const lines = translatedText.split('\n');
+    const maxCpl = lines.length > 0 ? Math.max(...lines.map(l => l.length)) : 0;
+    const cps = durationSec > 0 && charCount > 0 ? Number((charCount / durationSec).toFixed(1)) : 0;
+    const isCpsWarning = cps > 21;
+    const isCplWarning = maxCpl > 42;
+
     return (
-        <div className={`hover:bg-gray-50/50 transition-colors group ${selected ? 'bg-indigo-50/40' : ''}`}>
+        <div className={`hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors group ${selected ? 'bg-indigo-50/40 dark:bg-indigo-900/20' : ''}`}>
             {item.needs_review ? (
-                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100">
+                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100 dark:divide-gray-700">
                     {selectCell}
-                    <div className="p-4 text-xs font-mono text-gray-400 border-r border-gray-100 flex items-center">
+                    <div className="p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 flex items-center">
                         {item.timecode}
                     </div>
                     <div className="col-span-2 p-4 bg-rose-50/10 dark:bg-rose-950/5 border-l-4 border-rose-500">
@@ -59,23 +87,34 @@ const SubtitleRow = React.memo(function SubtitleRow({
                     </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100">
+                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100 dark:divide-gray-700">
                     {selectCell}
-                    <div className="p-4 text-xs font-mono text-gray-400 border-r border-gray-100 flex items-center">
+                    <div className="p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 flex items-center">
                         {item.timecode}
                     </div>
-                    <div className="p-4 text-gray-700 border-r border-gray-100 leading-relaxed">
+                    <div className="p-4 text-gray-700 dark:text-gray-300 border-r border-gray-100 dark:border-gray-700 leading-relaxed">
                         {item.original}
                     </div>
                     <div className={`p-0 transition-colors relative ${item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
                         <textarea
                             value={isPassthrough ? (item.original || '') : (item.translated || '')}
                             onChange={(e) => onChangeTranslation(item.id, e.target.value)}
+                            onKeyDown={(e) => {
+                                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (onSave) onSave();
+                                    const textareas = document.querySelectorAll('textarea');
+                                    const currentIdx = Array.from(textareas).indexOf(e.target);
+                                    if (currentIdx !== -1 && textareas[currentIdx + 1]) {
+                                        textareas[currentIdx + 1].focus();
+                                    }
+                                }
+                            }}
                             placeholder={isPassthrough ? "Effect / karaoke — not translated" : (isLoading ? "Translating..." : "Not translated")}
                             disabled={isLoading || isPassthrough}
                             readOnly={isPassthrough}
                             title={isPassthrough ? "This ASS event (karaoke/vector effect) is passed through unchanged." : undefined}
-                            className={`w-full h-full min-h-[80px] p-4 bg-transparent border-none outline-none resize-y text-gray-900 font-medium leading-relaxed focus:bg-white/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 disabled:opacity-50 focus:ring-indigo-500/20 ${isPassthrough ? 'text-gray-400 italic' : ''}`}
+                            className={`w-full h-full min-h-[85px] p-4 pb-7 bg-transparent border-none outline-none resize-y text-gray-900 dark:text-gray-100 font-medium leading-relaxed focus:bg-white/50 dark:focus:bg-gray-800/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 focus:ring-indigo-500/20 ${isPassthrough ? 'text-gray-400 dark:text-gray-500 italic' : ''}`}
                         />
                         {isLoading && !item.translated && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -96,17 +135,45 @@ const SubtitleRow = React.memo(function SubtitleRow({
                                 </label>
                             </div>
                         )}
+                        {/* Live Reading Speed & Length Counters */}
+                        {!isPassthrough && charCount > 0 && (
+                            <div className="absolute bottom-1.5 right-2 flex items-center gap-1 text-[10px] font-mono pointer-events-none select-none">
+                                <span
+                                    className={`px-1.5 py-0.5 rounded ${
+                                        isCplWarning
+                                            ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 font-bold border border-amber-300 dark:border-amber-700'
+                                            : 'bg-gray-100/80 dark:bg-gray-800/80 text-gray-400 dark:text-gray-500'
+                                    }`}
+                                    title={`Max Characters per Line: ${maxCpl} (Recommended ≤ 40-42)`}
+                                >
+                                    {maxCpl} CPL {isCplWarning && '⚠️'}
+                                </span>
+                                {durationSec > 0 && (
+                                    <span
+                                        className={`px-1.5 py-0.5 rounded ${
+                                            isCpsWarning
+                                                ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-800 dark:text-rose-200 font-bold border border-rose-300 dark:border-rose-700'
+                                                : 'bg-gray-100/80 dark:bg-gray-800/80 text-gray-400 dark:text-gray-500'
+                                        }`}
+                                        title={`Characters per Second: ${cps} (Recommended ≤ 18-20 CPS)`}
+                                    >
+                                        {cps} CPS {isCpsWarning && '⚠️'}
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
                         <div className="absolute top-2 right-2 pointer-events-none flex items-center gap-1 flex-wrap justify-end">
                             {isPassthrough && (
-                                <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-wider shadow-sm" title="Karaoke/effect line — passed through untranslated">
+                                <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 uppercase tracking-wider shadow-sm" title="Karaoke/effect line — passed through untranslated">
                                     {passthroughKind}
                                 </span>
                             )}
                             {item.from_tm && (
                                 item.tm_user_edited ? (
-                                    <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 uppercase tracking-wider shadow-sm" title={item.tm_origin_episode ? `Reused from your previous edits in ${item.tm_origin_episode}` : "Reused from your previous edits"}>User Edit</span>
+                                    <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 uppercase tracking-wider shadow-sm" title={item.tm_origin_episode ? `Reused from your previous edits in ${item.tm_origin_episode}` : "Reused from your previous edits"}>User Edit</span>
                                 ) : (
-                                    <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider shadow-sm" title={item.tm_origin_episode ? `Matched from Translation Memory (${item.tm_origin_episode})` : "Matched from Translation Memory"}>TM Match</span>
+                                    <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 uppercase tracking-wider shadow-sm" title={item.tm_origin_episode ? `Matched from Translation Memory (${item.tm_origin_episode})` : "Matched from Translation Memory"}>TM Match</span>
                                 )
                             )}
                         </div>
@@ -352,15 +419,15 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="h-screen flex flex-col bg-slate-50"
+            className="h-screen flex flex-col bg-slate-50 dark:bg-gray-900"
         >
             {/* Header */}
-            <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
+            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center shadow-sm z-10">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold text-gray-800">Translation Editor</h1>
+                    <h1 className="text-xl font-bold text-gray-800 dark:text-white">Translation Editor</h1>
                     <button
                         onClick={() => setShowGlossary(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium"
+                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm font-medium"
                     >
                         <Book className="w-4 h-4" />
                         Glossary
@@ -368,7 +435,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                 </div>
                 <div className="flex items-center gap-3">
                     {dirty && (
-                        <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Unsaved changes
                         </span>
@@ -386,7 +453,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                         <button
                             onClick={onExportToPath}
                             disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors text-sm font-medium disabled:opacity-50"
+                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:text-emerald-700 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-800 transition-colors text-sm font-medium disabled:opacity-50"
                             title="Write the translated subtitle next to the original media file"
                         >
                             <FolderOutput className="w-4 h-4" />
@@ -395,7 +462,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                     )}
                     <button
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-805 transition-colors shadow-lg shadow-gray-900/20"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors shadow-lg shadow-gray-900/20"
                         title="Download the subtitle file in your browser"
                     >
                         <Download className="w-4 h-4" />
@@ -405,7 +472,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
             </header>
 
             {/* Filter / Search / Selection Toolbar */}
-            <div className="bg-white border-b border-gray-200 px-6 py-2.5 flex flex-wrap items-center gap-3 z-10">
+            <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-2.5 flex flex-wrap items-center gap-3 z-10">
                 <div className="relative flex-1 min-w-[220px] max-w-md">
                     <Search className="absolute left-3 top-2 h-4 w-4 text-gray-400" />
                     <input
@@ -413,10 +480,10 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                         placeholder="Search original or translated text..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-9 pr-8 py-1.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+                        className="w-full pl-9 pr-8 py-1.5 text-sm bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-gray-800"
                     />
                     {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-gray-400 hover:text-gray-600">
+                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                             <X size={14} />
                         </button>
                     )}
@@ -434,7 +501,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                             className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-all ${
                                 filterStatus === btn.id
                                     ? 'bg-indigo-600 border-indigo-600 text-white'
-                                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                    : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                             }`}
                         >
                             {btn.label} ({counts[btn.id]})
@@ -443,14 +510,14 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                 </div>
                 {selected.size > 0 && (
                     <div className="flex items-center gap-2 ml-auto">
-                        <span className="text-xs font-semibold text-indigo-600">{selected.size} selected</span>
+                        <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">{selected.size} selected</span>
                         {selected.size === 1 && (
-                            <div className="flex items-center gap-1.5 pr-2 mr-1 border-r border-gray-200">
-                                <span className="text-[11px] font-medium text-gray-400 select-none">Realign:</span>
+                            <div className="flex items-center gap-1.5 pr-2 mr-1 border-r border-gray-200 dark:border-gray-700">
+                                <span className="text-[11px] font-medium text-gray-400 dark:text-gray-500 select-none">Realign:</span>
                                 <button
                                     onClick={() => handleShiftTranslations('up')}
                                     disabled={isLoading}
-                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors disabled:opacity-50"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-colors disabled:opacity-50"
                                     title="Shift every translation from this cue downward UP by one (fixes a split/shift where text sits one cue too low). Timecodes don't move; review then Save."
                                 >
                                     <ArrowUp size={13} />
@@ -459,7 +526,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                 <button
                                     onClick={() => handleShiftTranslations('down')}
                                     disabled={isLoading}
-                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors disabled:opacity-50"
+                                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-colors disabled:opacity-50"
                                     title="Shift every translation from this cue downward DOWN by one (insert a gap here when a translation is missing). Timecodes don't move; review then Save."
                                 >
                                     <ArrowDown size={13} />
@@ -470,7 +537,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                         <button
                             onClick={handleDeleteSelected}
                             disabled={isLoading}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg transition-colors disabled:opacity-50"
                             title="Delete selected lines permanently"
                         >
                             <Trash2 size={13} />
@@ -478,7 +545,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                         </button>
                         <button
                             onClick={() => setSelected(new Set())}
-                            className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            className="px-3 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                         >
                             Clear
                         </button>
@@ -488,29 +555,29 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
 
             {/* Main Content - Side by Side Grid */}
             <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-7xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="max-w-7xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[44px_100px_1fr_1fr] bg-gray-50 border-b border-gray-200 font-semibold text-gray-500 text-sm sticky top-0 z-10">
-                        <div className="p-3 border-r border-gray-200 flex items-center justify-center">
+                    <div className="grid grid-cols-[44px_100px_1fr_1fr] bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-500 dark:text-gray-400 text-sm sticky top-0 z-10">
+                        <div className="p-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
                             <input
                                 ref={selectAllRef}
                                 type="checkbox"
                                 checked={allVisibleSelected}
                                 onChange={handleToggleSelectVisible}
                                 disabled={visibleRows.length === 0}
-                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                                 title="Select all visible lines"
                             />
                         </div>
-                        <div className="p-4 border-r border-gray-200">Timecode</div>
-                        <div className="p-4 border-r border-gray-200">Original</div>
+                        <div className="p-4 border-r border-gray-200 dark:border-gray-700">Timecode</div>
+                        <div className="p-4 border-r border-gray-200 dark:border-gray-700">Original</div>
                         <div className="p-4">Translated</div>
                     </div>
 
                     {/* Table Body */}
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 dark:divide-gray-700">
                         {visibleRows.length === 0 ? (
-                            <div className="p-10 text-center text-sm text-gray-400">
+                            <div className="p-10 text-center text-sm text-gray-400 dark:text-gray-500">
                                 No lines match the current search/filter.
                             </div>
                         ) : (
@@ -528,6 +595,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                     onUpdateTm={handleUpdateTm}
                                     onToggleSelect={handleToggleSelect}
                                     onDeleteLine={handleDeleteLine}
+                                    onSave={onSave}
                                 />
                             ))
                         )}
@@ -548,22 +616,22 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] overflow-hidden flex flex-col"
+                            className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl h-[90vh] overflow-hidden flex flex-col"
                         >
-                            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                                <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                    <Book className="w-5 h-5 text-indigo-600" />
+                            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-gray-900/50">
+                                <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                    <Book className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                                     Glossary & Context
                                 </h2>
                                 <button
                                     onClick={() => setShowGlossary(false)}
-                                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                                    className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
                                 >
-                                    <X className="w-5 h-5 text-gray-500" />
+                                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                                 </button>
                             </div>
 
-                            <div className="flex-1 overflow-hidden bg-gray-50">
+                            <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900/50">
                                 <GlossaryEditor
                                     glossary={glossary}
                                     onSave={(updatedGlossary, globalSave) => {

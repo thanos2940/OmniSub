@@ -15,12 +15,11 @@ import logging
 import sqlite3
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, Optional
 
-logger = logging.getLogger(__name__)
+from utils.paths import DB_FILE
 
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
+logger = logging.getLogger(__name__)
 
 # Set by the worker / batch lane: {"project": ..., "episode": ..., "lane": "live"|"batch"}
 usage_ctx: contextvars.ContextVar[Optional[Dict]] = contextvars.ContextVar("usage_ctx", default=None)

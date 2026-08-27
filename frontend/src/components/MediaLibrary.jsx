@@ -9,6 +9,8 @@ import {
     Library, Filter, Search, Play, Pause, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import EmbeddedTracksModal from './EmbeddedTracksModal';
+import SyncOptionsModal from './SyncOptionsModal';
 
 const TABS = { SHOWS: 'shows', MOVIES: 'movies', DISABLED: 'disabled' };
 
@@ -20,7 +22,11 @@ const StatusBadge = ({ episodeCount, translatedCount, disabled }) => {
     return <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><Clock size={10} /> Pending</span>;
 };
 
-const EpisodeRow = ({ ep, status, onTranslate }) => {
+const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded }) => {
+    const isAss = ['ass', 'ssa'].includes((ep.metadata?.original_format || ep.metadata?.original_extension || '').toLowerCase());
+    const isMuxed = !!ep.metadata?.embedded_extracted;
+    const hasMedia = !!(ep.metadata?.arr_media_path || ep.metadata?.bazarr_media_path);
+
     const getBadge = () => {
         const base = "flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full w-fit";
         switch (status) {
@@ -39,16 +45,37 @@ const EpisodeRow = ({ ep, status, onTranslate }) => {
 
     return (
         <div className="flex items-center justify-between py-2 px-3 bg-white dark:bg-gray-800/80 rounded-xl border border-gray-150 dark:border-gray-700/60 shadow-sm text-sm">
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 <span className="font-semibold text-gray-800 dark:text-gray-200">{ep.name}</span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tight ${
+                    isAss
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                        : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                }`}>
+                    {isAss ? 'ASS' : 'SRT'}
+                </span>
+                {isMuxed && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 flex items-center gap-0.5 uppercase tracking-tight">
+                        <Film size={9} /> #{ep.metadata?.embedded_track?.index ?? ''}
+                    </span>
+                )}
                 {ep.metadata?.episode_title && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[140px] sm:max-w-[200px]" title={ep.metadata.episode_title}>
+                    <span className="text-xs text-gray-400 dark:text-gray-500 truncate max-w-[120px] sm:max-w-[160px]" title={ep.metadata.episode_title}>
                         {ep.metadata.episode_title}
                     </span>
                 )}
             </div>
             
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                {hasMedia && (
+                    <button
+                        onClick={() => onInspectEmbedded(ep.name)}
+                        className="p-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+                        title="Inspect & extract embedded subtitle tracks from media container"
+                    >
+                        <Film size={14} />
+                    </button>
+                )}
                 {getBadge()}
                 {status !== 'translated' && status !== 'running' && status !== 'queued' && (
                     <button
@@ -67,6 +94,7 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
     const [expanded, setExpanded] = useState(false);
     const [episodes, setEpisodes] = useState([]);
     const [loadingEpisodes, setLoadingEpisodes] = useState(false);
+    const [embeddedModalEpisode, setEmbeddedModalEpisode] = useState(null);
     const toast = useToast();
 
     const isDisabled = item.arr_disabled || item.bazarr_disabled;
@@ -269,6 +297,7 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
                                                 ep={ep}
                                                 status={status}
                                                 onTranslate={handleTranslateEpisode}
+                                                onInspectEmbedded={(epName) => setEmbeddedModalEpisode(epName)}
                                             />
                                         );
                                     })}
@@ -278,6 +307,16 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <EmbeddedTracksModal
+                isOpen={!!embeddedModalEpisode}
+                onClose={() => setEmbeddedModalEpisode(null)}
+                projectName={item.name}
+                episodeName={embeddedModalEpisode}
+                onExtractionComplete={() => {
+                    api.getEpisodes(item.name).then(res => setEpisodes(res.data)).catch(() => {});
+                }}
+            />
         </motion.div>
     );
 };
@@ -290,9 +329,17 @@ const MediaLibrary = () => {
     const [activeTab, setActiveTab] = useState(TABS.SHOWS);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
-    
+    const [arrConfigured, setArrConfigured] = useState(true); // assume yes until checked, to avoid a flash
+
+    useEffect(() => {
+        api.getArrStatus()
+            .then(res => setArrConfigured(!!(res.data?.sonarr?.configured || res.data?.radarr?.configured)))
+            .catch(() => {});
+    }, []);
+
     // Background Queue State
     const [queueData, setQueueData] = useState({ items: [], summary: {}, rate_limits: {}, paused: false });
+    const [syncModalOpen, setSyncModalOpen] = useState(false);
     
     const { activeJobs, addJob } = useJobs();
     const toast = useToast();
@@ -324,7 +371,7 @@ const MediaLibrary = () => {
 
     useEffect(() => {
         fetchQueue();
-        const interval = setInterval(fetchQueue, 5000);
+        const interval = setInterval(() => { if (!document.hidden) fetchQueue(); }, 5000);
         return () => clearInterval(interval);
     }, [fetchQueue]);
 
@@ -364,13 +411,25 @@ const MediaLibrary = () => {
         }
     }, [activeJobs, syncJobId, loadLibrary, toast]);
 
-    const handleSync = async () => {
+    const handleOpenSyncModal = () => {
+        setSyncModalOpen(true);
+    };
+
+    const handleStartSyncWithOptions = async (options) => {
         setSyncing(true);
         try {
-            const res = await api.syncArrAll();
-            if (res.data.job_id) {
+            let res;
+            if (options.source === 'sonarr') {
+                res = await api.syncSonarr(options);
+            } else if (options.source === 'radarr') {
+                res = await api.syncRadarr(options);
+            } else {
+                res = await api.syncArrAll(options);
+            }
+            if (res.data?.job_id) {
                 setSyncJobId(res.data.job_id);
-                addJob(res.data.job_id, 'arr_sync', 'Syncing Sonarr & Radarr library...', {});
+                const label = options.source === 'sonarr' ? 'Sonarr' : options.source === 'radarr' ? 'Radarr' : 'Sonarr & Radarr';
+                addJob(res.data.job_id, 'arr_sync', `Syncing ${label} library...`, {});
             }
         } catch (err) {
             setSyncing(false);
@@ -505,7 +564,7 @@ const MediaLibrary = () => {
                             </button>
 
                             <button
-                                onClick={handleSync}
+                                onClick={handleOpenSyncModal}
                                 disabled={syncing}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-all shadow-md shadow-blue-200 dark:shadow-none hover:-translate-y-0.5 active:translate-y-0"
                             >
@@ -619,19 +678,30 @@ const MediaLibrary = () => {
                                     ? 'No results match your search'
                                     : activeTab === TABS.DISABLED
                                         ? 'No disabled entries'
-                                        : library?.last_sync
-                                            ? 'No items found — try syncing'
-                                            : 'Click "Sync Now" to import from Sonarr/Radarr'
+                                        : !arrConfigured
+                                            ? 'Connect Sonarr or Radarr to import your library automatically'
+                                            : library?.last_sync
+                                                ? 'No items found — try syncing'
+                                                : 'Click "Sync Now" to import from Sonarr/Radarr'
                                 }
                             </p>
                             {!library?.last_sync && !searchQuery && (
-                                <button
-                                    onClick={handleSync}
-                                    disabled={syncing}
-                                    className="mt-4 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all"
-                                >
-                                    Sync with Sonarr & Radarr
-                                </button>
+                                arrConfigured ? (
+                                    <button
+                                        onClick={handleSync}
+                                        disabled={syncing}
+                                        className="mt-4 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all"
+                                    >
+                                        Sync with Sonarr & Radarr
+                                    </button>
+                                ) : (
+                                    <Link
+                                        to="/settings"
+                                        className="mt-4 inline-block px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all"
+                                    >
+                                        Connect Sonarr/Radarr
+                                    </Link>
+                                )
                             )}
                         </motion.div>
                     ) : (
@@ -681,6 +751,11 @@ const MediaLibrary = () => {
                     </div>
                 )}
             </main>
+            <SyncOptionsModal
+                isOpen={syncModalOpen}
+                onClose={() => setSyncModalOpen(false)}
+                onConfirm={handleStartSyncWithOptions}
+            />
         </div>
     );
 };

@@ -173,7 +173,7 @@ def _build_local_extra_body(
 # Thinking budgets (v2 plan, D2)
 # ---------------------------------------------------------------------------
 
-# Mechanical passes don't benefit from extended thinking, but Gemini 2.5 models
+# Mechanical passes don't benefit from extended thinking, but Gemini models
 # think by default and bill thinking tokens as output. -1 = keep model default.
 _DEFAULT_THINKING_BUDGETS = {
     "translation": 0,
@@ -226,7 +226,7 @@ def create_model(
 
     Args:
         model_name: Model identifier.
-                     - "gemini-2.5-flash" → Gemini
+                     - "gemini-3.5-flash" → Gemini
                      - "local/mistral-7b" → LiteLlm
         base_url: Override for local LLM server URL.
         temperature: Optional generation temperature.
@@ -286,7 +286,8 @@ def create_model(
 
         # Thinking budget (D2): disable thinking for mechanical agent roles.
         budget = resolve_thinking_budget(role)
-        if budget is not None and (budget > 0 or "pro" not in model_name.lower()):
+        is_thinking_model = "2.5" in model_name or "3." in model_name or "thinking" in model_name.lower()
+        if is_thinking_model and budget is not None and (budget > 0 or "pro" not in model_name.lower()):
             try:
                 gen_config["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
             except Exception:

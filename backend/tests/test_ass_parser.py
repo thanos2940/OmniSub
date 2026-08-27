@@ -287,3 +287,30 @@ def test_router_parse_and_reconstruct_ass():
         entries, filename="ep.ass", original_content=SAMPLE_ASS
     )
     assert "[Script Info]" in out
+
+
+def test_reconstruct_ass_greek_font_remapping():
+    """Greek ASS exports remap Latin-only fonts (like Fontin Sans Rg) to Arial."""
+    ass_with_latin_font = (
+        "[Script Info]\nTitle: Test\nScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        "Style: Default,Fontin Sans Rg,71,&H00FFFFFF,&H000000FF,&H00000000,&HA0000000,-1,0,0,0,100,100,0,0,1,4,1.5,2,15,15,53,1\n"
+        "Style: Alt,.VnClarendon,60,&H00FFFFFF,&H000000FF,&H00000000,&HA0000000,-1,0,0,0,100,100,0,0,1,4,1.5,2,15,15,53,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,{\\fnFontin Sans Rg\\pos(960,800)}Hold the shield!\n"
+    )
+    entries = ass_parser.parse_ass(ass_with_latin_font)
+    entries[0]["translated"] = "Κράτα την ασπίδα!"
+
+    # 1. Reconstruct with Greek target language code
+    out = ass_parser.reconstruct_ass(entries, original_content=ass_with_latin_font, target_lang_code="el")
+
+    # Verify all styles remapped to Arial
+    assert "Style: Default,Arial" in out
+    assert "Style: Alt,Arial" in out
+    assert "Fontin Sans Rg" not in out
+    assert ".VnClarendon" not in out
+    # Verify inline \fn tag remapped to \fnArial
+    assert "{\\fnArial\\pos(960,800)}Κράτα την ασπίδα!" in out

@@ -54,6 +54,42 @@ def secondary_episode_name(base: str, ext: str) -> str:
     return f"{base} [{ext}]"
 
 
+_ASS_EXTENSIONS = (".ass", ".ssa")
+
+
+def prefer_ass_for_project(project_meta: Optional[Dict]) -> bool:
+    """Should this project treat ``.ass`` as the subtitle format that must exist?
+
+    When on, an episode with only an ``.srt`` still gets its container probed for a
+    muxed ASS track, and the extracted ``.ass`` becomes the episode's primary source
+    (the ``.srt`` moves to a dual-format sibling and keeps its own translation).
+
+    The project setting ``prefer_ass_format`` is a tri-state:
+
+    - ``"auto"`` (default) — on for Sonarr series typed **anime**, off otherwise.
+      Anime releases carry their real subtitles as typeset ASS; an ``.srt`` next to
+      one is usually a stripped-down convenience track, so "has a subtitle already"
+      is the wrong test for them.
+    - ``True`` / ``"always"`` — on regardless of type.
+    - ``False`` / ``"never"`` — off regardless of type.
+
+    Explicit beats automatic, so a user who turns it off for one anime keeps it off.
+    """
+    meta = project_meta or {}
+    value = (meta.get("settings") or {}).get("prefer_ass_format", "auto")
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("always", "true", "on", "yes", "1"):
+            return True
+        if normalized in ("never", "false", "off", "no", "0"):
+            return False
+    elif value is not None:
+        return bool(value)
+
+    return (meta.get("series_type") or "").strip().lower() == "anime"
+
+
 def _movie_disambiguator(movie_data: Dict) -> str:
     """Suffix (year, or Radarr id as fallback) for movies that share a title —
     e.g. two different releases both titled "The Power". Extracted once so every
@@ -147,14 +183,27 @@ class MediaSyncEngine:
         source_lang_code: str = "en",
         target_lang_code: str = "el",
         target_language: str = "Greek",      # Human-readable name for metadata
+        embedded_extraction: bool = False,
+        embedded_keywords: Optional[str] = None,
+        embedded_auto_translate: bool = False,
+        scan_ass: bool = True,
     ):
         self.sonarr = sonarr_config
         self.radarr = radarr_config
         self.resolver = resolver or PathResolver()
-        self.scanner = SubtitleScannerService(source_lang_code, target_lang_code)
+        self.scan_ass = scan_ass
+        self.scanner = SubtitleScannerService(source_lang_code, target_lang_code, include_ass=scan_ass)
         self.source_lang_code = source_lang_code
         self.target_lang_code = target_lang_code
         self.target_language = target_language
+        # Embedded ASS extraction (docs/PLAN_embedded_ass_extraction.md). Off by default
+        # or when scan_ass is disabled.
+        self.embedded_extraction = embedded_extraction and scan_ass
+        self.embedded_auto_translate = embedded_auto_translate
+        from integrations import embedded_subs as _embedded_subs
+        self.embedded_keywords = _embedded_subs.parse_keywords(embedded_keywords)
+        self._embedded_tools = None
+        self._embedded_tools_resolved = False
 
     # ------------------------------------------------------------------
     # Full sync
@@ -343,12 +392,23 @@ class MediaSyncEngine:
 
         is_new = project_name not in existing_projects_set
         if is_new:
+            # Snapshot before handing the names to a worker thread: full_sync runs
+            # several series concurrently and each new one adds to the shared
+            # existing_projects_set, so iterating the live set off-thread raises
+            # "Set changed size during iteration". Reserve the name in the same
+            # breath, before the first await — two titles can sanitize to one
+            # project_name (the 80-char truncation in make_project_name collides
+            # on long titles), and without the reservation both tasks would see
+            # is_new and each create_project over the other.
+            existing_snapshot = list(existing_projects_set)
+            existing_projects_set.add(project_name)
+
             # Sibling project inheritance check (run in executor to avoid blocking)
-            def get_inherited_data(existing_set):
+            def get_inherited_data(existing_names):
                 inherited_glossary = {"terms": []}
                 inherited_context = ""
                 show_name_lower = series_title.lower()
-                for existing in existing_set:
+                for existing in existing_names:
                     try:
                         meta = storage.load_project_metadata(existing)
                     except Exception as e:
@@ -362,7 +422,7 @@ class MediaSyncEngine:
                             break
                 return inherited_glossary, inherited_context
 
-            inherited_glossary, inherited_context = await loop.run_in_executor(None, get_inherited_data, existing_projects_set)
+            inherited_glossary, inherited_context = await loop.run_in_executor(None, get_inherited_data, existing_snapshot)
 
             await loop.run_in_executor(None, storage.create_project, project_name, {
                 "show_name": series_title,
@@ -377,7 +437,6 @@ class MediaSyncEngine:
                 "glossary": inherited_glossary,
                 "context_guide": inherited_context,
             })
-            existing_projects_set.add(project_name)
             result.new_projects += 1
             logger.info(f"Created project from Sonarr: {project_name}")
         else:
@@ -391,10 +450,19 @@ class MediaSyncEngine:
                 meta["arr_sonarr_id"] = series_id
                 meta["arr_media_type"] = "series"
                 meta["type"] = "show"
+                # Keep series_type current: the "auto" prefer_ass_format default reads it,
+                # so a project created before this field existed (or one Sonarr has since
+                # retyped as anime) would otherwise never pick up the anime behaviour.
+                meta["series_type"] = series_type
                 # Migrate old bazarr_source projects
                 if meta.get("bazarr_source") and not meta.get("arr_source"):
                     meta["arr_source"] = True
                 await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
+
+        # Resolved once per series: gates embedded probing for .srt-only episodes and
+        # the default for dual-format sibling creation below.
+        project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
+        prefer_ass = prefer_ass_for_project(project_meta)
 
         episodes = await get_episodes(self.sonarr, series_id)
         # Fetch all episode files for the series in a single API call to avoid N+1 requests
@@ -447,9 +515,12 @@ class MediaSyncEngine:
             })
             parent_dirs.add(str(Path(media_path).parent))
 
-        # Step 2: Scan unique directories in parallel
+        # Step 2: Scan unique directories in parallel.
+        # Iterate a fixed list, not the set — the zip below pairs results back up by
+        # position, so the two traversals must be in the same order.
+        parent_dir_list = sorted(parent_dirs)
         scan_tasks = []
-        for d_path in parent_dirs:
+        for d_path in parent_dir_list:
             # Check directory accessibility
             def check_dir(p):
                 try:
@@ -470,9 +541,12 @@ class MediaSyncEngine:
                 loop.run_in_executor(None, self.scanner.scan_directory_index, d_path)
             )
         scan_results = await asyncio.gather(*scan_tasks)
-        dir_indices = dict(zip(parent_dirs, scan_results))
+        dir_indices = dict(zip(parent_dir_list, scan_results))
 
-        print(f"Step 3: Processing {len(resolved_episodes)} resolved episodes...")
+        logger.debug(f"Step 3: Processing {len(resolved_episodes)} resolved episodes...")
+        # Media files with no source sidecar — probed for embedded ASS after the loop
+        # so the probes run concurrently instead of serialising this pass.
+        embedded_candidates: List[Dict] = []
         for item in resolved_episodes:
             ep = item["ep"]
             episode_name = item["episode_name"]
@@ -484,13 +558,29 @@ class MediaSyncEngine:
             p_dir = str(Path(media_path).parent)
             dir_index = dir_indices.get(p_dir)
 
-            print(f"  [{episode_name}] Scanning media file...")
+            logger.debug(f"  [{episode_name}] Scanning media file...")
             scan = await loop.run_in_executor(None, self.scanner.scan_media_file, media_path, dir_index)
-            print(f"  [{episode_name}] Scan complete: has_source={scan.has_source_sub}, has_target={scan.has_target_sub}")
+            logger.debug(f"  [{episode_name}] Scan complete: has_source={scan.has_source_sub}, has_target={scan.has_target_sub}")
 
             total_with_file += 1
             if scan.has_target_sub:
                 translated_count += 1
+
+            # Probe for a muxed ASS track when there's nothing on disk, or when this is
+            # an ass-preferring (e.g. anime) project that only has an .srt. Deliberately
+            # before the has_source_sub check: an .srt-only episode still imports its
+            # .srt now and gains the .ass on the pass after extraction lands.
+            if self._wants_embedded_probe(scan, prefer_ass):
+                embedded_candidates.append({
+                    "episode_name": episode_name,
+                    "media_path": media_path,
+                    "import_metadata": {
+                        "arr_sonarr_episode_id": ep.get("id"),
+                        "episode_title": ep_title,
+                        "season": season,
+                        "episode": episode_num,
+                    },
+                })
 
             if not scan.has_source_sub:
                 result.skipped_no_subs += 1
@@ -499,31 +589,40 @@ class MediaSyncEngine:
             seen_episode_names.add(episode_name)
             item["scan"] = scan
 
-            print(f"  [{episode_name}] Generating fingerprint for {scan.source_sub_path}...")
+            logger.debug(f"  [{episode_name}] Generating fingerprint for {scan.source_sub_path}...")
             fingerprint = await loop.run_in_executor(None, self._fingerprint, scan.source_sub_path)
-            print(f"  [{episode_name}] Loading episode metadata...")
+            logger.debug(f"  [{episode_name}] Loading episode metadata...")
             existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
 
             should_import = True
             if existing_meta:
-                data_file = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "data.json"
+                data_file = storage.episode_dir(project_name, episode_name) / "data.json"
                 old_fp = existing_meta.get("arr_sub_fingerprint")
                 if not data_file.exists() or not existing_meta.get("arr_media_path"):
                     should_import = True
                 elif fingerprint is None:
                     should_import = False
-                    imported_count += 1
                 elif old_fp and fingerprint == old_fp:
-                    imported_count += 1
                     should_import = False
                 elif old_fp and fingerprint != old_fp:
                     result.updated_episodes += 1
                 else:
-                    imported_count += 1
                     should_import = False
 
+            # An .ass that has appeared next to the .srt this episode was imported from
+            # makes the .ass the new primary. Move the old episode to its sibling name
+            # first, or the import below overwrites its translations.
+            if should_import and existing_meta:
+                migrated_sibling = await loop.run_in_executor(
+                    None, self._migrate_primary_format_flip,
+                    project_name, episode_name, scan, existing_meta,
+                )
+                if migrated_sibling:
+                    seen_episode_names.add(migrated_sibling)
+                    existing_meta = None  # the base slot is free; import the .ass fresh
+
             if should_import:
-                print(f"  [{episode_name}] Reading subtitle file...")
+                logger.debug(f"  [{episode_name}] Reading subtitle file...")
                 srt_content = await loop.run_in_executor(None, self._read_file, scan.source_sub_path)
                 if not srt_content:
                     result.warnings.append(f"Cannot read subtitle: {scan.source_sub_path}")
@@ -545,35 +644,32 @@ class MediaSyncEngine:
 
                 from utils.source_clean import import_and_clean_srt
                 def _do_import():
-                    print(f"  [{episode_name}] Running import_and_clean_srt...")
-                    res = import_and_clean_srt(
-                        project_name, 
-                        episode_name, 
-                        srt_content, 
-                        filename=Path(scan.source_sub_path).name, 
+                    logger.debug(f"  [{episode_name}] Running import_and_clean_srt...")
+                    import_and_clean_srt(
+                        project_name,
+                        episode_name,
+                        srt_content,
+                        filename=Path(scan.source_sub_path).name,
                         fingerprint=fingerprint,
-                        target_srt_content=target_srt_content
+                        target_srt_content=target_srt_content,
+                        extra_metadata={
+                            "arr_source": True,
+                            "arr_sub_path": scan.source_sub_path,
+                            "arr_media_path": media_path,
+                            "arr_sonarr_episode_id": ep.get("id"),
+                            "episode_title": ep_title,
+                            "season": season,
+                            "episode": episode_num,
+                            "arr_has_target": scan.has_target_sub,
+                            "arr_target_path": scan.target_sub_path if scan.has_target_sub else None,
+                            "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
+                        },
                     )
-                    meta = res["metadata"]
-                    meta.update({
-                        "arr_source": True,
-                        "arr_sub_path": scan.source_sub_path,
-                        "arr_media_path": media_path,
-                        "arr_sonarr_episode_id": ep.get("id"),
-                        "episode_title": ep_title,
-                        "season": season,
-                        "episode": episode_num,
-                        "arr_has_target": scan.has_target_sub,
-                        "arr_target_path": scan.target_sub_path if scan.has_target_sub else None,
-                        "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
-                    })
-                    print(f"  [{episode_name}] Saving episode metadata...")
-                    storage.save_episode_metadata(project_name, episode_name, meta, update_stats=False)
                 await loop.run_in_executor(None, _do_import)
                 imported_count += 1
                 result.new_episodes += 1
             else:
-                print(f"  [{episode_name}] Updating existing metadata/target status...")
+                logger.debug(f"  [{episode_name}] Updating existing metadata/target status...")
                 # Update existing_meta if target sub status changed on disk
                 meta_changed = False
                 if existing_meta.get("arr_has_target") != scan.has_target_sub:
@@ -596,15 +692,33 @@ class MediaSyncEngine:
                     existing_meta["original_filename"] = Path(scan.source_sub_path).name
                     meta_changed = True
 
+                # Media moved/renamed (e.g. *arr relocated it to another share): the export
+                # writes next to arr_media_path, so a stale one makes every export fail
+                # silently. Refresh it here — this branch is the only path a long-lived,
+                # already-imported episode ever takes.
+                if existing_meta.get("arr_media_path") != media_path:
+                    existing_meta["arr_media_path"] = media_path
+                    meta_changed = True
+
                 if meta_changed:
                     await loop.run_in_executor(None, storage.save_episode_metadata, project_name, episode_name, existing_meta, False)
                 imported_count += 1
 
+        # Episodes with no sidecar: look inside the container for an embedded ASS track.
+        if embedded_candidates:
+            from utils.translation_queue import PRIORITY_SYNC
+            queued = await self._run_embedded_probes(
+                project_name, embedded_candidates, PRIORITY_SYNC, result
+            )
+            # Treat a queued extraction as "seen" so prune doesn't delete an episode —
+            # and its exported translation — in the window before the sidecar is
+            # (re)written. Without this, deleting a sidecar by hand would cost the
+            # translation too, then silently re-translate it.
+            seen_episode_names.update(queued)
+
         # Sync secondary formats
         project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
-        create_alt = False
-        if project_meta:
-            create_alt = bool(storage.get_project_setting(project_meta, "translate_all_source_formats", False))
+        create_alt = self._create_alt_formats(project_meta, prefer_ass)
 
         for item in resolved_episodes:
             if "scan" not in item:
@@ -780,7 +894,7 @@ class MediaSyncEngine:
 
             should_import = True
             if existing_meta:
-                data_file = storage.PROJECTS_DIR / project_name / "episodes" / sib_name / "data.json"
+                data_file = storage.episode_dir(project_name, sib_name) / "data.json"
                 old_fp = existing_meta.get("arr_sub_fingerprint")
                 if not data_file.exists() or not existing_meta.get("arr_media_path"):
                     should_import = True
@@ -809,15 +923,6 @@ class MediaSyncEngine:
                         target_srt_content = self._read_file(tgt_path)
 
                 from utils.source_clean import import_and_clean_srt
-                res = import_and_clean_srt(
-                    project_name,
-                    sib_name,
-                    srt_content,
-                    filename=Path(source_path).name,
-                    fingerprint=fp,
-                    target_srt_content=target_srt_content
-                )
-                meta = res["metadata"]
                 # Clean/merge extra metadata
                 extra = dict(base_extra_meta)
                 extra.pop("arr_target_path", None)
@@ -825,18 +930,25 @@ class MediaSyncEngine:
                 extra.pop("arr_sub_path", None)
                 extra.pop("arr_sub_fingerprint", None)
 
-                meta.update({
-                    "arr_source": True,
-                    "arr_sub_path": source_path,
-                    "arr_media_path": media_path,
-                    "arr_secondary_of": base_episode_name,
-                    "arr_source_format": ext,
-                    "arr_has_target": has_target,
-                    "arr_target_path": tgt_path if has_target else None,
-                    "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
-                    **extra,
-                })
-                storage.save_episode_metadata(project_name, sib_name, meta, update_stats=False)
+                import_and_clean_srt(
+                    project_name,
+                    sib_name,
+                    srt_content,
+                    filename=Path(source_path).name,
+                    fingerprint=fp,
+                    target_srt_content=target_srt_content,
+                    extra_metadata={
+                        "arr_source": True,
+                        "arr_sub_path": source_path,
+                        "arr_media_path": media_path,
+                        "arr_secondary_of": base_episode_name,
+                        "arr_source_format": ext,
+                        "arr_has_target": has_target,
+                        "arr_target_path": tgt_path if has_target else None,
+                        "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
+                        **extra,
+                    },
+                )
                 result.new_episodes += 1
             else:
                 meta_changed = False
@@ -856,6 +968,11 @@ class MediaSyncEngine:
                 if existing_meta.get("arr_sub_path") != source_path:
                     existing_meta["arr_sub_path"] = source_path
                     existing_meta["original_filename"] = Path(source_path).name
+                    meta_changed = True
+
+                # Keep the export target current when the media file moved (see base episode).
+                if existing_meta.get("arr_media_path") != media_path:
+                    existing_meta["arr_media_path"] = media_path
                     meta_changed = True
 
                 if meta_changed:
@@ -898,6 +1015,9 @@ class MediaSyncEngine:
 
         is_new = project_name not in existing_projects_set
         if is_new:
+            # Reserve before the first await so two movies resolving to the same
+            # project_name can't both create it (see _sync_series).
+            existing_projects_set.add(project_name)
             await loop.run_in_executor(None, storage.create_project, project_name, {
                 "show_name": movie_title,
                 "target_language": self.target_language,
@@ -908,7 +1028,6 @@ class MediaSyncEngine:
                 "arr_disabled": False,
                 "arr_last_sync": datetime.now().isoformat(),
             })
-            existing_projects_set.add(project_name)
             result.new_projects += 1
         else:
             try:
@@ -954,8 +1073,12 @@ class MediaSyncEngine:
 
         scan = await loop.run_in_executor(None, self.scanner.scan_media_file, media_path)
 
+        project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
+        prefer_ass = prefer_ass_for_project(project_meta)
+
         has_target = scan.has_target_sub
         imported = False
+        migrated_sibling = None
 
         # Movies are single-episode-per-project: the episode folder always mirrors
         # the (caller-resolved, possibly adopted) project name. Previously this was
@@ -971,7 +1094,7 @@ class MediaSyncEngine:
 
             should_import = True
             if existing_meta:
-                data_file = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "data.json"
+                data_file = storage.episode_dir(project_name, episode_name) / "data.json"
                 old_fp = existing_meta.get("arr_sub_fingerprint")
                 if not data_file.exists() or not existing_meta.get("arr_media_path"):
                     should_import = True
@@ -983,35 +1106,56 @@ class MediaSyncEngine:
                     imported = True
                 elif old_fp and fingerprint != old_fp:
                     result.updated_episodes += 1
+                else:
+                    # No stored fingerprint (episode predates fingerprinting): treat as
+                    # up to date rather than re-importing over it, matching the series
+                    # and secondary-format paths.
+                    should_import = False
+                    imported = True
+
+            if should_import and existing_meta:
+                migrated_sibling = await loop.run_in_executor(
+                    None, self._migrate_primary_format_flip,
+                    project_name, episode_name, scan, existing_meta,
+                )
+                if migrated_sibling:
+                    existing_meta = None
 
             if should_import:
                 srt_content = await loop.run_in_executor(None, self._read_file, scan.source_sub_path)
                 if srt_content:
                     target_srt_content = None
                     if has_target and scan.target_sub_path:
-                        target_srt_content = await loop.run_in_executor(None, self._read_file, scan.target_sub_path)
+                        # Seed translations from the on-disk target only for a brand-new or
+                        # not-yet-translated movie. import_and_clean_srt re-aligns the target
+                        # over the source and rewrites data.json, so doing this for an already
+                        # translated movie replaces in-app edits with a possibly-stale export.
+                        already_translated = bool(
+                            existing_meta and (existing_meta.get("translated")
+                                               or existing_meta.get("translation_status") == "completed")
+                        )
+                        if not already_translated:
+                            target_srt_content = await loop.run_in_executor(None, self._read_file, scan.target_sub_path)
 
                     from utils.source_clean import import_and_clean_srt
                     def _do_import_movie():
-                        res = import_and_clean_srt(
-                            project_name, 
-                            episode_name, 
-                            srt_content, 
-                            filename=Path(scan.source_sub_path).name, 
+                        import_and_clean_srt(
+                            project_name,
+                            episode_name,
+                            srt_content,
+                            filename=Path(scan.source_sub_path).name,
                             fingerprint=fingerprint,
-                            target_srt_content=target_srt_content
+                            target_srt_content=target_srt_content,
+                            extra_metadata={
+                                "arr_source": True,
+                                "arr_sub_path": scan.source_sub_path,
+                                "arr_media_path": media_path,
+                                "arr_radarr_id": radarr_id,
+                                "arr_has_target": has_target,
+                                "arr_target_path": scan.target_sub_path if has_target else None,
+                                "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
+                            },
                         )
-                        meta = res["metadata"]
-                        meta.update({
-                            "arr_source": True,
-                            "arr_sub_path": scan.source_sub_path,
-                            "arr_media_path": media_path,
-                            "arr_radarr_id": radarr_id,
-                            "arr_has_target": has_target,
-                            "arr_target_path": scan.target_sub_path if has_target else None,
-                            "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
-                        })
-                        storage.save_episode_metadata(project_name, episode_name, meta, update_stats=False)
                     await loop.run_in_executor(None, _do_import_movie)
                     imported = True
                     result.new_episodes += 1
@@ -1033,6 +1177,16 @@ class MediaSyncEngine:
                     existing_meta["bazarr_has_target"] = has_target
                     meta_changed = True
 
+                if existing_meta.get("arr_sub_path") != scan.source_sub_path:
+                    existing_meta["arr_sub_path"] = scan.source_sub_path
+                    existing_meta["original_filename"] = Path(scan.source_sub_path).name
+                    meta_changed = True
+
+                # Keep the export target current when the media file moved (see series sync).
+                if existing_meta.get("arr_media_path") != media_path:
+                    existing_meta["arr_media_path"] = media_path
+                    meta_changed = True
+
                 if meta_changed:
                     await loop.run_in_executor(None, storage.save_episode_metadata, project_name, episode_name, existing_meta, False)
                 imported = True
@@ -1043,11 +1197,27 @@ class MediaSyncEngine:
         # safety valve in _prune_removed_episodes skips when nothing was seen, so a
         # transient scan failure won't wipe the movie).
         _seen = {episode_name} if scan.has_source_sub else set()
+        if migrated_sibling:
+            _seen.add(migrated_sibling)
+
+        # No sidecar (or no .ass on an ass-preferring project): look inside the container.
+        # A queued extraction counts as "seen" so prune leaves the episode (and its
+        # export) alone until the job lands.
+        if self._wants_embedded_probe(scan, prefer_ass):
+            from utils.translation_queue import PRIORITY_SYNC
+            _seen.update(await self._run_embedded_probes(
+                project_name,
+                [{
+                    "episode_name": episode_name,
+                    "media_path": media_path,
+                    "import_metadata": {"arr_radarr_id": radarr_id},
+                }],
+                PRIORITY_SYNC,
+                result,
+            ))
         if scan.has_source_sub:
             project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
-            create_alt = False
-            if project_meta:
-                create_alt = bool(storage.get_project_setting(project_meta, "translate_all_source_formats", False))
+            create_alt = self._create_alt_formats(project_meta, prefer_ass)
 
             base_extra_meta = {
                 "arr_radarr_id": radarr_id,
@@ -1116,15 +1286,48 @@ class MediaSyncEngine:
         media_path = self.resolver.resolve(raw_media_path)
         scan = await loop.run_in_executor(None, self.scanner.scan_media_file, media_path)
 
-        if not scan.has_source_sub:
-            logger.info(f"Sonarr webhook: no .en.srt found for {raw_media_path}")
-            return None
-
         project_name = make_project_name(series_title)
         ep_data = episodes[0]  # Sonarr sends one episode per download event
         season = ep_data.get("seasonNumber", 0)
         episode_num = ep_data.get("episodeNumber", 0)
         episode_name = make_episode_name(season, episode_num)
+
+        # Resolve prefer_ass from the existing project, falling back to the seriesType
+        # in the payload so a brand-new anime show gets the behaviour on its very first
+        # download rather than only after the next full sync.
+        proj_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name) or {}
+        if not proj_meta.get("series_type"):
+            proj_meta = {**proj_meta, "series_type": series.get("seriesType", "standard")}
+        prefer_ass = prefer_ass_for_project(proj_meta)
+
+        if self._wants_embedded_probe(scan, prefer_ass):
+            from utils.translation_queue import PRIORITY_WEBHOOK
+            new_meta = self._new_project_metadata(series_title, "series")
+            new_meta["series_type"] = proj_meta.get("series_type", "standard")
+            queued = await self._run_embedded_probes(
+                project_name,
+                [{
+                    "episode_name": episode_name,
+                    "media_path": media_path,
+                    "import_metadata": {
+                        "arr_sonarr_series_id": series.get("id"),
+                        "arr_sonarr_episode_id": ep_data.get("id"),
+                        "episode_title": ep_data.get("title", ""),
+                        "season": season,
+                        "episode": episode_num,
+                    },
+                }],
+                PRIORITY_WEBHOOK,
+                SyncResult(),
+                project_metadata=new_meta,
+            )
+            if queued and not scan.has_source_sub:
+                logger.info(f"Sonarr webhook: queued embedded extraction for {raw_media_path}")
+                return None
+
+        if not scan.has_source_sub:
+            logger.info(f"Sonarr webhook: no source subtitle found for {raw_media_path}")
+            return None
 
         result = SyncResult()
         await self._import_episode_file(
@@ -1173,14 +1376,34 @@ class MediaSyncEngine:
         media_path = self.resolver.resolve(raw_media_path)
         scan = await loop.run_in_executor(None, self.scanner.scan_media_file, media_path)
 
-        if not scan.has_source_sub:
-            logger.info(f"Radarr webhook: no .en.srt found for {raw_media_path}")
-            return None
-
         radarr_id = movie.get("id")
         adopted_name = await loop.run_in_executor(None, self._find_project_by_radarr_id, storage, radarr_id)
         project_name = movie_project_name(movie, adopted=adopted_name)
         episode_name = project_name
+
+        proj_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name) or {}
+        prefer_ass = prefer_ass_for_project(proj_meta)
+
+        if self._wants_embedded_probe(scan, prefer_ass):
+            from utils.translation_queue import PRIORITY_WEBHOOK
+            queued = await self._run_embedded_probes(
+                project_name,
+                [{
+                    "episode_name": episode_name,
+                    "media_path": media_path,
+                    "import_metadata": {"arr_radarr_id": radarr_id},
+                }],
+                PRIORITY_WEBHOOK,
+                SyncResult(),
+                project_metadata=self._new_project_metadata(movie_title, "movie"),
+            )
+            if queued and not scan.has_source_sub:
+                logger.info(f"Radarr webhook: queued embedded extraction for {raw_media_path}")
+                return None
+
+        if not scan.has_source_sub:
+            logger.info(f"Radarr webhook: no source subtitle found for {raw_media_path}")
+            return None
 
         result = SyncResult()
         await self._import_episode_file(
@@ -1275,9 +1498,7 @@ class MediaSyncEngine:
                 return  # Fingerprint failed. Prevent spurious update.
             if old_fp and fingerprint == old_fp:
                 project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
-                create_alt = False
-                if project_meta:
-                    create_alt = bool(storage.get_project_setting(project_meta, "translate_all_source_formats", False))
+                create_alt = self._create_alt_formats(project_meta, prefer_ass_for_project(project_meta))
                 await loop.run_in_executor(
                     None,
                     self._sync_secondary_formats,
@@ -1294,6 +1515,15 @@ class MediaSyncEngine:
             if old_fp:
                 result.updated_episodes += 1
 
+            # A newly-arrived .ass outranks the .srt this episode was imported from;
+            # move the old episode to its sibling name so its translations survive.
+            migrated_sibling = await loop.run_in_executor(
+                None, self._migrate_primary_format_flip,
+                project_name, episode_name, scan, existing_meta,
+            )
+            if migrated_sibling:
+                existing_meta = None
+
         srt_content = await loop.run_in_executor(None, self._read_file, scan.source_sub_path)
         if not srt_content:
             result.warnings.append(f"Cannot read: {scan.source_sub_path}")
@@ -1305,31 +1535,27 @@ class MediaSyncEngine:
 
         from utils.source_clean import import_and_clean_srt
         def _do_import_webhook():
-            res = import_and_clean_srt(
-                project_name, 
-                episode_name, 
-                srt_content, 
-                filename=Path(scan.source_sub_path).name, 
+            import_and_clean_srt(
+                project_name,
+                episode_name,
+                srt_content,
+                filename=Path(scan.source_sub_path).name,
                 fingerprint=fingerprint,
-                target_srt_content=target_srt_content
+                target_srt_content=target_srt_content,
+                extra_metadata={
+                    "arr_source": True,
+                    "arr_sub_path": scan.source_sub_path,
+                    "arr_media_path": media_path,
+                    "arr_has_target": scan.has_target_sub,
+                    "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
+                    **ep_meta,
+                },
             )
-            meta = res["metadata"]
-            meta.update({
-                "arr_source": True,
-                "arr_sub_path": scan.source_sub_path,
-                "arr_media_path": media_path,
-                "arr_has_target": scan.has_target_sub,
-                "arr_translated_from_fingerprint": existing_meta.get("arr_translated_from_fingerprint") if existing_meta else None,
-                **ep_meta,
-            })
-            storage.save_episode_metadata(project_name, episode_name, meta)
         await loop.run_in_executor(None, _do_import_webhook)
         result.new_episodes += 1
 
         project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
-        create_alt = False
-        if project_meta:
-            create_alt = bool(storage.get_project_setting(project_meta, "translate_all_source_formats", False))
+        create_alt = self._create_alt_formats(project_meta, prefer_ass_for_project(project_meta))
         await loop.run_in_executor(
             None,
             self._sync_secondary_formats,
@@ -1365,6 +1591,231 @@ class MediaSyncEngine:
         except Exception as e:
             logger.warning(f"Failed to scan projects for radarr_id {radarr_id}: {e}")
         return None
+
+    # ------------------------------------------------------------------
+    # Embedded subtitle discovery (docs/PLAN_embedded_ass_extraction.md)
+    # ------------------------------------------------------------------
+
+    def _get_embedded_tools(self):
+        """Resolve the ffmpeg pair once per engine instead of once per media file."""
+        if not self._embedded_tools_resolved:
+            from integrations import embedded_subs
+            from utils import storage
+            self._embedded_tools = embedded_subs.resolve_tools(storage.load_global_config())
+            self._embedded_tools_resolved = True
+            if not self._embedded_tools:
+                logger.warning(
+                    "Embedded subtitle extraction is enabled but ffmpeg/ffprobe was not found. "
+                    "Set ffmpeg_path in Settings or install ffmpeg on PATH."
+                )
+        return self._embedded_tools
+
+    @staticmethod
+    def _create_alt_formats(project_meta: Optional[Dict], prefer_ass: bool) -> bool:
+        """Whether to create dual-format sibling episodes for non-primary source formats.
+
+        An explicit ``translate_all_source_formats`` on the project always wins. When it
+        is unset, ass-preferring projects default to **on**: the point of preferring
+        ``.ass`` is to get the typeset track, and the ``.srt`` that was there first is
+        still worth translating so viewers keep both options.
+        """
+        if not project_meta:
+            return False
+        from utils import storage
+        return bool(storage.get_project_setting(
+            project_meta, "translate_all_source_formats", prefer_ass
+        ))
+
+    @staticmethod
+    def _has_ass_source(scan) -> bool:
+        """True when a source-language .ass/.ssa sidecar is already on disk."""
+        return any(
+            Path(p).suffix.lower() in _ASS_EXTENSIONS for p in (scan.source_subs or [])
+        )
+
+    def _wants_embedded_probe(self, scan, prefer_ass: bool) -> bool:
+        """Should this media file be probed for a muxed ASS or SRT track?
+
+        Two triggers:
+        1. No source subtitle on disk at all (not scan.has_source_sub) -> probe for any embedded text track (ASS or SRT).
+        2. prefer_ass is True and no .ass exists on disk (an .srt-only episode still needs its typeset track).
+        """
+        if not self.embedded_extraction:
+            return False
+        if not scan.has_source_sub:
+            return True
+        if prefer_ass and not self._has_ass_source(scan):
+            return True
+        return False
+
+    @staticmethod
+    def _migrate_primary_format_flip(project_name: str, episode_name: str,
+                                     scan, existing_meta: Dict) -> Optional[str]:
+        """Move an episode aside when its primary source format changes underneath it.
+
+        An ``.ass`` appearing next to the ``.srt`` an episode was imported from (whether
+        extracted from the container or dropped in by hand) makes the ``.ass`` the new
+        primary, because ``_EXT_PRIORITY`` ranks it first. Left alone, the base episode
+        keeps its name, gets the new fingerprint, and ``import_and_clean_srt`` rewrites
+        its ``data.json`` — silently destroying every translation and edit made against
+        the old format.
+
+        Renaming it to ``"<episode> [srt]"`` is precisely where the dual-format sibling
+        model would have put it anyway: the next ``_sync_secondary_formats`` pass finds
+        it, matches its unchanged fingerprint, and leaves its translations alone.
+
+        Returns the sibling episode name when the episode was moved (so the caller can
+        import the new primary into a clean slot and protect the sibling from prune),
+        or None when nothing needed to happen.
+        """
+        from utils import storage
+
+        old_ext = (existing_meta.get("original_extension") or "").lstrip(".").lower()
+        if not old_ext:
+            old_ext = Path(existing_meta.get("arr_sub_path") or "").suffix.lstrip(".").lower()
+        new_ext = Path(scan.source_sub_path or "").suffix.lstrip(".").lower()
+        if not old_ext or not new_ext or old_ext == new_ext:
+            return None
+
+        # Only migrate when the old format is STILL on disk. If it's gone, there is no
+        # sibling for it to become — the source genuinely changed and a re-import is right.
+        if not any(Path(p).suffix.lstrip(".").lower() == old_ext for p in (scan.source_subs or [])):
+            return None
+
+        sibling = secondary_episode_name(episode_name, old_ext)
+        if storage.load_episode_metadata(project_name, sibling) is not None:
+            return None  # a sibling for that format already exists; never clobber it
+        if not storage.rename_episode(project_name, episode_name, sibling):
+            return None
+
+        sib_meta = storage.load_episode_metadata(project_name, sibling) or {}
+        sib_meta["arr_secondary_of"] = episode_name
+        sib_meta["arr_source_format"] = old_ext
+        storage.save_episode_metadata(project_name, sibling, sib_meta, False)
+        logger.info(
+            f"Primary subtitle format for {project_name}/{episode_name} changed "
+            f"{old_ext} -> {new_ext}; moved the existing episode to '{sibling}' so its "
+            f"translations survive."
+        )
+        return sibling
+
+    def _new_project_metadata(self, title: str, media_type: str) -> Dict:
+        """Metadata for a project the extraction job may have to create itself.
+
+        Webhook paths queue an extraction for a show/movie that has no project yet.
+        Creating it here and enqueuing separately would race the worker, so the
+        metadata travels with the job and the worker creates the project only if it
+        is still missing when the job runs.
+        """
+        return {
+            "show_name": title,
+            "target_language": self.target_language,
+            "type": media_type,
+            "arr_source": True,
+            "arr_media_type": media_type,
+            "arr_disabled": False,
+            "arr_last_sync": datetime.now().isoformat(),
+        }
+
+    async def _run_embedded_probes(
+        self, project_name: str, candidates: List[Dict], priority: int, result: SyncResult,
+        project_metadata: Optional[Dict] = None,
+    ) -> set:
+        """Probe several containers concurrently; return the episode names that got a job.
+
+        Bounded at 4: ffprobe is a header read, but on a network share a few hundred
+        unbounded probes would still saturate the link.
+        """
+        loop = asyncio.get_running_loop()
+        sem = asyncio.Semaphore(4)
+        queued: set = set()
+
+        async def probe_one(candidate: Dict):
+            async with sem:
+                try:
+                    ok = await loop.run_in_executor(
+                        None, self._probe_and_enqueue_extraction,
+                        project_name, candidate["episode_name"], candidate["media_path"],
+                        candidate["import_metadata"], priority, result, project_metadata,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Embedded probe failed for {project_name}/{candidate['episode_name']}: {e}"
+                    )
+                    return
+            if ok:
+                queued.add(candidate["episode_name"])
+
+        await asyncio.gather(*[probe_one(c) for c in candidates])
+        return queued
+
+    def _probe_and_enqueue_extraction(
+        self, project_name: str, episode_name: str, media_path: str,
+        import_metadata: Dict, priority: int, result: SyncResult,
+        project_metadata: Optional[Dict] = None,
+    ) -> bool:
+        """Probe a container that has no source sidecar and queue an extraction job.
+
+        Runs during sync because ffprobe only reads container headers — cheap even
+        over SMB, and cached by media fingerprint so a library full of files with no
+        embedded subtitles isn't re-probed on every pass. The *extraction* (which streams
+        the whole file) is deliberately not done here; it goes to the worker.
+
+        Returns True when a job was queued.
+        """
+        from integrations import embedded_subs
+        from utils import media_probe_cache
+
+        tools = self._get_embedded_tools()
+        if not tools:
+            return False
+
+        fingerprint = self._fingerprint(media_path)
+        cached = media_probe_cache.get(media_path, fingerprint)
+        if cached is not None:
+            tracks = [embedded_subs.SubtitleTrack.from_dict(t) for t in cached]
+        else:
+            tracks = embedded_subs.probe_subtitle_tracks(media_path, tools)
+            media_probe_cache.put(media_path, fingerprint, embedded_subs.describe_candidates(tracks))
+
+        if not tracks:
+            return False
+
+        track = embedded_subs.select_track(tracks, self.source_lang_code, self.embedded_keywords)
+        if not track:
+            # Something is in there, it's just not usable — say so once, because
+            # "found 3 PGS tracks" is a very different problem from "found nothing".
+            image_tracks = [t for t in tracks if t.is_image]
+            if image_tracks:
+                result.warnings.append(
+                    f"{project_name}/{episode_name}: {len(image_tracks)} image-based subtitle "
+                    f"track(s) found in the media file — these need OCR and cannot be extracted."
+                )
+            return False
+
+        from services.queue_service import enqueue_extraction
+        enqueue_extraction(
+            project_name,
+            episode_name,
+            priority,
+            {
+                "media_path": media_path,
+                "stream_index": track.index,
+                "source_lang_code": self.source_lang_code,
+                "output_format": track.output_format,
+                "track": track.to_dict(),
+                "candidates": embedded_subs.describe_candidates(tracks),
+                "import_metadata": import_metadata,
+                "project_metadata": project_metadata,
+                "auto_translate": self.embedded_auto_translate,
+            },
+        )
+        logger.info(
+            f"Queued embedded subtitle extraction for {project_name}/{episode_name}: "
+            f"stream {track.index} [{track.output_format.upper()}] ({track.title or 'untitled'}, {track.frames or '?'} events"
+            f"{', deprioritized: ' + '; '.join(track.penalty_reasons) if track.penalized else ''})"
+        )
+        return True
 
     @staticmethod
     def _fingerprint(path: Optional[str]) -> Optional[str]:

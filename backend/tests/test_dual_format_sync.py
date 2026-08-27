@@ -380,6 +380,143 @@ async def test_sibling_pruned_when_source_removed(
     assert result.removed_episodes == 1
 
 
+@pytest.mark.asyncio
+async def test_resync_refreshes_stale_media_path(
+    setup_storage, mock_media_dir, mock_arr_clients
+):
+    """Media moved by *arr (e.g. to another share) must refresh arr_media_path on re-sync.
+
+    The export writes next to arr_media_path, so a stale one makes every export fail
+    silently — the exporter logs and swallows the error. An already-imported episode
+    with an unchanged source fingerprint only ever takes the "no import" branch, so the
+    refresh has to happen there.
+    """
+    project_name = "Show Title"
+    storage.create_project(project_name, {
+        "show_name": "Show Title",
+        "target_language": "Greek",
+        "settings": {"translate_all_source_formats": True},
+    })
+
+    resolver = PathResolver(mappings=[
+        {"remote": "/mock/tv/Show Title", "local": str(mock_media_dir["dir"].parent)}
+    ])
+    engine = MediaSyncEngine(
+        sonarr_config=SonarrConfig(api_key="key", enabled=True),
+        resolver=resolver,
+        target_lang_code="el",
+        target_language="Greek",
+    )
+
+    await engine.full_sync()
+    real_media_path = storage.load_episode_metadata(project_name, "S01E01")["arr_media_path"]
+
+    # Poison both the base and the sibling with a path on a share that no longer exists.
+    stale = str(Path("//old-share/d") / Path(real_media_path).name)
+    for ep in ("S01E01", "S01E01 [srt]"):
+        meta = storage.load_episode_metadata(project_name, ep)
+        meta["arr_media_path"] = stale
+        storage.save_episode_metadata(project_name, ep, meta)
+
+    # Source content is untouched, so this re-sync takes the "already imported" branch.
+    result = await engine.full_sync()
+    assert result.new_episodes == 0
+
+    for ep in ("S01E01", "S01E01 [srt]"):
+        assert storage.load_episode_metadata(project_name, ep)["arr_media_path"] == real_media_path
+
+
+@pytest.mark.asyncio
+async def test_movie_resync_refreshes_stale_media_path(
+    setup_storage, mock_movie_dir, mock_arr_clients
+):
+    """Same stale-media-path refresh as the series case, on the Radarr path."""
+    project_name = "Movie Title (id-1)"
+    storage.create_project(project_name, {
+        "show_name": "Movie Title",
+        "target_language": "Greek",
+        "settings": {"translate_all_source_formats": False},
+    })
+
+    resolver = PathResolver(mappings=[
+        {"remote": "/mock/movies/Movie Title", "local": str(mock_movie_dir["dir"])}
+    ])
+    engine = MediaSyncEngine(
+        radarr_config=RadarrConfig(api_key="key", enabled=True),
+        resolver=resolver,
+        target_lang_code="el",
+        target_language="Greek",
+    )
+
+    await engine.full_sync()
+    meta = storage.load_episode_metadata(project_name, project_name)
+    real_media_path = meta["arr_media_path"]
+
+    meta["arr_media_path"] = str(Path("//old-share/d") / Path(real_media_path).name)
+    storage.save_episode_metadata(project_name, project_name, meta)
+
+    await engine.full_sync()
+    assert storage.load_episode_metadata(project_name, project_name)["arr_media_path"] == real_media_path
+
+
+def test_import_persists_extra_metadata_in_the_same_write(setup_storage):
+    """extra_metadata must land in the episode's metadata.json via import_and_clean_srt
+    itself, not a follow-up save."""
+    from utils.source_clean import import_and_clean_srt
+
+    storage.create_project("P", {"show_name": "P", "target_language": "Greek"})
+    import_and_clean_srt(
+        "P", "S01E01", SAMPLE_SRT,
+        filename="P.S01E01.en.srt",
+        extra_metadata={"arr_source": True, "arr_media_path": "/media/P.S01E01.mkv"},
+    )
+
+    meta = storage.load_episode_metadata("P", "S01E01")
+    assert meta["arr_media_path"] == "/media/P.S01E01.mkv"
+    assert meta["arr_source"] is True
+
+
+@pytest.mark.asyncio
+async def test_import_metadata_complete_without_followup_save(
+    setup_storage, mock_media_dir, mock_arr_clients, monkeypatch
+):
+    """An imported episode must never be left without arr_media_path / arr_source.
+
+    The sync engine used to enrich the metadata returned by import_and_clean_srt and
+    save a *second* time. Anything that interrupted the run in between (the concurrent
+    set-mutation crash did exactly this) left an episode with original.srt + data.json
+    but no arr_media_path — the background worker rejects it forever, and prune skips
+    it because arr_source is missing too, so it can never be cleaned up automatically.
+
+    Neutralising the follow-up save must therefore change nothing about the result.
+    """
+    project_name = "Show Title"
+    storage.create_project(project_name, {
+        "show_name": "Show Title",
+        "target_language": "Greek",
+        "settings": {"translate_all_source_formats": True},
+    })
+
+    monkeypatch.setattr(storage, "save_episode_metadata", lambda *a, **k: None)
+
+    resolver = PathResolver(mappings=[
+        {"remote": "/mock/tv/Show Title", "local": str(mock_media_dir["dir"].parent)}
+    ])
+    engine = MediaSyncEngine(
+        sonarr_config=SonarrConfig(api_key="key", enabled=True),
+        resolver=resolver,
+        target_lang_code="el",
+        target_language="Greek",
+    )
+    await engine.full_sync()
+
+    for ep in ("S01E01", "S01E01 [srt]"):
+        meta = storage.load_episode_metadata(project_name, ep)
+        assert meta, f"{ep} was not imported at all"
+        assert meta.get("arr_media_path"), f"{ep} imported without arr_media_path"
+        assert meta.get("arr_source") is True, f"{ep} imported without arr_source"
+
+
 def test_sibling_export_extension(setup_storage, mock_media_dir):
     """Verify that exporting translated siblings writes the correct extension without collisions."""
     project_name = "Show Title"

@@ -1,115 +1,127 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'framer-motion';
-import { Save, Edit2, Check, X, Globe, User, Book, Shield, Sparkles, Download, Upload, Trash2, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Save, Edit2, Check, X, Globe, User, Book, Shield, Sparkles,
+    Download, Upload, Trash2, Plus, RotateCcw, ArrowUpCircle,
+    EyeOff, Eye, AlertCircle, ChevronDown, ChevronUp, Search,
+    Filter, FileSpreadsheet, FileJson, CheckSquare, Square,
+    ArrowRight, Info, Layers
+} from 'lucide-react';
+import { api } from '../api';
+import { useToast } from '../context/ToastContext';
+import TermHarvestModal from './TermHarvestModal';
 
-// Stable client-side row ids so React keys survive prepend/remove (otherwise an
-// index key reuses the wrong row's DOM and the text cursor jumps). UI-only —
-// stripped before any value leaves the component.
 let _uidCounter = 0;
 const ensureUids = (arr) => (arr || []).map(t => (t && t._uid != null) ? t : { ...t, _uid: `t${Date.now()}_${_uidCounter++}` });
 const stripUids = (arr) => (arr || []).map(({ _uid, ...rest }) => rest);
 
-const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false, onChange, hideSaveButton = false, onUpdateTermsInScenes }) => {
+const SOURCE_FILTERS = {
+    ALL: 'all',
+    INHERITED: 'inherited',
+    OVERRIDE: 'override',
+    PROJECT_ONLY: 'project_only',
+    UPSTREAM_MODIFIED: 'upstream_modified',
+    SUPPRESSED: 'suppressed',
+};
+
+const TYPE_BADGES = {
+    person: { label: 'Character', color: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900' },
+    character: { label: 'Character', color: 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900' },
+    location: { label: 'Location', color: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900' },
+    organization: { label: 'Organization', color: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-900' },
+    item: { label: 'Item / Object', color: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-900' },
+    object: { label: 'Item / Object', color: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-900' },
+    technique: { label: 'Technique', color: 'bg-rose-100 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-900' },
+    concept: { label: 'Concept', color: 'bg-teal-100 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border-teal-200 dark:border-teal-900' },
+    other: { label: 'Other', color: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700' },
+};
+
+const GlossaryEditor = ({
+    glossary,
+    onSave,
+    onCancel,
+    isSaving,
+    readOnly = false,
+    onChange,
+    hideSaveButton = false,
+    onUpdateTermsInScenes,
+    projectName = null,
+    parentProject = null,
+    suppressedTerms: initialSuppressed = []
+}) => {
     const [terms, setTerms] = useState(() => ensureUids(glossary.terms || []));
+    const [suppressedTerms, setSuppressedTerms] = useState(() => initialSuppressed || []);
+    const [showSuppressed, setShowSuppressed] = useState(false);
     const [selectedTerms, setSelectedTerms] = useState(new Set());
     const [syncDialog, setSyncDialog] = useState(null);
+    const [promotingTerm, setPromotingTerm] = useState(null);
+    const [harvestModalOpen, setHarvestModalOpen] = useState(false);
+    const [expandedDiffUid, setExpandedDiffUid] = useState(null);
 
-    const [filter, setFilter] = useState('');
-    const [activeTab, setActiveTab] = useState('All');
+    // Facet Filters
+    const [searchFilter, setSearchFilter] = useState('');
+    const [sourceFilter, setSourceFilter] = useState(SOURCE_FILTERS.ALL);
+    const [typeFilter, setTypeFilter] = useState('All');
     const [customCategories, setCustomCategories] = useState([]);
+
     const fileInputRef = useRef(null);
+    const csvInputRef = useRef(null);
     const isInternalUpdateRef = useRef(false);
-    // True once the user has made edits not yet persisted via Save. Guards against a
-    // background reload (job completion / parent re-fetch) silently overwriting them.
     const dirtyRef = useRef(false);
     const debounceTimerRef = useRef(null);
+    const toast = useToast();
 
-    // Derive available types from defaults + existing terms + custom added
-    const defaultTypes = ['Person', 'Location', 'Item', 'Concept', 'Other'];
+    // Map of original loaded terms to detect overrides and provide revert values
+    const originalTermsMapRef = useRef(new Map());
+    useEffect(() => {
+        const map = new Map();
+        (glossary.terms || []).forEach(t => {
+            if (t.term) {
+                map.set(t.term.toLowerCase().strip ? t.term.toLowerCase().strip() : t.term.toLowerCase(), t);
+            }
+        });
+        originalTermsMapRef.current = map;
+    }, [glossary.terms]);
+
+    const defaultTypes = ['Person', 'Location', 'Item', 'Organization', 'Technique', 'Concept', 'Other'];
     const termTypes = [...new Set(terms.map(t => t.type || 'other'))].map(t => t.charAt(0).toUpperCase() + t.slice(1));
     const allTypes = [...new Set([...defaultTypes, ...termTypes, ...customCategories])];
 
-    const handleAddCategory = () => {
-        const name = prompt("Enter new category name:");
-        if (name) {
-            const formatted = name.charAt(0).toUpperCase() + name.slice(1);
-            if (!allTypes.includes(formatted)) {
-                setCustomCategories([...customCategories, formatted]);
-                setActiveTab(formatted);
-            }
+    const prevGlossaryTermsRef = useRef(glossary.terms);
+    useEffect(() => {
+        if (glossary.terms !== prevGlossaryTermsRef.current) {
+            setTerms(ensureUids(glossary.terms || []));
+            dirtyRef.current = false;
+            prevGlossaryTermsRef.current = glossary.terms;
         }
-    };
+    }, [glossary.terms]);
 
-    const toggleTermSelection = (termString) => {
-        if (!termString) return;
-        const newSelected = new Set(selectedTerms);
-        if (newSelected.has(termString)) newSelected.delete(termString);
-        else newSelected.add(termString);
-        setSelectedTerms(newSelected);
-    };
-
-    const handleSelectAll = () => {
-        if (filteredTerms.length === 0) return;
-        const visibleNames = filteredTerms.map(t => t.term.term).filter(Boolean);
-        const allSelected = visibleNames.every(name => selectedTerms.has(name));
-        
-        const newSelected = new Set(selectedTerms);
-        if (allSelected) {
-            visibleNames.forEach(name => newSelected.delete(name));
-        } else {
-            visibleNames.forEach(name => newSelected.add(name));
+    useEffect(() => {
+        if (initialSuppressed) {
+            setSuppressedTerms(initialSuppressed);
         }
-        setSelectedTerms(newSelected);
-    };
+    }, [initialSuppressed]);
 
-    const handleUpdateScenes = () => {
-        if (!onUpdateTermsInScenes || selectedTerms.size === 0) return;
-        onUpdateTermsInScenes(Array.from(selectedTerms));
-        setSelectedTerms(new Set());
-    };
-
-    // Debounced sync with parent to prevent rapid re-renders during fast typing
-    React.useEffect(() => {
+    // Debounced sync with parent
+    useEffect(() => {
         if (onChange && isInternalUpdateRef.current) {
-            // Clear any pending debounce timer
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
 
-            // Set a new debounce timer - only notify parent after 300ms of no changes
             debounceTimerRef.current = setTimeout(() => {
-                onChange({ ...glossary, terms: stripUids(terms) });
+                onChange({ ...glossary, terms: stripUids(terms) }, suppressedTerms);
                 isInternalUpdateRef.current = false;
             }, 300);
         }
 
-        // Cleanup function to clear timer on unmount
         return () => {
             if (debounceTimerRef.current) {
                 clearTimeout(debounceTimerRef.current);
             }
         };
-    }, [terms]);
-
-    // Track the last glossary terms prop we received to detect external changes
-    const prevGlossaryTermsRef = useRef(glossary.terms);
-
-    // Sync with prop changes (e.g. when switching projects or reloading)
-    React.useEffect(() => {
-        // Simple length check or reference check might be enough, but let's be safe.
-        // If the prop reference changes AND it's different from what we have, update.
-        if (glossary.terms !== prevGlossaryTermsRef.current) {
-            // Adopt the incoming terms only when the user has no unsaved edits — never
-            // clobber them on a background reload. dirtyRef stays set until Save, so it
-            // covers the whole pending-edits window. (A real project switch remounts
-            // this component, so local state resets there regardless.)
-            if (!dirtyRef.current) {
-                setTerms(ensureUids(glossary.terms || []));
-            }
-            prevGlossaryTermsRef.current = glossary.terms;
-        }
-    }, [glossary.terms]);
+    }, [terms, suppressedTerms]);
 
     const handleTermChange = (index, field, value) => {
         if (readOnly) return;
@@ -122,11 +134,119 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
 
     const handleRemoveTerm = (index) => {
         if (readOnly) return;
-        if (window.confirm("Are you sure you want to remove this term?")) {
-            isInternalUpdateRef.current = true;
-            dirtyRef.current = true;
-            const newTerms = terms.filter((_, i) => i !== index);
-            setTerms(newTerms);
+        const targetTerm = terms[index];
+        if (!targetTerm) return;
+
+        if (targetTerm.inherited) {
+            if (window.confirm(`"${targetTerm.term}" is inherited from parent universe (${targetTerm.inherited_from || 'Universe'}).\n\nSuppress this term for this project? (It won't affect the universe or sibling shows).`)) {
+                isInternalUpdateRef.current = true;
+                dirtyRef.current = true;
+                const normName = (targetTerm.term || '').trim();
+                if (normName && !suppressedTerms.includes(normName)) {
+                    setSuppressedTerms([...suppressedTerms, normName]);
+                }
+                setTerms(terms.filter((_, i) => i !== index));
+                toast?.info(`"${targetTerm.term}" suppressed for this project.`);
+            }
+        } else {
+            if (window.confirm(`Are you sure you want to remove "${targetTerm.term || 'this term'}"?`)) {
+                isInternalUpdateRef.current = true;
+                dirtyRef.current = true;
+                setTerms(terms.filter((_, i) => i !== index));
+            }
+        }
+    };
+
+    const handleUnsuppressTerm = (termName) => {
+        isInternalUpdateRef.current = true;
+        dirtyRef.current = true;
+        setSuppressedTerms(suppressedTerms.filter(t => t.toLowerCase() !== termName.toLowerCase()));
+        toast?.success(`"${termName}" restored. Click Save to apply.`);
+    };
+
+    const handleRevertToUniverse = (index) => {
+        const targetTerm = terms[index];
+        if (!targetTerm || !targetTerm.term) return;
+        const parentDef = targetTerm.parent_term || originalTermsMapRef.current.get(targetTerm.term.toLowerCase());
+        if (!parentDef) return;
+
+        isInternalUpdateRef.current = true;
+        dirtyRef.current = true;
+        const newTerms = [...terms];
+        newTerms[index] = {
+            ...newTerms[index],
+            translation: parentDef.translation || '',
+            type: parentDef.type || 'other',
+            gender: parentDef.gender || 'neuter',
+            description: parentDef.description || '',
+            keep_original: parentDef.keep_original || false,
+            case_sensitive: parentDef.case_sensitive !== false,
+            is_override: false,
+            upstream_modified: false,
+        };
+        setTerms(newTerms);
+        toast?.info(`Reverted "${targetTerm.term}" to universe standard.`);
+    };
+
+    const handleAdoptUpstream = (index) => {
+        const targetTerm = terms[index];
+        if (!targetTerm || !targetTerm.parent_term) return;
+        const parentDef = targetTerm.parent_term;
+
+        isInternalUpdateRef.current = true;
+        dirtyRef.current = true;
+        const newTerms = [...terms];
+        newTerms[index] = {
+            ...newTerms[index],
+            translation: parentDef.translation || targetTerm.translation,
+            type: parentDef.type || targetTerm.type,
+            gender: parentDef.gender || targetTerm.gender,
+            description: parentDef.description || targetTerm.description,
+            keep_original: parentDef.keep_original ?? targetTerm.keep_original,
+            case_sensitive: parentDef.case_sensitive ?? targetTerm.case_sensitive,
+            upstream_modified: false,
+        };
+        setTerms(newTerms);
+        toast?.success(`Adopted upstream definition for "${targetTerm.term}".`);
+    };
+
+    const handleSilenceUpstreamDiff = (index) => {
+        const newTerms = [...terms];
+        newTerms[index] = { ...newTerms[index], upstream_modified: false };
+        setTerms(newTerms);
+    };
+
+    const handleInlinePromote = async (term) => {
+        if (!projectName || !parentProject) {
+            toast?.error("No parent universe linked to promote to.");
+            return;
+        }
+        if (!term.term || !term.translation) {
+            toast?.warning("Term and translation are required before promoting.");
+            return;
+        }
+
+        setPromotingTerm(term.term);
+        try {
+            await api.promoteTerm(projectName, {
+                term: term.term,
+                translation: term.translation,
+                type: term.type,
+                gender: term.gender,
+                case_sensitive: term.case_sensitive,
+                keep_original: term.keep_original,
+                description: term.description,
+            });
+            toast?.success(`"${term.term}" promoted to ${parentProject} universe!`);
+            setTerms(prev => prev.map(t => (t.term.toLowerCase() === term.term.toLowerCase())
+                ? { ...t, inherited: true, inherited_from: parentProject, is_override: false, upstream_modified: false }
+                : t
+            ));
+        } catch (err) {
+            console.error("Failed to promote term", err);
+            toast?.error("Failed to promote term to universe.");
+        } finally {
+            setPromotingTerm(null);
         }
     };
 
@@ -135,485 +255,805 @@ const GlossaryEditor = ({ glossary, onSave, onCancel, isSaving, readOnly = false
             _uid: `t${Date.now()}_${_uidCounter++}`,
             term: '',
             translation: '',
-            type: activeTab !== 'All' ? activeTab.toLowerCase() : 'other',
+            type: typeFilter !== 'All' ? typeFilter.toLowerCase() : 'other',
             gender: 'neuter',
             description: '',
             keep_original: false,
-            case_sensitive: false
+            case_sensitive: false,
+            inherited: false,
+            is_override: false,
+            upstream_modified: false,
         };
-        // Add to the beginning of the list so the user sees it immediately
         isInternalUpdateRef.current = true;
         dirtyRef.current = true;
         setTerms([newTerm, ...terms]);
     };
 
-    const getModifiedInheritedTerms = () => {
-        const originalTermsMap = new Map();
-        if (glossary && glossary.terms) {
-            glossary.terms.forEach(t => {
-                if (t.term) {
-                    originalTermsMap.set(t.term.toLowerCase(), t);
-                }
-            });
-        }
-        
-        return terms.filter(t => {
-            if (!t.inherited || !t.term) return false;
-            const orig = originalTermsMap.get(t.term.toLowerCase());
-            if (!orig) return false;
-            
-            return (
-                t.translation !== orig.translation ||
-                t.type !== orig.type ||
-                t.gender !== orig.gender ||
-                t.description !== orig.description ||
-                t.keep_original !== orig.keep_original ||
-                t.case_sensitive !== orig.case_sensitive
-            );
+    // Bulk selection handlers
+    const toggleSelectTerm = (uid) => {
+        setSelectedTerms(prev => {
+            const next = new Set(prev);
+            if (next.has(uid)) next.delete(uid);
+            else next.add(uid);
+            return next;
         });
+    };
+
+    const toggleSelectAllFiltered = () => {
+        const visibleUids = filteredTerms.map(t => t.term._uid);
+        const allSelected = visibleUids.every(uid => selectedTerms.has(uid));
+        setSelectedTerms(prev => {
+            const next = new Set(prev);
+            if (allSelected) {
+                visibleUids.forEach(uid => next.delete(uid));
+            } else {
+                visibleUids.forEach(uid => next.add(uid));
+            }
+            return next;
+        });
+    };
+
+    // Bulk actions
+    const handleBulkPromote = async () => {
+        if (!parentProject || !projectName) return;
+        const selectedList = terms.filter(t => selectedTerms.has(t._uid) && t.term);
+        if (selectedList.length === 0) return;
+
+        try {
+            await api.promoteTermsBatch(projectName, selectedList);
+            toast.success(`Promoted ${selectedList.length} terms to ${parentProject} universe!`);
+            setTerms(prev => prev.map(t => selectedTerms.has(t._uid)
+                ? { ...t, inherited: true, inherited_from: parentProject, is_override: false, upstream_modified: false }
+                : t
+            ));
+            setSelectedTerms(new Set());
+        } catch (e) {
+            toast.error("Failed to batch promote terms.");
+        }
+    };
+
+    const handleBulkSuppress = async () => {
+        const selectedList = terms.filter(t => selectedTerms.has(t._uid) && t.term);
+        if (selectedList.length === 0) return;
+
+        const termNames = selectedList.map(t => t.term.trim());
+        try {
+            await api.suppressTermsBatch(projectName, termNames);
+            setSuppressedTerms(prev => [...new Set([...prev, ...termNames])]);
+            setTerms(prev => prev.filter(t => !selectedTerms.has(t._uid)));
+            setSelectedTerms(new Set());
+            toast.success(`Suppressed ${selectedList.length} terms.`);
+        } catch (e) {
+            toast.error("Failed to batch suppress terms.");
+        }
+    };
+
+    const handleBulkRevert = async () => {
+        const selectedList = terms.filter(t => selectedTerms.has(t._uid) && t.term);
+        if (selectedList.length === 0) return;
+
+        const termNames = selectedList.map(t => t.term.trim());
+        try {
+            await api.revertTermsBatch(projectName, termNames);
+            toast.success(`Reverted overrides for ${selectedList.length} terms.`);
+            // Reload or refresh locally
+            setTerms(prev => prev.map(t => {
+                if (selectedTerms.has(t._uid) && t.parent_term) {
+                    return {
+                        ...t,
+                        ...t.parent_term,
+                        is_override: false,
+                        upstream_modified: false,
+                    };
+                }
+                return t;
+            }));
+            setSelectedTerms(new Set());
+        } catch (e) {
+            toast.error("Failed to batch revert terms.");
+        }
+    };
+
+    const handleBulkDelete = () => {
+        const count = selectedTerms.size;
+        if (!count) return;
+        if (window.confirm(`Delete / remove ${count} selected term(s)?`)) {
+            isInternalUpdateRef.current = true;
+            dirtyRef.current = true;
+            setTerms(prev => prev.filter(t => !selectedTerms.has(t._uid)));
+            setSelectedTerms(new Set());
+            toast.info(`Removed ${count} terms.`);
+        }
+    };
+
+    const handleHarvestedTermsAdded = (newHarvestedTerms, directToUniverse = false) => {
+        if (!newHarvestedTerms || newHarvestedTerms.length === 0) return;
+        if (directToUniverse) {
+            // Added to universe, mark as inherited
+            const formatted = newHarvestedTerms.map(t => ({
+                ...t,
+                _uid: `t${Date.now()}_${_uidCounter++}`,
+                inherited: true,
+                inherited_from: parentProject,
+                is_override: false,
+            }));
+            setTerms(prev => [...formatted, ...prev]);
+        } else {
+            const formatted = newHarvestedTerms.map(t => ({
+                ...t,
+                _uid: `t${Date.now()}_${_uidCounter++}`,
+                inherited: false,
+                is_override: false,
+            }));
+            setTerms(prev => [...formatted, ...prev]);
+            isInternalUpdateRef.current = true;
+            dirtyRef.current = true;
+        }
     };
 
     const handleSave = () => {
         const cleanTerms = stripUids(terms);
-        const modifiedInherited = getModifiedInheritedTerms();
-        if (modifiedInherited.length > 0) {
-            setSyncDialog({
-                terms: modifiedInherited,
-                onConfirmGlobal: () => {
-                    dirtyRef.current = false;
-                    onSave({ ...glossary, terms: cleanTerms }, true);
-                    setSyncDialog(null);
-                },
-                onConfirmLocal: () => {
-                    dirtyRef.current = false;
-                    onSave({ ...glossary, terms: cleanTerms }, false);
-                    setSyncDialog(null);
-                },
-                onCancel: () => {
-                    setSyncDialog(null);
-                }
-            });
-        } else {
-            dirtyRef.current = false;
-            onSave({ ...glossary, terms: cleanTerms });
-        }
+        dirtyRef.current = false;
+        onSave({ ...glossary, terms: cleanTerms }, false, suppressedTerms);
     };
 
-    const handleExportGlossary = () => {
-        const dataStr = JSON.stringify({ ...glossary, terms: stripUids(terms) }, null, 2);
+    // Export Formats
+    const handleExportJSON = () => {
+        const dataStr = JSON.stringify({
+            ...glossary,
+            terms: stripUids(terms),
+            suppressed_terms: suppressedTerms
+        }, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = "glossary.json";
+        a.download = `glossary_${projectName || glossary.show_name || 'export'}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
-    const handleImportClick = () => {
-        fileInputRef.current.click();
+    const handleExportCSV = () => {
+        const headers = ["term", "translation", "type", "gender", "case_sensitive", "keep_original", "description"];
+        const rows = terms.map(t => [
+            `"${(t.term || '').replace(/"/g, '""')}"`,
+            `"${(t.translation || '').replace(/"/g, '""')}"`,
+            `"${(t.type || 'other').replace(/"/g, '""')}"`,
+            `"${(t.gender || 'n/a').replace(/"/g, '""')}"`,
+            t.case_sensitive ? "true" : "false",
+            t.keep_original ? "true" : "false",
+            `"${(t.description || '').replace(/"/g, '""')}"`
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `glossary_${projectName || 'export'}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
-    const handleImportFile = (e) => {
+    const handleImportCSV = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const importedData = JSON.parse(event.target.result);
-                if (importedData.terms && Array.isArray(importedData.terms)) {
+                const text = event.target.result;
+                const lines = text.split(/\r?\n/).filter(line => line.trim());
+                if (lines.length <= 1) return;
+
+                const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+                const imported = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const row = lines[i];
+                    // Simple CSV parser handling quotes
+                    const values = row.match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || row.split(',');
+                    const cleanValues = values.map(v => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+                    const termObj = {};
+                    headers.forEach((h, idx) => {
+                        termObj[h] = cleanValues[idx] || '';
+                    });
+
+                    if (termObj.term && termObj.translation) {
+                        imported.push({
+                            term: termObj.term,
+                            translation: termObj.translation,
+                            type: termObj.type || 'other',
+                            gender: termObj.gender || 'n/a',
+                            case_sensitive: termObj.case_sensitive === 'true',
+                            keep_original: termObj.keep_original === 'true',
+                            description: termObj.description || '',
+                        });
+                    }
+                }
+
+                if (imported.length > 0) {
                     isInternalUpdateRef.current = true;
                     dirtyRef.current = true;
-                    setTerms(ensureUids(importedData.terms));
-                    alert("Glossary imported successfully!");
-                } else {
-                    alert("Invalid glossary format.");
+                    setTerms(prev => [...ensureUids(imported), ...prev]);
+                    toast.success(`Imported ${imported.length} terms from CSV.`);
                 }
             } catch (err) {
-                console.error(err);
-                alert("Error parsing JSON file.");
+                console.error("CSV import error:", err);
+                toast.error("Failed to parse CSV file.");
             }
         };
         reader.readAsText(file);
-        e.target.value = null; // Reset input
+        e.target.value = null;
     };
 
-    const toggleKeepAllOriginal = () => {
-        const allKeep = terms.every(t => t.type !== 'person' || t.keep_original);
-        isInternalUpdateRef.current = true;
-        dirtyRef.current = true;
-        const newTerms = terms.map(t => {
-            if (t.type === 'person') {
-                return { ...t, keep_original: !allKeep };
-            }
-            return t;
-        });
-        setTerms(newTerms);
-    };
+    // Filter computation
+    const filteredTerms = useMemo(() => {
+        return terms
+            .map((term, index) => ({ term, index }))
+            .filter(({ term }) => {
+                // Search filter
+                const q = searchFilter.toLowerCase();
+                const matchesSearch = !q ||
+                    (term.term && term.term.toLowerCase().includes(q)) ||
+                    (term.translation && term.translation.toLowerCase().includes(q)) ||
+                    (term.description && term.description.toLowerCase().includes(q));
 
-    // Keep each term's real index into `terms` so the edit/remove handlers target the
-    // correct entry even when a category tab or filter is hiding other terms. (Using the
-    // filtered position here silently wrote edits to the wrong/hidden term, so changes
-    // appeared to do nothing whenever a tab/filter was active.)
-    const filteredTerms = terms
-        .map((term, index) => ({ term, index }))
-        .filter(({ term }) => {
-            const matchesFilter = (term.term || '').toLowerCase().includes(filter.toLowerCase()) ||
-                term.description?.toLowerCase().includes(filter.toLowerCase());
+                // Source facet
+                let matchesSource = true;
+                if (sourceFilter === SOURCE_FILTERS.INHERITED) matchesSource = !!term.inherited;
+                else if (sourceFilter === SOURCE_FILTERS.OVERRIDE) matchesSource = !!term.is_override;
+                else if (sourceFilter === SOURCE_FILTERS.PROJECT_ONLY) matchesSource = !term.inherited && !term.is_override;
+                else if (sourceFilter === SOURCE_FILTERS.UPSTREAM_MODIFIED) matchesSource = !!term.upstream_modified;
 
-            // Fallback to 'other' when term.type is falsy/undefined to avoid tab matching mismatch
-            const matchesTab = activeTab === 'All' || (term.type || 'other').toLowerCase() === activeTab.toLowerCase();
+                // Type facet
+                const matchesType = typeFilter === 'All' ||
+                    (term.type && term.type.toLowerCase() === typeFilter.toLowerCase());
 
-            return matchesFilter && matchesTab;
-        });
+                return matchesSearch && matchesSource && matchesType;
+            });
+    }, [terms, searchFilter, sourceFilter, typeFilter]);
+
+    const upstreamModifiedCount = terms.filter(t => t.upstream_modified).length;
+    const inheritedCount = terms.filter(t => t.inherited).length;
+    const overrideCount = terms.filter(t => t.is_override).length;
 
     return (
-        <div className="h-full flex flex-col bg-white/50 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 overflow-hidden">
-            {/* Header */}
-            <div className="p-6 border-b border-gray-200/50 bg-white/40 flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <Book className="w-6 h-6 text-indigo-600" />
-                        Glossary Editor
-                    </h2>
-                    <div className="flex items-center gap-3 mt-1">
-                        <p className="text-sm text-gray-500">Review and edit detected terms before translation.</p>
-                        <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
-                            Est. {Math.ceil(JSON.stringify(terms).length / 3.8 * 1.15)} Tokens
-                        </span>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+            {/* Top Toolbar */}
+            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3 bg-gray-50/50 dark:bg-gray-850">
+                {/* Search & Source Filter Tabs */}
+                <div className="flex items-center gap-3 flex-wrap flex-1 min-w-[280px]">
+                    <div className="relative flex-1 max-w-sm">
+                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+                        <input
+                            type="text"
+                            placeholder="Search terms, translations, notes..."
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target.value)}
+                            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-1 focus:ring-indigo-500 text-gray-800 dark:text-gray-200"
+                        />
+                    </div>
+
+                    {/* Source Facet Pills */}
+                    <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl gap-0.5 text-xs font-semibold">
+                        {[
+                            { id: SOURCE_FILTERS.ALL, label: 'All', count: terms.length },
+                            { id: SOURCE_FILTERS.INHERITED, label: 'Inherited', count: inheritedCount },
+                            { id: SOURCE_FILTERS.OVERRIDE, label: 'Overrides', count: overrideCount },
+                            { id: SOURCE_FILTERS.UPSTREAM_MODIFIED, label: 'Upstream Changed', count: upstreamModifiedCount, highlight: true },
+                        ].map(({ id, label, count, highlight }) => {
+                            if (highlight && count === 0) return null;
+                            const isActive = sourceFilter === id;
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => setSourceFilter(id)}
+                                    className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
+                                        isActive
+                                            ? highlight
+                                                ? 'bg-amber-500 text-white shadow-sm'
+                                                : 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                                            : highlight
+                                                ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                    <span>{label}</span>
+                                    <span className={`text-[10px] px-1 py-0.2 rounded-full ${isActive ? 'bg-black/15 text-current' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
+                                        {count}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
-                <div className="flex gap-3">
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleImportFile}
-                        accept=".json"
-                        className="hidden"
-                    />
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                    {/* Harvest Dialogue Terms */}
                     <button
-                        onClick={handleImportClick}
-                        className="px-3 py-2 rounded-xl text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all flex items-center gap-2"
-                        title="Import Glossary"
+                        onClick={() => setHarvestModalOpen(true)}
+                        className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                        title="Scan translated dialogue for new named entities"
                     >
-                        <Upload className="w-4 h-4" /> Import
-                    </button>
-                    <button
-                        onClick={handleExportGlossary}
-                        className="px-3 py-2 rounded-xl text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-all flex items-center gap-2"
-                        title="Export Glossary"
-                    >
-                        <Download className="w-4 h-4" /> Export
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Harvest from Dialogue</span>
                     </button>
 
-                    {!readOnly && !hideSaveButton && (
-                        <>
-                            <button
-                                onClick={onCancel}
-                                className="px-4 py-2 rounded-xl text-gray-600 hover:bg-gray-100 transition-all"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSave}
-                                disabled={isSaving}
-                                className="px-6 py-2 rounded-xl bg-indigo-600 text-white font-semibold shadow-lg hover:bg-indigo-700 transition-all flex items-center gap-2"
-                            >
-                                {isSaving ? 'Saving...' : <><Save className="w-4 h-4" /> Save & Continue</>}
-                            </button>
-                        </>
+                    {/* Import / Export Menu */}
+                    <input type="file" ref={fileInputRef} onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (evt) => {
+                                try {
+                                    const parsed = JSON.parse(evt.target.result);
+                                    const imported = Array.isArray(parsed) ? parsed : (parsed.terms || []);
+                                    setTerms(prev => [...ensureUids(imported), ...prev]);
+                                    toast.success(`Imported ${imported.length} terms.`);
+                                } catch (err) {
+                                    toast.error("Invalid JSON format.");
+                                }
+                            };
+                            reader.readAsText(file);
+                        }
+                    }} accept=".json" className="hidden" />
+                    <input type="file" ref={csvInputRef} onChange={handleImportCSV} accept=".csv" className="hidden" />
+
+                    <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-xl p-0.5">
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-1.5 text-gray-600 dark:text-gray-300 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors"
+                            title="Import JSON"
+                        >
+                            <FileJson className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => csvInputRef.current?.click()}
+                            className="p-1.5 text-gray-600 dark:text-gray-300 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors"
+                            title="Import CSV"
+                        >
+                            <FileSpreadsheet className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleExportJSON}
+                            className="p-1.5 text-gray-600 dark:text-gray-300 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors"
+                            title="Export JSON"
+                        >
+                            <Download className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    {!hideSaveButton && !readOnly && (
+                        <button
+                            onClick={handleSave}
+                            disabled={isSaving}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+                        >
+                            <Save className="w-3.5 h-3.5" />
+                            {isSaving ? 'Saving...' : 'Save Glossary'}
+                        </button>
                     )}
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-
-
-                {/* Tabs */}
-                <div className="px-6 pt-4 bg-gray-50/50 border-b border-gray-200/50 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+            {/* Type Categories & Term Actions Sub-Bar */}
+            <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-gray-800">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mr-1">Type:</span>
                     {['All', ...allTypes].map(type => (
                         <button
                             key={type}
-                            onClick={() => setActiveTab(type)}
-                            className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors border-b-2 ${activeTab === type
-                                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                                }`}
+                            onClick={() => setTypeFilter(type)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                                typeFilter === type
+                                    ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
                         >
                             {type}
                         </button>
                     ))}
-                    {!readOnly && (
-                        <button
-                            onClick={handleAddCategory}
-                            className="px-3 py-1 ml-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                            title="Add Category"
-                        >
-                            <Plus className="w-4 h-4" />
-                        </button>
-                    )}
                 </div>
 
-                {/* Filter & Actions */}
-                <div className="p-4 bg-gray-50/50 border-b border-gray-200/50 flex gap-4 items-center sticky top-0 z-10 backdrop-blur-sm">
-                    {!readOnly && (
-                        <div className="flex items-center justify-center mr-1">
-                            <input
-                                type="checkbox"
-                                checked={filteredTerms.length > 0 && filteredTerms.every(t => t.term.term && selectedTerms.has(t.term.term))}
-                                ref={el => {
-                                    if (el && filteredTerms.length > 0) {
-                                        const visibleNames = filteredTerms.map(t => t.term.term).filter(Boolean);
-                                        const someSelected = visibleNames.some(name => selectedTerms.has(name));
-                                        const allSelected = visibleNames.every(name => selectedTerms.has(name));
-                                        el.indeterminate = someSelected && !allSelected;
-                                    }
-                                }}
-                                onChange={handleSelectAll}
-                                title="Select All Visible"
-                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                            />
+                {!readOnly && (
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleAddTerm}
+                            className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors"
+                        >
+                            <Plus className="w-3.5 h-3.5" /> Add Term
+                        </button>
+                        {suppressedTerms.length > 0 && (
+                            <button
+                                onClick={() => setShowSuppressed(!showSuppressed)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
+                                    showSuppressed
+                                        ? 'bg-amber-100 border-amber-300 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300'
+                                        : 'bg-gray-50 dark:bg-gray-750 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'
+                                }`}
+                            >
+                                <EyeOff className="w-3.5 h-3.5 text-amber-500" />
+                                <span>Suppressed ({suppressedTerms.length})</span>
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Suppressed Terms Drawer */}
+            <AnimatePresence>
+                {showSuppressed && suppressedTerms.length > 0 && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-900/50 p-4"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                                <EyeOff className="w-4 h-4 text-amber-600" />
+                                Suppressed Parent Universe Terms for this Project
+                            </h4>
+                            <span className="text-[11px] text-amber-700 dark:text-amber-400">
+                                Click Restore on any term to inherit it again.
+                            </span>
                         </div>
-                    )}
-                    <input
-                        type="text"
-                        placeholder="Filter terms..."
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="flex-1 px-4 py-2 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    {!readOnly && (
-                        <>
-                            <button
-                                onClick={handleAddTerm}
-                                className="px-4 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 text-sm font-medium flex items-center gap-2 shadow-sm"
-                            >
-                                <Plus className="w-4 h-4" />
-                                Add Term
-                            </button>
-                            <button
-                                onClick={toggleKeepAllOriginal}
-                                className="px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-medium flex items-center gap-2"
-                            >
-                                <Shield className="w-4 h-4" />
-                                Keep all character names as original
-                            </button>
-                            {selectedTerms.size > 0 && onUpdateTermsInScenes && (
-                                <button
-                                    onClick={handleUpdateScenes}
-                                    className="px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 text-sm font-medium flex items-center gap-2 shadow-sm"
+                        <div className="flex flex-wrap gap-2">
+                            {suppressedTerms.map(tName => (
+                                <div
+                                    key={tName}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-900 text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-sm"
                                 >
-                                    <Sparkles className="w-4 h-4" />
-                                    Update in Scenes ({selectedTerms.size})
+                                    <span className="line-through text-gray-400">{tName}</span>
+                                    <button
+                                        onClick={() => handleUnsuppressTerm(tName)}
+                                        className="text-indigo-600 dark:text-indigo-400 hover:underline text-[11px] font-bold"
+                                    >
+                                        Restore
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Bulk Actions Floating Bar */}
+            <AnimatePresence>
+                {selectedTerms.size > 0 && !readOnly && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="p-3 bg-indigo-600 text-white flex items-center justify-between gap-4 shadow-lg"
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="font-bold text-xs bg-indigo-800/80 px-2.5 py-1 rounded-lg">
+                                {selectedTerms.size} selected
+                            </span>
+                            <button
+                                onClick={() => setSelectedTerms(new Set())}
+                                className="text-xs text-indigo-200 hover:text-white underline"
+                            >
+                                Deselect all
+                            </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            {parentProject && (
+                                <button
+                                    onClick={handleBulkPromote}
+                                    className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                                >
+                                    <Globe className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>Promote to Universe</span>
                                 </button>
                             )}
-                        </>
-                    )}
-                </div>
+                            <button
+                                onClick={handleBulkRevert}
+                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                                <RotateCcw className="w-3.5 h-3.5 text-blue-300" />
+                                <span>Revert Overrides</span>
+                            </button>
+                            <button
+                                onClick={handleBulkSuppress}
+                                className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                                <EyeOff className="w-3.5 h-3.5 text-amber-300" />
+                                <span>Suppress</span>
+                            </button>
+                            <button
+                                onClick={handleBulkDelete}
+                                className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Delete</span>
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-                {/* Terms List */}
-                <div className="p-4 space-y-4">
-                    {filteredTerms.map(({ term, index }) => (
-                        <motion.div
-                            key={term._uid ?? index}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className={`bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border transition-all ${
-                                term.inherited
-                                    ? 'border-dashed border-amber-300 bg-amber-50/5 hover:border-amber-400 hover:shadow-md'
-                                    : 'border-gray-100 hover:border-gray-250 hover:shadow-md'
-                            }`}
-                        >
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                                {/* Term Name */}
-                                <div className="md:col-span-3">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center gap-2">
+            {/* Glossary Table */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="border-b border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-850/80 text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            {!readOnly && (
+                                <th className="p-3 w-10 text-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={filteredTerms.length > 0 && filteredTerms.every(t => selectedTerms.has(t.term._uid))}
+                                        onChange={toggleSelectAllFiltered}
+                                        className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 border-gray-300"
+                                    />
+                                </th>
+                            )}
+                            <th className="p-3 min-w-[180px]">Source Term</th>
+                            <th className="p-3 min-w-[200px]">Translation</th>
+                            <th className="p-3 w-32">Type</th>
+                            <th className="p-3 w-28">Gender</th>
+                            <th className="p-3 min-w-[200px]">Notes & Description</th>
+                            <th className="p-3 w-28 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-750 text-xs">
+                        {filteredTerms.length === 0 ? (
+                            <tr>
+                                <td colSpan={7} className="text-center py-12 text-gray-400">
+                                    <Book className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                                    <p className="font-semibold text-gray-500 dark:text-gray-400">No glossary terms match your filter</p>
+                                    <p className="text-[11px] mt-0.5">Try clearing your search or adding new terms.</p>
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredTerms.map(({ term, index }) => {
+                                const isSelected = selectedTerms.has(term._uid);
+                                const isModifiedDiffOpen = expandedDiffUid === term._uid;
+                                const parentDef = term.parent_term;
+
+                                return (
+                                    <React.Fragment key={term._uid}>
+                                        <tr className={`transition-colors ${
+                                            isSelected
+                                                ? 'bg-indigo-50/40 dark:bg-indigo-950/20'
+                                                : term.upstream_modified
+                                                    ? 'bg-amber-50/30 dark:bg-amber-950/15 hover:bg-amber-50/50'
+                                                    : 'hover:bg-gray-50/60 dark:hover:bg-gray-750/40'
+                                        }`}>
                                             {!readOnly && (
-                                                <input
-                                                    type="checkbox"
-                                                    checked={term.term ? selectedTerms.has(term.term) : false}
-                                                    onChange={() => toggleTermSelection(term.term)}
-                                                    disabled={!term.term}
-                                                    className="w-3.5 h-3.5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 disabled:opacity-50"
-                                                    title="Select for batch updates"
-                                                />
+                                                <td className="p-3 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isSelected}
+                                                        onChange={() => toggleSelectTerm(term._uid)}
+                                                        className="rounded text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 border-gray-300"
+                                                    />
+                                                </td>
                                             )}
-                                            <label className="text-xs font-semibold text-gray-500 uppercase block">Term</label>
-                                        </div>
-                                        {term.inherited && (
-                                            <span 
-                                                className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900"
-                                                title={`Inherited from ${term.inherited_from}. Editing will decouple or save globally.`}
-                                            >
-                                                {term.inherited_from || 'Parent'}
-                                            </span>
+
+                                            {/* Term Name & Origin Badges */}
+                                            <td className="p-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <input
+                                                        type="text"
+                                                        value={term.term || ''}
+                                                        disabled={readOnly}
+                                                        onChange={(e) => handleTermChange(index, 'term', e.target.value)}
+                                                        className="w-full font-bold text-gray-900 dark:text-white bg-transparent border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5"
+                                                        placeholder="English Term"
+                                                    />
+                                                    <div className="flex items-center gap-1.5 flex-wrap pl-1.5">
+                                                        {term.inherited ? (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-900/60 flex items-center gap-1">
+                                                                <Globe className="w-2.5 h-2.5" />
+                                                                {term.inherited_from || 'Universe'}
+                                                            </span>
+                                                        ) : term.is_override ? (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/60">
+                                                                Local Override
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                                                                Project Only
+                                                            </span>
+                                                        )}
+
+                                                        {term.upstream_modified && (
+                                                            <button
+                                                                onClick={() => setExpandedDiffUid(isModifiedDiffOpen ? null : term._uid)}
+                                                                className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500 text-white flex items-center gap-1 animate-pulse shadow-sm"
+                                                                title="Parent definition changed upstream. Click to compare."
+                                                            >
+                                                                <AlertCircle className="w-2.5 h-2.5" />
+                                                                Upstream Changed
+                                                                {isModifiedDiffOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* Translation */}
+                                            <td className="p-3">
+                                                <input
+                                                    type="text"
+                                                    value={term.translation || ''}
+                                                    disabled={readOnly}
+                                                    onChange={(e) => handleTermChange(index, 'translation', e.target.value)}
+                                                    className="w-full font-semibold text-indigo-600 dark:text-indigo-400 bg-transparent border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5"
+                                                    placeholder="Target Translation"
+                                                />
+                                            </td>
+
+                                            {/* Type Dropdown */}
+                                            <td className="p-3">
+                                                <select
+                                                    value={term.type || 'other'}
+                                                    disabled={readOnly}
+                                                    onChange={(e) => handleTermChange(index, 'type', e.target.value)}
+                                                    className="w-full text-xs font-semibold rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 text-gray-800 dark:text-gray-200 py-1 px-2 focus:ring-1 focus:ring-indigo-500"
+                                                >
+                                                    {allTypes.map(t => (
+                                                        <option key={t} value={t.toLowerCase()}>{t}</option>
+                                                    ))}
+                                                </select>
+                                            </td>
+
+                                            {/* Gender Dropdown */}
+                                            <td className="p-3">
+                                                <select
+                                                    value={term.gender || 'neuter'}
+                                                    disabled={readOnly}
+                                                    onChange={(e) => handleTermChange(index, 'gender', e.target.value)}
+                                                    className="w-full text-xs rounded-lg border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 text-gray-800 dark:text-gray-200 py-1 px-2 focus:ring-1 focus:ring-indigo-500"
+                                                >
+                                                    <option value="masculine">Masc (αρσ)</option>
+                                                    <option value="feminine">Fem (θηλ)</option>
+                                                    <option value="neuter">Neut (ουδ)</option>
+                                                    <option value="n/a">N/A</option>
+                                                </select>
+                                            </td>
+
+                                            {/* Description & Flags */}
+                                            <td className="p-3">
+                                                <div className="flex flex-col gap-1">
+                                                    <input
+                                                        type="text"
+                                                        value={term.description || ''}
+                                                        disabled={readOnly}
+                                                        onChange={(e) => handleTermChange(index, 'description', e.target.value)}
+                                                        className="w-full text-xs text-gray-600 dark:text-gray-300 bg-transparent border-0 focus:ring-1 focus:ring-indigo-500 rounded px-1.5 py-0.5"
+                                                        placeholder="Context notes..."
+                                                    />
+                                                    <div className="flex items-center gap-3 pl-1.5 text-[11px] text-gray-400">
+                                                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={term.case_sensitive ?? false}
+                                                                disabled={readOnly}
+                                                                onChange={(e) => handleTermChange(index, 'case_sensitive', e.target.checked)}
+                                                                className="rounded text-indigo-600 w-3 h-3"
+                                                            />
+                                                            <span>Case Sensitive</span>
+                                                        </label>
+                                                        <label className="flex items-center gap-1 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={term.keep_original ?? false}
+                                                                disabled={readOnly}
+                                                                onChange={(e) => handleTermChange(index, 'keep_original', e.target.checked)}
+                                                                className="rounded text-indigo-600 w-3 h-3"
+                                                            />
+                                                            <span>Keep Original</span>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* Actions */}
+                                            <td className="p-3 text-center">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    {/* Promote to Universe */}
+                                                    {!term.inherited && parentProject && !readOnly && (
+                                                        <button
+                                                            onClick={() => handleInlinePromote(term)}
+                                                            disabled={promotingTerm === term.term}
+                                                            className="p-1.5 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50 rounded-lg transition-colors"
+                                                            title={`Promote to ${parentProject} universe`}
+                                                        >
+                                                            <ArrowUpCircle className={`w-4 h-4 ${promotingTerm === term.term ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Revert override */}
+                                                    {term.is_override && !readOnly && (
+                                                        <button
+                                                            onClick={() => handleRevertToUniverse(index)}
+                                                            className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded-lg transition-colors"
+                                                            title="Revert override to parent universe definition"
+                                                        >
+                                                            <RotateCcw className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+
+                                                    {/* Delete / Suppress */}
+                                                    {!readOnly && (
+                                                        <button
+                                                            onClick={() => handleRemoveTerm(index)}
+                                                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
+                                                            title={term.inherited ? "Suppress from this show" : "Delete term"}
+                                                        >
+                                                            {term.inherited ? <EyeOff className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        {/* Upstream Diff Accordion Row */}
+                                        {isModifiedDiffOpen && parentDef && (
+                                            <tr className="bg-amber-50/60 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/60">
+                                                <td colSpan={readOnly ? 6 : 7} className="p-4">
+                                                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                                                        <div className="space-y-1">
+                                                            <div className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
+                                                                <AlertCircle className="w-4 h-4 text-amber-600" />
+                                                                Upstream Parent Definition:
+                                                            </div>
+                                                            <div className="text-xs text-amber-800 dark:text-amber-300 font-mono bg-white/70 dark:bg-gray-850 p-2 rounded-lg border border-amber-200 dark:border-amber-900">
+                                                                <strong>{parentDef.term}</strong> → <span className="text-indigo-600 dark:text-indigo-400 font-bold">{parentDef.translation}</span> | Type: {parentDef.type} | Gender: {parentDef.gender} | Notes: {parentDef.description || 'none'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => handleAdoptUpstream(index)}
+                                                                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                                                            >
+                                                                <Check className="w-3.5 h-3.5" /> Adopt Upstream
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRevertToUniverse(index)}
+                                                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition-all"
+                                                            >
+                                                                <RotateCcw className="w-3.5 h-3.5" /> Revert to Parent
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleSilenceUpstreamDiff(index)}
+                                                                className="px-3 py-1.5 bg-white dark:bg-gray-800 hover:bg-gray-100 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-semibold transition-colors"
+                                                            >
+                                                                Keep Local
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         )}
-                                    </div>
-                                    <input
-                                        type="text"
-                                        value={term.term}
-                                        onChange={(e) => handleTermChange(index, 'term', e.target.value)}
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-gray-800 font-medium disabled:bg-gray-50"
-                                    />
-                                </div>
-
-                                {/* Translation */}
-                                <div className="md:col-span-3">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Translation</label>
-                                    <input
-                                        type="text"
-                                        value={term.translation || ''}
-                                        onChange={(e) => handleTermChange(index, 'translation', e.target.value)}
-                                        placeholder="Auto-translate if empty"
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 rounded-lg border border-indigo-100 bg-indigo-50/30 focus:border-indigo-500 outline-none text-gray-800 disabled:opacity-70"
-                                    />
-                                </div>
-
-                                {/* Type */}
-                                <div className="md:col-span-2">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Type</label>
-                                    <select
-                                        value={term.type || 'other'}
-                                        onChange={(e) => handleTermChange(index, 'type', e.target.value)}
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-sm disabled:bg-gray-50 capitalize"
-                                    >
-                                        {allTypes.map(t => (
-                                            <option key={t} value={t.toLowerCase()}>{t}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Gender */}
-                                <div className="md:col-span-2">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block flex items-center gap-1">
-                                        Gender <User className="w-3 h-3" />
-                                    </label>
-                                    <select
-                                        value={term.gender || 'neuter'}
-                                        onChange={(e) => handleTermChange(index, 'gender', e.target.value)}
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-sm disabled:bg-gray-50"
-                                    >
-                                        <option value="masculine">Masculine</option>
-                                        <option value="feminine">Feminine</option>
-                                        <option value="neuter">Neuter</option>
-                                        <option value="n/a">N/A</option>
-                                    </select>
-                                </div>
-
-                                {/* Options: Keep Original & Case Sensitive & Remove */}
-                                <div className="md:col-span-2 flex flex-col justify-center gap-2 h-full pt-5">
-                                    <label className="flex items-center gap-2 cursor-pointer select-none" title="Do not translate this term">
-                                        <input
-                                            type="checkbox"
-                                            checked={term.keep_original || false}
-                                            onChange={(e) => handleTermChange(index, 'keep_original', e.target.checked)}
-                                            disabled={readOnly}
-                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 disabled:opacity-50"
-                                        />
-                                        <span className="text-xs text-gray-700 font-medium flex items-center gap-1">
-                                            <Shield className="w-3 h-3" /> Keep Original
-                                        </span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer select-none" title="Enforce exact capitalization">
-                                        <input
-                                            type="checkbox"
-                                            checked={term.case_sensitive || false}
-                                            onChange={(e) => handleTermChange(index, 'case_sensitive', e.target.checked)}
-                                            disabled={readOnly}
-                                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500 border-gray-300 disabled:opacity-50"
-                                        />
-                                        <span className="text-xs text-gray-700 font-medium flex items-center gap-1">
-                                            <span className="font-serif italic">Aa</span> Case Sensitive
-                                        </span>
-                                    </label>
-                                    {!readOnly && (
-                                        <button
-                                            onClick={() => handleRemoveTerm(index)}
-                                            className="flex items-center gap-2 text-xs text-red-600 hover:text-red-800 font-medium mt-1"
-                                            title="Remove term"
-                                        >
-                                            <Trash2 className="w-3 h-3" /> Remove Term
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Description */}
-                                <div className="md:col-span-12">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Context / Description</label>
-                                    <textarea
-                                        value={term.description || ''}
-                                        onChange={(e) => handleTermChange(index, 'description', e.target.value)}
-                                        rows={1}
-                                        disabled={readOnly}
-                                        className="w-full px-3 py-2 text-gray-700 rounded-lg border border-gray-200 focus:border-indigo-500 outline-none text-sm resize-none focus:h-20 transition-all disabled:bg-gray-50"
-                                    />
-                                </div>
-                            </div>
-                        </motion.div>
-                    ))}
-
-                    {filteredTerms.length === 0 && (
-                        <div className="text-center py-12 text-gray-400">
-                            No terms found matching your filter.
-                        </div>
-                    )}
-                </div>
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
             </div>
-            {syncDialog && createPortal(
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-150 dark:border-gray-700 p-6 w-full max-w-md">
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                            <Globe className="text-amber-500 w-5 h-5 animate-pulse" />
-                            Save Inherited Terms
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                            You have modified terminology inherited from the parent universe (<strong>{syncDialog.terms[0]?.inherited_from}</strong>). How would you like to save these changes?
-                        </p>
-                        
-                        <div className="space-y-3 mb-6">
-                            <div className="max-h-32 overflow-y-auto border border-gray-100 dark:border-gray-750 rounded-lg p-2 bg-gray-50/50 dark:bg-gray-900/50 space-y-1">
-                                {syncDialog.terms.map(t => (
-                                    <div key={t.term} className="text-xs font-medium text-gray-700 dark:text-gray-300 flex justify-between">
-                                        <span>{t.term}</span>
-                                        <span className="text-gray-400">→</span>
-                                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{t.translation}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
 
-                        <div className="flex flex-col gap-2">
-                            <button
-                                onClick={syncDialog.onConfirmGlobal}
-                                className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all"
-                            >
-                                Save Globally (Updates Parent Universe)
-                            </button>
-                            <button
-                                onClick={syncDialog.onConfirmLocal}
-                                className="w-full py-2.5 px-4 rounded-xl bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-650 text-gray-700 dark:text-white border border-gray-200 dark:border-gray-600 font-semibold text-sm transition-all"
-                            >
-                                Save Locally (Create Override)
-                            </button>
-                            <button
-                                onClick={syncDialog.onCancel}
-                                className="w-full py-2.5 px-4 rounded-xl bg-transparent hover:bg-gray-100/50 text-gray-500 dark:text-gray-400 font-semibold text-sm transition-all"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>,
-                document.body
-            )}
+            {/* Term Harvester Modal */}
+            <TermHarvestModal
+                isOpen={harvestModalOpen}
+                onClose={() => setHarvestModalOpen(false)}
+                projectName={projectName}
+                parentProjectName={parentProject}
+                onTermsAdded={handleHarvestedTermsAdded}
+            />
         </div>
     );
 };

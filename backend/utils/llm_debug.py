@@ -61,7 +61,7 @@ def save_response(
     """Write a debug dump and return its path (or None on failure)."""
     try:
         from utils import storage
-        dbg = storage.PROJECTS_DIR / project / "episodes" / episode / "debug"
+        dbg = storage.episode_dir(project, episode) / "debug"
         dbg.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         path = dbg / f"{kind}_{ts}.json"

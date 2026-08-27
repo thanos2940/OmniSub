@@ -2,11 +2,12 @@ import asyncio
 import time
 import json
 import logging
-from pathlib import Path
 from typing import List, Dict, Optional, Callable
 import contextvars
 from datetime import datetime, time as datetime_time, timedelta
 from zoneinfo import ZoneInfo
+
+from utils.paths import RATE_LIMITER_STATE_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -69,58 +70,58 @@ class RateLimiter:
 
     async def acquire(self):
         """Acquire a token, waiting if necessary."""
-        wait_time = 0.0
-        async with self._lock:
-            # Check daily reset
-            now = time.time()
-            if now >= self._daily_reset:
-                self._daily_count = 0
-                self._daily_exhausted = False
-                self._daily_reset = _calculate_next_daily_reset(now)
-                if self.on_change:
-                    self.on_change()
-
-            # Daily exhaustion is now detected from the API's own 429 responses
-            # (see trigger_daily_limit / api_call_wrapper), NOT from counting
-            # requests against a guessed per-model limit. We only honor the latch
-            # that a real daily-quota response set, so we stop hammering the API
-            # once it has actually told us we're out for the day.
-            if self._daily_exhausted:
-                raise DailyLimitExhausted(self._daily_count, self.daily_limit, self._daily_reset)
-
-            # Calculate backoff wait
+        while True:
+            wait_time = 0.0
             backoff_wait = 0.0
-            if now < self._backoff_until:
-                backoff_wait = self._backoff_until - now
+            async with self._lock:
+                # Check daily reset
+                now = time.time()
+                if now >= self._daily_reset:
+                    self._daily_count = 0
+                    self._daily_exhausted = False
+                    self._daily_reset = _calculate_next_daily_reset(now)
+                    if self.on_change:
+                        self.on_change()
 
-            # Refill tokens
-            elapsed = now - self._last_refill
-            refill_amount = elapsed * (self.requests_per_minute / 60.0)
-            self._tokens = min(self.requests_per_minute, self._tokens + refill_amount)
-            self._last_refill = now
+                # Daily exhaustion is now detected from the API's own 429 responses
+                if self._daily_exhausted:
+                    raise DailyLimitExhausted(self._daily_count, self.daily_limit, self._daily_reset)
 
-            # If no tokens, calculate token wait
-            token_wait = 0.0
-            if self._tokens < 1.0:
-                token_wait = (1.0 - self._tokens) / (self.requests_per_minute / 60.0)
-                self._tokens = 0.0  # Reset tokens to 0 since we are waiting for the next one
-                # Adjust self._last_refill to when the token will actually be ready,
-                # so that subsequent requests calculate their wait time relative to that point.
-                self._last_refill = now + token_wait
-            else:
-                self._tokens -= 1.0
+                # Calculate backoff wait
+                if now < self._backoff_until:
+                    backoff_wait = self._backoff_until - now
+                else:
+                    # Refill tokens
+                    elapsed = now - self._last_refill
+                    refill_amount = elapsed * (self.requests_per_minute / 60.0)
+                    self._tokens = min(self.requests_per_minute, self._tokens + refill_amount)
+                    self._last_refill = now
 
-            # The total wait time is the maximum of backoff wait and token wait
-            wait_time = max(backoff_wait, token_wait)
-            
-            # Increment daily count since we are committing to make a request
-            self._daily_count += 1
-            if self.on_change:
-                self.on_change()
+                    # If no tokens, calculate token wait
+                    token_wait = 0.0
+                    if self._tokens < 1.0:
+                        token_wait = (1.0 - self._tokens) / (self.requests_per_minute / 60.0)
+                        self._tokens = 0.0  # Reset tokens to 0 since we are waiting for the next one
+                        self._last_refill = now + token_wait
+                    else:
+                        self._tokens -= 1.0
 
-        # Sleep outside the lock
-        if wait_time > 0.0:
-            await asyncio.sleep(wait_time)
+                    wait_time = token_wait
+
+                    # Increment daily count since we are committing to make a request
+                    self._daily_count += 1
+                    if self.on_change:
+                        self.on_change()
+
+            # If backing off from an RPM limit, sleep outside the lock without claiming a token
+            if backoff_wait > 0.0:
+                await asyncio.sleep(backoff_wait)
+                continue
+
+            # Sleep outside the lock for normal token refill pacing
+            if wait_time > 0.0:
+                await asyncio.sleep(wait_time)
+            break
 
         # Adaptive concurrency: a successful acquire (no 429) is an "increase" signal.
         try:
@@ -128,6 +129,53 @@ class RateLimiter:
             concurrency_manager.on_success(self.model_name)
         except Exception:
             pass
+
+    def acquire_sync(self):
+        """Synchronous version of acquire for non-async callers."""
+        while True:
+            now = time.time()
+            wait_time = 0.0
+            backoff_wait = 0.0
+
+            with self._lock:
+                if self.is_daily_reset_due():
+                    self._daily_count = 0
+                    self._daily_exhausted = False
+                    self._daily_reset = _calculate_next_daily_reset(now)
+                    if self.on_change:
+                        self.on_change()
+
+                if self._daily_exhausted:
+                    raise DailyLimitExhausted(self._daily_count, self.daily_limit, self._daily_reset)
+
+                if now < self._backoff_until:
+                    backoff_wait = self._backoff_until - now
+                else:
+                    elapsed = now - self._last_refill
+                    refill_amount = elapsed * (self.requests_per_minute / 60.0)
+                    self._tokens = min(self.requests_per_minute, self._tokens + refill_amount)
+                    self._last_refill = now
+
+                    token_wait = 0.0
+                    if self._tokens < 1.0:
+                        token_wait = (1.0 - self._tokens) / (self.requests_per_minute / 60.0)
+                        self._tokens = 0.0
+                        self._last_refill = now + token_wait
+                    else:
+                        self._tokens -= 1.0
+
+                    wait_time = token_wait
+                    self._daily_count += 1
+                    if self.on_change:
+                        self.on_change()
+
+            if backoff_wait > 0.0:
+                time.sleep(backoff_wait)
+                continue
+
+            if wait_time > 0.0:
+                time.sleep(wait_time)
+            break
 
     def report_rate_limit(self, retry_after: float = None):
         """Called when a 429 is received."""
@@ -156,8 +204,11 @@ class RateLimiter:
         self._daily_exhausted = True
         if reset_time and reset_time > time.time():
             self._daily_reset = reset_time
-        # Schedule the first automatic re-check.
-        self._next_daily_probe = time.time() + _daily_recheck_seconds()
+        else:
+            self._daily_reset = _calculate_next_daily_reset(time.time())
+        # Schedule the next automatic probe directly at the reset boundary
+        # instead of pinging the API every 30 minutes while latched.
+        self._next_daily_probe = self._daily_reset
         if self.on_change:
             self.on_change()
 
@@ -166,12 +217,13 @@ class RateLimiter:
         return self._daily_exhausted and time.time() >= self._next_daily_probe
 
     def defer_probe(self) -> None:
-        """Push the next automatic probe out by the configured interval.
+        """Push the next automatic probe out to the next daily reset boundary.
 
         Called after a probe confirms the daily limit is still in effect.
         """
-        self._next_daily_probe = time.time() + _daily_recheck_seconds()
+        self._next_daily_probe = _calculate_next_daily_reset(time.time())
         if self.on_change:
+            self.on_change()
             self.on_change()
 
     def clear_daily_limit(self) -> None:
@@ -298,7 +350,7 @@ no_op_rate_limiter = NoOpRateLimiter()
 
 
 class PerModelRateLimiter:
-    STATE_FILE = Path(__file__).resolve().parent.parent / "rate_limiter_state.json"
+    STATE_FILE = RATE_LIMITER_STATE_FILE
 
     # Debounce disk writes: on_change fires on every acquire (i.e. every API call),
     # which previously wrote the whole state JSON synchronously each time. Coalesce to

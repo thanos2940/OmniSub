@@ -28,7 +28,7 @@ const Dashboard = () => {
 
     useEffect(() => {
         load();
-        const t = setInterval(load, 10000);
+        const t = setInterval(() => { if (!document.hidden) load(); }, 10000);
         return () => clearInterval(t);
     }, []);
 

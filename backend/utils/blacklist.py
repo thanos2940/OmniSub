@@ -7,10 +7,9 @@ several blacklisted target renderings.
 
 import sqlite3
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Dict, Optional
 
-DB_FILE = Path(__file__).resolve().parent.parent / "omnisub.db"
+from utils.paths import DB_FILE
 
 
 def _conn():

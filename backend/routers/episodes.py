@@ -1,8 +1,8 @@
 from io import BytesIO
 from zipfile import ZipFile
 from typing import List, Dict, Optional
-from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Response
+from fastapi.responses import StreamingResponse, JSONResponse
 from utils import storage
 from utils.srt_parser import parse_srt, reconstruct_srt
 from utils.subtitle_fixer import fix_subtitles_with_se
@@ -60,12 +60,37 @@ async def list_episodes(project_name: str):
 
 
 @router.get("/projects/{project_name}/episodes/{episode_name}")
-async def get_episode(project_name: str, episode_name: str):
+async def get_episode(project_name: str, episode_name: str, request: Request):
+    """The live editor polls this every few seconds while a translation is
+    running (EpisodeView.jsx), refetching the entire (potentially
+    thousands-of-lines) payload each time. An ETag derived from the backing
+    data.json's mtime/size — no read, no hashing — lets an unchanged poll
+    short-circuit to 304 instead of re-serializing and re-transferring the
+    whole episode."""
     try:
+        episode_dir = storage.episode_dir(project_name, episode_name)
+        data_file = episode_dir / "data.json"
+        if not data_file.exists():
+            raise HTTPException(status_code=404, detail="Episode not found")
+
+        def _etag_for(stat) -> str:
+            return f'W/"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+
+        pre_load_etag = _etag_for(data_file.stat())
+        if request.headers.get("if-none-match") == pre_load_etag:
+            return Response(status_code=304)
+
         data = storage.load_episode(project_name, episode_name)
         if not data:
             raise HTTPException(status_code=404, detail="Episode not found")
-        return data
+
+        # load_episode() can self-heal legacy entries (missing translations/
+        # src_hash) and rewrite data.json as a side effect — stat again so the
+        # ETag we hand back reflects what's actually on disk now, not the
+        # pre-load snapshot. Otherwise the very next request's If-None-Match
+        # would never match and every poll would pay full cost forever.
+        etag = _etag_for(data_file.stat())
+        return JSONResponse(content=data, headers={"ETag": etag})
     except HTTPException:
         raise
     except Exception as e:
@@ -240,7 +265,7 @@ def _apply_fixes_and_persist(project_name: str, episode_name: str, track: str,
 
     # The cue structure changed — a stale checkpoint would mis-map on resume.
     try:
-        cp = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "checkpoint.json"
+        cp = storage.episode_dir(project_name, episode_name) / "checkpoint.json"
         if cp.exists():
             cp.unlink()
     except Exception:
@@ -417,7 +442,7 @@ def _delete_episode_translation(project_name: str, episode_name: str) -> bool:
 
     # Drop the checkpoint so a fresh translation starts clean.
     try:
-        cp = storage.PROJECTS_DIR / project_name / "episodes" / episode_name / "checkpoint.json"
+        cp = storage.episode_dir(project_name, episode_name) / "checkpoint.json"
         if cp.exists():
             cp.unlink()
     except Exception:
@@ -506,9 +531,19 @@ async def export_episode_to_path(project_name: str, episode_name: str):
         raise HTTPException(status_code=400, detail="No media path recorded for this episode — cannot determine export location")
 
     try:
-        auto_export_translated_subtitle(project_name, episode_name, ep_data["data"], ep_meta)
-        target_path = ep_meta.get("arr_target_path", "")
-        return {"status": "exported", "path": target_path}
+        exported_path = auto_export_translated_subtitle(project_name, episode_name, ep_data["data"], ep_meta)
+        if not exported_path:
+            # The exporter logs the cause and swallows it (background paths must not die on
+            # one bad episode) — but a manual export must never report a success that
+            # didn't happen. The usual cause is a stale/unreachable arr_media_path.
+            raise HTTPException(
+                status_code=500,
+                detail=f"Export failed — could not write next to {media_path}. "
+                       "The media path may be stale or unreachable; re-sync the project.",
+            )
+        return {"status": "exported", "path": exported_path}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
@@ -537,7 +572,10 @@ async def batch_export_to_path(project_name: str, request: BatchDownloadRequest)
                 failed.append({"name": ep_name, "reason": "no media path"})
                 continue
 
-            auto_export_translated_subtitle(project_name, ep_name, ep_data["data"], ep_meta)
+            exported_path = auto_export_translated_subtitle(project_name, ep_name, ep_data["data"], ep_meta)
+            if not exported_path:
+                failed.append({"name": ep_name, "reason": f"could not write next to {media_path} (stale/unreachable media path)"})
+                continue
             exported.append(ep_name)
         except Exception as e:
             failed.append({"name": ep_name, "reason": str(e)})
