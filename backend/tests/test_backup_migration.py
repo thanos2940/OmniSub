@@ -529,3 +529,48 @@ def test_download_link_path_is_exempt_from_the_api_key_gate():
     import main
     assert "/api/backup/download/abc".startswith(main._AUTH_EXEMPT_PREFIXES)
     assert not "/api/backup/export".startswith(main._AUTH_EXEMPT_PREFIXES)
+
+
+def test_bundle_carries_every_project_file_and_runner_settings(sample_data_dir: Path, tmp_path: Path):
+    """Episode summaries, character profiles, suggestions and episode backup folders all travel."""
+    proj = sample_data_dir / "projects" / "Attack on Titan"
+    ep = proj / "episodes" / "S01E01"
+    (proj / "episode_summaries.json").write_text("{}", encoding="utf-8")
+    (proj / "character_profiles.json").write_text("{}", encoding="utf-8")
+    (proj / "suggestions.json").write_text("[]", encoding="utf-8")
+    (ep / "disk_backup").mkdir()
+    (ep / "disk_backup" / "S01E01.el.srt").write_text("repaired original", encoding="utf-8")
+    (sample_data_dir / "agent_runner.json").write_text('{"config": {"engine": "antigravity"}}', encoding="utf-8")
+
+    for mode in ("full", "compact"):
+        bundle_zip = tmp_path / f"{mode}.zip"
+        create_migration_bundle(output_path=bundle_zip, mode=mode, data_dir=sample_data_dir)
+        with zipfile.ZipFile(bundle_zip) as zf:
+            names = set(zf.namelist())
+        for rel in ("episode_summaries.json", "character_profiles.json", "suggestions.json",
+                    "episodes/S01E01/disk_backup/S01E01.el.srt"):
+            assert f"projects/Attack on Titan/{rel}" in names, (mode, rel)
+        assert "agent_runner.json" in names
+        assert not any("agent_workspace" in n or n.endswith(".bak") for n in names)
+        assert ("projects/Attack on Titan/episodes/S01E01/original.srt" in names) is (mode == "full")
+
+    est = get_backup_estimate(sample_data_dir)
+    assert est["project_count"] == 1 and est["episode_count"] == 1
+
+
+def test_remapped_ownership_keys_match_lookups(sample_data_dir: Path, tmp_path: Path):
+    """The registry key is ownership.norm_path of the file; after a remap it must still be."""
+    from services.autopilot.ownership import norm_path
+
+    bundle_zip = tmp_path / "bundle.zip"
+    create_migration_bundle(output_path=bundle_zip, mode="compact", data_dir=sample_data_dir)
+    target_dir = tmp_path / "server"
+    import_migration_bundle(zip_path=bundle_zip, remap_unc_to_local=True, target_data_dir=target_dir)
+
+    conn = sqlite3.connect(str(target_dir / "subtitle_ownership.db"))
+    try:
+        key, display = conn.execute("SELECT path, display_path FROM owned_files").fetchone()
+    finally:
+        conn.close()
+    assert display == r"E:\Shows\Attack on Titan\S01E01.el.srt"
+    assert key == norm_path(display)

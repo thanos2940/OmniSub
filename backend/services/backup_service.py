@@ -44,6 +44,8 @@ CONFIG_FILES = (
     "config.json",
     "rate_limiter_state.json",
     "release_version.json",
+    "agent_runner.json",     # the agent runner's engine, models, lanes and fallbacks
+    "library_audit.json",
 )
 
 
@@ -163,6 +165,25 @@ def normalize_path_for_local_server(
     return result
 
 
+def _project_files(projects_dir: Path):
+    """Every file under projects/ that belongs in a bundle, as (path, is_source_subtitle).
+
+    The whole tree goes (project.json, glossary, episode summaries, character profiles,
+    suggestions, episode files and their backup folders) except ``*.bak`` files and agent
+    workspaces. ``is_source_subtitle`` marks an episode's ``original.*`` /
+    ``original_backup.*``, which a compact bundle leaves out.
+    """
+    for root, dirs, files in os.walk(projects_dir):
+        dirs[:] = sorted(d for d in dirs if d != "agent_workspace")
+        here = Path(root)
+        in_episode = here.parent.name == "episodes" and here.parent.parent.parent == projects_dir
+        for f in sorted(files):
+            name = f.lower()
+            if name.endswith(".bak"):
+                continue
+            yield here / f, in_episode and name.startswith(("original.", "original_backup."))
+
+
 def _format_size(size_bytes: int) -> str:
     """Format bytes into a human-readable string."""
     val = float(size_bytes)
@@ -186,34 +207,13 @@ def get_backup_estimate(data_dir: Optional[Path] = None) -> dict:
 
     # Count projects and episodes
     if projects_dir.is_dir():
-        for p in projects_dir.iterdir():
-            if p.is_dir():
-                project_count += 1
-                # Project level files
-                for p_file in ("project.json", "glossary.json"):
-                    pf = p / p_file
-                    if pf.is_file():
-                        sz = pf.stat().st_size
-                        compact_bytes += sz
-                        full_bytes += sz
-
-                ep_dir = p / "episodes"
-                if ep_dir.is_dir():
-                    for e in ep_dir.iterdir():
-                        if e.is_dir():
-                            episode_count += 1
-                            for item in e.iterdir():
-                                if not item.is_file():
-                                    continue
-                                name = item.name.lower()
-                                if name.endswith(".bak") or "agent_workspace" in item.parts:
-                                    continue
-                                sz = item.stat().st_size
-                                if name.startswith("original.") or name.startswith("original_backup."):
-                                    full_bytes += sz
-                                else:
-                                    compact_bytes += sz
-                                    full_bytes += sz
+        project_count = sum(1 for p in projects_dir.iterdir() if p.is_dir())
+        episode_count = sum(1 for e in projects_dir.glob("*/episodes/*") if e.is_dir())
+        for fp, is_source in _project_files(projects_dir):
+            sz = fp.stat().st_size
+            full_bytes += sz
+            if not is_source:
+                compact_bytes += sz
 
     # Databases
     databases = _find_databases(base_dir)
@@ -318,35 +318,12 @@ def create_migration_bundle(
         project_count = 0
         episode_count = 0
         if projects_dir.is_dir():
-            for p in sorted(projects_dir.iterdir()):
-                if not p.is_dir():
+            project_count = sum(1 for p in projects_dir.iterdir() if p.is_dir())
+            episode_count = sum(1 for e in projects_dir.glob("*/episodes/*") if e.is_dir())
+            for fp, is_source in _project_files(projects_dir):
+                if is_source and mode == "compact":
                     continue
-                project_count += 1
-                for pf_name in ("project.json", "glossary.json"):
-                    pf = p / pf_name
-                    if pf.is_file():
-                        rel = pf.relative_to(base_dir).as_posix()
-                        files_to_pack[rel] = pf
-
-                ep_dir = p / "episodes"
-                if ep_dir.is_dir():
-                    for e in sorted(ep_dir.iterdir()):
-                        if not e.is_dir():
-                            continue
-                        episode_count += 1
-                        for item in sorted(e.iterdir()):
-                            if not item.is_file():
-                                continue
-                            name = item.name.lower()
-                            if name.endswith(".bak") or "agent_workspace" in item.parts:
-                                continue
-
-                            is_original = name.startswith("original.") or name.startswith("original_backup.")
-                            if is_original and mode == "compact":
-                                continue
-
-                            rel = item.relative_to(base_dir).as_posix()
-                            files_to_pack[rel] = item
+                files_to_pack[fp.relative_to(base_dir).as_posix()] = fp
 
         # Calculate manifest entries
         files_manifest: Dict[str, Dict[str, Any]] = {}
@@ -710,8 +687,10 @@ def _remap_staged_paths(
                                 except Exception:
                                     pass
 
-                # 2) subtitle_ownership.db ('owned_files')
+                # 2) subtitle_ownership.db ('owned_files'): the key is ownership.norm_path of
+                #    the file (case-folded on Windows), so a remapped path gets a fresh key.
                 if "owned_files" in tables:
+                    from services.autopilot.ownership import norm_path
                     cols = [r[1] for r in conn.execute("PRAGMA table_info(owned_files)").fetchall()]
                     if "path" in cols:
                         has_disp = "display_path" in cols
@@ -724,8 +703,8 @@ def _remap_staged_paths(
                         for r in rows:
                             if has_disp:
                                 old_p, disp_p, sha1, sz, prj, ep, wrt = r
-                                new_p = _remap(old_p)
                                 new_disp = _remap(disp_p)
+                                new_p = norm_path(new_disp or _remap(old_p))
                                 if new_p != old_p or new_disp != disp_p:
                                     conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
                                     conn.execute(
@@ -736,7 +715,7 @@ def _remap_staged_paths(
                                     )
                             else:
                                 old_p, sha1, sz, prj, ep, wrt = r
-                                new_p = _remap(old_p)
+                                new_p = norm_path(_remap(old_p))
                                 if new_p != old_p:
                                     conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
                                     conn.execute(

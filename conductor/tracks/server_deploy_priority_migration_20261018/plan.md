@@ -69,7 +69,8 @@
 - [x] Task 5.4: Migration import stages and verifies before touching live data, restores DBs through the SQLite backup API (no stale `-wal`), snapshots every replaced DB, swaps `translation_memory/` whole, only extracts manifest-listed entries; read-only snapshot URI fixed. `full` is now the default bundle (compact drops `original.*`, which ASS export needs); UI downloads through a one-time link instead of an in-memory blob; CLI refuses to import over a running server.
 - [x] Task 5.5: Updater refuses to reset a checkout onto a release tag that lacks its local commits (unless forced).
 - [x] Task 5.6: `install.ps1 -OpenFirewall` (inbound TCP on Private networks) and `-KeepAwake` (no sleep/hibernate on AC) — the Phase 4 follow-up.
-- [x] Task 5.7: Regression tests for each fix (each fails on the pre-fix code); full suite, eslint and vite build green.
+- [x] Task 5.7: Real-data dry run (731 projects, 3,086 episodes; full bundle 2.67 GB) found two more export/import gaps, now fixed: the bundle skipped project files other than `project.json`/`glossary.json` (episode summaries, character profiles, suggestions) and episode subfolders (`disk_backup/`), plus `agent_runner.json`; remapped ownership keys were not re-normalised (`ownership.norm_path`), so the server would have treated its own subtitles as foreign.
+- [x] Task 5.8: Regression tests for each fix (each fails on the pre-fix code); full suite, eslint and vite build green.
 
 ## Remaining (operational, needs the owner)
 - [ ] Move to `Morpiceserver`: export a **full** bundle, install with `install.ps1 -Mode Tray -OpenFirewall -KeepAwake`, stop OmbiSub, import with `--remap-unc-to-local`, start it.
