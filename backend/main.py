@@ -271,6 +271,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Auth secret bootstrap skipped (non-critical): {e}")
 
+    # One-time settings changes of new versions (utils/config_migrations.py).
+    try:
+        from utils.config_migrations import apply_config_migrations
+        apply_config_migrations()
+    except Exception as e:
+        logger.warning(f"Config migrations skipped (non-critical): {e}")
+
     # Setup-wizard migration: an install that already has a real config (a
     # Gemini key, or Sonarr/Radarr credentials) predates the wizard and should
     # never see it — only a genuinely empty config.json goes through first-run.
