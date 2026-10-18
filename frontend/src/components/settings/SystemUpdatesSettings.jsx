@@ -29,7 +29,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
     const [importing, setImporting] = useState(false);
     const [importSuccess, setImportSuccess] = useState(null);
 
-    const webhookUrl = `${window.location.origin}/api/webhooks/github`;
+    const webhookUrl = `${window.location.origin}${window.__OMBISUB_BASE__ || ''}/api/webhooks/github`;
 
     const fetchStatus = useCallback(async (forceCheck = false) => {
         if (forceCheck) setChecking(true);
@@ -38,11 +38,13 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
             setUpdateStatus(res.data);
             if (forceCheck) {
                 if (res.data.update_available) {
-                    toast.info(`New release available: ${res.data.latest_release?.tag_name || res.data.latest_commit}`);
+                    toast.info(res.data.channel === 'main'
+                        ? `${res.data.behind} new commit(s) on main`
+                        : `New release available: ${res.data.latest_release?.tag_name || res.data.latest_commit}`);
                 } else if (res.data.release_status === 'no_releases_published') {
                     toast.info('No official GitHub releases published yet.');
                 } else {
-                    toast.success('OmbiSub is up to date (Official Release)!');
+                    toast.success('OmbiSub is up to date!');
                 }
             }
         } catch (err) {
@@ -184,6 +186,9 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
     const installedTag = updateStatus?.installed_release?.tag_name || updateStatus?.tag_name || updateStatus?.current_commit;
     const latestRelease = updateStatus?.latest_release;
     const isNoReleases = updateStatus?.release_status === 'no_releases_published';
+    const isMain = updateStatus?.channel === 'main';
+    const notChecked = updateStatus?.checked === false;
+    const commits = updateStatus?.commits || [];
 
     return (
         <div className="space-y-6">
@@ -192,23 +197,27 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">OmbiSub Official Releases</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{isMain ? 'OmbiSub Updates (main branch)' : 'OmbiSub Official Releases'}</h3>
                             {updateStatus?.update_available ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                                    <Tag className="w-3 h-3 mr-1" /> New Release Available: {latestRelease?.tag_name || 'Latest'}
+                                    <Tag className="w-3 h-3 mr-1" /> {isMain ? `${updateStatus.behind} new commit${updateStatus.behind === 1 ? '' : 's'} available` : `New Release Available: ${latestRelease?.tag_name || 'Latest'}`}
                                 </span>
-                            ) : isNoReleases ? (
+                            ) : notChecked ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+                                    <Info className="w-3 h-3 mr-1" /> Not checked yet
+                                </span>
+                            ) : isNoReleases && !isMain ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
                                     <Info className="w-3 h-3 mr-1" /> No GitHub Releases Published Yet
                                 </span>
                             ) : (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Up to Date (Official Release)
+                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Up to Date
                                 </span>
                             )}
                         </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Tracking Official GitHub Releases from <span className="text-gray-700 dark:text-gray-300 font-mono">thanos2940/OmbiSub---Google-Seminar-Capstone-Project</span>
+                            {isMain ? 'Following the main branch of ' : 'Tracking Official GitHub Releases from '}<span className="text-gray-700 dark:text-gray-300 font-mono">thanos2940/OmbiSub---Google-Seminar-Capstone-Project</span>
                         </p>
                     </div>
 
@@ -220,7 +229,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             className="inline-flex items-center px-3.5 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600/50 transition-colors disabled:opacity-50"
                         >
                             <RefreshCw className={`w-4 h-4 mr-1.5 ${checking ? 'animate-spin' : ''}`} />
-                            {checking ? 'Checking...' : 'Check for Releases'}
+                            {checking ? 'Checking...' : 'Check for updates'}
                         </button>
 
                         {updateStatus?.update_available && (
@@ -231,7 +240,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                                 className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
                             >
                                 <ArrowDownCircle className={`w-4 h-4 mr-1.5 ${applying ? 'animate-spin' : ''}`} />
-                                {applying ? 'Installing...' : `Install ${latestRelease?.tag_name || 'Update'} & Restart`}
+                                {applying ? 'Installing...' : `Install ${isMain ? 'update' : (latestRelease?.tag_name || 'Update')} & Restart`}
                             </button>
                         )}
                     </div>
@@ -265,7 +274,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mb-1">
                             <Clock className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" /> Last Checked
                         </div>
-                        <div className="text-sm text-gray-800 dark:text-gray-200">{updateStatus?.last_checked || 'Just now'}</div>
+                        <div className="text-sm text-gray-800 dark:text-gray-200">{updateStatus?.last_checked || (notChecked ? 'Never' : 'Just now')}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Automated or manual check</div>
                     </div>
 
@@ -306,6 +315,27 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                 </div>
             )}
 
+            {/* What the update brings: the commit subjects on the main channel */}
+            {isMain && commits.length > 0 && (
+                <div className="bg-white dark:bg-gray-800/80 border border-indigo-500/30 rounded-xl p-5 shadow-sm space-y-3">
+                    <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                        <GitCommit className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        What's new ({updateStatus.behind} commit{updateStatus.behind === 1 ? '' : 's'}{commits.length < updateStatus.behind ? `, newest ${commits.length} shown` : ''})
+                    </h4>
+                    <ul className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-lg text-xs text-gray-700 dark:text-gray-300 font-mono max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 leading-relaxed space-y-1">
+                        {commits.map((c) => (
+                            <li key={c.hash}><span className="text-gray-500 dark:text-gray-500">{c.hash}</span> {c.message}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+            {isMain && updateStatus?.ahead > 0 && (
+                <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    This checkout has {updateStatus.ahead} commit(s) that are not on origin/main; updating is refused until they are pushed.
+                </div>
+            )}
+
             {/* Automated Release Installation Settings */}
             <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 space-y-4 shadow-sm">
                 <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
@@ -313,7 +343,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                     Automated Background Updates
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    OmbiSub periodically checks GitHub in the background. When enabled, it pulls new official releases and restarts the server as soon as the translation queue is idle.
+                    OmbiSub periodically checks GitHub in the background. When enabled, it installs new updates (commits on main, or official releases, depending on the channel) and restarts the server as soon as the translation queue is idle.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -325,8 +355,8 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             className="w-4 h-4 text-indigo-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-indigo-500"
                         />
                         <div>
-                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Automatically install new GitHub Releases when idle</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">Installs verified official releases when translation queue finishes</div>
+                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Automatically install updates when idle</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Installs when the translation queue is idle</div>
                         </div>
                     </label>
 
@@ -344,6 +374,53 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             <option value={24}>Every 24 hours</option>
                         </select>
                     </div>
+
+                    <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700/60 flex flex-col justify-center">
+                        <label className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Update channel</label>
+                        <select
+                            value={settings.update_channel ?? 'auto'}
+                            onChange={(e) => updateSetting('update_channel', e.target.value)}
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-800 dark:text-gray-200 p-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        >
+                            <option value="auto">Automatic (main until releases are published)</option>
+                            <option value="main">main branch (every pushed commit)</option>
+                            <option value="releases">GitHub Releases only</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Reverse proxy (Caddy) */}
+            <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 space-y-4 shadow-sm">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <Server className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                    Reverse proxy
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Serving OmbiSub under a path of another site (for example Caddy at example.com/ombisub)? Enter that path. Leave it empty for a (sub)domain or direct access.
+                    Both settings take effect after a restart. Turn on the login (Security tab) before exposing OmbiSub to the internet.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700/60 flex flex-col">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">URL base (restart required)</span>
+                        <input
+                            type="text"
+                            value={settings.url_base ?? ''}
+                            onChange={(e) => updateSetting('url_base', e.target.value)}
+                            placeholder="/ombisub"
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-800 dark:text-gray-200 p-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                    </label>
+                    <label className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700/60 flex flex-col">
+                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Trusted proxies (restart required)</span>
+                        <input
+                            type="text"
+                            value={settings.trusted_proxies ?? '127.0.0.1'}
+                            onChange={(e) => updateSetting('trusted_proxies', e.target.value)}
+                            placeholder="127.0.0.1"
+                            className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded text-sm text-gray-800 dark:text-gray-200 p-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                    </label>
                 </div>
             </div>
 
@@ -614,7 +691,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Official Release Install</h3>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-300">
-                            OmbiSub will download release <span className="font-mono text-indigo-600 dark:text-indigo-300">{latestRelease?.tag_name}</span>, update any modified dependencies, rebuild the UI static bundle, and gracefully restart the server.
+                            OmbiSub will download {isMain ? 'the latest commits of main' : <>release <span className="font-mono text-indigo-600 dark:text-indigo-300">{latestRelease?.tag_name}</span></>}, update any modified dependencies, rebuild the UI static bundle, and gracefully restart the server.
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                             Your projects, glossaries, and configuration in <code className="text-gray-700 dark:text-gray-300">data/</code> are safely protected and will remain untouched.

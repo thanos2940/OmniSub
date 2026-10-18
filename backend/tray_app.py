@@ -2,11 +2,11 @@
 OmbiSub System Tray Application & Server Supervisor
 ===================================================
 Runs OmbiSub windowlessly with tray notifications, status polling, and automatic
-restart on updates (exit code 42) or unexpected crashes.
+restart on updates (exit code 42, at once) or crashes (back-off 5 s, 15 s, 60 s).
 
 Can be run via:
     pythonw.exe backend/tray_app.py [--port 8000] [--data-dir <path>]
-    python.exe backend/tray_app.py --headless
+    python.exe backend/tray_app.py --headless      (what install.ps1 -Mode Service runs at boot)
 """
 
 import argparse
@@ -116,21 +116,68 @@ def release_tray_lock(lock_file: Path) -> None:
         pass
 
 
+EXIT_RESTART = 42  # run_server exits with this when the app asked to be restarted (update, /api/system/restart)
+
+
+class RestartPolicy:
+    """Decides how long to wait before the server is started again after it exited.
+
+    A restart request (exit code 42) is answered at once and clears the crash count. Any other exit is a
+    crash: the wait grows 5 s, 15 s, 60 s (then stays at 60 s), and the count starts over once a server
+    has stayed up for ``stable_after`` seconds. Pure: the caller supplies the exit code and the uptime.
+    """
+
+    BACKOFF = (5.0, 15.0, 60.0)
+
+    def __init__(self, stable_after: float = 60.0):
+        self.stable_after = stable_after
+        self.crashes = 0
+
+    def next_delay(self, exit_code: Optional[int], uptime: float) -> float:
+        if exit_code == EXIT_RESTART:
+            self.crashes = 0
+            return 0.0
+        if uptime >= self.stable_after:
+            self.crashes = 0
+        delay = self.BACKOFF[min(self.crashes, len(self.BACKOFF) - 1)]
+        self.crashes += 1
+        return delay
+
+
 class ServerSupervisor:
     """Supervises the backend run_server.py process with auto-respawn and health tracking."""
 
     def __init__(self, port: int = DEFAULT_PORT, data_dir: Optional[Path] = None,
-                 python_exe: Optional[str] = None):
+                 python_exe: Optional[str] = None, popen=None, clock=time.monotonic,
+                 policy: Optional[RestartPolicy] = None):
         self.port = port
         self.data_dir = data_dir or (Path(os.environ.get("OMNISUB_DATA_DIR") or BACKEND_DIR).resolve())
         self.python_exe = python_exe or sys.executable
         self.proc: Optional[subprocess.Popen] = None
-        self.stopping = False
+        self._stop_event = threading.Event()
         self.restarting = False
         self.last_health: Dict[str, Any] = {}
         self.is_healthy = False
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()  # restart_server holds it while start_server takes it again
         self.monitor_thread: Optional[threading.Thread] = None
+        self._popen_fn = popen  # injectable for tests; looked up late so patching subprocess.Popen works
+        self._clock = clock
+        self.policy = policy or RestartPolicy()
+        self.started_at = 0.0
+
+    @property
+    def stopping(self) -> bool:
+        return self._stop_event.is_set()
+
+    @stopping.setter
+    def stopping(self, value: bool) -> None:
+        if value:
+            self._stop_event.set()
+        else:
+            self._stop_event.clear()
+
+    def _popen(self, *args, **kwargs):
+        return (self._popen_fn or subprocess.Popen)(*args, **kwargs)
 
     def start_server(self) -> None:
         """Launch backend/run_server.py windowlessly with OMBISUB_SUPERVISOR=tray."""
@@ -151,13 +198,14 @@ class ServerSupervisor:
             env["OMNISUB_DATA_DIR"] = str(self.data_dir)
 
             logger.info(f"Starting server: {' '.join(cmd)}")
-            self.proc = subprocess.Popen(
+            self.proc = self._popen(
                 cmd,
                 cwd=str(BACKEND_DIR),
                 env=env,
                 creationflags=_SUBPROCESS_FLAGS,
                 close_fds=(sys.platform != "win32"),
             )
+            self.started_at = self._clock()
             logger.info(f"Server started (PID {self.proc.pid})")
 
     def stop_server(self, timeout: float = 5.0) -> None:
@@ -216,23 +264,38 @@ class ServerSupervisor:
             self.start_server()
         self.restarting = False
 
+    def supervise_once(self) -> bool:
+        """One look at the server process; starts it again when it has exited. True if it had exited.
+
+        Waits (interruptibly) for the policy's delay first: none after a restart request, 5/15/60 s
+        after a crash. Every respawn is logged with the exit code.
+        """
+        proc = self.proc
+        exit_code = proc.poll() if proc is not None else None
+        if exit_code is None or self.stopping or self.restarting:
+            return False
+        uptime = self._clock() - self.started_at
+        delay = self.policy.next_delay(exit_code, uptime)
+        if exit_code == EXIT_RESTART:
+            logger.info(f"Server PID {proc.pid} exited with code {exit_code} (restart requested); starting it again.")
+        else:
+            logger.warning(f"Server PID {proc.pid} exited with code {exit_code} after {uptime:.0f}s "
+                           f"(crash {self.policy.crashes}); starting it again in {delay:.0f}s.")
+        if delay and self._stop_event.wait(delay):
+            return True
+        if not self.stopping:
+            self.start_server()
+        return True
+
     def supervisor_loop(self) -> None:
-        """Monitor server process, auto-respawning on exit code 42 (update) or crash."""
+        """Monitor the server process until stopped, respawning it after a restart request or a crash."""
         while not self.stopping:
-            proc = self.proc
-            if proc is not None:
-                exit_code = proc.poll()
-                if exit_code is not None:
-                    logger.warning(f"Server PID {proc.pid} exited with code {exit_code}")
-                    if self.stopping:
-                        break
-                    if not self.restarting:
-                        # Exit code 42: update restart requested; any other non-zero/zero: crash respawn
-                        logger.info(f"Respawning server in 2s (exit code was {exit_code})...")
-                        time.sleep(2.0)
-                        if not self.stopping:
-                            self.start_server()
-            time.sleep(1.0)
+            try:
+                self.supervise_once()
+            except Exception:
+                logger.exception("Supervisor could not start the server; retrying.")
+                self._stop_event.wait(5.0)
+            self._stop_event.wait(1.0)
 
     def check_health(self) -> Dict[str, Any]:
         """Poll /api/health to inspect queue and agent runner state."""
@@ -388,11 +451,12 @@ def main(argv=None) -> int:
         print(f"OmbiSub Tray is already running for {data_dir}.")
         return 0
 
+    (data_dir / "logs").mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[
-            logging.StreamHandler(sys.stdout),
+            *([logging.StreamHandler(sys.stdout)] if sys.stdout else []),  # pythonw has no stdout
             logging.FileHandler(str(data_dir / "logs" / "tray_app.log"), encoding="utf-8"),
         ],
     )
@@ -405,8 +469,9 @@ def main(argv=None) -> int:
         release_tray_lock(lock_file)
         sys.exit(0)
 
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
+    for name in ("SIGINT", "SIGTERM", "SIGBREAK"):  # SIGBREAK: Ctrl+Break / console close on Windows
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), handle_signal)
 
     try:
         if args.headless:

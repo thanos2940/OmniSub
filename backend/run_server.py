@@ -4,6 +4,7 @@
 
 * one uvicorn worker, no reload, graceful shutdown;
 * console + rotating file log (<data dir>/logs/ombisub.log, 10 MB x 5);
+* honours X-Forwarded-* headers from the ``trusted_proxies`` setting (default 127.0.0.1: a Caddy on this machine);
 * refuses to start twice for the same data directory (lock file with stale detection);
 * ``--check`` prints the resolved configuration and exits 0 (ready) / 1 (problem) without serving.
 """
@@ -95,6 +96,12 @@ def release_lock(path) -> None:
             path.unlink()
     except (OSError, TypeError, ValueError):
         pass
+
+
+def trusted_proxies(config: dict) -> str:
+    """The ``trusted_proxies`` setting (comma separated addresses, "*" = any) for uvicorn; default: this machine."""
+    value = str((config or {}).get("trusted_proxies") or "").strip()
+    return value or "127.0.0.1"
 
 
 def setup_logging(data_dir: Path) -> Path:
@@ -231,8 +238,11 @@ def main(argv=None) -> int:
             per_model_rate_limiter.load_config_and_state()
         except Exception as exc:
             log.warning("Rate limiter state not loaded: %s", exc)
+        from utils import storage
         config = uvicorn.Config(app, host=args.host, port=args.port, workers=1, reload=False,
-                                log_config=None, timeout_graceful_shutdown=20)
+                                log_config=None, timeout_graceful_shutdown=20,
+                                proxy_headers=True,  # X-Forwarded-For/-Proto from a reverse proxy (Caddy) ...
+                                forwarded_allow_ips=trusted_proxies(storage.load_global_config()))  # ... if it is trusted
         uvicorn.Server(config).run()  # handles Ctrl+C / SIGTERM and runs the lifespan shutdown
         log.info("OmbiSub stopped.")
         return 0

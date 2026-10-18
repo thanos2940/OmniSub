@@ -212,12 +212,12 @@ def test_has_active_jobs_checks_agent_runner(monkeypatch):
     monkeypatch.setattr(jm, "jobs", {})
     svc = UpdateService()
     mock_runner = MagicMock()
-    mock_runner.status.return_value.running = True
+    mock_runner.status = "running"
     monkeypatch.setattr("services.agent_runner.get_runner", lambda: mock_runner)
 
     assert svc.has_active_jobs() is True
 
-    mock_runner.status.return_value.running = False
+    mock_runner.status = "idle"  # watching an empty queue is not work in flight
     assert svc.has_active_jobs() is False
 
 
