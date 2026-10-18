@@ -545,7 +545,7 @@ class UpdateService:
                 self._run_git, ["diff", "--name-only", "HEAD", target_ref], 15.0
             )
             changed_files = diff_res.stdout.strip().splitlines() if diff_res.returncode == 0 else []
-            reqs_changed = any("backend/requirements.txt" in f or f == "requirements.txt" for f in changed_files)
+            reqs_changed = any(f.startswith(("backend/requirements", "requirements")) for f in changed_files)
             frontend_changed = any(f.startswith("frontend/") for f in changed_files)
 
             # Pre-reset safety check
@@ -574,7 +574,8 @@ class UpdateService:
             if reqs_changed:
                 logger.info("backend/requirements.txt changed; running pip install...")
                 try:
-                    pip_cmd = [str(PYTHON_EXE), "-m", "pip", "install", "-r", "requirements.txt"]
+                    req = "requirements.lock.txt" if (BACKEND_DIR / "requirements.lock.txt").is_file() else "requirements.txt"
+                    pip_cmd = [str(PYTHON_EXE), "-m", "pip", "install", "-r", req]
                     await asyncio.to_thread(
                         subprocess.run,
                         pip_cmd,

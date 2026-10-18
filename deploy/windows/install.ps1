@@ -122,8 +122,12 @@ if ($PSCmdlet.ShouldProcess($Venv, 'Create/update venv and install backend\requi
         if ($LASTEXITCODE -ne 0) { Fail 'Creating the venv failed.' }
     }
     & $VenvPy -m pip install --upgrade pip --quiet
-    Write-Host '  installing backend\requirements.txt (the first time this downloads several hundred MB) ...'
-    & $VenvPy -m pip install -r (Join-Path $Backend 'requirements.txt')
+    # The lock file holds the exact tested versions; requirements.txt alone would pull the newest of
+    # everything (a fresh install once got SQLAlchemy 2.1, which broke the session database).
+    $reqFile = Join-Path $Backend 'requirements.lock.txt'
+    if (-not (Test-Path $reqFile)) { $reqFile = Join-Path $Backend 'requirements.txt' }
+    Write-Host "  installing $(Split-Path $reqFile -Leaf) (the first time this downloads several hundred MB) ..."
+    & $VenvPy -m pip install -r $reqFile
     if ($LASTEXITCODE -ne 0) { Fail 'pip install failed.' }
     Write-Host '  installing pystray and Pillow for tray support ...'
     & $VenvPy -m pip install pystray Pillow --quiet
