@@ -127,3 +127,5 @@ docs/
 *.p12
 *.pfx
 secrets/
+# Runtime lock files
+backend/*.lock

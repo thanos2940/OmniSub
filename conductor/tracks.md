@@ -20,4 +20,9 @@ This file tracks all major tracks for the project. Each track has its own detail
 ---
 
 - [x] **Track: Bazarr-Style Server Deployment, Autonomous Boot, 4-Tier Project Priorities, Migration Bundle & GitHub Release Auto-Updater (`server_deploy_priority_migration_20261018`)**
-  *Link: [./tracks/server_deploy_priority_migration_20261018/index.md](./tracks/server_deploy_priority_migration_20261018/index.md)*
+  *Link: [./tracks/server_deploy_priority_migration_20261018/index.md](./tracks/server_deploy_priority_migration_20261018/index.md)*
+
+---
+
+- [~] **Track: Dependable, agy-first OmbiSub (`dependable_agy_first_20261019`)**
+  *Link: [./tracks/dependable_agy_first_20261019/index.md](./tracks/dependable_agy_first_20261019/index.md)*
