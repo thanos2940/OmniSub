@@ -2,10 +2,12 @@
 Source Subtitle Cleaning Preprocess (Plan 25).
 """
 
+import os
 import re
 import hashlib
 import logging
-from typing import List, Dict, Tuple, Optional
+from pathlib import Path
+from typing import Any, List, Dict, Tuple, Optional
 from utils.srt_parser import timecode_to_ms
 from utils.subtitle_io import detect_format, parse_subtitle, reconstruct_subtitle
 from utils.text_normalize import sanitize_translation_text
@@ -439,19 +441,70 @@ def _autobalance_for_export(rows: List[Dict], fmt: str) -> None:
         pass
 
 
-def reconstruct_cleaned_srt(
-    project_name: str,
-    episode_name: str,
-    cleaned_data: List[Dict],
-    target_lang_code: Optional[str] = None
+def export_ass(
+    entries: List[Dict],
+    original_content: Optional[str] = None,
+    font_scale: float = 1.0,
+    target_lang: Optional[str] = None,
+    **kwargs
 ) -> str:
-    """Reconstruct SRT using the original timing/structure, filling in
+    """Export ASS subtitle entries using reconstruct_subtitle with font remapping and scaling."""
+    from utils.subtitle_io import reconstruct_subtitle
+    return reconstruct_subtitle(
+        entries,
+        fmt="ass",
+        original_content=original_content,
+        font_scale=font_scale,
+        target_lang_code=target_lang,
+        **kwargs
+    )
+
+
+def reconstruct_cleaned_srt(
+    project_name: Any = None,
+    episode_name: Any = None,
+    cleaned_data: Any = None,
+    target_lang_code: Optional[str] = None,
+    *args,
+    clean_to_orig_map: Any = None,
+    original_srt_path: Any = None,
+    source_ass_path: Optional[str] = None,
+    video_dims: Any = None,
+    target_lang: Optional[str] = None,
+    **kwargs
+) -> str:
+    """Reconstruct SRT/ASS using the original timing/structure, filling in
     translations from the cleaned/translated data.
     """
-    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    target_lang_code = target_lang_code or target_lang
 
-    raw_content, ext = storage.load_original_subtitle(project_name, episode_name)
-    fmt = ext.lstrip('.') if ext else "srt"
+    if isinstance(project_name, list):
+        cleaned_data_arg = project_name
+        clean_to_orig_map_arg = episode_name if isinstance(episode_name, dict) else clean_to_orig_map
+        orig_path = cleaned_data if isinstance(cleaned_data, (str, Path)) else original_srt_path
+        ass_path = target_lang_code if isinstance(target_lang_code, (str, Path)) else source_ass_path
+        if isinstance(target_lang_code, (str, Path)) and str(target_lang_code).endswith((".ass", ".ssa", ".srt")):
+            target_lang_code = target_lang
+
+        raw_content = ""
+        fmt = "srt"
+        if ass_path and os.path.exists(str(ass_path)):
+            raw_content = Path(ass_path).read_text(encoding="utf-8-sig", errors="replace")
+            fmt = "ass"
+        elif orig_path and os.path.exists(str(orig_path)):
+            raw_content = Path(orig_path).read_text(encoding="utf-8-sig", errors="replace")
+            fmt = Path(orig_path).suffix.lstrip(".").lower() or "srt"
+
+        metadata = {
+            "clean_to_orig_map": clean_to_orig_map_arg or {},
+        }
+        cleaned_data = cleaned_data_arg
+        project_name = "direct"
+        episode_name = "direct"
+    else:
+        metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+        raw_content, ext = storage.load_original_subtitle(project_name, episode_name)
+        fmt = ext.lstrip('.') if ext else "srt"
 
     # Font-size scaling for ASS targets whose glyphs are wider than Latin.
     font_scale = _ass_font_scale(target_lang_code) if fmt in ("ass", "ssa") else 1.0
@@ -483,6 +536,8 @@ def reconstruct_cleaned_srt(
     if metadata.get("structure_authoritative"):
         rows = _rows_from_cleaned()
         _autobalance_for_export(rows, fmt)
+        if fmt in ("ass", "ssa"):
+            return export_ass(rows, original_content=raw_content, font_scale=font_scale, target_lang=target_lang_code)
         return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
     if not raw_content:
@@ -490,17 +545,29 @@ def reconstruct_cleaned_srt(
         # data) and export-only balancing must not leak back into it.
         rows = [dict(e) for e in cleaned_data]
         _autobalance_for_export(rows, fmt)
+        if fmt in ("ass", "ssa"):
+            return export_ass(rows, font_scale=font_scale, target_lang=target_lang_code)
         return reconstruct_subtitle(rows, fmt=fmt, font_scale=font_scale, target_lang_code=target_lang_code)
 
     parsed_raw = parse_subtitle(raw_content, fmt=fmt)
     clean_to_orig_str = metadata.get("clean_to_orig_map", {})
 
-    # No map at all (episode imported before the map existed): the raw remap below
-    # would treat every original cue as unmapped. Emit the cleaned/translated cue
-    # list directly instead — it's the only structure we can trust here.
-    if not clean_to_orig_str:
+    # No map at all (episode imported before the map existed), or compacted ASS episode
+    # where drawing/karaoke passthrough rows were stripped from data.json (D-02) and each
+    # row maps back to original.ass via its own _ass["index"].
+    if not clean_to_orig_str or (fmt in ("ass", "ssa") and len(clean_to_orig_str) != len(cleaned_data)):
+        deleted_orig = {int(i) for i in metadata.get("deleted_orig_indexes") or []}
         rows = _rows_from_cleaned()
+        if deleted_orig and fmt in ("ass", "ssa"):
+            deleted_ass_idx = {
+                (parsed_raw[i].get("_ass") or {}).get("index")
+                for i in deleted_orig
+                if 0 <= i < len(parsed_raw) and isinstance(parsed_raw[i].get("_ass"), dict)
+            } | deleted_orig
+            rows = [r for r in rows if (r.get("_ass") or {}).get("index") not in deleted_ass_idx]
         _autobalance_for_export(rows, fmt)
+        if fmt in ("ass", "ssa"):
+            return export_ass(rows, original_content=raw_content, font_scale=font_scale, target_lang=target_lang_code)
         return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
     clean_to_orig = {int(k): normalize_orig_indexes(v) for k, v in clean_to_orig_str.items()}
@@ -586,6 +653,9 @@ def reconstruct_cleaned_srt(
     # kept_entries are freshly parsed from the raw file, so mutation is export-only.
     _autobalance_for_export(kept_entries, fmt)
 
+    if fmt in ("ass", "ssa"):
+        return export_ass(kept_entries, original_content=raw_content, font_scale=font_scale, target_lang=target_lang_code)
+
     return reconstruct_subtitle(kept_entries, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
 
@@ -594,59 +664,139 @@ def align_and_carry_translations(
     new_lines: List[Dict],
     min_unchanged_ratio: float = 0.5
 ) -> Tuple[List[Dict], bool]:
-    """Align old and new lines by src_hash using LCS.
+    """Align old and new lines by src_hash / normalized text using LCS or fast windowed matching.
     Carries over translations for unchanged lines.
     Returns: (new_lines_with_carried_translations, is_incremental)
     """
-    n = len(old_lines)
-    m = len(new_lines)
-    
+    if not old_lines or not new_lines:
+        return new_lines, False
+
+    def _is_translatable(line: Dict) -> bool:
+        if line.get("translatable") is False:
+            return False
+        if (line.get("_ass") or {}).get("translatable") is False:
+            return False
+        return True
+
+    def _get_hash(entry: Dict) -> str:
+        h = entry.get("src_hash")
+        if h:
+            return h
+        text = (entry.get("original") or "").strip()
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+    old_translatable = [(idx, line) for idx, line in enumerate(old_lines) if _is_translatable(line)]
+    new_translatable = [(idx, line) for idx, line in enumerate(new_lines) if _is_translatable(line)]
+
+    n = len(old_translatable)
+    m = len(new_translatable)
+
     if n == 0 or m == 0:
         return new_lines, False
 
-    dp = [[0] * (m + 1) for _ in range(n + 1)]
-    for i in range(1, n + 1):
-        for j in range(1, m + 1):
-            if old_lines[i-1].get("src_hash") == new_lines[j-1].get("src_hash"):
-                dp[i][j] = dp[i-1][j-1] + 1
-            else:
-                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
-                
     matches = []
-    i, j = n, m
-    while i > 0 and j > 0:
-        if old_lines[i-1].get("src_hash") == new_lines[j-1].get("src_hash"):
-            matches.append((i-1, j-1))
-            i -= 1
-            j -= 1
-        elif dp[i-1][j] >= dp[i][j-1]:
-            i -= 1
-        else:
-            j -= 1
-            
-    matches.reverse()
-    
+
+    # If N * M > 4,000,000 (e.g. > 2000 x 2000), use fast windowed matching pass to prevent OOM
+    if n * m > 4_000_000:
+        used_old = set()
+        last_matched_pos = 0
+        ratio_scale = n / m
+
+        old_hashes = [_get_hash(l[1]) for l in old_translatable]
+        old_texts = [(l[1].get("original") or "").strip() for l in old_translatable]
+        old_ass_indices = [(l[1].get("_ass") or {}).get("index") for l in old_translatable]
+        old_timecodes = [l[1].get("timecode") for l in old_translatable]
+
+        for j, (new_orig_idx, new_line) in enumerate(new_translatable):
+            new_h = _get_hash(new_line)
+            new_text = (new_line.get("original") or "").strip()
+            new_ass_idx = (new_line.get("_ass") or {}).get("index")
+            new_timecode = new_line.get("timecode")
+
+            approx_i = int(j * ratio_scale)
+            win_start = max(last_matched_pos, approx_i - 50)
+            win_end = min(n, approx_i + 51)
+
+            best_match = None
+            best_score = -1
+
+            for pos in range(win_start, win_end):
+                if pos in used_old:
+                    continue
+                old_h = old_hashes[pos]
+                old_text = old_texts[pos]
+
+                if old_h == new_h or (new_text and old_text == new_text):
+                    score = 10
+                    # Proximity bonuses
+                    if new_ass_idx is not None and old_ass_indices[pos] == new_ass_idx:
+                        score += 20
+                    if new_timecode and old_timecodes[pos] == new_timecode:
+                        score += 15
+                    # Distance penalty
+                    dist = abs(pos - approx_i)
+                    score -= dist * 0.1
+
+                    if score > best_score:
+                        best_score = score
+                        best_match = (pos, old_translatable[pos][0], new_orig_idx)
+                        if score >= 45:
+                            break
+
+            if best_match:
+                pos, old_orig_idx, new_orig_idx = best_match
+                used_old.add(pos)
+                matches.append((old_orig_idx, new_orig_idx))
+                last_matched_pos = pos
+    else:
+        # Standard LCS DP on translatable cues
+        dp = [[0] * (m + 1) for _ in range(n + 1)]
+        old_hashes = [_get_hash(l[1]) for l in old_translatable]
+        new_hashes = [_get_hash(l[1]) for l in new_translatable]
+
+        for i in range(1, n + 1):
+            h_i = old_hashes[i - 1]
+            for j in range(1, m + 1):
+                if h_i == new_hashes[j - 1]:
+                    dp[i][j] = dp[i - 1][j - 1] + 1
+                else:
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+        i, j = n, m
+        while i > 0 and j > 0:
+            if old_hashes[i - 1] == new_hashes[j - 1]:
+                matches.append((old_translatable[i - 1][0], new_translatable[j - 1][0]))
+                i -= 1
+                j -= 1
+            elif dp[i - 1][j] >= dp[i][j - 1]:
+                i -= 1
+            else:
+                j -= 1
+        matches.reverse()
+
     match_count = len(matches)
     ratio = match_count / m if m > 0 else 0.0
-    
+
     if ratio < min_unchanged_ratio:
         return new_lines, False
-        
+
     for old_idx, new_idx in matches:
         old_line = old_lines[old_idx]
         new_line = new_lines[new_idx]
-        
+
         new_line["translations"] = dict(old_line.get("translations", {}))
         if old_line.get("translated"):
             new_line["translated"] = old_line["translated"]
-            
+
         new_line["from_tm"] = old_line.get("from_tm", False)
         new_line["tm_user_edited"] = old_line.get("tm_user_edited", False)
         new_line["tm_origin_episode"] = old_line.get("tm_origin_episode", "")
-        
+
         if "needs_review" in old_line:
             new_line["needs_review"] = old_line["needs_review"]
         if "review_issues" in old_line:
             new_line["review_issues"] = old_line["review_issues"]
-            
+        if "previous_translated" in old_line:
+            new_line["previous_translated"] = old_line["previous_translated"]
+
     return new_lines, True

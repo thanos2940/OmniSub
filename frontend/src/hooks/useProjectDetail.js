@@ -136,10 +136,16 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         e.target.value = null;
     }, [projectName, loadData, toast]);
 
-    const handleDeleteEpisode = useCallback(async (epName) => {
-        if (!window.confirm(`Delete episode "${epName}"? This will remove all subtitles for this episode.`)) return;
+    const handleDeleteEpisode = useCallback(async (epName, deleteDiskFile) => {
+        let shouldDeleteDisk;
+        if (typeof deleteDiskFile === 'boolean') {
+            shouldDeleteDisk = deleteDiskFile;
+        } else {
+            if (!window.confirm(`Delete episode "${epName}"? This will remove all subtitles for this episode.`)) return;
+            shouldDeleteDisk = window.confirm("Also delete the detected .el.srt / .el.ass file from disk?");
+        }
         try {
-            await api.deleteEpisode(projectName, epName);
+            await api.deleteEpisode(projectName, epName, shouldDeleteDisk);
             if (toast?.success) toast.success(`Deleted episode "${epName}".`);
             loadData();
         } catch (err) {
@@ -344,7 +350,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         }
     }, [projectName, addJob, toast]);
 
-    const handleBatchDelete = useCallback(async (selectedList) => {
+    const handleBatchDelete = useCallback(async (selectedList, deleteDiskFile) => {
         if (!selectedList || (Array.isArray(selectedList) && selectedList.length === 0) || (selectedList.size !== undefined && selectedList.size === 0)) return false;
         if (isBatchDeletingRef.current) {
             if (toast?.warning) toast.warning("Batch deletion is already in progress.");
@@ -353,9 +359,14 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
 
         const epList = Array.isArray(selectedList) ? selectedList : Array.from(selectedList);
 
-        if (!window.confirm(`Delete subtitles for ${epList.length} selected episode(s)? This will remove translated subtitles and cannot be undone.`)) {
-            return false;
+        if (typeof deleteDiskFile !== 'boolean') {
+            if (!window.confirm(`Delete subtitles for ${epList.length} selected episode(s)? This will remove translated subtitles and cannot be undone.`)) {
+                return false;
+            }
         }
+        const shouldDeleteDisk = typeof deleteDiskFile === 'boolean'
+            ? deleteDiskFile
+            : window.confirm("Also delete detected .el.srt / .el.ass files from disk for selected episodes?");
 
         isBatchDeletingRef.current = true;
 
@@ -366,7 +377,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
             await Promise.all(
                 epList.map(async (epName) => {
                     try {
-                        await api.deleteEpisode(projectName, epName);
+                        await api.deleteEpisode(projectName, epName, shouldDeleteDisk);
                         successCount++;
                     } catch (err) {
                         console.error(`Failed to delete episode "${epName}"`, err);

@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timezone
 from io import BytesIO
 from zipfile import ZipFile
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from fastapi import APIRouter, HTTPException, UploadFile, BackgroundTasks, Request, Response
 from fastapi.responses import StreamingResponse, JSONResponse
 from utils import storage
@@ -61,6 +61,10 @@ async def list_episodes(project_name: str):
     return await asyncio.to_thread(storage.list_episodes_with_metadata, project_name)
 
 
+def _etag_for(stat) -> str:
+    return f'W/"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
+
+
 @router.get("/projects/{project_name}/episodes/{episode_name}")
 async def get_episode(project_name: str, episode_name: str, request: Request):
     """The live editor polls this every few seconds while a translation is
@@ -74,9 +78,6 @@ async def get_episode(project_name: str, episode_name: str, request: Request):
         data_file = episode_dir / "data.json"
         if not data_file.exists():
             raise HTTPException(status_code=404, detail="Episode not found")
-
-        def _etag_for(stat) -> str:
-            return f'W/"{stat.st_mtime_ns:x}-{stat.st_size:x}"'
 
         pre_load_etag = _etag_for(data_file.stat())
         if request.headers.get("if-none-match") == pre_load_etag:
@@ -116,11 +117,20 @@ async def upload_episode(project_name: str, episode_name: str, file: UploadFile)
     return {"status": "success", "line_count": res["line_count"]}
 
 
+@router.put("/projects/{project_name}/episodes/{episode_name}")
 @router.post("/projects/{project_name}/episodes/{episode_name}/save")
-async def save_episode(project_name: str, episode_name: str, request: SaveEpisodeRequest):
-    previous = storage.load_episode(project_name, episode_name)
+async def save_episode(project_name: str, episode_name: str, request: SaveEpisodeRequest, request_raw: Request = None):
+    data_file = storage.episode_dir(project_name, episode_name) / "data.json"
+    if request_raw and data_file.exists():
+        if_match = request_raw.headers.get("if-match")
+        if if_match and if_match != "*":
+            current_etag = _etag_for(data_file.stat())
+            if if_match != current_etag:
+                raise HTTPException(status_code=409, detail=f"Conflict: ETag mismatch. Current: {current_etag}, If-Match: {if_match}")
 
-    proj_meta = storage.load_project_metadata(project_name)
+    previous = await asyncio.to_thread(storage.load_episode, project_name, episode_name)
+
+    proj_meta = await asyncio.to_thread(storage.load_project_metadata, project_name)
     primary_lang = proj_meta.get("target_language", "Greek") if proj_meta else "Greek"
     from utils.language_codes import to_code
     primary_code = to_code(primary_lang)
@@ -139,7 +149,7 @@ async def save_episode(project_name: str, episode_name: str, request: SaveEpisod
         if primary_code in line["translations"]:
             line["translated"] = line["translations"][primary_code]
 
-    storage.save_episode(project_name, episode_name, request.data)
+    await asyncio.to_thread(storage.save_episode, project_name, episode_name, request.data)
 
     if previous and previous.get("data"):
         try:
@@ -152,34 +162,41 @@ async def save_episode(project_name: str, episode_name: str, request: SaveEpisod
     has_translated = any(line.get("translated") or line.get("translations", {}).get(lang_code) for line in request.data)
     if has_translated:
         try:
-            metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+            metadata = (await asyncio.to_thread(storage.load_episode_metadata, project_name, episode_name)) or {}
             metadata["translated"] = True
             metadata["translation_status"] = "completed"
             metadata["last_translated_at"] = datetime.now(timezone.utc).isoformat()
-            storage.save_episode_metadata(project_name, episode_name, metadata)
-            exported_path = auto_export_translated_subtitle(project_name, episode_name, request.data, metadata, force=True)
+            await asyncio.to_thread(storage.save_episode_metadata, project_name, episode_name, metadata)
+            exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, request.data, metadata, force=True)
         except Exception:
             pass
 
         try:
             from services.agent_task_service import agent_task_service
-            agent_task_service.mark_task_completed(project_name, episode_name)
+            await asyncio.to_thread(agent_task_service.mark_task_completed, project_name, episode_name)
         except Exception:
             try:
                 from utils.translation_queue import TranslationQueue
                 q = TranslationQueue()
                 now_str = datetime.now(timezone.utc).isoformat()
-                with q._conn() as conn:
-                    conn.execute("""
-                        UPDATE translation_queue
-                        SET status = 'completed', completed_at = COALESCE(completed_at, ?)
-                        WHERE project_name = ? AND episode_name = ? AND status IN ('pending', 'running')
-                    """, (now_str, project_name, episode_name))
-                    conn.commit()
+                def _update_q():
+                    with q._conn() as conn:
+                        conn.execute("""
+                            UPDATE translation_queue
+                            SET status = 'completed', completed_at = COALESCE(completed_at, ?)
+                            WHERE project_name = ? AND episode_name = ? AND status IN ('pending', 'running')
+                        """, (now_str, project_name, episode_name))
+                        conn.commit()
+                await asyncio.to_thread(_update_q)
             except Exception:
                 pass
 
-    return {"status": "success", "exported_path": exported_path}
+    new_etag = _etag_for(data_file.stat()) if data_file.exists() else None
+    headers = {"ETag": new_etag} if new_etag else {}
+    return JSONResponse(
+        content={"status": "success", "exported_path": exported_path, "etag": new_etag},
+        headers=headers
+    )
 
 
 @router.post("/projects/{project_name}/episodes/{episode_name}/delete-lines")
@@ -191,7 +208,7 @@ async def delete_episode_lines(project_name: str, episode_name: str, request: De
     reconstruct_cleaned_srt skips entirely. Re-exports the on-disk subtitle so the
     deleted lines disappear there too.
     """
-    ep = storage.load_episode(project_name, episode_name)
+    ep = await asyncio.to_thread(storage.load_episode, project_name, episode_name)
     if not ep:
         raise HTTPException(status_code=404, detail="Episode not found")
 
@@ -200,7 +217,7 @@ async def delete_episode_lines(project_name: str, episode_name: str, request: De
     if not deleted:
         raise HTTPException(status_code=400, detail="No valid line indexes to delete")
 
-    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    metadata = (await asyncio.to_thread(storage.load_episode_metadata, project_name, episode_name)) or {}
 
     from utils.source_clean import normalize_orig_indexes
     old_map = {int(k): normalize_orig_indexes(v) for k, v in (metadata.get("clean_to_orig_map") or {}).items()}
@@ -222,13 +239,13 @@ async def delete_episode_lines(project_name: str, episode_name: str, request: De
     metadata["deleted_orig_indexes"] = sorted(deleted_orig)
     metadata["line_count"] = len(new_data)
 
-    storage.save_episode(project_name, episode_name, new_data, metadata)
+    await asyncio.to_thread(storage.save_episode, project_name, episode_name, new_data, metadata)
 
     # Refresh the exported file on disk so the deleted lines disappear there too
     exported_path = None
     has_media = metadata.get("arr_media_path")
     if has_media and any(line.get("translated") for line in new_data):
-        exported_path = auto_export_translated_subtitle(project_name, episode_name, new_data, metadata, force=True)
+        exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, new_data, metadata, force=True)
 
     return {
         "status": "success",
@@ -342,7 +359,10 @@ async def apply_episode_fixes(project_name: str, episode_name: str, request: App
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SubtitleEdit fixes failed: {e}")
 
-    return {"status": "success", "track": track, **res}
+    data_file = storage.episode_dir(project_name, episode_name) / "data.json"
+    etag = _etag_for(data_file.stat()) if data_file.exists() else None
+    headers = {"ETag": etag} if etag else {}
+    return JSONResponse(content={"status": "success", "track": track, "etag": etag, **res}, headers=headers)
 
 
 async def _process_batch_apply_fixes(job_id: str, project_name: str,
@@ -421,43 +441,120 @@ async def batch_apply_fixes(project_name: str, background_tasks: BackgroundTasks
     return {"job_id": job_id}
 
 
-def _delete_episode_translation(project_name: str, episode_name: str) -> bool:
-    """Delete only an episode's TRANSLATION — clears in-app translated text and deletes
-    the exported target .srt — while leaving the original/source subtitle intact, both
-    in-app and on disk. Returns False if the episode doesn't exist.
-
-    This is what the dashboard's "delete" does: the app mirrors the source directory, so
-    the original is never removed here (Sync reconciles originals against the directory).
+def _delete_episode_translation(project_name: str, episode_name: str, delete_disk_file: Optional[bool] = None) -> Any:
+    """Delete an episode's translation — clears in-app translated text and optionally deletes
+    the exported target subtitles on disk. Returns False/None if episode not found.
     """
     import os
     import logging
+    from pathlib import Path
     logger = logging.getLogger(__name__)
 
     data = storage.load_episode(project_name, episode_name)
     if not data:
-        return False
+        return False if delete_disk_file is None else None
 
-    for line in data["data"]:
+    for line in data.get("data", []):
         line["translated"] = ""
         line["translations"] = {}
+        line.pop("from_tm", None)
+        line.pop("needs_review", None)
+        line.pop("review_issues", None)
+        line.pop("review_scores", None)
 
     metadata = storage.load_episode_metadata(project_name, episode_name) or {}
     metadata["translated"] = False
     metadata["translation_status"] = "pending"
+    metadata.pop("translation_failed", None)
+    metadata.pop("translation_error", None)
+    metadata.pop("translation_warning", None)
 
-    # Delete the exported translated .srt next to media (and any per-language targets) so
-    # the output folder reflects that the translation is gone.
-    target_paths = [metadata.get("arr_target_path")]
+    # Detect existing target subtitle files on disk
+    proj_meta = storage.load_project_metadata(project_name) or {}
+    target_lang_name = proj_meta.get("target_language", "Greek")
+    tgt_code = _lang_code(target_lang_name) or "el"
+
+    candidate_paths = []
+    if metadata.get("arr_target_path"):
+        candidate_paths.append(metadata.get("arr_target_path"))
     for t in (metadata.get("arr_targets") or {}).values():
         if isinstance(t, dict) and t.get("target_path"):
-            target_paths.append(t["target_path"])
-    for target_path in target_paths:
-        if target_path and os.path.exists(target_path):
+            candidate_paths.append(t["target_path"])
+
+    media_path = metadata.get("arr_media_path")
+    if media_path:
+        try:
+            from services.path_resolver import path_resolver
+            resolved_media = path_resolver.resolve(media_path)
+            media_file = Path(resolved_media) if resolved_media else Path(media_path)
+            candidate_paths.append(str(media_file.parent / f"{media_file.stem}.{tgt_code}.srt"))
+            candidate_paths.append(str(media_file.parent / f"{media_file.stem}.{tgt_code}.ass"))
+            candidate_paths.append(str(media_file.parent / f"{media_file.stem}.{tgt_code}.default.srt"))
+            candidate_paths.append(str(media_file.parent / f"{media_file.stem}.{tgt_code}.forced.srt"))
+            candidate_paths.append(str(media_file.parent / f"{media_file.stem}.{tgt_code}.forced.ass"))
+        except Exception:
+            pass
+
+    for cp in list(candidate_paths):
+        if str(cp).endswith(".ass"):
+            candidate_paths.append(str(Path(cp).with_suffix(".srt")))
+
+    candidate_paths.append(str(storage.episode_dir(project_name, episode_name) / f"{episode_name}.{tgt_code}.srt"))
+
+    detected_disk_files = []
+    seen = set()
+    for cp in candidate_paths:
+        if not cp:
+            continue
+        try:
+            norm = os.path.normcase(os.path.abspath(str(cp)))
+            if norm in seen:
+                continue
+            seen.add(norm)
+            if os.path.exists(str(cp)):
+                detected_disk_files.append(str(cp))
+        except Exception:
+            pass
+
+    disk_file_ownership = {}
+    try:
+        from services.autopilot import ownership
+        ledger = getattr(ownership, "OwnershipLedger", None)
+        ledger_inst = ledger() if ledger else None
+    except Exception:
+        ownership = None
+        ledger_inst = None
+
+    for path_str in detected_disk_files:
+        is_ours = False
+        if ledger_inst and hasattr(ledger_inst, "is_ours"):
             try:
-                os.remove(target_path)
-                logger.info(f"Deleted target subtitle file at {target_path}")
+                is_ours = bool(ledger_inst.is_ours(path_str))
+            except Exception:
+                is_ours = False
+        elif ownership and hasattr(ownership, "is_ours"):
+            try:
+                is_ours = bool(ownership.is_ours(path_str, metadata))
+            except Exception:
+                is_ours = False
+        disk_file_ownership[path_str] = is_ours
+
+    deleted_disk_files = []
+    should_delete = bool(delete_disk_file) if delete_disk_file is not None else True
+    if should_delete:
+        for path_str in detected_disk_files:
+            try:
+                if os.path.exists(path_str):
+                    os.remove(path_str)
+                    deleted_disk_files.append(path_str)
+                    if ownership and hasattr(ownership, "forget"):
+                        try:
+                            ownership.forget(path_str)
+                        except Exception:
+                            pass
+                    logger.info(f"Deleted target subtitle file at {path_str}")
             except Exception as e:
-                logger.error(f"Failed to delete target subtitle file {target_path}: {e}")
+                logger.error(f"Failed to delete target subtitle file {path_str}: {e}")
 
     # Remove target flags so background workers do not skip re-translation.
     metadata.pop("arr_has_target", None)
@@ -473,23 +570,61 @@ def _delete_episode_translation(project_name: str, episode_name: str) -> bool:
         pass
 
     storage.save_episode(project_name, episode_name, data["data"], metadata)
-    return True
+
+    try:
+        from utils import metadata_index
+        metadata_index.set_review_count(project_name, episode_name, 0)
+        metadata_index.upsert(project_name, episode_name, metadata)
+    except Exception:
+        pass
+
+    if delete_disk_file is None:
+        return True
+
+    return {
+        "status": "translation-deleted",
+        "detected_disk_files": detected_disk_files,
+        "deleted_disk_files": deleted_disk_files,
+        "disk_file_ownership": disk_file_ownership,
+    }
+
+
+@router.delete("/projects/{project_name}/episodes/{episode_name}/translation")
+@router.delete("/{project_name}/episodes/{episode_name}/translation")
+async def delete_episode_translation(project_name: str, episode_name: str, delete_disk_file: bool = False):
+    res = await asyncio.to_thread(_delete_episode_translation, project_name, episode_name, delete_disk_file=delete_disk_file)
+    if res is None or res is False:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    if isinstance(res, dict):
+        return res
+    return {
+        "status": "translation-deleted",
+        "detected_disk_files": [],
+        "deleted_disk_files": [],
+        "disk_file_ownership": {},
+    }
 
 
 @router.delete("/projects/{project_name}/episodes/{episode_name}")
-async def delete_episode(project_name: str, episode_name: str):
+async def delete_episode(project_name: str, episode_name: str, delete_disk_file: bool = False):
     """Dashboard delete = translation-only. The original subtitle stays intact (in-app
     and on disk); only the translation and its exported file are removed."""
-    if _delete_episode_translation(project_name, episode_name):
-        return {"status": "translation-deleted"}
-    raise HTTPException(status_code=404, detail="Episode not found")
+    res = await asyncio.to_thread(_delete_episode_translation, project_name, episode_name, delete_disk_file=delete_disk_file)
+    if res is None or res is False:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    if isinstance(res, dict):
+        return res
+    return {"status": "translation-deleted"}
 
 
 @router.post("/projects/{project_name}/episodes/{episode_name}/clear")
-async def clear_episode_translation(project_name: str, episode_name: str):
-    if _delete_episode_translation(project_name, episode_name):
-        return {"status": "cleared"}
-    raise HTTPException(status_code=404, detail="Episode not found")
+async def clear_episode_translation(project_name: str, episode_name: str, delete_disk_file: bool = False):
+    res = await asyncio.to_thread(_delete_episode_translation, project_name, episode_name, delete_disk_file=delete_disk_file)
+    if res is None or res is False:
+        raise HTTPException(status_code=404, detail="Episode not found")
+    if isinstance(res, dict):
+        return res
+    return {"status": "cleared"}
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +690,127 @@ async def retranslate_episode(
         "item_id": item_id,
         "comparison_key": comparison_key
     }
+
+
+@router.post("/projects/{project_name}/episodes/{episode_name}/retranslate-line")
+async def retranslate_single_line(
+    project_name: str,
+    episode_name: str,
+    request: Dict[str, Any]
+):
+    validate_api_key()
+    line_index = int(request.get("line_index", 0))
+    new_text = request.get("new_text")
+    model = request.get("model")
+
+    ep = storage.load_episode(project_name, episode_name)
+    if not ep or not ep.get("data"):
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    data = ep["data"]
+    if line_index < 0 or line_index >= len(data):
+        raise HTTPException(status_code=400, detail="Invalid line_index")
+
+    entry = data[line_index]
+    proj_meta = storage.load_project_metadata(project_name) or {}
+    primary_code = _lang_code(proj_meta.get("target_language", "Greek"))
+    lang_code = _lang_code(request.get("lang")) if request.get("lang") else primary_code
+
+    if new_text is None:
+        from utils.model_resolver import resolve_model
+        effective_model = model or resolve_model("translation", proj_meta)
+        target_lang_name = proj_meta.get("target_language", "Greek")
+
+        from adk_agents.translator_agent import build_translation_prompt
+        from adk_agents import create_translation_pipeline
+        from adk_config import get_ephemeral_session_service
+        from google.adk.runners import types as adk_types, Runner as _Runner
+        from utils.llm_utils import strip_reasoning_blocks
+        from utils.structured_output import parse_structured
+        from uuid import uuid4
+
+        glossary = proj_meta.get("glossary", {"terms": []})
+        context_guide = proj_meta.get("context_guide", "")
+
+        prompt = build_translation_prompt(
+            [entry.get("original", "")],
+            target_lang_name,
+            context_hint="",
+            few_shot_context="",
+            priority_glossary="",
+            character_context="",
+            episode_context="",
+            conformance_hint="",
+            negative_examples="",
+            lookahead_line="",
+        )
+
+        shared_agent = create_translation_pipeline(
+            project_name=project_name,
+            target_language=target_lang_name,
+            glossary=glossary,
+            context_guide=context_guide,
+            cartographer_model=effective_model,
+            translator_model=effective_model,
+            skip_glossary_step=True,
+        )
+        session_id = f"single_{uuid4().hex[:8]}"
+        eph_svc = get_ephemeral_session_service()
+        runner = _Runner(agent=shared_agent, app_name=f"Omnisub_{session_id}", session_service=eph_svc)
+        await eph_svc.create_session(session_id=session_id, user_id="default_user", app_name=f"Omnisub_{session_id}")
+
+        resp_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=adk_types.Content(role="user", parts=[adk_types.Part(text=prompt)])
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        resp_text += part.text
+
+        clean_resp = strip_reasoning_blocks(resp_text)
+        parsed = parse_structured(clean_resp, expected_count=1)
+        if parsed and len(parsed) > 0:
+            new_text = parsed[0]["text"]
+        else:
+            new_text = clean_resp.strip()
+
+    old_translated = entry.get("translated", "")
+    if old_translated and old_translated != new_text:
+        entry["previous_translated"] = old_translated
+    entry["translated"] = new_text
+    entry["retranslated_text"] = new_text
+
+    if "translations" not in entry:
+        entry["translations"] = {}
+    entry["translations"][lang_code] = new_text
+    if lang_code == primary_code:
+        entry["translations"][primary_code] = new_text
+
+    ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
+    storage.save_episode(project_name, episode_name, data, ep_meta)
+
+    data_file = storage.episode_dir(project_name, episode_name) / "data.json"
+    etag = _etag_for(data_file.stat()) if data_file.exists() else None
+
+    try:
+        from services.translation_service import auto_export_translated_subtitle
+        auto_export_translated_subtitle(project_name, episode_name, data, ep_meta, force=True)
+    except Exception:
+        pass
+
+    return JSONResponse(
+        content={
+            "status": "success",
+            "line_index": line_index,
+            "translated": new_text,
+            "previous_translated": entry.get("previous_translated"),
+            "etag": etag
+        },
+        headers={"ETag": etag} if etag else {}
+    )
 
 
 @router.post("/projects/{project_name}/episodes/{episode_name}/merge")

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Book, X, AlertTriangle, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown } from 'lucide-react';
+import { Download, Book, X, AlertTriangle, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
 import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';
@@ -31,7 +31,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
     onChangeTranslation, onResolved, onUpdateTm, onToggleSelect, onDeleteLine, onSave
 }) {
     const selectCell = (
-        <div className="p-2 pt-4 border-r border-gray-100 dark:border-gray-700 flex flex-col items-center gap-1.5">
+        <div className="hidden sm:flex p-2 pt-4 border-r border-gray-100 dark:border-gray-700 flex-col items-center gap-1.5">
             <input
                 type="checkbox"
                 checked={selected}
@@ -42,6 +42,28 @@ const SubtitleRow = React.memo(function SubtitleRow({
             <button
                 onClick={() => onDeleteLine(idx)}
                 className="opacity-0 group-hover:opacity-100 p-1 text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all"
+                title="Delete this line permanently"
+            >
+                <Trash2 size={13} />
+            </button>
+        </div>
+    );
+
+    const mobileHeader = (
+        <div className="flex sm:hidden items-center justify-between px-3 py-1.5 bg-gray-50/90 dark:bg-gray-800/90 border-b border-gray-100 dark:border-gray-700 text-xs">
+            <div className="flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={() => onToggleSelect(item.id)}
+                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="font-bold text-gray-700 dark:text-gray-300">Cue #{idx + 1}</span>
+                <span className="font-mono text-[11px] text-gray-400 dark:text-gray-500">{item.timecode}</span>
+            </div>
+            <button
+                onClick={() => onDeleteLine(idx)}
+                className="p-1 text-gray-400 hover:text-red-500 rounded"
                 title="Delete this line permanently"
             >
                 <Trash2 size={13} />
@@ -68,12 +90,13 @@ const SubtitleRow = React.memo(function SubtitleRow({
     return (
         <div className={`hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors group ${selected ? 'bg-indigo-50/40 dark:bg-indigo-900/20' : ''}`}>
             {item.needs_review ? (
-                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100 dark:divide-gray-700">
+                <div className="grid grid-cols-1 sm:grid-cols-[44px_100px_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
+                    {mobileHeader}
                     {selectCell}
-                    <div className="p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 flex items-center">
+                    <div className="hidden sm:flex p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 items-center">
                         {item.timecode}
                     </div>
-                    <div className="col-span-2 p-4 bg-rose-50/10 dark:bg-rose-950/5 border-l-4 border-rose-500">
+                    <div className="sm:col-span-2 p-4 bg-rose-50/10 dark:bg-rose-950/5 border-l-4 border-rose-500">
                         <div className="text-xs text-rose-500 font-bold mb-2 uppercase tracking-wide">
                             Needs Review — Cue {idx + 1}
                         </div>
@@ -87,12 +110,13 @@ const SubtitleRow = React.memo(function SubtitleRow({
                     </div>
                 </div>
             ) : (
-                <div className="grid grid-cols-[44px_100px_1fr_1fr] divide-x divide-gray-100 dark:divide-gray-700">
+                <div className="grid grid-cols-1 sm:grid-cols-[44px_100px_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
+                    {mobileHeader}
                     {selectCell}
-                    <div className="p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 flex items-center">
+                    <div className="hidden sm:flex p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 items-center">
                         {item.timecode}
                     </div>
-                    <div className="p-4 text-gray-700 dark:text-gray-300 border-r border-gray-100 dark:border-gray-700 leading-relaxed">
+                    <div className="p-3 sm:p-4 text-gray-700 dark:text-gray-300 border-r-0 sm:border-r border-gray-100 dark:border-gray-700 leading-relaxed text-sm">
                         {item.original}
                     </div>
                     <div className={`p-0 transition-colors relative ${item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
@@ -169,6 +193,17 @@ const SubtitleRow = React.memo(function SubtitleRow({
                                     {passthroughKind}
                                 </span>
                             )}
+                            {item.previous_translated && item.previous_translated !== item.translated && (
+                                <button
+                                    type="button"
+                                    onClick={() => onChangeTranslation(item.id, item.previous_translated)}
+                                    className="pointer-events-auto flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/50 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700 transition-colors shadow-sm cursor-pointer"
+                                    title={`Previous: ${item.previous_translated}`}
+                                >
+                                    <RotateCcw size={10} />
+                                    <span>Revert</span>
+                                </button>
+                            )}
                             {item.from_tm && (
                                 item.tm_user_edited ? (
                                     <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 uppercase tracking-wider shadow-sm" title={item.tm_origin_episode ? `Reused from your previous edits in ${item.tm_origin_episode}` : "Reused from your previous edits"}>User Edit</span>
@@ -198,8 +233,8 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
 
     const handleTranslationChange = useCallback((id, newText) => {
         if (onDataUpdate) {
-            onDataUpdate(dataRef.current.map(item =>
-                item.id === id ? { ...item, translated: newText, is_edited: true } : item
+            onDataUpdate(dataRef.current.map((item, idx) =>
+                (item.id === id || idx === id) ? { ...item, translated: newText, is_edited: true } : item
             ));
         }
     }, [onDataUpdate]);
@@ -303,11 +338,18 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
         }
     };
 
+    const isTranslatable = (item) => {
+        if (!item) return false;
+        if (item.translatable === false) return false;
+        if (item._ass && item._ass.translatable === false) return false;
+        return true;
+    };
+
     // Search + status filtering. Each visible row keeps its true index into `data`
     // so deletions and the review resolver still target the right line.
     const query = searchQuery.trim().toLowerCase();
     const matchesStatus = (item) => {
-        if (filterStatus === 'untranslated') return !item.translated && !item.needs_review;
+        if (filterStatus === 'untranslated') return isTranslatable(item) && !item.translated && !item.needs_review;
         if (filterStatus === 'review') return !!item.needs_review;
         if (filterStatus === 'edited') return !!(item.is_edited || item.tm_user_edited);
         return true;
@@ -324,10 +366,39 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
 
     const counts = {
         all: data.length,
-        untranslated: data.filter(it => !it.translated && !it.needs_review).length,
+        untranslated: data.filter(it => isTranslatable(it) && !it.translated && !it.needs_review).length,
         review: data.filter(it => it.needs_review).length,
         edited: data.filter(it => it.is_edited || it.tm_user_edited).length,
     };
+
+    const [visibleLimit, setVisibleLimit] = useState(300);
+
+    // Reset visible limit on filter or query change
+    useEffect(() => {
+        setVisibleLimit(300);
+    }, [filterStatus, searchQuery]);
+
+    // Automatically expand visibleLimit if a selected item is beyond current limit
+    useEffect(() => {
+        if (selected.size > 0) {
+            const firstSelectedIdx = visibleRows.findIndex(({ item }) => selected.has(item.id));
+            if (firstSelectedIdx >= visibleLimit) {
+                setVisibleLimit(Math.min(visibleRows.length, firstSelectedIdx + 100));
+            }
+        }
+    }, [selected, visibleRows, visibleLimit]);
+
+    const renderedRows = useMemo(() => {
+        if (visibleRows.length <= 300) return visibleRows;
+        return visibleRows.slice(0, visibleLimit);
+    }, [visibleRows, visibleLimit]);
+
+    const handleScroll = useCallback((e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop - clientHeight < 600) {
+            setVisibleLimit(prev => (prev < visibleRows.length ? Math.min(prev + 200, visibleRows.length) : prev));
+        }
+    }, [visibleRows.length]);
 
     const allVisibleSelected = visibleRows.length > 0 && visibleRows.every(({ item }) => selected.has(item.id));
     const someVisibleSelected = visibleRows.some(({ item }) => selected.has(item.id));
@@ -554,10 +625,10 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
             </div>
 
             {/* Main Content - Side by Side Grid */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-2 sm:p-6" onScroll={handleScroll}>
                 <div className="max-w-7xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[44px_100px_1fr_1fr] bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-500 dark:text-gray-400 text-sm sticky top-0 z-10">
+                    <div className="hidden sm:grid sm:grid-cols-[44px_100px_1fr_1fr] bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700 font-semibold text-gray-500 dark:text-gray-400 text-sm sticky top-0 z-10">
                         <div className="p-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
                             <input
                                 ref={selectAllRef}
@@ -581,7 +652,7 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                 No lines match the current search/filter.
                             </div>
                         ) : (
-                            visibleRows.map(({ item, idx }) => (
+                            renderedRows.map(({ item, idx }) => (
                                 <SubtitleRow
                                     key={item.id}
                                     item={item}
@@ -600,6 +671,29 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                             ))
                         )}
                     </div>
+
+                    {/* Windowed pagination / expansion bar */}
+                    {renderedRows.length < visibleRows.length && (
+                        <div className="p-4 bg-slate-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
+                            <span>Showing {renderedRows.length} of {visibleRows.length} cues</span>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setVisibleLimit(prev => Math.min(prev + 300, visibleRows.length))}
+                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg font-medium text-gray-700 dark:text-gray-300 transition-colors shadow-sm"
+                                >
+                                    Load More (+300)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setVisibleLimit(visibleRows.length)}
+                                    className="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-lg font-bold text-indigo-600 dark:text-indigo-400 transition-colors shadow-sm"
+                                >
+                                    Show All ({visibleRows.length})
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

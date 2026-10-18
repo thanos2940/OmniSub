@@ -19,6 +19,7 @@ class ClearQueueRequest(BaseModel):
 _last_queue_reconcile_at = 0.0
 
 @router.get("/api/queue")
+@router.get("/queue")
 async def get_queue_status(reconcile: bool = False):
     global _last_queue_reconcile_at
     import time, asyncio
@@ -39,7 +40,7 @@ async def get_queue_status(reconcile: bool = False):
     from utils.jobs_manager import jobs
     global_config = storage.load_global_config()
 
-    items = queue.get_all(limit=100)
+    items = queue.get_all(limit=100, include_all_kinds=True)
     # Agent-routed items: tag them, and give claimed ones the agent's live progress
     # (measured from its work file, since no in-process job tracks an external agent).
     try:
@@ -241,7 +242,42 @@ async def prioritize_queue_item(item_id: str):
 
 
 @router.get("/api/queue/{item_id}/logs")
+@router.get("/queue/{item_id}/logs")
 async def get_queue_item_logs(item_id: str):
     queue = TranslationQueue()
     logs = queue.get_logs(item_id)
     return {"logs": logs}
+
+
+class ContinueRequest(BaseModel):
+    boost_priority: Optional[bool] = True
+
+
+@router.post("/api/queue/{item_id}/postpone")
+@router.post("/queue/{item_id}/postpone")
+async def postpone_queue_item(item_id: str):
+    from services.queue_service import postpone_item
+    success = postpone_item(item_id)
+    return {"status": "success" if success else "not_found", "item_id": item_id}
+
+
+@router.post("/api/queue/{item_id}/continue")
+@router.post("/queue/{item_id}/continue")
+async def continue_queue_item(item_id: str, request: Optional[ContinueRequest] = None, boost_priority: Optional[bool] = None):
+    boost = True
+    if request is not None and request.boost_priority is not None:
+        boost = request.boost_priority
+    elif boost_priority is not None:
+        boost = boost_priority
+    from services.queue_service import continue_item
+    success = continue_item(item_id, boost_priority=boost)
+    return {"status": "success" if success else "not_found", "item_id": item_id, "boost_priority": boost}
+
+
+@router.post("/api/queue/{item_id}/stop")
+@router.post("/queue/{item_id}/stop")
+async def stop_queue_item(item_id: str):
+    from services.queue_service import stop_item
+    success = stop_item(item_id)
+    return {"status": "success" if success else "not_found", "item_id": item_id}
+

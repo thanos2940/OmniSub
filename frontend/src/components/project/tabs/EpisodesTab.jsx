@@ -9,6 +9,7 @@ import {
 import { Link } from 'react-router-dom';
 import { useJobs } from '../../../context/JobContext';
 import { formatEta } from '../../../utils/formatters';
+import { api } from '../../../api';
 
 const EpisodesTab = ({
     project,
@@ -30,6 +31,7 @@ const EpisodesTab = ({
     onScriptFix,
     onEmbeddedTracks,
     onDeleteEpisode,
+    onDeleteTranslation,
     onBatchDownload,
     onBatchExportToPath,
     onBatchDelete,
@@ -43,6 +45,28 @@ const EpisodesTab = ({
     const [statusFilter, setStatusFilter] = useState('all'); // all | running | translated | untranslated | nosub
     const [viewMode, setViewMode] = useState('grid'); // grid | table
     const [collapsedSeasons, setCollapsedSeasons] = useState({});
+
+    const handleDeleteTranslationClick = async (epName) => {
+        if (!window.confirm(`Delete translation for episode "${epName}"?`)) return;
+        const deleteDiskFile = window.confirm(`Also delete the detected .el.srt / .el.ass file from disk?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
+        if (onDeleteTranslation) {
+            await onDeleteTranslation(epName, deleteDiskFile);
+        } else if (onDeleteEpisode) {
+            await onDeleteEpisode(epName, deleteDiskFile);
+        } else {
+            try {
+                await api.deleteEpisodeTranslation(projectName, epName, deleteDiskFile);
+            } catch (err) {
+                console.error('Failed to delete translation', err);
+            }
+        }
+    };
+
+    const handleBatchDeleteClick = async () => {
+        if (!onBatchDelete) return;
+        const deleteDiskFile = window.confirm(`Also delete detected .el.srt / .el.ass files from disk for selected episodes?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
+        await onBatchDelete(deleteDiskFile);
+    };
 
     const isEpHasSource = (ep) => {
         if (ep.has_source === true) return true;
@@ -592,9 +616,9 @@ const EpisodesTab = ({
                                                                     )}
                                                                     <button
                                                                         type="button"
-                                                                        onClick={() => onDeleteEpisode(ep.name)}
+                                                                        onClick={() => handleDeleteTranslationClick(ep.name)}
                                                                         className="p-1 text-gray-400 hover:text-rose-600 rounded"
-                                                                        title="Delete Episode"
+                                                                        title="Delete Translation"
                                                                     >
                                                                         <Trash2 size={13} />
                                                                     </button>
@@ -703,7 +727,7 @@ const EpisodesTab = ({
                                                                                     </button>
                                                                                 );
                                                                             })()}
-                                                                            <button onClick={() => onDeleteEpisode(ep.name)} className="p-1 text-gray-400 hover:text-rose-600 rounded" title="Delete Episode">
+                                                                            <button onClick={() => handleDeleteTranslationClick(ep.name)} className="p-1 text-gray-400 hover:text-rose-600 rounded" title="Delete Translation">
                                                                                 <Trash2 size={14} />
                                                                             </button>
                                                                         </div>
@@ -817,9 +841,9 @@ const EpisodesTab = ({
 
                             <button
                                 type="button"
-                                onClick={onBatchDelete}
+                                onClick={handleBatchDeleteClick}
                                 className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded-lg transition-colors"
-                                title="Delete Selected Episodes"
+                                title="Delete Selected Episodes Translation"
                             >
                                 <Trash2 size={16} />
                             </button>

@@ -283,6 +283,22 @@ async def _translate_episode_atomic(
         except Exception as e:
             update_job(job_id, log=f"{episode_name}: TM exact match check failed: {e}")
 
+    # Pre-fill song lyrics from song_lyrics_memory if translate_lyrics is enabled
+    translate_lyrics = project_meta.get("settings", {}).get("translate_lyrics", project_meta.get("translate_lyrics", True))
+    if translate_lyrics:
+        try:
+            from utils.ass_parser import apply_song_lyrics_memory
+            lyrics_filled = apply_song_lyrics_memory(parsed_srt, project_meta, target_lang_code)
+            if lyrics_filled > 0:
+                for idx, entry in enumerate(parsed_srt):
+                    if entry.get("from_lyrics_memory"):
+                        trans_text = (entry.get("translations") or {}).get(target_lang_code) or entry.get("translated") or ""
+                        if idx not in translated_map and trans_text:
+                            translated_map[idx] = trans_text
+                update_job(job_id, log=f"{episode_name}: Pre-filled {lyrics_filled} song lyric lines from lyrics memory.")
+        except Exception as e:
+            logger.warning(f"Failed to apply song lyrics memory: {e}")
+
     glossary = project_meta.get("glossary", {"terms": []})
     context_guide = project_meta.get("context_guide", "")
 
@@ -395,20 +411,21 @@ async def _translate_episode_atomic(
 
     if use_context_cache:
         try:
-            from utils.cache_manager import get_or_create_context_cache
+            from utils.cache_manager import get_or_create_cache
             cached_system_instruction = getattr(shared_agent, "instruction", "")
             failover_state["cached_system_instruction"] = cached_system_instruction
-            cache_info = await get_or_create_context_cache(
-                project_name=project_name,
-                model_name=cache_model,
-                glossary=glossary,
-                context_guide=context_guide,
-                character_profiles=profile_mgr.load_all_resolved() if profiles_enabled else None,
-                system_instruction=cached_system_instruction,
-                target_language=target_lang,
+            cache_info = get_or_create_cache(
+                project_meta if project_meta is not None else {},
+                cache_model,
+                cached_system_instruction,
             )
-            if cache_info and cache_info.get("name"):
-                context_cache_name = cache_info["name"]
+            if isinstance(cache_info, tuple):
+                context_cache_name = cache_info[0]
+            elif isinstance(cache_info, dict):
+                context_cache_name = cache_info.get("name")
+            else:
+                context_cache_name = cache_info
+            if context_cache_name:
                 failover_state["context_cache_name"] = context_cache_name
                 update_job(job_id, log=f"{episode_name}: using Gemini context cache '{context_cache_name}' (model: {cache_model})")
         except Exception as ce:
@@ -475,22 +492,20 @@ async def _translate_episode_atomic(
                 remaining,
                 episode_context=episode_context,
                 conformance_hint=conformance_hint,
+                character_context=whole_char_block,
                 collect_new_terms=collect_terms and _attempt == 0,
             )
             try:
-                async def _whole_ep_call():
-                    from adk_agents.llm_factory import generate
-                    return await generate(
-                        model_name=failover_state["cache_model"],
-                        prompt=req.prompt,
-                        system_instruction=req.system_instruction,
-                        temperature=global_config.get("temperature", 0.3) or 0.3,
-                        response_schema=req.response_schema,
-                        cache_name=failover_state["context_cache_name"],
-                        role="translation",
-                    )
-
-                resp_text = await rate_limited_call(_whole_ep_call, rate_limiter=failover_state["rate_limiter"])
+                from adk_agents import llm_factory
+                resp_text = await llm_factory.generate(
+                    model_name=failover_state["cache_model"],
+                    prompt=req.prompt,
+                    system_instruction=req.system_instruction,
+                    temperature=global_config.get("temperature", 0.3) or 0.3,
+                    response_schema=req.response_schema,
+                    cache_name=failover_state["context_cache_name"],
+                    role="translation",
+                )
                 clean_resp = strip_reasoning_blocks(resp_text or "")
                 if collect_terms and _attempt == 0:
                     new_terms = parse_new_terms(clean_resp)
@@ -498,6 +513,13 @@ async def _translate_episode_atomic(
                         save_suggestions(project_name, new_terms)
 
                 parsed_whole = parse_structured(clean_resp, expected_count=len(remaining))
+                from utils.alignment_audit import filter_by_source_echo
+                parsed_whole, _dropped_echo = filter_by_source_echo(
+                    parsed_whole,
+                    [parsed_srt[g].get("original", "") for g in remaining],
+                )
+                if _dropped_echo:
+                    update_job(job_id, log=f"{episode_name}: dropped {_dropped_echo} shifted line(s) via source-echo check for scene/line recovery.")
                 for item in parsed_whole:
                     idx = item["index"] - 1
                     if 0 <= idx < len(remaining):
@@ -1320,6 +1342,17 @@ async def _translate_episode_atomic(
                 update_job(job_id, log=f"{episode_name}: No common/duplicate lines to store in Translation Memory")
         except Exception as e:
             update_job(job_id, log=f"{episode_name}: TM storage failed (non-critical): {e}")
+
+    # Record translated song lyrics to project metadata for reuse across episodes
+    try:
+        from utils.ass_parser import record_song_lyrics_memory
+        if record_song_lyrics_memory(parsed_srt, project_meta, target_lang_code):
+            latest_pmeta = storage.load_project_metadata(project_name) or {}
+            latest_pmeta.setdefault("song_lyrics_memory", {}).update(project_meta.get("song_lyrics_memory", {}))
+            storage.save_project_metadata(project_name, latest_pmeta)
+            update_job(job_id, log=f"{episode_name}: Updated song lyrics memory in project metadata.")
+    except Exception as e:
+        logger.warning(f"Failed to record song lyrics memory for {episode_name}: {e}")
 
     if global_config.get("episode_summaries_enabled", True):
         try:

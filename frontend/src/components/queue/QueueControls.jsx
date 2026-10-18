@@ -147,6 +147,13 @@ const QueueControls = ({
                             >
                                 Clear Cancelled Items
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => handleClearAction('postponed')}
+                                className="w-full text-left px-3 py-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/20"
+                            >
+                                Clear Postponed Items
+                            </button>
                             <div className="my-1 border-t border-gray-150 dark:border-gray-700" />
                             <button
                                 type="button"

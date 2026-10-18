@@ -67,17 +67,14 @@ async def _retranslate_minority_lines(
 
     from adk_agents.llm_factory import generate
 
-    async def _call():
-        return await generate(
+    try:
+        response_text = await generate(
             model_name=model_name,
             prompt=prompt,
             system_instruction=f"You are a {target_lang_name} subtitle term-consistency enforcer.",
             temperature=0.1,
             role="reconciliation",
         )
-
-    try:
-        response_text = await rate_limited_call(_call, rate_limiter=rate_limiter)
     except DailyLimitExhausted:
         raise
     except Exception as e:
@@ -161,17 +158,14 @@ async def _translate_missing_line_with_context(
         f"\n\nProduce ONLY the translated text in {target_lang_name} for the 'Line to Translate'. Do not include any tags, notes, markdown formatting, or extra text. Just provide the raw translation."
     )
     
-    async def _call():
+    try:
         from adk_agents.llm_factory import generate
-        return await generate(
+        res = await generate(
             model_name=model_name,
             prompt=prompt,
             temperature=0.3,
             role="translation",
         )
-        
-    try:
-        res = await rate_limited_call(_call, rate_limiter=rate_limiter)
         if res:
             res_stripped = res.strip()
             res_stripped = strip_reasoning_blocks(res_stripped)

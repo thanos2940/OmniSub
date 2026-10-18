@@ -1112,7 +1112,7 @@ These are the same rules the API translator follows.
         if err:
             return err
         units = aw.units_from_plan(plan)
-        content = self._resolve_content(file_path_or_content)
+        content = self._resolve_content(file_path_or_content, allow_file_path=True, allowed_dir=folder)
         translations = self._read_translations(folder, units, content)
         proj_meta = storage.load_project_metadata(manifest["project_name"]) or {}
         report = aw.validate(units, translations, manifest.get("target_code") or "el",
@@ -1151,13 +1151,51 @@ These are the same rules the API translator follows.
             return -1
 
     @staticmethod
-    def _resolve_content(file_path_or_content: Optional[str]) -> Optional[str]:
-        if not file_path_or_content:
+    def _resolve_content(
+        file_path_or_content: Optional[str],
+        *,
+        allow_file_path: bool = False,
+        allowed_dir: Optional[Any] = None,
+    ) -> Optional[str]:
+        if not file_path_or_content or not isinstance(file_path_or_content, str):
             return None
+        if not allow_file_path:
+            return file_path_or_content if file_path_or_content.strip() else None
         try:
-            p = Path(file_path_or_content)
-            if len(file_path_or_content) < 1024 and "\n" not in file_path_or_content and p.is_file():
-                return p.read_text(encoding="utf-8-sig")
+            if len(file_path_or_content) < 1024 and "\n" not in file_path_or_content:
+                p = Path(file_path_or_content)
+                if p.is_file():
+                    real_p = p.resolve()
+                    name_lower = real_p.name.lower()
+                    if name_lower in ("config.json", ".env") or name_lower.endswith((".db", ".env", ".sqlite", ".key", ".pem")):
+                        return file_path_or_content if file_path_or_content.strip() else None
+
+                    import tempfile
+                    allowed = False
+                    if allowed_dir:
+                        try:
+                            if real_p.is_relative_to(Path(allowed_dir).resolve()):
+                                allowed = True
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            temp_dir = Path(tempfile.gettempdir()).resolve()
+                            if real_p.is_relative_to(temp_dir):
+                                allowed = True
+                        except Exception:
+                            pass
+                        if not allowed:
+                            try:
+                                from utils import storage
+                                proj_dir = Path(storage.PROJECTS_DIR).resolve()
+                                if real_p.is_relative_to(proj_dir) and "agent_workspace" in real_p.parts:
+                                    allowed = True
+                            except Exception:
+                                pass
+
+                    if allowed:
+                        return real_p.read_text(encoding="utf-8-sig")
         except OSError:
             pass
         return file_path_or_content if file_path_or_content.strip() else None
@@ -1307,7 +1345,7 @@ These are the same rules the API translator follows.
                     "message": f"Task '{task_id}' was {manifest['status']}; claim the episode again with `{cli_command('next')}`."}
 
         units = aw.units_from_plan(plan)
-        translations = self._read_translations(folder, units, self._resolve_content(file_path_or_content))
+        translations = self._read_translations(folder, units, self._resolve_content(file_path_or_content, allow_file_path=True, allowed_dir=folder))
         proj_meta = storage.load_project_metadata(project_name) or {}
         report = aw.validate(units, translations, target_code, proj_meta.get("glossary"), target_name,
                              vocab=self._vocab(project_name))
@@ -1349,6 +1387,15 @@ These are the same rules the API translator follows.
                     tm_pairs = len(good)
         except Exception as e:
             logger.warning(f"Failed to harvest Translation Memory: {e}")
+
+        # Song lyrics memory: store translated lyrics for reuse across episodes
+        try:
+            from utils.ass_parser import record_song_lyrics_memory
+            pmeta = storage.load_project_metadata(project_name) or {}
+            if record_song_lyrics_memory(cues, pmeta, target_code):
+                storage.save_project_metadata(project_name, pmeta)
+        except Exception as e:
+            logger.warning(f"Failed to record song lyrics memory: {e}")
 
         # Context guide
         context_guide_updated = False

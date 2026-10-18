@@ -114,6 +114,22 @@ class SafetyAwareGemini(Gemini):
                     llm_request.config.safety_settings = settings
         except Exception as e:
             logger.debug(f"Gemini safety settings not applied: {e}")
+
+        try:
+            gen_cfg = getattr(self, "generation_config", None)
+            if isinstance(gen_cfg, dict):
+                if llm_request.config is None:
+                    llm_request.config = types.GenerateContentConfig()
+                for key in ("temperature", "thinking_config", "response_mime_type", "response_schema", "top_k", "top_p"):
+                    val = gen_cfg.get(key)
+                    if val is not None and getattr(llm_request.config, key, None) is None:
+                        try:
+                            setattr(llm_request.config, key, val)
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.debug(f"Generation config not applied: {e}")
+
         async for response in super().generate_content_async(llm_request, stream):
             yield response
 

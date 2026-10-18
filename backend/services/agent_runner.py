@@ -51,6 +51,25 @@ from services import agent_cli, agent_prompts as ap, agent_workspace as aw
 
 logger = logging.getLogger("omnisub.agent_runner")
 
+DEFAULT_API_URL = "http://127.0.0.1:8000"
+
+
+def normalize_api_url(url: Optional[str]) -> str:
+    """Normalize local API URL to 127.0.0.1 to avoid Windows IPv6 localhost 2s timeout."""
+    if not url:
+        return DEFAULT_API_URL
+    u = url.rstrip("/")
+    if "://localhost" in u:
+        u = u.replace("://localhost:", "://127.0.0.1:").replace("://localhost/", "://127.0.0.1/")
+        if u.endswith("://localhost"):
+            u = u[:-len("localhost")] + "127.0.0.1"
+    if "://[::1]" in u:
+        u = u.replace("://[::1]:", "://127.0.0.1:").replace("://[::1]/", "://127.0.0.1/")
+        if u.endswith("://[::1]"):
+            u = u[:-len("[::1]")] + "127.0.0.1"
+    return u
+
+
 DEFAULT_CONFIG = {
     "engine": "antigravity",
     "model": "gemini-3.8-flash-low",
@@ -63,9 +82,10 @@ DEFAULT_CONFIG = {
     "watch": False,              # keep running on an empty queue and take new episodes as they are queued
     "api_rescue": True,          # lines the CLI model's safety filter refuses go to the Gemini API at the end
     "rescue_model": "",          # ... with this model ("": the project's translation model)
+    "api_url": DEFAULT_API_URL,
 }
 LIVE_KEYS = ("model", "fallback_models", "per_show", "chunk_lines", "fix_rounds", "max_episodes", "watch",
-             "api_rescue", "rescue_model")
+             "api_rescue", "rescue_model", "api_url")
 API_PREFIX = "api:"              # a model name with this prefix is called through the Gemini API, not the CLI
 WATCH_SECONDS = 60
 QUOTA_MARGIN = 30
@@ -138,6 +158,8 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
     for key in ("model", "rescue_model"):
         if key in out:
             out[key] = str(out[key] or "").strip()
+    if "api_url" in out:
+        out["api_url"] = normalize_api_url(str(out["api_url"] or "").strip())
     for key in ("watch", "api_rescue"):
         if key in out:
             out[key] = out[key] in (True, 1, "1", "true", "True", "yes", "on")
@@ -154,6 +176,19 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
             except (TypeError, ValueError):
                 out[key] = DEFAULT_CONFIG[key]
     return out
+
+
+class RunnerConfig(dict):
+    """Configuration container for AgentRunner."""
+    def __init__(self, *args, **kwargs):
+        initial = {}
+        if args and isinstance(args[0], dict):
+            initial.update(args[0])
+        initial.update(kwargs)
+        cleaned = clean_config(initial)
+        super().__init__(cleaned)
+        for k, v in cleaned.items():
+            setattr(self, k, v)
 
 
 class AgentRunner:
@@ -906,12 +941,25 @@ class AgentRunner:
 
     # ------------------------------------------------------------------ refused lines
 
+    def _has_gemini_api_key(self) -> bool:
+        if os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"):
+            return True
+        cfg = getattr(storage, "GLOBAL_CONFIG", {}) or {}
+        return bool(cfg.get("gemini_api_key"))
+
+    def _get_gemini_api_key(self) -> str:
+        key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY") or ""
+        if not key:
+            cfg = getattr(storage, "GLOBAL_CONFIG", {}) or {}
+            key = cfg.get("gemini_api_key") or ""
+        return key
+
     def _rescue_model(self, project: str) -> Optional[str]:
         """The Gemini API model for lines the CLI model's filter refused; None when the rescue is off,
         there is no Gemini API key, or the project translates with a local model."""
-        if not self.config["api_rescue"] or not (os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")):
+        if not self.config.get("api_rescue", True) or not self._has_gemini_api_key():
             return None
-        model = (self.config["rescue_model"] or "").strip()
+        model = (self.config.get("rescue_model") or "").strip()
         if not model:
             try:
                 from utils.model_resolver import resolve_model
@@ -980,6 +1028,9 @@ class AgentRunner:
         import asyncio
         from adk_agents.llm_factory import generate
         from utils import telemetry
+        api_key = self._get_gemini_api_key()
+        if api_key and not os.environ.get("GOOGLE_API_KEY"):
+            os.environ["GOOGLE_API_KEY"] = api_key
         blocked: List[str] = []
         started = time.time()
         token = telemetry.usage_ctx.set({"project": project, "episode": episode})

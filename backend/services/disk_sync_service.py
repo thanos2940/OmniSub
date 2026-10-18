@@ -70,12 +70,18 @@ class DiskSyncService:
                 seen_dirs.add(normalized)
                 result_dirs.append(d_path)
 
+        from integrations.path_resolver import PathResolver
+        from services.translation.export_formatter import resolve_cross_share_media
+        gc = storage.load_global_config()
+        resolver = PathResolver(gc.get("arr_path_mappings", []))
+
         # 1. Project-level path metadata
         for key in ("path", "media_path", "root_folder_path", "arr_path", "series_path", "folder"):
             p_val = proj_meta.get(key)
             if p_val:
                 try:
-                    p = Path(p_val)
+                    resolved_p_val = resolver.resolve(p_val)
+                    p = Path(resolved_p_val) if resolved_p_val else Path(p_val)
                     if p.exists() and p.is_dir():
                         add_dir(p)
                         # Look for season and media subdirectories
@@ -99,9 +105,23 @@ class DiskSyncService:
                 val = ep_meta.get(path_key)
                 if val:
                     try:
-                        p = Path(val)
+                        resolved_val = resolver.resolve(val)
+                        p = Path(resolved_val) if resolved_val else Path(val)
+                        if not p.parent.exists() and path_key == "arr_media_path":
+                            re_resolved = resolve_cross_share_media(
+                                val,
+                                episode_name=ep_name,
+                                metadata=ep_meta,
+                                global_config=gc,
+                                project_name=project_name,
+                            )
+                            if re_resolved:
+                                p = re_resolved
                         parent = p.parent
-                        add_dir(parent)
+                        if parent.exists():
+                            add_dir(parent)
+                        else:
+                            add_dir(parent)
                     except Exception:
                         pass
 
@@ -428,6 +448,9 @@ class DiskSyncService:
         target_lang = proj_meta.get("target_language", "Greek")
         target_code = to_code(target_lang) or "el"
         source_code = "en"
+        proj_disabled = bool(proj_meta.get("arr_disabled", False))
+        gc = storage.load_global_config()
+        from services.translation.export_formatter import resolve_cross_share_media
 
         episodes = storage.list_episodes(project_name)
         candidate_dirs = self._get_project_directories(project_name, proj_meta, episodes)
@@ -462,6 +485,24 @@ class DiskSyncService:
             ep_meta = storage.load_episode_metadata(project_name, ep_name) or {}
             ep_dir = storage.episode_dir(project_name, ep_name)
 
+            existing_cues = storage.load_episode_data(project_name, ep_name) or []
+            meta_changed = False
+
+            # Check if arr_media_path is stale or missing on disk, and re-resolve it
+            if ep_meta.get("arr_media_path"):
+                p_media = Path(ep_meta["arr_media_path"])
+                if not p_media.exists():
+                    resolved_media = resolve_cross_share_media(
+                        ep_meta["arr_media_path"],
+                        episode_name=ep_name,
+                        metadata=ep_meta,
+                        global_config=gc,
+                        project_name=project_name,
+                    )
+                    if resolved_media and str(resolved_media) != ep_meta.get("arr_media_path"):
+                        ep_meta["arr_media_path"] = str(resolved_media)
+                        meta_changed = True
+
             ep_local_files = all_disk_files
             if ep_dir.exists():
                 ep_local_files = list(all_disk_files)
@@ -472,9 +513,6 @@ class DiskSyncService:
             # Discover Subtitles on Disk
             source_sub = self._find_matching_source_sub(ep_name, ep_meta, ep_local_files, target_code=target_code, source_code=source_code)
             target_sub = self._find_matching_target_sub(ep_name, ep_meta, ep_local_files, target_code)
-
-            existing_cues = storage.load_episode_data(project_name, ep_name) or []
-            meta_changed = False
 
             # 1. Source Subtitle Handling
             if source_sub and source_sub.is_file() and source_sub.stat().st_size > 0:
@@ -544,7 +582,7 @@ class DiskSyncService:
 
                 if meta_changed:
                     storage.save_episode_metadata(project_name, ep_name, ep_meta, update_stats=False)
-                    index_upsert(project_name, ep_name, ep_meta, original_exists=True, disabled=False)
+                    index_upsert(project_name, ep_name, ep_meta, original_exists=True, disabled=proj_disabled)
 
                 # Complete queue items the file satisfies (explicit agent/user requests
                 # such as gap-filling are left alone — a file existing isn't their goal).
@@ -580,7 +618,7 @@ class DiskSyncService:
                         storage.save_episode(project_name, ep_name, existing_cues)
 
                     storage.save_episode_metadata(project_name, ep_name, ep_meta, update_stats=False)
-                    index_upsert(project_name, ep_name, ep_meta, original_exists=True, disabled=False)
+                    index_upsert(project_name, ep_name, ep_meta, original_exists=True, disabled=proj_disabled)
                     translations_removed += 1
 
                     # Re-queue in translation queue if requested

@@ -18,7 +18,6 @@ import ApplyFixesModal from './project/modals/ApplyFixesModal';
 import CheckMissingModal from './project/modals/CheckMissingModal';
 import ScriptFixModal from './project/modals/ScriptFixModal';
 import EmbeddedTracksModal from './project/modals/EmbeddedTracksModal';
-import ComparisonModal from './project/modals/ComparisonModal';
 import SyncOptionsModal from './project/modals/SyncOptionsModal';
 import SimplePipelineWizard from './SimplePipelineWizard';
 import AgentTaskModal from './modals/AgentTaskModal';
@@ -63,7 +62,6 @@ const ProjectDetail = () => {
     const [checkMissingModal, setCheckMissingModal] = useState({ open: false, episodeName: null });
     const [scriptFixModal, setScriptFixModal] = useState({ open: false, episodeName: null });
     const [embeddedTracksModal, setEmbeddedTracksModal] = useState({ open: false, episodeName: null });
-    const [comparisonModal, setComparisonModal] = useState({ open: false, episodeName: null, diffData: [] });
     const [agentModalData, setAgentModalData] = useState(null);
     const [preparingAgent, setPreparingAgent] = useState(false);
     const [startingRunner, setStartingRunner] = useState(false);
@@ -554,8 +552,8 @@ const ProjectDetail = () => {
                             onDeleteEpisode={handleDeleteEpisode}
                             onBatchDownload={() => handleBatchDownload(Array.from(selectedEpisodes))}
                             onBatchExportToPath={() => handleBatchExportToPath(Array.from(selectedEpisodes))}
-                            onBatchDelete={async () => {
-                                const success = await handleBatchDelete(Array.from(selectedEpisodes));
+                            onBatchDelete={async (deleteDiskFile) => {
+                                const success = await handleBatchDelete(Array.from(selectedEpisodes), deleteDiskFile);
                                 if (success) {
                                     clearSelection();
                                 }
@@ -691,12 +689,6 @@ const ProjectDetail = () => {
                 toast={toast}
             />
 
-            <ComparisonModal
-                isOpen={comparisonModal.open}
-                onClose={() => setComparisonModal({ open: false, episodeName: null, diffData: [] })}
-                episodeName={comparisonModal.episodeName}
-                diffData={comparisonModal.diffData}
-            />
 
             <AgentTaskModal
                 agentModalData={agentModalData}

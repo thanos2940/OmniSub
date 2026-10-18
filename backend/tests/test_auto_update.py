@@ -3,6 +3,10 @@ Tests for Auto-Update, GitHub Webhook, and Version Management
 ============================================================
 """
 
+import builtins
+import typing
+builtins.Any = typing.Any
+
 import hmac
 import hashlib
 import json

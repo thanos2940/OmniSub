@@ -8,9 +8,10 @@ finds such orphans and renames them to the current video stem, keeping their
 language / forced / SDH tags.
 """
 
+import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from utils.language_codes import LANG_VARIANTS
 
@@ -93,8 +94,13 @@ def plan_directory(directory: Path) -> List[Dict[str, str]]:
     return plan
 
 
-def apply_plan(plan: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], List[str]]:
-    """Perform the ``rename`` entries of a plan. Returns (renamed, errors)."""
+def apply_plan(
+    plan: List[Dict[str, str]],
+    project_name: Optional[str] = None,
+    episode_name: Optional[str] = None,
+    ledger: Optional[Any] = None,
+) -> Tuple[List[Dict[str, str]], List[str]]:
+    """Perform the ``rename`` entries of a plan and sync ownership in ownership.db. Returns (renamed, errors)."""
     renamed, errors = [], []
     for entry in plan:
         if entry["status"] != "rename":
@@ -104,8 +110,115 @@ def apply_plan(plan: List[Dict[str, str]]) -> Tuple[List[Dict[str, str]], List[s
             if new.exists():
                 errors.append(f"{new.name} already exists; left {old.name} alone")
                 continue
-            old.rename(new)
+
+            was_ours = False
+            try:
+                if ledger is not None and hasattr(ledger, "is_ours"):
+                    was_ours = ledger.is_ours(str(old))
+                else:
+                    from services.autopilot import ownership
+                    if hasattr(ownership, "OwnershipLedger"):
+                        temp_ledger = ownership.OwnershipLedger()
+                        was_ours = temp_ledger.is_ours(str(old))
+                    elif hasattr(ownership, "is_ours"):
+                        was_ours = ownership.is_ours(str(old))
+            except Exception:
+                was_ours = False
+
+            os.replace(str(old), str(new))
+
+            if was_ours:
+                try:
+                    if ledger is not None:
+                        if hasattr(ledger, "record_write"):
+                            ledger.record_write(str(new), project=project_name, episode=episode_name)
+                        elif hasattr(ledger, "register_file"):
+                            ledger.register_file(str(new), project_name=project_name, episode_name=episode_name)
+                    else:
+                        from services.autopilot import ownership
+                        if hasattr(ownership, "OwnershipLedger"):
+                            temp_ledger = ownership.OwnershipLedger()
+                            if hasattr(temp_ledger, "record_write"):
+                                temp_ledger.record_write(str(new), project=project_name, episode=episode_name)
+                        if hasattr(ownership, "forget"):
+                            ownership.forget(str(old))
+                        if hasattr(ownership, "register_file"):
+                            ownership.register_file(str(new), project_name=project_name, episode_name=episode_name)
+                        if hasattr(ownership, "record_write"):
+                            ownership.record_write(str(new), project=project_name, episode=episode_name)
+                except Exception:
+                    pass
+
             renamed.append({"old_name": old.name, "new_name": new.name, "path": str(new), "old_path": str(old)})
         except OSError as e:
             errors.append(f"Failed to rename {old.name}: {e}")
     return renamed, errors
+
+
+def rename_episode_subtitles_to_match_video(
+    target: Any,
+    new_path: Optional[Any] = None,
+    project_name: Optional[str] = None,
+    episode_name: Optional[str] = None,
+    ledger: Optional[Any] = None,
+) -> Any:
+    """Rename sidecar subtitle(s) to match the current video stem and synchronize ownership in ownership.db.
+
+    Supports:
+    1. Single file rename: rename_episode_subtitles_to_match_video(old_path, new_path, project_name=..., episode_name=..., ledger=...)
+    2. Directory scanning: rename_episode_subtitles_to_match_video(directory, project_name=..., episode_name=..., ledger=...)
+    3. Video file path: rename_episode_subtitles_to_match_video(video_path, project_name=..., episode_name=..., ledger=...)
+    """
+    target_path = Path(target)
+
+    # Case 1: old_path and new_path both provided
+    if new_path is not None and isinstance(new_path, (str, Path)):
+        dest_path = Path(new_path)
+        if not target_path.exists():
+            return False
+
+        was_ours = False
+        try:
+            if ledger is not None and hasattr(ledger, "is_ours"):
+                was_ours = ledger.is_ours(str(target_path))
+            else:
+                from services.autopilot import ownership
+                if hasattr(ownership, "OwnershipLedger"):
+                    temp_ledger = ownership.OwnershipLedger()
+                    was_ours = temp_ledger.is_ours(str(target_path))
+                elif hasattr(ownership, "is_ours"):
+                    was_ours = ownership.is_ours(str(target_path))
+        except Exception:
+            was_ours = False
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(str(target_path), str(dest_path))
+
+        if was_ours:
+            try:
+                if ledger is not None:
+                    if hasattr(ledger, "record_write"):
+                        ledger.record_write(str(dest_path), project=project_name, episode=episode_name)
+                    elif hasattr(ledger, "register_file"):
+                        ledger.register_file(str(dest_path), project_name=project_name, episode_name=episode_name)
+                else:
+                    from services.autopilot import ownership
+                    if hasattr(ownership, "OwnershipLedger"):
+                        temp_ledger = ownership.OwnershipLedger()
+                        if hasattr(temp_ledger, "record_write"):
+                            temp_ledger.record_write(str(dest_path), project=project_name, episode=episode_name)
+                    if hasattr(ownership, "forget"):
+                        ownership.forget(str(target_path))
+                    if hasattr(ownership, "register_file"):
+                        ownership.register_file(str(dest_path), project_name=project_name, episode_name=episode_name)
+                    if hasattr(ownership, "record_write"):
+                        ownership.record_write(str(dest_path), project=project_name, episode=episode_name)
+            except Exception:
+                pass
+        return True
+
+    # Case 2 & 3: Directory or video file path
+    directory = target_path if target_path.is_dir() else target_path.parent
+    plan = plan_directory(directory)
+    return apply_plan(plan, project_name=project_name, episode_name=episode_name, ledger=ledger)
+

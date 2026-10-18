@@ -192,10 +192,14 @@ class SettingsRequest(BaseModel):
     tm_exact_reuse_require_same_speaker: Optional[bool] = False
     morphology_normalization: Optional[bool] = True
     # --- Auto-Updates (GitHub Sync) ---
-    auto_update_enabled: Optional[bool] = True
+    auto_update_enabled: Optional[bool] = False
     auto_update_interval_hours: Optional[int] = 6
     github_webhook_enabled: Optional[bool] = True
     github_webhook_secret: Optional[str] = ""
+    # --- Agent Runner Rescue ---
+    api_rescue: Optional[bool] = True
+    rescue_model: Optional[str] = None
+    gemini_api_key: Optional[str] = None
     morphology_stemming: Optional[bool] = True
     # --- Intra-episode consistency reconciliation (Plan 20) ---
     intra_episode_reconcile_enabled: Optional[bool] = True
@@ -264,6 +268,32 @@ class SettingsRequest(BaseModel):
     plex_refresh_enabled: Optional[bool] = False
     plex_url: Optional[str] = "http://localhost:32400"
     plex_token: Optional[str] = ""
+    translate_lyrics: Optional[bool] = True
+
+
+class ProjectSettings(BaseModel):
+    translate_lyrics: bool = True
+    translation_model: Optional[str] = None
+    context_model: Optional[str] = None
+    glossary_model: Optional[str] = None
+    fallback_translation_model: Optional[str] = None
+    auto_export_enabled: Optional[bool] = False
+    auto_export_dir: Optional[str] = ""
+    apply_subtitle_edit_fixes: Optional[bool] = True
+    translate_all_source_formats: Optional[bool] = False
+    prefer_ass_format: Optional[str] = "auto"
+    embedded_deprioritize_keywords: Optional[str] = ""
+    temperature: Optional[float] = 0.3
+    top_k: Optional[int] = 64
+    top_p: Optional[float] = 0.95
+
+
+class ProjectMetadata(BaseModel):
+    show_name: Optional[str] = None
+    target_language: str = "Greek"
+    target_languages: Optional[List[str]] = []
+    translate_lyrics: bool = True
+    settings: Optional[ProjectSettings] = None
 
 
 class ApiKeyRequest(BaseModel):

@@ -49,6 +49,23 @@ except Exception:
     pass
 PY = ".venv/Scripts/python.exe" if sys.platform == "win32" else ".venv/bin/python"
 CMD = f"{PY} scripts/agent_task.py"
+DEFAULT_URL = "http://127.0.0.1:8000"
+
+
+def normalize_url(url: str) -> str:
+    """Normalize localhost or [::1] to 127.0.0.1 to avoid Windows IPv6 2-second timeout."""
+    if not url:
+        return DEFAULT_URL
+    u = url.rstrip("/")
+    if "://localhost" in u:
+        u = u.replace("://localhost:", "://127.0.0.1:").replace("://localhost/", "://127.0.0.1/")
+        if u.endswith("://localhost"):
+            u = u[:-len("localhost")] + "127.0.0.1"
+    if "://[::1]" in u:
+        u = u.replace("://[::1]:", "://127.0.0.1:").replace("://[::1]/", "://127.0.0.1/")
+        if u.endswith("://[::1]"):
+            u = u[:-len("[::1]")] + "127.0.0.1"
+    return u
 
 
 class ServerUnreachable(Exception):
@@ -59,7 +76,7 @@ class Client:
     """Calls the running server when there is one, else the service in-process."""
 
     def __init__(self):
-        self.base = (os.environ.get("OMNISUB_API_URL") or "http://127.0.0.1:8000").rstrip("/")
+        self.base = normalize_url(os.environ.get("OMNISUB_API_URL") or DEFAULT_URL)
         self.headers = {"Content-Type": "application/json"}
         key = os.environ.get("OMNISUB_API_KEY") or self._config_api_key()
         if key:

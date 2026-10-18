@@ -13,6 +13,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
         auto_export_dir: '',
         apply_subtitle_edit_fixes: true,
         translate_all_source_formats: false,
+        translate_lyrics: true,
         prefer_ass_format: 'auto',
         embedded_deprioritize_keywords: '',
         temperature: 0.3,
@@ -42,6 +43,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                         context_model: src.context_model ?? g.default_context_model ?? '',
                         glossary_model: src.glossary_model ?? g.default_glossary_model ?? '',
                         fallback_translation_model: src.fallback_translation_model ?? g.fallback_translation_model ?? '',
+                        translate_lyrics: src.translate_lyrics ?? true,
                         ...src
                     }));
                 });
@@ -363,6 +365,24 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             </label>
                             <p className="text-[10px] text-gray-400 -mt-2 pl-8 italic">
                                 Translates sibling formats (e.g. SRT alongside extracted ASS), preserving both for media players.
+                            </p>
+
+                            <label className="flex items-center gap-3 cursor-pointer group pt-1">
+                                <div className="relative flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={settings.translate_lyrics ?? true}
+                                        onChange={(e) => handleChange('translate_lyrics', e.target.checked)}
+                                        className="sr-only"
+                                    />
+                                    <div className={`w-5 h-5 rounded border transition-all flex items-center justify-center ${(settings.translate_lyrics ?? true) ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300 dark:border-gray-600 group-hover:border-indigo-400'}`}>
+                                        {(settings.translate_lyrics ?? true) && <Check size={14} className="text-white" />}
+                                    </div>
+                                </div>
+                                <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Translate Song Lyrics (OP/ED &amp; Insert Songs)</span>
+                            </label>
+                            <p className="text-[10px] text-gray-400 -mt-2 pl-8 italic">
+                                Translates readable song lyrics into target language and caches recurring OP/ED lyrics across episodes (syllable-timed karaoke FX remain untouched).
                             </p>
                         </div>
                     </div>

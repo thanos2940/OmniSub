@@ -19,6 +19,7 @@ import json
 import logging
 import asyncio
 import subprocess
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from urllib.request import Request, urlopen
@@ -242,6 +243,12 @@ class UpdateService:
                     return True
         except Exception:
             pass
+        try:
+            from services import agent_runner
+            if agent_runner.get_runner().status().running:
+                return True
+        except Exception:
+            pass
         return False
 
     async def apply_update(self, force: bool = False) -> Dict[str, Any]:
@@ -269,16 +276,24 @@ class UpdateService:
         # for a working checkout, so refuse — even when forced; `force` only means
         # "don't wait for running jobs".
         status_res = await asyncio.to_thread(
-            self._run_git, ["status", "--porcelain", "--untracked-files=no"], 15.0
+            self._run_git, ["status", "--porcelain"], 15.0
         )
         if status_res.returncode == 0 and status_res.stdout.strip():
             changed = len(status_res.stdout.strip().splitlines())
             logger.warning(
-                f"Update not applied: {changed} tracked file(s) have local changes a reset would erase."
+                f"Update not applied: {changed} file(s) have local changes a reset would erase."
             )
+            if not force:
+                return {
+                    "success": False,
+                    "status": "skipped",
+                    "reason": "dirty_working_tree",
+                    "message": "Working tree has uncommitted changes; commit or stash before updating.",
+                }
             return {
                 "success": False,
                 "status": "local_changes",
+                "reason": "dirty_working_tree",
                 "message": (
                     f"{changed} file(s) have uncommitted changes that an update would erase. "
                     "Commit or stash them, then update."
@@ -326,6 +341,17 @@ class UpdateService:
             reqs_changed = bool(diff_res.stdout.strip()) if diff_res.returncode == 0 else False
 
             # Hard reset to remote HEAD (safe for data/ and config.json as they are .gitignored)
+            if not force:
+                pre_reset_status = await asyncio.to_thread(self._run_git, ["status", "--porcelain"], 15.0)
+                if pre_reset_status.returncode == 0 and pre_reset_status.stdout.strip():
+                    self._updating = False
+                    return {
+                        "success": False,
+                        "status": "skipped",
+                        "reason": "dirty_working_tree",
+                        "message": "Working tree has uncommitted changes; commit or stash before updating.",
+                    }
+
             reset_res = await asyncio.to_thread(self._run_git, ["reset", "--hard", f"origin/{branch}"], 20.0)
             if reset_res.returncode != 0:
                 self._updating = False
@@ -400,6 +426,7 @@ class UpdateService:
                 close_fds=True,
             )
             logger.info(f"Detached restart helper launched for PID {parent_pid}.")
+            threading.Timer(0.5, lambda: os._exit(0)).start()
         except Exception as e:
             logger.error(f"Failed to launch restart helper: {e}")
 

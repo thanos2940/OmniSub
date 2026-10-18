@@ -69,6 +69,7 @@ const AgentRunnerPanel = ({ toast }) => {
     const [busy, setBusy] = useState(false);
     const [open, setOpen] = useState(false);
     const [form, setForm] = useState(null);
+    const [apiRescue, setApiRescue] = useState(true);
     const [checkingQuota, setCheckingQuota] = useState(false);
     const seq = useRef(0);
     const logBox = useRef(null);
@@ -111,6 +112,9 @@ const AgentRunnerPanel = ({ toast }) => {
             setInfo(data);
             announce(data);
             setForm(f => f || toForm(data.config));
+            if (data.config?.api_rescue !== undefined) {
+                setApiRescue(data.config.api_rescue);
+            }
             const since = seq.current;
             if ((data.log_seq || 0) < since) {  // the server restarted: reload the whole log next time
                 seq.current = 0;
@@ -162,7 +166,7 @@ const AgentRunnerPanel = ({ toast }) => {
         per_show: Number(form.per_show) || 1,
         max_episodes: Number(form.max_episodes) || 0,
         watch: form.watch,
-        api_rescue: form.api_rescue,
+        api_rescue: apiRescue,
         rescue_model: form.rescue_model.trim(),
     }), info?.running ? 'Runner settings updated.' : 'Runner started.');
 
@@ -311,14 +315,17 @@ const AgentRunnerPanel = ({ toast }) => {
                     </label>
                     <label className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 pt-4 col-span-2"
                         title="When the CLI's safety filter refuses a part, its lines are set aside and sent on their own at the end of the episode: to the Gemini API (Settings → Gemini safety filter applies), else to the fallback model.">
-                        <input type="checkbox" checked={form.api_rescue} onChange={e => setForm({ ...form, api_rescue: e.target.checked })}
+                        <input type="checkbox" checked={apiRescue} onChange={e => {
+                            setApiRescue(e.target.checked);
+                            setForm({ ...form, api_rescue: e.target.checked });
+                        }}
                             className="w-4 h-4 text-purple-600 rounded border-gray-300" />
-                        Send lines the CLI refuses to the Gemini API
+                        API Rescue for refused lines
                     </label>
                     <label className="text-[11px] font-semibold text-gray-500 space-y-1 col-span-2">
                         <span>Gemini API model for refused lines</span>
                         <input className={field} value={form.rescue_model} placeholder="the project's translation model"
-                            disabled={!form.api_rescue}
+                            disabled={!apiRescue}
                             onChange={e => setForm({ ...form, rescue_model: e.target.value })} />
                     </label>
                     <div className="col-span-2 md:col-span-4 flex items-center justify-between gap-2 text-[11px] text-gray-400">

@@ -35,59 +35,64 @@ def _index_episode(project_name: str, episode_name: str, ep_meta: Dict) -> None:
 
 def update_project_stats_on_change(project_name: str) -> None:
     """Recalculate project stats based on imported episodes and update project.json."""
-    from utils.storage_modules.project_store import load_project_metadata, save_project_metadata
+    from utils.storage_modules.project_store import (
+        load_project_metadata,
+        save_project_metadata,
+        _get_project_lock,
+    )
     from utils.storage_modules.episode_store import list_episodes, load_episode_metadata
 
-    meta = load_project_metadata(project_name)
-    if not meta:
-        return
+    with _get_project_lock(project_name):
+        meta = load_project_metadata(project_name)
+        if not meta:
+            return
 
-    episodes = list_episodes(project_name)
+        episodes = list_episodes(project_name)
 
-    # Filter out sibling episodes
-    non_siblings = []
-    for ep_name in episodes:
-        if ' [' in ep_name:
-            ep_meta = load_episode_metadata(project_name, ep_name)
-            if ep_meta and ep_meta.get("arr_secondary_of"):
-                continue
-        non_siblings.append(ep_name)
+        # Filter out sibling episodes
+        non_siblings = []
+        for ep_name in episodes:
+            if ' [' in ep_name:
+                ep_meta = load_episode_metadata(project_name, ep_name)
+                if ep_meta and ep_meta.get("arr_secondary_of"):
+                    continue
+            non_siblings.append(ep_name)
 
-    # Fast path: one indexed COUNT instead of reading every episode's metadata file.
-    translated = None
-    try:
-        from utils import metadata_index
-        translated = metadata_index.count_translated(project_name)
-    except Exception:
+        # Fast path: one indexed COUNT instead of reading every episode's metadata file.
         translated = None
+        try:
+            from utils import metadata_index
+            translated = metadata_index.count_translated(project_name)
+        except Exception:
+            translated = None
 
-    if translated is None:
-        translated = 0
-        for ep_name in non_siblings:
-            ep_meta = load_episode_metadata(project_name, ep_name)
-            if ep_meta and (
-                ep_meta.get("arr_has_target")
-                or ep_meta.get("translated")
-            ):
-                translated += 1
+        if translated is None:
+            translated = 0
+            for ep_name in non_siblings:
+                ep_meta = load_episode_metadata(project_name, ep_name)
+                if ep_meta and (
+                    ep_meta.get("arr_has_target")
+                    or ep_meta.get("translated")
+                ):
+                    translated += 1
 
-    if meta.get("type") == "movie" or meta.get("arr_media_type") == "movie":
-        total_count = 1 if len(non_siblings) > 0 else 0
-        translated_count = 1 if translated > 0 else 0
-    else:
-        current_total = meta.get("arr_total_episodes")
-        if current_total is None:
-            current_total = len(non_siblings)
+        if meta.get("type") == "movie" or meta.get("arr_media_type") == "movie":
+            total_count = 1 if len(non_siblings) > 0 else 0
+            translated_count = 1 if translated > 0 else 0
         else:
-            current_total = max(current_total, len(non_siblings))
-        
-        total_count = current_total
-        translated_count = translated
+            current_total = meta.get("arr_total_episodes")
+            if current_total is None:
+                current_total = len(non_siblings)
+            else:
+                current_total = max(current_total, len(non_siblings))
+            
+            total_count = current_total
+            translated_count = translated
 
-    meta["arr_total_episodes"] = total_count
-    meta["arr_translated_episodes"] = translated_count
+        meta["arr_total_episodes"] = total_count
+        meta["arr_translated_episodes"] = translated_count
 
-    save_project_metadata(project_name, meta)
+        save_project_metadata(project_name, meta)
 
 
 def get_arr_library() -> Dict:

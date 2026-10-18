@@ -142,19 +142,62 @@ def _widest(it: _Item) -> float:
     return max((text_width(l, it.fs, it.bold) for l in it.text.split("\n")), default=0.0) * it.fscx / 100.0
 
 
+def fit_translated_sign_group(
+    group: List[_Item],
+    frame_w: float,
+    all_items: List[_Item],
+) -> int:
+    """Fit a group of frames belonging to the same animated/panning sign consistently.
+    All frames in the group receive the identical line wrap and fscx/fs scaling based on the
+    most constrained frame in the sequence to prevent visual jitter."""
+    if not group:
+        return 0
+
+    first = group[0]
+    min_room = min(_room(it, frame_w) for it in group)
+    widest = _widest(first)
+
+    if min_room <= 0 or widest <= min_room:
+        return 0
+
+    from utils.ass_parser import _plain_to_ass_text
+
+    # 1. Wrap into extra lines if that stays clear of simultaneous signs.
+    limit = min_room / (first.fscx / 100.0)
+    lines = wrap_words(first.text, first.fs, first.bold, limit)
+    new_text, extra = None, None
+
+    # Check collision across all frames in this sign group
+    collides = any(_collides(it, all_items, len(lines), lines, frame_w) for it in group) if lines else True
+    if lines and len(lines) <= MAX_LINES and not collides:
+        new_text = "\n".join(lines)
+    else:
+        # 2. Condense horizontally, then shrink the font, on the original line structure.
+        factor = max(MIN_CONDENSE, int(100.0 * min_room / widest * first.fscx / 100.0))
+        extra = f"\\fscx{factor}"
+        still = widest * factor / first.fscx
+        if still > min_room:
+            extra += f"\\fs{max(int(first.fs * MIN_FONT_FRACTION), int(first.fs * min_room / still))}"
+        new_text = first.text
+
+    changed = 0
+    for it in group:
+        it.ev.text = it.prefix + (("{" + extra + "}") if extra else "") + _plain_to_ass_text(new_text) + it.suffix
+        changed += 1
+    return changed
+
+
 def fit_sign_events(subs, raw_items: List[Tuple]) -> int:
     """Wrap / condense translated sign events so they fit the frame.
 
     ``raw_items``: ``(event, prefix_tags, plain_text, suffix_tags, start_ms, end_ms)``
     for each translated sign event. Rewrites ``event.text`` where needed and returns how
-    many events were changed.
+    many events were changed. Multi-frame panning/animated signs share consistent fitting.
     """
     try:
         frame_w = float(subs.info.get("PlayResX") or 384)
     except (TypeError, ValueError):
         frame_w = 384.0
-
-    from utils.ass_parser import _plain_to_ass_text
 
     items: List[_Item] = []
     for ev, prefix, text, suffix, start, end in raw_items:
@@ -172,30 +215,13 @@ def fit_sign_events(subs, raw_items: List[Tuple]) -> int:
         bold = (b[-1] == "1") if b else bool(getattr(style, "bold", False))
         items.append(_Item(ev, prefix, text, suffix, float(pm.group(1)), float(pm.group(2)), an, fs, fscx, bold, start, end))
 
-    changed = 0
+    sign_groups: Dict[Tuple[str, str], List[_Item]] = {}
     for it in items:
-        room = _room(it, frame_w)
-        if room <= 0 or _widest(it) <= room:
-            continue
+        sign_groups.setdefault((it.ev.style or "", it.text.strip()), []).append(it)
 
-        # 1. Wrap into extra lines if that stays clear of simultaneous signs.
-        limit = room / (it.fscx / 100.0)
-        lines = wrap_words(it.text, it.fs, it.bold, limit)
-        new_text, extra = None, None
-        if lines and len(lines) <= MAX_LINES and not _collides(it, items, len(lines), lines, frame_w):
-            new_text = "\n".join(lines)
-        else:
-            # 2. Condense horizontally, then shrink the font, on the original line structure.
-            w = _widest(it)
-            factor = max(MIN_CONDENSE, int(100.0 * room / w * it.fscx / 100.0))
-            extra = f"\\fscx{factor}"
-            still = w * factor / it.fscx
-            if still > room:
-                # shrink the font too, but never below a legible fraction of the original
-                extra += f"\\fs{max(int(it.fs * MIN_FONT_FRACTION), int(it.fs * room / still))}"
-            new_text = it.text
-        it.ev.text = it.prefix + (("{" + extra + "}") if extra else "") + _plain_to_ass_text(new_text) + it.suffix
-        changed += 1
+    changed = 0
+    for group in sign_groups.values():
+        changed += fit_translated_sign_group(group, frame_w, items)
     return changed
 
 

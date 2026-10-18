@@ -34,6 +34,16 @@ axios.interceptors.response.use(
     }
 );
 
+export const apiClient = {
+    get: (url, config) => axios.get(url.startsWith('http') ? url : `${API_URL}${url.startsWith('/') ? url : '/' + url}`, config),
+    post: (url, data, config) => axios.post(url.startsWith('http') ? url : `${API_URL}${url.startsWith('/') ? url : '/' + url}`, data, config),
+    put: (url, data, config) => axios.put(url.startsWith('http') ? url : `${API_URL}${url.startsWith('/') ? url : '/' + url}`, data, config),
+    delete: (url, config) => axios.delete(url.startsWith('http') ? url : `${API_URL}${url.startsWith('/') ? url : '/' + url}`, config),
+    postponeQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/postpone`),
+    continueQueueItem: (itemId, boostPriority = true) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/continue`, null, { params: { boost_priority: boostPriority } }),
+    stopQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/stop`),
+};
+
 export const api = {
     // Auth
     getAuthStatus: () => axios.get(`${API_URL}/api/auth/status`),
@@ -112,7 +122,8 @@ export const api = {
     ),
     saveEpisode: (projectName, episodeName, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/save`, { data }),
     updateEpisodeMetadata: (projectName, episodeName, metadata) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/metadata`, { metadata }),
-    deleteEpisode: (projectName, episodeName) => axios.delete(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}`),
+    deleteEpisode: (projectName, episodeName, deleteDiskFile = false) => apiClient.delete(`/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translation`, { params: { delete_disk_file: deleteDiskFile } }),
+    deleteEpisodeTranslation: (projectName, episodeName, deleteDiskFile = false) => apiClient.delete(`/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translation`, { params: { delete_disk_file: deleteDiskFile } }),
     deleteLines: (projectName, episodeName, indexes) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/delete-lines`, { indexes }),
     applyCommonFixes: (projectName, episodeName, track = 'source', lang = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/apply-fixes`, { track, lang }),
     applyEpisodeFixes: (projectName, episodeName, options = {}) => {
@@ -153,7 +164,7 @@ export const api = {
         }
         return axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translate`, payload);
     },
-    clearTranslation: (projectName, episodeName) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/clear`),
+    clearTranslation: (projectName, episodeName, deleteDiskFile = false) => apiClient.delete(`/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translation`, { params: { delete_disk_file: deleteDiskFile } }),
     retranslateEpisode: (projectName, episodeName, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/retranslate`, { model }),
     mergeTranslation: (projectName, episodeName, selectedLines) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/merge`, { selected_lines: selectedLines }),
 
@@ -330,6 +341,9 @@ export const api = {
     getEvents: (since = 0) => axios.get(`${API_URL}/api/events/poll`, { params: { since } }),
     retryQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/retry`),
     cancelQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/cancel`),
+    postponeQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/postpone`),
+    continueQueueItem: (itemId, boostPriority = true) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/continue`, null, { params: { boost_priority: boostPriority } }),
+    stopQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/stop`),
     cancelAllQueueItems: (status = 'pending') => axios.post(`${API_URL}/api/queue/cancel-all`, null, { params: { status } }),
     deleteQueueItem: (itemId) => axios.delete(`${API_URL}/api/queue/${itemId}`),
     prioritizeQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/prioritize`),

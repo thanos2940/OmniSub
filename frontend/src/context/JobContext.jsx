@@ -123,6 +123,7 @@ export const JobProvider = ({ children }) => {
 
     const activeJobsRef = useRef(activeJobs);
     const pollErrorsRef = useRef({});
+    const wsConnectedRef = useRef(false);
 
     const BASE_INTERVAL = 1500;
     const MAX_BACKOFF_INTERVAL = 5000;
@@ -498,6 +499,7 @@ export const JobProvider = ({ children }) => {
                 ws = new WebSocket(wsUrl);
 
                 ws.onopen = () => {
+                    wsConnectedRef.current = true;
                     ws._pingInterval = setInterval(() => {
                         if (ws && ws.readyState === WebSocket.OPEN) {
                             ws.send('ping');
@@ -516,6 +518,7 @@ export const JobProvider = ({ children }) => {
                 };
 
                 ws.onclose = () => {
+                    wsConnectedRef.current = false;
                     if (ws && ws._pingInterval) clearInterval(ws._pingInterval);
                     if (!isUnmounted) {
                         reconnectTimeout = setTimeout(connectWs, 3000);
@@ -523,9 +526,11 @@ export const JobProvider = ({ children }) => {
                 };
 
                 ws.onerror = () => {
+                    wsConnectedRef.current = false;
                     if (ws) ws.close();
                 };
             } catch (err) {
+                wsConnectedRef.current = false;
                 if (!isUnmounted) {
                     reconnectTimeout = setTimeout(connectWs, 5000);
                 }
@@ -599,6 +604,8 @@ export const JobProvider = ({ children }) => {
 
         const pollEventFallback = async () => {
             if (document.hidden) return;
+            // Skip HTTP polling when WebSocket is connected and pushing events
+            if (wsConnectedRef.current || (ws && ws.readyState === WebSocket.OPEN)) return;
             try {
                 const res = await api.getEvents(lastEventId ?? 0);
                 const latestId = res.data?.latest_id ?? 0;
@@ -626,6 +633,7 @@ export const JobProvider = ({ children }) => {
 
         return () => {
             isUnmounted = true;
+            wsConnectedRef.current = false;
             if (reconnectTimeout) clearTimeout(reconnectTimeout);
             if (pollInterval) clearInterval(pollInterval);
             if (ws) {

@@ -38,7 +38,139 @@ def _apply_output_conformance(rows: List[Dict], target_lang_code: str, global_co
         logger.warning(f"Output conformance wrapping failed: {e}")
 
 
-def _current_media_file(episode_name: str, metadata: Dict, global_config: Dict) -> Optional[Path]:
+def resolve_cross_share_media(
+    media_path: Optional[str],
+    episode_name: Optional[str] = None,
+    metadata: Optional[Dict] = None,
+    global_config: Optional[Dict] = None,
+    project_name: Optional[str] = None,
+) -> Optional[Path]:
+    """Re-resolve stale or cross-share media paths when direct path mapping fails.
+
+    When mapped_media and its parent do not exist on disk, checks project_meta["arr_path"]
+    and probes alternative path_mappings roots while preserving relative path tails.
+    Updates metadata["arr_media_path"] if resolved to a new valid file path.
+    """
+    if not media_path:
+        return None
+    if metadata is None:
+        metadata = {}
+    if global_config is None:
+        from utils import storage
+        global_config = storage.load_global_config()
+
+    from integrations.path_resolver import PathResolver
+    mappings = global_config.get("arr_path_mappings", [])
+    resolver = PathResolver(mappings)
+
+    # 1. Direct check
+    found = resolver.find_media_file(media_path, episode_name=episode_name)
+    if found:
+        p = Path(found)
+        if p.exists() and p.is_file():
+            if str(p) != media_path:
+                metadata["arr_media_path"] = str(p)
+            return p
+
+    resolved_direct = resolver.resolve(media_path)
+    if resolved_direct:
+        p_dir = Path(resolved_direct)
+        if p_dir.exists() and p_dir.is_file():
+            if str(p_dir) != media_path:
+                metadata["arr_media_path"] = str(p_dir)
+            return p_dir
+
+    video_exts = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".mov"}
+    target_filename = Path(media_path).name
+
+    # 2. Check project_meta["arr_path"] / "path" / "media_path"
+    proj_name = project_name or metadata.get("project_name")
+    from utils import storage
+    proj_meta = storage.load_project_metadata(proj_name) if proj_name else None
+
+    if proj_meta:
+        for pkey in ("arr_path", "path", "media_path", "root_folder_path"):
+            cand_folder = proj_meta.get(pkey)
+            if not cand_folder:
+                continue
+            resolved_folder = resolver.resolve(cand_folder)
+            rf_path = Path(resolved_folder)
+            if not rf_path.exists() or not rf_path.is_dir():
+                continue
+
+            parent_dir_name = Path(media_path).parent.name
+            if parent_dir_name:
+                cand_in_season = rf_path / parent_dir_name / target_filename
+                if cand_in_season.exists() and cand_in_season.is_file():
+                    metadata["arr_media_path"] = str(cand_in_season)
+                    return cand_in_season
+
+            cand_direct = rf_path / target_filename
+            if cand_direct.exists() and cand_direct.is_file():
+                metadata["arr_media_path"] = str(cand_direct)
+                return cand_direct
+
+            try:
+                for sub in rf_path.iterdir():
+                    if sub.is_file() and sub.suffix.lower() in video_exts:
+                        if sub.name.lower() == target_filename.lower() or (episode_name and episode_name.lower() in sub.name.lower()):
+                            metadata["arr_media_path"] = str(sub)
+                            return sub
+                    elif sub.is_dir():
+                        for ep_file in sub.iterdir():
+                            if ep_file.is_file() and ep_file.suffix.lower() in video_exts:
+                                if ep_file.name.lower() == target_filename.lower() or (episode_name and episode_name.lower() in ep_file.name.lower()):
+                                    metadata["arr_media_path"] = str(ep_file)
+                                    return ep_file
+            except OSError:
+                pass
+
+    # 3. Probe alternative path_mappings roots preserving relative tail
+    norm_media = media_path.replace("\\", "/")
+    tails_to_try = []
+    for m in mappings:
+        rem = (m.get("remote") or "").replace("\\", "/").rstrip("/")
+        if rem and norm_media.lower().startswith(rem.lower()):
+            tail = norm_media[len(rem):].lstrip("/")
+            if tail and tail not in tails_to_try:
+                tails_to_try.append(tail)
+
+    parent_tail = Path(media_path).parent.name
+    if parent_tail:
+        season_tail = f"{parent_tail}/{target_filename}"
+        if season_tail not in tails_to_try:
+            tails_to_try.append(season_tail)
+    if target_filename not in tails_to_try:
+        tails_to_try.append(target_filename)
+
+    for m in mappings:
+        local_root_str = m.get("local")
+        if not local_root_str:
+            continue
+        local_root = Path(local_root_str)
+        if not local_root.exists() or not local_root.is_dir():
+            continue
+
+        for tail in tails_to_try:
+            cand = local_root / tail
+            try:
+                if cand.exists() and cand.is_file():
+                    metadata["arr_media_path"] = str(cand)
+                    return cand
+                if cand.parent.exists() and cand.parent.is_dir():
+                    import re
+                    for f in cand.parent.iterdir():
+                        if f.is_file() and f.suffix.lower() in video_exts:
+                            if episode_name and (re.search(rf"(?i)(?:\b|_){re.escape(episode_name)}(?:\b|_)", f.name) or episode_name.lower() in f.name.lower()):
+                                metadata["arr_media_path"] = str(f)
+                                return f
+            except OSError:
+                pass
+
+    return None
+
+
+def _current_media_file(episode_name: str, metadata: Dict, global_config: Dict, project_name: Optional[str] = None) -> Optional[Path]:
     """The episode's video file as it is named on disk *now*.
 
     Sonarr/Radarr upgrades and renames replace the file behind ``arr_media_path``
@@ -57,6 +189,17 @@ def _current_media_file(episode_name: str, metadata: Dict, global_config: Dict) 
             logger.info(f"Media file for {episode_name} is now '{Path(found).name}' (was '{Path(media_path).name}').")
             metadata["arr_media_path"] = found
         return Path(found)
+
+    resolved_cross = resolve_cross_share_media(
+        media_path=media_path,
+        episode_name=episode_name,
+        metadata=metadata,
+        global_config=global_config,
+        project_name=project_name or metadata.get("project_name"),
+    )
+    if resolved_cross:
+        return resolved_cross
+
     resolved = resolver.resolve(media_path)
     return Path(resolved) if resolved else None
 
@@ -229,7 +372,7 @@ def auto_export_translated_subtitle(project_name: str, episode_name: str, parsed
         protect = bool(gc.get("autopilot_protect_foreign_subs", True))
 
         # 1. Export next to the media file, named after the video as it is named now
-        media_file = _current_media_file(episode_name, metadata, gc)
+        media_file = _current_media_file(episode_name, metadata, gc, project_name=project_name)
 
         _, original_ext = storage.load_original_subtitle(project_name, episode_name)
         ext = original_ext.lstrip('.') if original_ext else "srt"

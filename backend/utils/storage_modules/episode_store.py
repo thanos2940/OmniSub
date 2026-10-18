@@ -259,6 +259,35 @@ def load_episode(project_name: str, episode_name: str) -> Optional[Dict]:
             result = {"data": result}
             write_json_atomic(data_file, result)
 
+        # Lazy compaction on load (D-02): strip legacy drawing/karaoke bloat if original ASS exists
+        has_ass_orig = (ep_dir / "original.ass").exists() or (ep_dir / "original.ssa").exists()
+        if has_ass_orig and isinstance(result.get("data"), list):
+            def _is_bloat(r: Dict) -> bool:
+                ass = r.get("_ass")
+                if not isinstance(ass, dict):
+                    return False
+                if not ass.get("translatable", True) and (ass.get("kind") or ass.get("reason")) in ("drawing", "karaoke", "empty"):
+                    return True
+                return False
+
+            bloat_rows = [r for r in result["data"] if _is_bloat(r)]
+            has_drawing = any((r.get("_ass") or {}).get("kind") == "drawing" or (r.get("_ass") or {}).get("reason") == "drawing" for r in bloat_rows)
+            if has_drawing or len(bloat_rows) >= 2:
+                result["data"] = [r for r in result["data"] if not _is_bloat(r)]
+                for i, r in enumerate(result["data"], start=1):
+                    r["id"] = str(i)
+                write_json_atomic(data_file, {"data": result["data"]})
+                meta_file = ep_dir / "metadata.json"
+                if meta_file.exists():
+                    try:
+                        with open(meta_file, 'r', encoding='utf-8') as mf:
+                            mdata = json.load(mf)
+                        mdata["line_count"] = len(result["data"])
+                        mdata.pop("clean_to_orig_map", None)
+                        write_json_atomic(meta_file, mdata)
+                    except Exception as e:
+                        logger.warning(f"Failed to update metadata line_count on lazy compaction: {e}")
+
         proj_meta = load_project_metadata(project_name)
         primary_lang = proj_meta.get("target_language", "Greek") if proj_meta else "Greek"
         primary_code = to_code(primary_lang)

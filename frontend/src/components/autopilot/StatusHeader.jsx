@@ -8,21 +8,48 @@ const CHIP = {
     ok: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
     bad: 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400',
     warn: 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400',
+    neutral: 'bg-slate-500/10 border-slate-500/30 text-slate-600 dark:text-slate-400',
     off: 'bg-gray-500/10 border-gray-500/30 text-gray-500 dark:text-gray-400',
 };
 
-const Chip = ({ label, value, kind, title }) => (
-    <span title={title} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${CHIP[kind]}`}>
-        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-        <span>{label}</span>
-        <span className="font-medium opacity-80">{value}</span>
-    </span>
-);
+const Chip = ({ label, value, kind, ok, error, last_error, last_poll_at, title }) => {
+    let finalKind = kind;
+    let finalValue = value;
+    if (!finalKind) {
+        const err = last_error || error;
+        if (Boolean(err)) {
+            finalKind = 'bad';
+            finalValue = finalValue || 'error';
+        } else if (Boolean((last_poll_at || ok) && !err)) {
+            finalKind = 'ok';
+            finalValue = finalValue || 'connected';
+        } else {
+            finalKind = 'neutral';
+            finalValue = finalValue || 'awaiting poll / webhook';
+        }
+    }
+    return (
+        <span title={title} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${CHIP[finalKind] || CHIP.neutral}`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            <span>{label}</span>
+            {finalValue && <span className="font-medium opacity-80">{finalValue}</span>}
+        </span>
+    );
+};
+
+export const StatusPill = Chip;
 
 const arrChip = (name, a) => {
     if (!a || !a.configured) return { kind: 'off', value: 'not set up', title: `${name} is not configured (Settings, Media Servers).` };
-    if (a.ok) return { kind: 'ok', value: 'connected', title: a.since ? `Connected since ${fmtDateTime(a.since)}` : 'Connected' };
-    return { kind: 'bad', value: 'unreachable', title: `${a.error || 'Cannot reach it'}${a.since ? ` (since ${fmtDateTime(a.since)})` : ''}` };
+    const err = a.last_error || a.error;
+    const isPolled = Boolean(a.last_poll_at || a.ok);
+    if (Boolean(err)) {
+        return { kind: 'bad', value: 'unreachable', title: `${err}${a.since ? ` (since ${fmtDateTime(a.since)})` : ''}` };
+    }
+    if (isPolled) {
+        return { kind: 'ok', value: 'connected', title: a.since ? `Connected since ${fmtDateTime(a.since)}` : 'Connected' };
+    }
+    return { kind: 'neutral', value: 'awaiting poll / webhook', title: `${name} is configured; awaiting first poll or webhook event.` };
 };
 
 const engineChip = (e) => {

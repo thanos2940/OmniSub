@@ -22,6 +22,8 @@ from services.agent_task_service import agent_task_service
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
+_VALID_MODES = {"auto", "full", "missing", "Sign", "gaps"}
+
 
 class SubmitTaskRequest(BaseModel):
     file_path: Optional[str] = None
@@ -76,6 +78,8 @@ class RunnerStartRequest(BaseModel):
     fix_rounds: Optional[int] = None
     max_episodes: Optional[int] = None
     watch: Optional[bool] = None
+    api_rescue: bool = True
+    rescue_model: Optional[str] = None
 
 
 def _result(result: Dict[str, Any], not_found_statuses=("not_found",)) -> Any:
@@ -234,8 +238,13 @@ async def runner_status(since: int = Query(0), quota: bool = Query(False)):
 @router.post("/runner/start")
 async def runner_start(payload: Optional[RunnerStartRequest] = None):
     """Start the runner (or change the settings of a running one)."""
-    from services.agent_runner import get_runner
-    config = {k: v for k, v in (payload.model_dump() if payload else {}).items() if v is not None}
+    from services.agent_runner import RunnerConfig, get_runner
+    req = payload or RunnerStartRequest()
+    params = {k: v for k, v in req.model_dump().items() if v is not None}
+    params["api_rescue"] = req.api_rescue
+    if req.rescue_model is not None:
+        params["rescue_model"] = req.rescue_model
+    config = RunnerConfig(**params)
     try:
         return await asyncio.to_thread(get_runner().start, config)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:

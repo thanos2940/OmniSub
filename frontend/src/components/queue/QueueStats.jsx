@@ -1,11 +1,46 @@
 import React from 'react';
-import { Activity, Pause } from 'lucide-react';
+import { Activity, Pause, Layers, HardDrive, Clock } from 'lucide-react';
 
 const QueueStats = ({ summary = {}, rateLimits = {} }) => {
+    const postponedCount = summary.postponed_count || summary.postponed || 0;
+    const extractionCount = summary.extraction_count || 0;
+    const exportRetryCount = summary.export_retry_count || 0;
+    const hasHousekeeping = extractionCount > 0 || exportRetryCount > 0 || postponedCount > 0;
+
     return (
         <div className="space-y-4">
+            {/* Active Housekeeping & Sub-lane Visibility Banner */}
+            {hasHousekeeping && (
+                <div className="p-3.5 bg-gradient-to-r from-indigo-50/80 via-purple-50/60 to-cyan-50/80 dark:from-indigo-950/30 dark:via-purple-950/20 dark:to-cyan-950/30 border border-indigo-200/60 dark:border-indigo-800/40 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm">
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-gray-800 dark:text-gray-200">Active Queue Lanes:</span>
+                        <span className="text-gray-500 dark:text-gray-400">Underlying tasks active in parallel processing</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {extractionCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-semibold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/50 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 shadow-xs">
+                                <Layers size={13} className="text-cyan-600 dark:text-cyan-400" />
+                                {extractionCount} Extraction{extractionCount > 1 ? 's' : ''}
+                            </span>
+                        )}
+                        {exportRetryCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800 shadow-xs">
+                                <HardDrive size={13} className="text-amber-600 dark:text-amber-400" />
+                                {exportRetryCount} NAS Export Retry{exportRetryCount > 1 ? 'ies' : ''}
+                            </span>
+                        )}
+                        {postponedCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-semibold bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 shadow-xs">
+                                <Clock size={13} className="text-purple-600 dark:text-purple-400" />
+                                {postponedCount} Postponed
+                            </span>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Summary Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className={`grid grid-cols-2 ${postponedCount > 0 ? 'md:grid-cols-6' : 'md:grid-cols-5'} gap-4`}>
                 <div className="bg-white dark:bg-gray-850 p-4 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Running</div>
                     <div className="text-2xl font-bold text-amber-500 mt-1 flex items-center gap-2">
@@ -17,6 +52,12 @@ const QueueStats = ({ summary = {}, rateLimits = {} }) => {
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Pending</div>
                     <div className="text-2xl font-bold text-blue-500 mt-1">{summary.pending || 0}</div>
                 </div>
+                {postponedCount > 0 && (
+                    <div className="bg-white dark:bg-gray-850 p-4 border border-purple-200 dark:border-purple-900/40 rounded-2xl shadow-sm">
+                        <div className="text-xs font-semibold text-purple-500 dark:text-purple-400 uppercase tracking-wider">Postponed</div>
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{postponedCount}</div>
+                    </div>
+                )}
                 <div className="bg-white dark:bg-gray-850 p-4 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm">
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Completed Today</div>
                     <div className="text-2xl font-bold text-emerald-500 mt-1">{summary.completed_today || 0}</div>

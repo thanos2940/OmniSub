@@ -191,6 +191,8 @@ def _classify(style: str, raw_text: str, effect: str = "") -> str:
         return "karaoke"
     if _DRAWING_ON_RE.search(raw_text):
         return "drawing"
+    if style and _SONG_STYLE_RE.search(style):
+        return "lyrics"
     if style and _SIGN_STYLE_RE.search(style):
         return "sign"
     # Positioned / moving events are on-screen signs (books, panels, moving text)
@@ -200,7 +202,11 @@ def _classify(style: str, raw_text: str, effect: str = "") -> str:
     return "dialogue"
 
 
-def parse_ass(content: str) -> List[Dict]:
+def parse_ass(
+    content: str,
+    include_passthrough: bool = True,
+    translate_lyrics: bool = True,
+) -> List[Dict]:
     """Parse .ass/.ssa content into pipeline-compatible subtitle entries.
 
     Entries are sorted by start time and assigned sequential string ids, exactly
@@ -222,9 +228,20 @@ def parse_ass(content: str) -> List[Dict]:
         kind = _classify(ev.style or "", raw_text, getattr(ev, "effect", "") or "")
         prefix, suffix, visible, inline_tags = _split_tags(raw_text)
 
-        # Karaoke and drawing pass through untouched; so do empty/blank events.
-        passthrough = kind in ("karaoke", "drawing") or not visible.strip()
-        translatable = not passthrough
+        reason = kind
+        if kind == "drawing":
+            translatable = False
+        elif kind == "karaoke":
+            translatable = False
+        elif not visible.strip():
+            translatable = False
+            reason = "empty"
+        elif kind == "lyrics":
+            translatable = bool(translate_lyrics)
+            reason = "lyrics"
+        else:
+            translatable = True
+            reason = kind
 
         raw_entries.append({
             "id": "",  # assigned after sort
@@ -237,6 +254,7 @@ def parse_ass(content: str) -> List[Dict]:
             "_ass": {
                 "index": idx,
                 "kind": kind,
+                "reason": reason,
                 "translatable": translatable,
                 "prefix_tags": prefix,
                 "suffix_tags": suffix,
@@ -258,10 +276,14 @@ def parse_ass(content: str) -> List[Dict]:
     # then renumber so ids match display order — the reconstruction mapping uses
     # the stored event index, so reordering entries is safe.
     raw_entries.sort(key=lambda e: (e["_ass"]["start_ms"], e["_ass"]["index"]))
+    demote_fragmented_styles(raw_entries)
+
+    if not include_passthrough:
+        raw_entries = [e for e in raw_entries if e["_ass"].get("translatable", True)]
+
     for i, entry in enumerate(raw_entries, start=1):
         entry["id"] = str(i)
 
-    demote_fragmented_styles(raw_entries)
     return raw_entries
 
 
@@ -450,12 +472,28 @@ def reconstruct_ass(
                 style.fontname = chosen_font
                 style.encoding = 1
 
+        deleted_event_indices: set[int] = set()
+        for e in parsed_data:
+            if e.get("deleted") is True:
+                for k in ("ass_event_idx", "index"):
+                    v = e.get(k)
+                    if isinstance(v, int):
+                        deleted_event_indices.add(v)
+                ass_meta = e.get("_ass")
+                if isinstance(ass_meta, dict):
+                    for k in ("ass_event_idx", "index"):
+                        v = ass_meta.get(k)
+                        if isinstance(v, int):
+                            deleted_event_indices.add(v)
+
         # An index can map to SEVERAL entries: export auto-splitting cuts an over-long
         # cue into parts that share the source event's duration. The first part reuses
         # (and, when flagged ``split``, retimes) the original event; extra parts become
         # cloned events inserted right after it.
         by_index: Dict[int, List[Dict]] = {}
         for e in parsed_data:
+            if e.get("deleted") is True:
+                continue
             if isinstance(e.get("_ass"), dict) and "index" in e["_ass"]:
                 by_index.setdefault(e["_ass"]["index"], []).append(e)
         # ``parse_ass`` surfaces *every* non-comment event, so when the entries carry
@@ -468,6 +506,7 @@ def reconstruct_ass(
         has_any_translation = any(
             bool((e.get("translations", {}) or {}).get(target_lang_code) or e.get("translated"))
             for e in parsed_data
+            if not e.get("deleted")
         )
         can_prune = bool(by_index)
         kept_events = []
@@ -477,15 +516,20 @@ def reconstruct_ass(
             # Fallback for plain rows (e.g. structure-authoritative or index-less rebuilds):
             # map translatable non-comment events sequentially to parsed_data entries.
             plain_idx = 0
-            for ev in subs.events:
+            for idx, ev in enumerate(subs.events):
                 if ev.is_comment:
                     kept_events.append(ev)
+                    continue
+                if idx in deleted_event_indices:
                     continue
                 kind = _classify(ev.style or "", ev.text or "", getattr(ev, "effect", "") or "")
                 prefix, suffix, visible, _ = _split_tags(ev.text or "")
                 translatable = kind not in ("karaoke", "drawing") and bool(visible.strip())
                 if translatable and plain_idx < len(parsed_data):
                     entry = parsed_data[plain_idx]
+                    plain_idx += 1
+                    if entry.get("deleted") is True:
+                        continue
                     text = entry.get("translated") or ""
                     if target_lang_code:
                         text = (entry.get("translations", {}) or {}).get(target_lang_code) or text
@@ -493,19 +537,38 @@ def reconstruct_ass(
                         if chosen_font and "\\fn" in prefix:
                             prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
                         ev.text = prefix + _plain_to_ass_text(text) + suffix
-                    plain_idx += 1
                 kept_events.append(ev)
             subs.events = kept_events
             return subs.to_string("ass")
 
         for idx, ev in enumerate(subs.events):
+            if idx in deleted_event_indices:
+                continue
             entries = by_index.get(idx)
             if not entries:
-                if can_prune and not ev.is_comment:
-                    continue  # surfaced dialogue/sign/effect deleted in editor — drop
-                kept_events.append(ev)  # comment (or index-less rebuild) — leave untouched
-                continue
+                # Check why it's not in by_index: passthrough events (drawing, karaoke,
+                # empty, or non-translated lyrics) are omitted from zero-duplication storage.
+                kind = _classify(ev.style or "", ev.text or "", getattr(ev, "effect", "") or "")
+                _, _, visible, _ = _split_tags(ev.text or "")
+                has_lyrics_in_parsed = any(
+                    (e.get("_ass") or {}).get("reason") == "lyrics" or (e.get("_ass") or {}).get("kind") == "lyrics"
+                    for e in parsed_data
+                )
+                is_passthrough = (
+                    kind in ("karaoke", "drawing")
+                    or not visible.strip()
+                    or is_untranslatable_text(visible)
+                    or (kind == "lyrics" and not has_lyrics_in_parsed)
+                )
+
+                if is_passthrough or ev.is_comment or not can_prune:
+                    kept_events.append(ev)  # passthrough / comment — leave untouched
+                    continue
+
+                continue  # translatable dialogue/sign/lyrics deleted in editor — drop
             for part_no, entry in enumerate(entries):
+                if entry.get("deleted") is True:
+                    continue
                 meta = entry["_ass"]
                 target = ev if part_no == 0 else _copy.copy(ev)
                 if meta.get("translatable"):
@@ -558,6 +621,8 @@ def reconstruct_ass(
     subs.styles["Default"] = default_style
 
     for entry in parsed_data:
+        if entry.get("deleted") is True:
+            continue
         meta = entry.get("_ass", {}) or {}
         text = ""
         if meta.get("translatable", True):
@@ -611,3 +676,82 @@ def _srt_timecode_to_ms(timecode: str) -> Tuple[int, int]:
     if len(parts) != 2:
         return 0, 0
     return one(parts[0]), one(parts[1])
+
+
+export_ass = reconstruct_ass
+
+
+def _norm_lyric(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def apply_song_lyrics_memory(
+    entries: List[Dict],
+    project_meta: Dict,
+    target_lang_code: str = "el",
+) -> int:
+    """Pre-fill recurring OP/ED lyrics across episodes from project lyrics memory."""
+    if project_meta is None or not entries:
+        return 0
+    memory = project_meta.get("song_lyrics_memory") or {}
+    if not memory:
+        return 0
+
+    applied = 0
+    for entry in entries:
+        meta = entry.get("_ass") if isinstance(entry.get("_ass"), dict) else {}
+        is_lyric = (
+            meta.get("reason") == "lyrics"
+            or meta.get("kind") == "lyrics"
+            or bool(_SONG_STYLE_RE.search(meta.get("style") or ""))
+        )
+        if not is_lyric:
+            continue
+
+        existing = (entry.get("translations") or {}).get(target_lang_code) or entry.get("translated") or ""
+        if existing.strip():
+            continue
+
+        orig = _norm_lyric(entry.get("original", ""))
+        translation = memory.get(orig) or memory.get(orig.casefold())
+        if translation:
+            entry["translated"] = translation
+            entry.setdefault("translations", {})[target_lang_code] = translation
+            entry["from_lyrics_memory"] = True
+            applied += 1
+
+    return applied
+
+
+def record_song_lyrics_memory(
+    entries: List[Dict],
+    project_meta: Dict,
+    target_lang_code: str = "el",
+) -> bool:
+    """Store translated song lyrics in project metadata for reuse across episodes."""
+    if project_meta is None or not entries:
+        return False
+
+    memory = project_meta.setdefault("song_lyrics_memory", {})
+    modified = False
+
+    for entry in entries:
+        meta = entry.get("_ass") if isinstance(entry.get("_ass"), dict) else {}
+        is_lyric = (
+            meta.get("reason") == "lyrics"
+            or meta.get("kind") == "lyrics"
+            or bool(_SONG_STYLE_RE.search(meta.get("style") or ""))
+        )
+        if not is_lyric:
+            continue
+
+        trans = (entry.get("translations") or {}).get(target_lang_code) or entry.get("translated") or ""
+        orig = _norm_lyric(entry.get("original", ""))
+        if trans.strip() and orig:
+            if memory.get(orig) != trans.strip():
+                memory[orig] = trans.strip()
+                modified = True
+
+    return modified
+
+

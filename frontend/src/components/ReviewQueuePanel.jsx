@@ -173,10 +173,24 @@ const ReviewQueuePanel = ({ projectName }) => {
         }
     };
 
-    const handleLocalLineUpdate = (lineIndex, newText) => {
-        setQueue(prev => prev.map(item => 
-            item.index === lineIndex ? { ...item, translated: newText } : item
-        ));
+    const handleLocalLineUpdate = (arg1, arg2, arg3, arg4) => {
+        let episodeName, lineIndex, newText, projectName;
+        if (typeof arg1 === 'string' && typeof arg2 === 'number') {
+            episodeName = arg1;
+            lineIndex = arg2;
+            newText = arg3;
+            projectName = arg4;
+        } else {
+            lineIndex = arg1;
+            newText = arg2;
+        }
+
+        setQueue(prev => prev.map(item => {
+            const matchesIndex = item.index === lineIndex;
+            const matchesEp = !episodeName || item.episode === episodeName;
+            const matchesProj = !projectName || !item.project_name || item.project_name === projectName;
+            return (matchesIndex && matchesEp && matchesProj) ? { ...item, translated: newText } : item;
+        }));
     };
 
     const handleAcceptSuggestion = async (sug) => {
@@ -331,7 +345,7 @@ const ReviewQueuePanel = ({ projectName }) => {
                                                         )));
                                                         setActiveIndex(prev => Math.max(0, Math.min(displayedQueue.length - 2, prev)));
                                                     }}
-                                                    onUpdateLineText={handleLocalLineUpdate}
+                                                    onUpdateLineText={(lineIdx, newTxt) => handleLocalLineUpdate(item.episode, lineIdx, newTxt, item.project_name || effectiveProject)}
                                                     onSkip={() => setActiveIndex(prev => Math.min(displayedQueue.length - 1, prev + 1))}
                                                 />
                                             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
 import { ArrowLeft, Sparkles, Languages, RefreshCw, RotateCcw, Trash2, X, Wand2, BookOpen } from 'lucide-react';
@@ -10,6 +10,7 @@ import TermHarvestModal from './TermHarvestModal';
 
 const EpisodeView = () => {
     const { projectName, episodeName } = useParams();
+    const navigate = useNavigate();
     const { addJob, activeJobs } = useJobs();
     const toast = useToast();
     const [data, setData] = useState([]);
@@ -55,10 +56,16 @@ const EpisodeView = () => {
     const primaryLangCode = getLangCode(primaryLang);
 
     const editorData = useMemo(() => {
-        return (data || []).map(item => ({
-            ...item,
-            translated: item.translations?.[activeLangCode] || (activeLangCode === primaryLangCode ? item.translated : '') || ''
-        }));
+        return (data || []).map(item => {
+            const resolvedText = item.translations?.[activeLangCode] || (activeLangCode === primaryLangCode ? item.translated : '') || '';
+            if (item.translated === resolvedText) {
+                return item;
+            }
+            return {
+                ...item,
+                translated: resolvedText
+            };
+        });
     }, [data, activeLangCode, primaryLangCode]);
 
     const handleEditorDataUpdate = (updatedEditorData) => {
@@ -75,6 +82,7 @@ const EpisodeView = () => {
                 needs_review: updatedItem.needs_review,
                 review_issues: updatedItem.review_issues,
                 review_scores: updatedItem.review_scores,
+                previous_translated: updatedItem.previous_translated !== undefined ? updatedItem.previous_translated : item.previous_translated,
             };
 
             if (activeLangCode === primaryLangCode) {
@@ -86,32 +94,55 @@ const EpisodeView = () => {
         setDirty(true);
     };
 
+    // Guard page unload when unsaved changes exist
+    useEffect(() => {
+        const handleBeforeUnload = (e) => {
+            if (dirty) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [dirty]);
+
+    const handleSwitchEpisode = (targetEp) => {
+        if (!targetEp || targetEp === episodeName) return;
+        if (dirty && !window.confirm("You have unsaved changes in this episode. Discard changes and switch episodes?")) {
+            return;
+        }
+        navigate(`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(targetEp)}`);
+    };
+
     useEffect(() => {
         etagRef.current = null; // switching episodes — the old ETag doesn't apply
         loadData();
     }, [projectName, episodeName]);
 
     // Watch for completed translation jobs
-    const completedJobId = useMemo(() => {
+    const completedJob = useMemo(() => {
         const jobs = Object.values(activeJobs);
-        const completed = jobs.find(job =>
+        return jobs.find(job =>
             job.status === 'completed' &&
             ['translate_episode', 'batch_translate', 'auto_translate', 'pipeline', 'retranslate_compare', 'retranslate_invalidated'].includes(job.type) &&
             (job.metadata?.episodeName === episodeName || job.metadata?.projectId === projectName)
         );
-        return completed ? completed.id : null;
     }, [activeJobs, episodeName, projectName]);
 
     useEffect(() => {
-        if (completedJobId && !handledJobsRef.current.has(completedJobId)) {
+        if (completedJob && !handledJobsRef.current.has(completedJob.id)) {
             if (!dirtyRef.current) {
+                etagRef.current = null;
                 loadData();
+                if (completedJob.type === 'retranslate_compare') {
+                    toast.success("Retranslation applied! Use 'Revert' on any row to restore previous text.");
+                }
             } else {
                 toast.info("Translation job finished. Save changes to load the updated translation.");
             }
-            handledJobsRef.current.add(completedJobId);
+            handledJobsRef.current.add(completedJob.id);
         }
-    }, [completedJobId]);
+    }, [completedJob]);
 
     // Live View Polling: Fetch data progressively while any translation job is running in this project
     const isTranslating = useMemo(() => {
@@ -288,6 +319,11 @@ const EpisodeView = () => {
                 ? 'line count unchanged'
                 : delta > 0 ? `+${delta} line${delta !== 1 ? 's' : ''}` : `${delta} line${delta !== -1 ? 's' : ''}`;
             toast.success(`Applied SubtitleEdit fixes to ${label}: ${s.before ?? '?'} → ${s.after ?? '?'} (${deltaMsg})`);
+            if (res.data?.etag) {
+                etagRef.current = res.data.etag;
+            } else {
+                etagRef.current = null;
+            }
             await loadData();
         } catch (err) {
             console.error('Failed to apply SubtitleEdit fixes', err);
@@ -299,8 +335,9 @@ const EpisodeView = () => {
 
     const handleClear = async () => {
         if (!window.confirm(`Clear translation for ${episodeName}?`)) return;
+        const deleteDiskFile = window.confirm(`Also delete the detected .el.srt / .el.ass file from disk?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
         try {
-            await api.clearTranslation(projectName, episodeName);
+            await api.deleteEpisodeTranslation(projectName, episodeName, deleteDiskFile);
             toast.success(`Translation cleared`);
             loadData();
         } catch (err) {
@@ -355,6 +392,9 @@ const EpisodeView = () => {
         setProcessing(true);
         try {
             const res = await api.saveEpisode(projectName, episodeName, payload);
+            if (res.data?.etag) {
+                etagRef.current = res.data.etag;
+            }
             const exportedPath = res.data?.exported_path;
             if (exportedPath) {
                 const filename = exportedPath.split(/[\\/]/).pop();
@@ -438,11 +478,32 @@ const EpisodeView = () => {
             <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex flex-col gap-2 shrink-0">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <Link to={`/project/${encodeURIComponent(projectName)}`} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
+                        <Link
+                            to={`/project/${encodeURIComponent(projectName)}`}
+                            onClick={(e) => {
+                                if (dirty && !window.confirm("You have unsaved changes in this episode. Discard changes and leave?")) {
+                                    e.preventDefault();
+                                }
+                            }}
+                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                        >
                             <ArrowLeft size={20} />
                         </Link>
                         <div>
-                            <h1 className="text-lg font-bold text-gray-900 dark:text-white">{episodeName}</h1>
+                            {project?.episodes && project.episodes.length > 1 ? (
+                                <select
+                                    value={episodeName}
+                                    onChange={(e) => handleSwitchEpisode(e.target.value)}
+                                    className="text-lg font-bold text-gray-900 dark:text-white bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    {project.episodes.map(ep => {
+                                        const epN = typeof ep === 'string' ? ep : ep.name;
+                                        return <option key={epN} value={epN} className="dark:bg-gray-800 text-sm font-normal">{epN}</option>;
+                                    })}
+                                </select>
+                            ) : (
+                                <h1 className="text-lg font-bold text-gray-900 dark:text-white">{episodeName}</h1>
+                            )}
                             <p className="text-sm text-gray-500 dark:text-gray-400">{project?.show_name}</p>
                         </div>
                         {targetLanguages.length > 1 && (

@@ -24,7 +24,14 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple
 
-from utils.ass_parser import refresh_passthrough, is_untranslatable_text, _srt_timecode_to_ms, _SONG_STYLE_RE
+from utils.ass_parser import (
+    refresh_passthrough,
+    is_untranslatable_text,
+    _srt_timecode_to_ms,
+    _SONG_STYLE_RE,
+    apply_song_lyrics_memory,
+    record_song_lyrics_memory,
+)
 
 PLAN_VERSION = 2
 WORK_FILE = "translation.txt"
@@ -131,23 +138,28 @@ def build_units(
     target_code: str,
     is_primary: bool = True,
     full: bool = False,
+    project_meta: Optional[Dict] = None,
+    translate_lyrics: Optional[bool] = None,
 ) -> Tuple[List[Unit], Dict[str, int]]:
     """Group an episode's cues into the units an agent has to translate.
 
-    * Karaoke, vector drawings, song-lyric styles (OP/ED), blank cues and cues
-      without a single letter ("♪", "...") are skipped — they export as authored.
-    * Signs are merged by text across the whole episode (typesetters redraw one
-      sign on every frame); dialogue only merges exact layer duplicates (same
-      text, same timing) so "Are you ready?" can still agree with a different
-      listener each time it is said.
-    * ``full=False`` keeps only units whose cues lack a real translation — so a
-      translated episode only asks for its missing lines and signs.
-
-    ``cues`` is refreshed in place with the current karaoke rules (so a later save
-    persists the reclassification). Returns the units (ids 1..N, dialogue first)
-    and counts for the brief.
+    * Karaoke, vector drawings, blank cues and cues without a single letter ("♪", "...")
+      are skipped — they export as authored.
+    * When ``translate_lyrics`` is False, song lyrics (OP/ED/insert songs) are also skipped.
+      When True (default), readable song lyrics are included for translation.
+    * Signs are merged by text across the whole episode; dialogue only merges exact layer
+      duplicates (same text, same timing).
+    * ``full=False`` keeps only units whose cues lack a real translation.
     """
     refresh_passthrough(cues)
+
+    if translate_lyrics is None:
+        if project_meta:
+            translate_lyrics = project_meta.get("settings", {}).get(
+                "translate_lyrics", project_meta.get("translate_lyrics", True)
+            )
+        else:
+            translate_lyrics = True
 
     groups: Dict[tuple, Unit] = {}
     order: List[tuple] = []
@@ -155,11 +167,22 @@ def build_units(
     for i, cue in enumerate(cues):
         meta = cue.get("_ass") if isinstance(cue.get("_ass"), dict) else {}
         text = (cue.get("original") or "").strip()
-        # Song lyrics (OP/ED/insert-song styles) are typesetting, like karaoke: left as authored.
-        if (meta.get("translatable") is False or not text or not _has_letters(text) or is_untranslatable_text(text)
-                or _SONG_STYLE_RE.search(meta.get("style") or "")):
-            passthrough += 1
-            continue
+        is_song = (
+            bool(_SONG_STYLE_RE.search(meta.get("style") or ""))
+            or meta.get("kind") == "lyrics"
+            or meta.get("reason") == "lyrics"
+        )
+
+        if is_song and translate_lyrics:
+            if meta.get("kind") in ("karaoke", "drawing") or not text or not _has_letters(text) or is_untranslatable_text(text):
+                passthrough += 1
+                continue
+        else:
+            if (meta.get("translatable") is False or not text or not _has_letters(text) or is_untranslatable_text(text)
+                    or is_song):
+                passthrough += 1
+                continue
+
         kind = "sign" if meta.get("kind") == "sign" else "dialogue"
         start, end = _cue_times(cue)
         if kind == "sign":
@@ -195,6 +218,19 @@ def build_units(
         "already_translated_units": len(all_units) - len(needed),
     }
     return needed, stats
+
+
+def build_workspace(
+    cues: List[Dict],
+    project_meta: Dict,
+    target_code: str = "el",
+    is_primary: bool = True,
+    full: bool = False,
+) -> Tuple[List[Unit], Dict[str, int]]:
+    """Pre-fills recurring lyrics from memory, then groups cues into translation units."""
+    apply_song_lyrics_memory(cues, project_meta, target_code)
+    return build_units(cues, target_code, is_primary=is_primary, full=full, project_meta=project_meta)
+
 
 
 def source_fingerprint(cues: List[Dict], units: List[Unit]) -> str:

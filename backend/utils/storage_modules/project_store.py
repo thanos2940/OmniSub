@@ -5,15 +5,35 @@ Project Metadata, Universe Inheritance, and Hierarchy Resolution.
 import json
 import logging
 import shutil
+import threading
 from typing import List, Dict, Optional
 
-from utils.storage_modules.atomic_io import _safe_project_dir, ensure_projects_dir, _get_projects_dir
+from utils.storage_modules.atomic_io import (
+    _safe_project_dir,
+    ensure_projects_dir,
+    _get_projects_dir,
+    write_json_atomic as _atomic_write_json,
+)
 from utils.storage_modules.config_store import load_global_config
 import utils.paths as paths
 
 PROJECTS_DIR = paths.PROJECTS_DIR
 
 logger = logging.getLogger(__name__)
+
+_project_locks = {}
+_project_locks_lock = threading.Lock()
+
+
+def _get_project_lock(project_name: str) -> threading.RLock:
+    """Return a per-project threading.RLock for thread-safe metadata operations."""
+    with _project_locks_lock:
+        if project_name not in _project_locks:
+            _project_locks[project_name] = threading.RLock()
+        return _project_locks[project_name]
+
+
+get_project_lock = _get_project_lock
 
 # The exact prefix load_resolved_project_metadata appends when merging a parent's
 # context into a child. Single source of truth so the strip helper can't drift from
@@ -101,11 +121,11 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
 def load_project_metadata(project_name: str) -> Optional[Dict]:
     """Load project metadata from JSON file."""
     project_file = _safe_project_dir(project_name) / "project.json"
-    if not project_file.exists():
-        return None
-    
-    with open(project_file, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    with _get_project_lock(project_name):
+        if not project_file.exists():
+            return None
+        with open(project_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
 
 
 def load_resolved_project_metadata(project_name: str, _seen: Optional[set] = None) -> Dict:
@@ -243,12 +263,12 @@ def get_descendant_projects(project_name: str) -> List[str]:
 
 
 def save_project_metadata(project_name: str, metadata: Dict) -> None:
-    """Save project metadata to JSON file."""
+    """Save project metadata to JSON file under project lock atomically."""
     from utils.storage_modules.stats_and_index import invalidate_arr_library_cache
     invalidate_arr_library_cache()
-    project_file = _safe_project_dir(project_name) / "project.json"
-    with open(project_file, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2, ensure_ascii=False)
+    metadata_path = _safe_project_dir(project_name) / "project.json"
+    with _get_project_lock(project_name):
+        _atomic_write_json(metadata_path, metadata)
 
 
 def delete_project(project_name: str) -> bool:

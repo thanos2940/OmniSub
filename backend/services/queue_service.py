@@ -239,3 +239,28 @@ def enqueue_webhook_episode(project_name: str, episode_name: str, delay_seconds:
         if item_id:
             enqueued_ids.append(item_id)
     return enqueued_ids
+
+
+def postpone_item(item_id: Union[str, int]) -> bool:
+    """Postpone a queued, pending, or failed queue item."""
+    return get_queue().postpone_item(item_id)
+
+
+def continue_item(item_id: Union[str, int], boost_priority: bool = True) -> bool:
+    """Continue a postponed or queued item, optionally boosting its priority to 10."""
+    res = get_queue().continue_item(item_id, boost_priority=boost_priority)
+    if res:
+        _wake_worker()
+        _wake_runner()
+    return res
+
+
+def stop_item(item_id: Union[str, int]) -> bool:
+    """Stop/cancel a queue item and abort any running worker job."""
+    return get_queue().stop_item(item_id)
+
+
+def list_queue_items(limit: int = 100, work_types: Optional[Union[tuple, list, str]] = None) -> List[Dict]:
+    """Retrieve queue items with full visibility across work types."""
+    return get_queue().get_all(limit=limit, work_types=work_types, include_all_kinds=True)
+

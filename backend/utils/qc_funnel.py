@@ -239,21 +239,17 @@ async def run_repair_pass(
         return 0
 
     from adk_agents.llm_factory import generate
-    from utils.api_call_wrapper import rate_limited_call
     from utils.llm_utils import parse_translations_from_text, strip_reasoning_blocks
 
     prompt = build_repair_prompt(parsed_srt, tickets, target_lang_code, target_lang_name)
 
-    async def _call():
-        return await generate(
-            model_name=model_name,
-            prompt=prompt,
-            system_instruction=f"You are a meticulous {target_lang_name} subtitle corrector.",
-            temperature=0.2,
-            role="repair",
-        )
-
-    response = await rate_limited_call(_call, rate_limiter=rate_limiter)
+    response = await generate(
+        model_name=model_name,
+        prompt=prompt,
+        system_instruction=f"You are a meticulous {target_lang_name} subtitle corrector.",
+        temperature=0.2,
+        role="repair",
+    )
     parsed = parse_translations_from_text(strip_reasoning_blocks(response or ""))
 
     by_item = {p["index"]: p["text"] for p in parsed}

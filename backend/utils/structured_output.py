@@ -5,7 +5,7 @@ Structured JSON output schema and parsing logic for translator agent (Plan 18).
 import json
 import re
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from utils.llm_utils import strip_reasoning_blocks, parse_translations_from_text
 from utils.text_normalize import sanitize_translation_text
@@ -144,6 +144,7 @@ def _fix_line_count_mismatch(results: List[Dict[str, Any]], expected_count: int)
                     "index": item["index"],
                     "text": current_text + separator + next_text,
                     "src_head": item.get("src_head", ""),
+                    "source_text": item.get("source_text") or item.get("src_head", ""),
                 })
                 skip_next = True
                 merges_done += 1
@@ -260,7 +261,7 @@ def parse_structured(text: str, expected_count: int = 0) -> List[Dict[str, Any]]
                 elif "target" in lower_keys:
                     translated_text = lower_keys["target"]
 
-                src_head = lower_keys.get("s") or lower_keys.get("src") or lower_keys.get("source") or ""
+                src_head = lower_keys.get("s") or lower_keys.get("src") or lower_keys.get("source") or lower_keys.get("source_text") or ""
                 if idx is not None and translated_text is not None:
                     try:
                         clean_text = sanitize_translation_text(
@@ -271,6 +272,7 @@ def parse_structured(text: str, expected_count: int = 0) -> List[Dict[str, Any]]
                             "index": int(idx),
                             "text": clean_text,
                             "src_head": str(src_head),
+                            "source_text": str(src_head),
                         })
                     except ValueError:
                         continue
@@ -283,3 +285,40 @@ def parse_structured(text: str, expected_count: int = 0) -> List[Dict[str, Any]]
     # Fallback to standard text parser
     fallback = parse_translations_from_text(text)
     return _fix_line_count_mismatch(fallback, expected_count) if expected_count > 0 else fallback
+
+
+def parse_translation_response(
+    raw_text: str,
+    expected_indices: Optional[Any] = None,
+    verify_echo: bool = False,
+    source_lines: Optional[List[Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Parse raw translation response text with optional echo verification.
+
+    Args:
+        raw_text: Model output text (JSON or plain text).
+        expected_indices: List of expected indices, or expected count integer.
+        verify_echo: If True and source_lines provided, drops or flags mismatched items.
+        source_lines: Source line texts for echo verification.
+    """
+    expected_count = 0
+    if isinstance(expected_indices, int):
+        expected_count = expected_indices
+    elif expected_indices is not None:
+        try:
+            expected_count = len(expected_indices)
+        except Exception:
+            expected_count = 0
+
+    parsed = parse_structured(raw_text, expected_count=expected_count)
+
+    if verify_echo and source_lines:
+        from utils.alignment_audit import filter_by_source_echo
+        src_texts = [
+            s.get("original", "") if isinstance(s, dict) else str(s)
+            for s in source_lines
+        ]
+        kept, dropped = filter_by_source_echo(parsed, src_texts)
+        return kept
+
+    return parsed

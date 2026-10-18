@@ -4,14 +4,18 @@ Global Configuration and Project Setting Resolution.
 
 import json
 import logging
+import threading
 from pathlib import Path
 from typing import Dict, Optional, Any
 
 import utils.paths as paths
+from utils.storage_modules.atomic_io import write_json_atomic as _atomic_write_json
 
 logger = logging.getLogger(__name__)
 
 _config_defaults_cache: Optional[Dict] = None
+_config_lock = threading.RLock()
+GLOBAL_CONFIG: Dict[str, Any] = {}
 
 
 def _get_config_file() -> Path:
@@ -51,22 +55,62 @@ def _load_raw_config() -> Dict:
         return {}
 
 
+def load_config_and_state() -> Dict[str, Any]:
+    """Load configuration from disk into memory and sync state/keys."""
+    global GLOBAL_CONFIG
+    with _config_lock:
+        GLOBAL_CONFIG.clear()
+        GLOBAL_CONFIG.update(_load_raw_config())
+        try:
+            import os
+            from routers.settings import get_api_key
+            key = get_api_key()
+            if key and not os.environ.get("GOOGLE_API_KEY"):
+                os.environ["GOOGLE_API_KEY"] = key
+        except Exception:
+            pass
+        try:
+            from utils.rate_limiter import per_model_rate_limiter
+            per_model_rate_limiter.load_config_and_state()
+        except Exception:
+            pass
+        return GLOBAL_CONFIG
+
+
 def load_global_config() -> Dict:
     """Load global configuration: schema defaults overlaid with on-disk values.
 
     Guarantees every known setting is present with its canonical default, so callers
     don't need to repeat inline defaults.
     """
-    return {**_config_defaults(), **_load_raw_config()}
+    with _config_lock:
+        raw = _load_raw_config()
+        GLOBAL_CONFIG.clear()
+        GLOBAL_CONFIG.update(raw)
+        return {**_config_defaults(), **raw}
 
 
-def save_global_config(config: Dict) -> None:
-    """Merge ``config`` into the on-disk config (defaults are not persisted)."""
-    current = _load_raw_config()
-    current.update(config)
+def save_global_config(new_config: Dict) -> None:
+    """Merge new_config into GLOBAL_CONFIG and save atomically under lock."""
+    global GLOBAL_CONFIG
     cfg_file = _get_config_file()
-    with open(cfg_file, 'w', encoding='utf-8') as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
+    with _config_lock:
+        current = _load_raw_config()
+        current.update(new_config)
+        GLOBAL_CONFIG.clear()
+        GLOBAL_CONFIG.update(current)
+        _atomic_write_json(cfg_file, GLOBAL_CONFIG)
+
+
+try:
+    import sys
+    _mod = sys.modules.get("utils.storage")
+    if _mod is not None:
+        setattr(_mod, "GLOBAL_CONFIG", GLOBAL_CONFIG)
+        setattr(_mod, "load_config_and_state", load_config_and_state)
+        setattr(_mod, "_config_lock", _config_lock)
+except Exception:
+    pass
 
 
 def get_project_setting(metadata: Dict, key: str, default_val=None) -> Any:

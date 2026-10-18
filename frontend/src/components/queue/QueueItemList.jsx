@@ -43,6 +43,8 @@ const QueueItemList = ({
     const getStatusIcon = (status) => {
         switch (status) {
             case 'pending': return <Clock className="text-blue-500" size={16} />;
+            case 'queued': return <Clock className="text-sky-500" size={16} />;
+            case 'postponed': return <Pause className="text-amber-500" size={16} />;
             case 'running': return <Activity className="text-amber-500 animate-pulse" size={16} />;
             case 'completed': return <CheckCircle2 className="text-emerald-500" size={16} />;
             case 'failed': return <AlertTriangle className="text-rose-500" size={16} />;
@@ -56,6 +58,8 @@ const QueueItemList = ({
         const base = "px-2 py-0.5 text-xs font-semibold rounded-full flex items-center gap-1.5 w-fit";
         switch (status) {
             case 'pending': return <span className={`${base} bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400`}>{getStatusIcon(status)} Pending</span>;
+            case 'queued': return <span className={`${base} bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400`}>{getStatusIcon(status)} Queued</span>;
+            case 'postponed': return <span className={`${base} bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400`}>{getStatusIcon(status)} Postponed</span>;
             case 'running': return <span className={`${base} bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 animate-pulse`}>{getStatusIcon(status)} Running</span>;
             case 'completed': return <span className={`${base} bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400`}>{getStatusIcon(status)} Completed</span>;
             case 'completed_flagged': return <span className={`${base} bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400`} title="Completed, but some lines need review"><AlertTriangle size={14} /> Needs review</span>;
@@ -63,6 +67,22 @@ const QueueItemList = ({
             case 'paused_daily_limit': return <span className={`${base} bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-500`}>{getStatusIcon(status)} Rate Paused</span>;
             case 'cancelled': return <span className={`${base} bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-450`}>{getStatusIcon(status)} Cancelled</span>;
             default: return <span className={`${base} bg-gray-50 text-gray-700`}>{getStatusIcon(status)} {status}</span>;
+        }
+    };
+
+    const getWorkTypeBadge = (workType) => {
+        const base = "px-1.5 py-0.5 text-[10px] font-semibold rounded uppercase tracking-wider border flex items-center gap-1 w-fit";
+        const type = (workType || 'translation').toLowerCase();
+        switch (type) {
+            case 'extraction':
+                return <span className={`${base} bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800/40`} title="Subtitle Extraction"><FileText size={10} /> Extraction</span>;
+            case 'export_retry':
+                return <span className={`${base} bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800/40`} title="Export Retry"><Folder size={10} /> Export Retry</span>;
+            case 'retranslate':
+                return <span className={`${base} bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800/40`} title="Retranslation"><Sparkles size={10} /> Retranslate</span>;
+            case 'translation':
+            default:
+                return <span className={`${base} bg-slate-50 text-slate-600 border-slate-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700`} title="Translation">Translation</span>;
         }
     };
 
@@ -90,6 +110,7 @@ const QueueItemList = ({
 
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [bulkProcessing, setBulkProcessing] = useState(false);
+    const [workTypeFilter, setWorkTypeFilter] = useState('all');
     const [preparingAgentId, setPreparingAgentId] = useState(null);
     const [agentModalData, setAgentModalData] = useState(null);
     const [copiedField, setCopiedField] = useState(null);
@@ -121,14 +142,26 @@ const QueueItemList = ({
     };
 
     const filteredItems = items.filter(item => {
-        const isActive = ['pending', 'running', 'paused_daily_limit'].includes(item.status);
-        return activeTab === 'active' ? isActive : !isActive;
+        let matchesTab = false;
+        if (activeTab === 'active') {
+            matchesTab = ['pending', 'queued', 'running', 'paused_daily_limit'].includes(item.status);
+        } else if (activeTab === 'postponed') {
+            matchesTab = item.status === 'postponed';
+        } else {
+            matchesTab = !['pending', 'queued', 'running', 'paused_daily_limit', 'postponed'].includes(item.status);
+        }
+        if (!matchesTab) return false;
+        if (workTypeFilter !== 'all') {
+            const itemType = (item.work_type || item.kind || 'translation').toLowerCase();
+            return itemType === workTypeFilter;
+        }
+        return true;
     });
 
-    // Clear selection when tab changes
+    // Clear selection when tab or filter changes
     useEffect(() => {
         setSelectedIds(new Set());
-    }, [activeTab]);
+    }, [activeTab, workTypeFilter]);
 
     const allSelected = filteredItems.length > 0 && filteredItems.every(i => selectedIds.has(i.id));
     const someSelected = filteredItems.length > 0 && filteredItems.some(i => selectedIds.has(i.id));
@@ -151,7 +184,7 @@ const QueueItemList = ({
     };
 
     const handleBulkPrioritize = async () => {
-        const targets = filteredItems.filter(i => selectedIds.has(i.id) && ['pending', 'failed', 'paused_daily_limit'].includes(i.status) && i.priority > 0);
+        const targets = filteredItems.filter(i => selectedIds.has(i.id) && ['pending', 'queued', 'failed', 'paused_daily_limit'].includes(i.status) && i.priority > 0);
         if (targets.length === 0) {
             toast.info("No prioritizable tasks selected");
             return;
@@ -172,6 +205,87 @@ const QueueItemList = ({
             if (onRefresh) onRefresh();
         } catch (err) {
             toast.error("Failed to prioritize tasks");
+        } finally {
+            setBulkProcessing(false);
+        }
+    };
+
+    const handleBulkContinue = async () => {
+        const targets = filteredItems.filter(i => selectedIds.has(i.id) && ['pending', 'queued', 'postponed', 'paused_daily_limit', 'failed'].includes(i.status));
+        if (targets.length === 0) {
+            toast.info("No resumable tasks selected");
+            return;
+        }
+        setBulkProcessing(true);
+        try {
+            const results = await Promise.allSettled(targets.map(t => api.continueQueueItem(t.id, true)));
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (succeeded > 0 && failed === 0) {
+                toast.success(`Resumed and prioritized ${succeeded} task(s)`);
+            } else if (succeeded > 0 && failed > 0) {
+                toast.warning(`Resumed ${succeeded} task(s), ${failed} failed`);
+            } else {
+                toast.error(`Failed to resume ${failed} task(s)`);
+            }
+            setSelectedIds(new Set());
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            toast.error("Failed to resume tasks");
+        } finally {
+            setBulkProcessing(false);
+        }
+    };
+
+    const handleBulkPostpone = async () => {
+        const targets = filteredItems.filter(i => selectedIds.has(i.id) && ['pending', 'queued'].includes(i.status));
+        if (targets.length === 0) {
+            toast.info("No postponable tasks selected");
+            return;
+        }
+        setBulkProcessing(true);
+        try {
+            const results = await Promise.allSettled(targets.map(t => api.postponeQueueItem(t.id)));
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (succeeded > 0 && failed === 0) {
+                toast.success(`Postponed ${succeeded} task(s)`);
+            } else if (succeeded > 0 && failed > 0) {
+                toast.warning(`Postponed ${succeeded} task(s), ${failed} failed`);
+            } else {
+                toast.error(`Failed to postpone ${failed} task(s)`);
+            }
+            setSelectedIds(new Set());
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            toast.error("Failed to postpone tasks");
+        } finally {
+            setBulkProcessing(false);
+        }
+    };
+
+    const handleBulkStop = async () => {
+        const targets = filteredItems.filter(i => selectedIds.has(i.id) && ['running', 'pending', 'queued', 'postponed'].includes(i.status));
+        if (targets.length === 0) {
+            toast.info("No stoppable tasks selected");
+            return;
+        }
+        setBulkProcessing(true);
+        try {
+            const results = await Promise.allSettled(targets.map(t => api.stopQueueItem(t.id)));
+            const succeeded = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+            if (succeeded > 0 && failed === 0) {
+                toast.success(`Stopped ${succeeded} task(s)`);
+            } else if (succeeded > 0 && failed > 0) {
+                toast.warning(`Stopped ${succeeded} task(s), ${failed} failed`);
+            } else {
+                toast.error(`Failed to stop ${failed} task(s)`);
+            }
+            setSelectedIds(new Set());
+            if (onRefresh) onRefresh();
+        } catch (err) {
+            toast.error("Failed to stop tasks");
         } finally {
             setBulkProcessing(false);
         }
@@ -253,13 +367,14 @@ const QueueItemList = ({
         }
     };
 
-    const activeCount = items.filter(i => ['pending', 'running', 'paused_daily_limit'].includes(i.status)).length;
-    const historyCount = items.filter(i => !['pending', 'running', 'paused_daily_limit'].includes(i.status)).length;
+    const activeCount = items.filter(i => ['pending', 'queued', 'running', 'paused_daily_limit'].includes(i.status)).length;
+    const postponedCount = items.filter(i => i.status === 'postponed').length;
+    const historyCount = items.filter(i => !['pending', 'queued', 'running', 'paused_daily_limit', 'postponed'].includes(i.status)).length;
 
     return (
         <div className="bg-white dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-3xl overflow-hidden shadow-sm">
-            <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex items-center justify-between">
-                <div className="flex gap-2">
+            <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-2">
                     <button 
                         type="button"
                         onClick={() => setActiveTab('active')}
@@ -273,6 +388,17 @@ const QueueItemList = ({
                     </button>
                     <button 
                         type="button"
+                        onClick={() => setActiveTab('postponed')}
+                        className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
+                            activeTab === 'postponed' 
+                                ? 'bg-amber-600 text-white shadow-sm' 
+                                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        }`}
+                    >
+                        Postponed ({postponedCount})
+                    </button>
+                    <button 
+                        type="button"
                         onClick={() => setActiveTab('history')}
                         className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors ${
                             activeTab === 'history' 
@@ -282,6 +408,20 @@ const QueueItemList = ({
                     >
                         History ({historyCount})
                     </button>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Work Type:</span>
+                    <select
+                        value={workTypeFilter}
+                        onChange={(e) => setWorkTypeFilter(e.target.value)}
+                        className="text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-gray-700 dark:text-gray-300 font-medium focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                    >
+                        <option value="all">All Types</option>
+                        <option value="translation">Translation</option>
+                        <option value="extraction">Extraction</option>
+                        <option value="export_retry">Export Retry</option>
+                        <option value="retranslate">Retranslate</option>
+                    </select>
                 </div>
             </div>
 
@@ -326,7 +466,10 @@ const QueueItemList = ({
                                         />
                                     </td>
                                     <td className="px-4 py-4 font-medium">
-                                        <div className="text-gray-900 dark:text-white font-bold">{item.project_name}</div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-900 dark:text-white font-bold">{item.project_name}</span>
+                                            {getWorkTypeBadge(item.work_type || item.kind)}
+                                        </div>
                                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{item.episode_name}</div>
                                     </td>
                                     <td className="px-6 py-4">
@@ -438,7 +581,7 @@ const QueueItemList = ({
                                     <td className="px-6 py-4">{getPriorityBadge(item.priority)}</td>
                                     <td className="px-6 py-4 font-semibold text-gray-500 dark:text-gray-400">{item.attempts} / 5</td>
                                     <td className="px-6 py-4 text-xs font-semibold">
-                                        {item.status === 'pending' && item.next_retry_at ? (
+                                        {['pending', 'queued'].includes(item.status) && item.next_retry_at ? (
                                             <span className="text-amber-600 dark:text-amber-500 flex items-center gap-1">
                                                 <Clock size={12} /> {getCountdown(item.next_retry_at)}
                                             </span>
@@ -493,7 +636,7 @@ const QueueItemList = ({
                                                     <X size={16} />
                                                 </button>
                                             )}
-                                            {['pending', 'failed', 'paused_daily_limit'].includes(item.status) && item.priority > 0 && (
+                                            {['pending', 'queued', 'failed', 'paused_daily_limit'].includes(item.status) && item.priority > 0 && (
                                                 <button
                                                     type="button"
                                                     onClick={() => onAction(api.prioritizeQueueItem, item.id, "Bumped task priority")}
@@ -503,22 +646,32 @@ const QueueItemList = ({
                                                     <ArrowUp size={16} />
                                                 </button>
                                             )}
-                                            {['pending', 'failed', 'paused_daily_limit'].includes(item.status) && (
+                                            {['pending', 'queued', 'postponed', 'paused_daily_limit', 'failed'].includes(item.status) && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => onAction(api.retryQueueItem, item.id, "Forced queue item retry")}
-                                                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-750 text-emerald-600 rounded-lg transition-colors"
-                                                    title="Retry now"
+                                                    onClick={() => onAction((id) => api.continueQueueItem(id, true), item.id, "Resumed and prioritized task")}
+                                                    className="p-1.5 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-lg transition-colors"
+                                                    title="Continue / Run Now"
                                                 >
                                                     <Play size={16} />
                                                 </button>
                                             )}
-                                            {['pending', 'running', 'failed', 'paused_daily_limit'].includes(item.status) && (
+                                            {['pending', 'queued'].includes(item.status) && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => onAction(api.cancelQueueItem, item.id, "Cancelled queue task")}
-                                                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-750 text-rose-500 rounded-lg transition-colors"
-                                                    title="Cancel task"
+                                                    onClick={() => onAction(api.postponeQueueItem, item.id, "Task postponed")}
+                                                    className="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-lg transition-colors"
+                                                    title="Postpone task"
+                                                >
+                                                    <Pause size={16} />
+                                                </button>
+                                            )}
+                                            {['running', 'pending', 'queued', 'postponed'].includes(item.status) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onAction(api.stopQueueItem, item.id, "Stopped task")}
+                                                    className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 rounded-lg transition-colors"
+                                                    title="Stop / Cancel task"
                                                 >
                                                     <X size={16} />
                                                 </button>
@@ -533,7 +686,7 @@ const QueueItemList = ({
                                                     <Trash2 size={15} />
                                                 </button>
                                             )}
-                                            {!['pending', 'running', 'paused_daily_limit'].includes(item.status) && (
+                                            {!['pending', 'queued', 'running', 'paused_daily_limit', 'postponed'].includes(item.status) && (
                                                 <span className="text-xs text-gray-400">
                                                     {item.status === 'completed' 
                                                         ? formatTimestamp(item.completed_at) 
@@ -566,36 +719,50 @@ const QueueItemList = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                            {activeTab === 'active' && (
+                            {['active', 'postponed'].includes(activeTab) && (
                                 <>
                                     <button
                                         type="button"
-                                        onClick={handleBulkPrioritize}
-                                        disabled={bulkProcessing}
-                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                                        title="Bump priority for selected pending tasks"
-                                    >
-                                        <ArrowUp size={13} /> Prioritize Selected
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={handleBulkRetry}
+                                        onClick={handleBulkContinue}
                                         disabled={bulkProcessing}
                                         className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                                        title="Retry selected pending or failed tasks"
+                                        title="Continue / Run selected tasks"
                                     >
-                                        <Play size={13} /> Retry Selected
+                                        <Play size={13} /> Continue Selected
                                     </button>
+
+                                    {activeTab === 'active' && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={handleBulkPrioritize}
+                                                disabled={bulkProcessing}
+                                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                                                title="Bump priority for selected pending tasks"
+                                            >
+                                                <ArrowUp size={13} /> Prioritize Selected
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                onClick={handleBulkPostpone}
+                                                disabled={bulkProcessing}
+                                                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
+                                                title="Postpone selected pending/queued tasks"
+                                            >
+                                                <Pause size={13} /> Postpone Selected
+                                            </button>
+                                        </>
+                                    )}
 
                                     <button
                                         type="button"
-                                        onClick={handleBulkCancel}
+                                        onClick={handleBulkStop}
                                         disabled={bulkProcessing}
                                         className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                                        title="Cancel selected active tasks"
+                                        title="Stop / Cancel selected active tasks"
                                     >
-                                        <X size={13} /> Cancel Selected
+                                        <X size={13} /> Stop Selected
                                     </button>
                                 </>
                             )}
@@ -603,10 +770,10 @@ const QueueItemList = ({
                             {activeTab === 'history' && (
                                 <button
                                     type="button"
-                                    onClick={handleBulkRetry}
+                                    onClick={handleBulkContinue}
                                     disabled={bulkProcessing}
                                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-all"
-                                    title="Re-enqueue selected history tasks"
+                                    title="Re-run selected history tasks"
                                 >
                                     <Play size={13} /> Re-run Selected
                                 </button>

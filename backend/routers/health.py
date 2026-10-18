@@ -180,14 +180,15 @@ async def full_health() -> Dict[str, Any]:
 
     # Webhooks
     secret = (config.get("webhook_secret") or "").strip()
-    suffix = f"?token={secret}" if secret else ""
     out["webhooks"] = {
         "status": "pass" if secret else "warn",
         "secured": bool(secret),
-        "sonarr_url": f"/api/webhook/sonarr{suffix}",
-        "radarr_url": f"/api/webhook/radarr{suffix}",
+        "webhook_secret_configured": bool(secret),
+        "sonarr_url": "/api/webhook/sonarr",
+        "radarr_url": "/api/webhook/radarr",
         "hint": "" if secret else "No webhook_secret set — Sonarr/Radarr webhooks will be rejected until you set one in Settings.",
     }
+    out["webhook_secret_configured"] = bool(secret)
 
     statuses = [v.get("status") for v in out.values() if isinstance(v, dict)]
     out["overall"] = "fail" if "fail" in statuses else ("warn" if "warn" in statuses else "pass")

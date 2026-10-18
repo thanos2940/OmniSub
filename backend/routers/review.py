@@ -1,7 +1,8 @@
 import asyncio
+import copy
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import re
 
@@ -14,6 +15,40 @@ from utils.language_codes import to_code
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_export_tasks: Dict[Tuple[str, str], asyncio.Task] = {}
+
+
+def _export_latest_episode(project_name: str, episode_name: str) -> Optional[str]:
+    from services.translation.export_formatter import auto_export_translated_subtitle
+    data = storage.load_episode(project_name, episode_name)
+    if not data or not data.get("data"):
+        return None
+    metadata = storage.load_episode_metadata(project_name, episode_name) or {}
+    return auto_export_translated_subtitle(project_name, episode_name, data["data"], metadata, force=True)
+
+
+def _schedule_debounced_review_export(project_name: str, episode_name: str, delay: float = 2.5) -> asyncio.Task:
+    key = (project_name, episode_name)
+    existing_task = _export_tasks.get(key)
+    if existing_task and not existing_task.done():
+        existing_task.cancel()
+
+    async def _debounced():
+        try:
+            await asyncio.sleep(delay)
+            await asyncio.to_thread(_export_latest_episode, project_name, episode_name)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"Debounced export failed for {project_name}/{episode_name}: {e}")
+        finally:
+            if _export_tasks.get(key) is asyncio.current_task():
+                _export_tasks.pop(key, None)
+
+    task = asyncio.create_task(_debounced())
+    _export_tasks[key] = task
+    return task
 
 # The review-queue scan walks every episode's data.json. That's filesystem-heavy on a
 # large library, so it MUST run off the event loop (asyncio.to_thread) and the hot global
@@ -188,7 +223,7 @@ async def resolve_review_item(
     """Mark a review-flagged line as resolved (user has verified it).
 
     Clears the needs_review flag and review metadata for the line.
-    Optionally saves the user-edited translated text at the same time.
+    Optionally saves the user-edited translated text at the same time and records it in TM.
     """
     data = storage.load_episode(project_name, episode_name)
     if not data:
@@ -198,21 +233,27 @@ async def resolve_review_item(
         raise HTTPException(status_code=400, detail="Invalid line index")
 
     line = data["data"][line_index]
+    old_line = copy.deepcopy(line)
+
     line.pop("needs_review", None)
     line.pop("review_issues", None)
     line.pop("review_scores", None)
 
+    proj_meta = storage.load_project_metadata(project_name) or {}
+    primary_lang = proj_meta.get("target_language", "Greek")
+    lang_code = to_code(primary_lang)
+
     # Save the edited translation text if provided
     if translated_text is not None:
         line["translated"] = translated_text
-        # Also update the translations dict for the primary language
-        proj_meta = storage.load_project_metadata(project_name)
-        if proj_meta:
-            primary_lang = proj_meta.get("target_language", "Greek")
-            lang_code = to_code(primary_lang)
-            if "translations" not in line:
-                line["translations"] = {}
-            line["translations"][lang_code] = translated_text
+        if "translations" not in line:
+            line["translations"] = {}
+        line["translations"][lang_code] = translated_text
+
+        old_trans = old_line.get("translations", {}).get(lang_code) or old_line.get("translated") or ""
+        if translated_text.strip() != old_trans.strip():
+            from services.translation.helpers import _record_user_edits
+            _record_user_edits(project_name, episode_name, [old_line], [line], lang=lang_code)
 
     metadata = storage.load_episode_metadata(project_name, episode_name) or {}
     storage.save_episode(project_name, episode_name, data["data"], metadata)
@@ -222,34 +263,33 @@ async def resolve_review_item(
     delivered = False
     output_path = ""
     if not remaining_review:
+        # All resolved: cancel debounced task, mark approved, immediately auto-export
+        key = (project_name, episode_name)
+        existing_task = _export_tasks.pop(key, None)
+        if existing_task and not existing_task.done():
+            existing_task.cancel()
+
         metadata["review_status"] = "approved"
         storage.save_episode(project_name, episode_name, data["data"], metadata)
-        
-        # Deliver if arr source
-        media_path = metadata.get("arr_media_path")
-        if media_path:
-            try:
-                proj_meta = storage.load_project_metadata(project_name)
-                target_lang = proj_meta.get("target_language", "Greek") if proj_meta else "Greek"
-                lang_code = to_code(target_lang)
-                from utils.source_clean import reconstruct_cleaned_srt
-                from utils.language_codes import output_filename_from_original
-                srt_output = reconstruct_cleaned_srt(project_name, episode_name, data["data"], lang_code)
-                
-                # Write next to media file
-                media = Path(media_path)
-                orig_filename = metadata.get("original_filename") or ""
-                ext = Path(orig_filename).suffix
-                if not ext:
-                    _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
-                    ext = f".{ext_sub}" if ext_sub else ".srt"
-                target_filename = output_filename_from_original(f"{media.stem}{ext}", lang_code)
-                out_path = media.parent / target_filename
-                out_path.write_text(srt_output, encoding="utf-8-sig")
+
+        try:
+            from services.translation.export_formatter import auto_export_translated_subtitle
+            out_path = await asyncio.to_thread(
+                auto_export_translated_subtitle,
+                project_name,
+                episode_name,
+                data["data"],
+                metadata,
+                True,
+            )
+            if out_path:
                 output_path = str(out_path)
                 delivered = True
-            except Exception as e:
-                logger.error(f"Failed to deliver approved subtitle: {e}")
+        except Exception as e:
+            logger.error(f"Failed to auto-export approved subtitle: {e}")
+    else:
+        # Still has review items; schedule debounced export
+        _schedule_debounced_review_export(project_name, episode_name, delay=2.5)
 
     _invalidate_global_review_cache()
     return {
@@ -265,10 +305,22 @@ async def resolve_review_item(
 @router.post("/projects/{project_name}/review-queue/resolve-all")
 async def resolve_all_review_items(project_name: str):
     """Mark all review-flagged lines as resolved across all episodes."""
+    from utils import metadata_index
+    from services.translation.export_formatter import auto_export_translated_subtitle
+
     resolved_count = 0
     delivered_episodes = []
-    
-    for ep_name in storage.list_episodes(project_name):
+
+    ep_names = []
+    try:
+        pairs = metadata_index.list_with_review(project_name)
+        ep_names = [ep for proj, ep in pairs if proj == project_name]
+    except Exception:
+        pass
+    if not ep_names:
+        ep_names = storage.list_episodes(project_name)
+
+    for ep_name in ep_names:
         data = storage.load_episode(project_name, ep_name)
         if not data:
             continue
@@ -283,33 +335,28 @@ async def resolve_all_review_items(project_name: str):
                 modified = True
 
         if modified:
+            key = (project_name, ep_name)
+            existing_task = _export_tasks.pop(key, None)
+            if existing_task and not existing_task.done():
+                existing_task.cancel()
+
             metadata = storage.load_episode_metadata(project_name, ep_name) or {}
             metadata["review_status"] = "approved"
             storage.save_episode(project_name, ep_name, data["data"], metadata)
-            
-            # Deliver if arr source
-            media_path = metadata.get("arr_media_path")
-            if media_path:
-                try:
-                    proj_meta = storage.load_project_metadata(project_name)
-                    target_lang = proj_meta.get("target_language", "Greek") if proj_meta else "Greek"
-                    lang_code = to_code(target_lang)
-                    from utils.source_clean import reconstruct_cleaned_srt
-                    from utils.language_codes import output_filename_from_original
-                    srt_output = reconstruct_cleaned_srt(project_name, ep_name, data["data"], lang_code)
-                    
-                    media = Path(media_path)
-                    orig_filename = metadata.get("original_filename") or ""
-                    ext = Path(orig_filename).suffix
-                    if not ext:
-                        _, ext_sub = storage.load_original_subtitle(project_name, ep_name)
-                        ext = f".{ext_sub}" if ext_sub else ".srt"
-                    target_filename = output_filename_from_original(f"{media.stem}{ext}", lang_code)
-                    out_path = media.parent / target_filename
-                    out_path.write_text(srt_output, encoding="utf-8-sig")
+
+            try:
+                out_path = await asyncio.to_thread(
+                    auto_export_translated_subtitle,
+                    project_name,
+                    ep_name,
+                    data["data"],
+                    metadata,
+                    True,
+                )
+                if out_path:
                     delivered_episodes.append(ep_name)
-                except Exception as e:
-                    logger.error(f"Failed to deliver approved subtitle {ep_name}: {e}")
+            except Exception as e:
+                logger.error(f"Failed to deliver approved subtitle {ep_name}: {e}")
 
     _invalidate_global_review_cache()
     return {"status": "resolved", "count": resolved_count, "delivered_episodes": delivered_episodes}
@@ -337,19 +384,26 @@ async def save_review_line(
         raise HTTPException(status_code=400, detail="Invalid line index")
 
     line = data["data"][line_index]
+    old_line = copy.deepcopy(line)
     line["translated"] = translated_text
 
     # Also update the translations dict for the primary language
-    proj_meta = storage.load_project_metadata(project_name)
-    if proj_meta:
-        primary_lang = proj_meta.get("target_language", "Greek")
-        lang_code = to_code(primary_lang)
-        if "translations" not in line:
-            line["translations"] = {}
-        line["translations"][lang_code] = translated_text
+    proj_meta = storage.load_project_metadata(project_name) or {}
+    primary_lang = proj_meta.get("target_language", "Greek")
+    lang_code = to_code(primary_lang)
+    if "translations" not in line:
+        line["translations"] = {}
+    line["translations"][lang_code] = translated_text
+
+    old_trans = old_line.get("translations", {}).get(lang_code) or old_line.get("translated") or ""
+    if translated_text.strip() != old_trans.strip():
+        from services.translation.helpers import _record_user_edits
+        _record_user_edits(project_name, episode_name, [old_line], [line], lang=lang_code)
 
     metadata = storage.load_episode_metadata(project_name, episode_name) or {}
     storage.save_episode(project_name, episode_name, data["data"], metadata)
+
+    _schedule_debounced_review_export(project_name, episode_name, delay=2.5)
 
     return {"status": "saved", "episode": episode_name, "index": line_index}
 

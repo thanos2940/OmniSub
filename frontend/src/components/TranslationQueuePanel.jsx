@@ -43,8 +43,8 @@ const TranslationQueuePanel = () => {
     const hasDailyLimit = Object.values(rateLimits).some(s => s.daily_exhausted)
         || (summary.paused_daily_limit || 0) > 0;
 
-    const activeCount = items.filter(i => ['pending', 'running', 'paused_daily_limit'].includes(i.status)).length;
-    const historyCount = items.filter(i => !['pending', 'running', 'paused_daily_limit'].includes(i.status)).length;
+    const activeCount = items.filter(i => ['pending', 'queued', 'running', 'paused_daily_limit', 'postponed'].includes(i.status)).length;
+    const historyCount = items.filter(i => !['pending', 'queued', 'running', 'paused_daily_limit', 'postponed'].includes(i.status)).length;
 
     const getModalLogs = () => {
         if (!selectedJobLogs) return [];

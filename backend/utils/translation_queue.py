@@ -16,6 +16,15 @@ PRIORITY_MANUAL  = 1   # user clicked Translate / Batch / Auto in the UI
 PRIORITY_SYNC    = 2   # scheduled sonarr/radarr gap-fill
 PRIORITY_BACKLOG = 3   # bulk "translate everything missing"
 
+# Queue Status constants
+QUEUE_STATUS_QUEUED = "queued"
+QUEUE_STATUS_PENDING = "pending"
+QUEUE_STATUS_RUNNING = "running"
+QUEUE_STATUS_COMPLETED = "completed"
+QUEUE_STATUS_FAILED = "failed"
+QUEUE_STATUS_CANCELLED = "cancelled"
+QUEUE_STATUS_POSTPONED = "postponed"
+
 # Work kinds. Each is drained by its own claim method so the lanes never steal
 # each other's items — an embedded-subtitle extraction can take minutes of full-file
 # I/O and must not occupy a translation slot (docs/PLAN_embedded_ass_extraction.md).
@@ -51,6 +60,9 @@ def _unique_index_columns(conn) -> set:
     return columns
 
 
+_INITIAL_DB_FILE = DB_FILE
+
+
 class TranslationQueue:
     # Run the one-time legacy-pollution cleanup once per process, not on every
     # construction (TranslationQueue() is instantiated per request in routers).
@@ -58,8 +70,8 @@ class TranslationQueue:
     _initialized_dbs = set()
 
     def __init__(self, db_path: Path = DB_FILE):
-        self.db_path = db_path
-        db_key = str(Path(db_path).resolve())
+        self.db_path = DB_FILE if db_path == _INITIAL_DB_FILE else (db_path or DB_FILE)
+        db_key = str(Path(self.db_path).resolve())
         if db_key not in TranslationQueue._initialized_dbs:
             self._init_db()
             TranslationQueue._initialized_dbs.add(db_key)
@@ -135,6 +147,8 @@ class TranslationQueue:
                 # Lines flagged needs_review (gaps + quality flags) on the last completed
                 # run, so the UI can distinguish a clean completion from a flagged one.
                 conn.execute("ALTER TABLE translation_queue ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0")
+            if "updated_at" not in columns:
+                conn.execute("ALTER TABLE translation_queue ADD COLUMN updated_at TEXT")
             if "lang" not in columns:
                 # Rebuild to add the lang column AND widen UNIQUE to include it (Plan 15).
                 # SQLite can't alter a UNIQUE constraint in place, so recreate + copy.
@@ -337,9 +351,25 @@ class TranslationQueue:
         """Claim the next pending export retry item atomically."""
         return self._claim(KIND_EXPORT_RETRY)
 
-    def _claim(self, kind: str, max_priority: Optional[int] = None, exclude_agent: bool = False) -> Optional[Dict]:
+    def dequeue_next(
+        self,
+        work_types: Optional[Union[tuple, list, str]] = None,
+        max_priority: Optional[int] = None,
+        exclude_agent: bool = False,
+    ) -> Optional[Dict]:
+        """Claim and dequeue the next active item for the specified work_types.
+
+        Only dequeues items with status in ('queued', 'pending'). Never dequeues 'postponed'.
+        """
         now_str = datetime.now(timezone.utc).isoformat()
         max_retries = 5
+        if isinstance(work_types, str):
+            types_list = [work_types]
+        elif work_types is not None:
+            types_list = list(work_types)
+        else:
+            types_list = None
+
         for attempt in range(max_retries):
             try:
                 with self._conn() as conn:
@@ -347,16 +377,27 @@ class TranslationQueue:
                         conn.rollback()
                     conn.execute("BEGIN IMMEDIATE")
                     try:
-                        # Select the next pending item
                         prio_clause = "AND priority <= ?" if max_priority is not None else ""
                         agent_clause = f"AND {NOT_AGENT_SQL}" if exclude_agent else ""
-                        params = [kind, now_str] + ([max_priority] if max_priority is not None else [])
+
+                        kind_clause = ""
+                        params = [now_str]
+                        if types_list:
+                            placeholders = ",".join("?" for _ in types_list)
+                            kind_clause = f"AND kind IN ({placeholders})"
+                            params.extend(types_list)
+                        if max_priority is not None:
+                            params.append(max_priority)
+
                         cursor = conn.execute(
                             f"""
                             SELECT * FROM translation_queue
-                            WHERE status = 'pending' AND kind = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
-                            {prio_clause} {agent_clause}
-                            ORDER BY priority ASC, created_at ASC
+                            WHERE status IN ('queued', 'pending')
+                              AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                              {kind_clause}
+                              {prio_clause}
+                              {agent_clause}
+                            ORDER BY CASE WHEN priority = 10 THEN -1 ELSE priority END ASC, created_at ASC
                             LIMIT 1
                             """,
                             params
@@ -364,13 +405,11 @@ class TranslationQueue:
                         row = cursor.fetchone()
                         if row:
                             item = dict(row)
-                            # Update status to running and increment attempts
                             conn.execute(
                                 "UPDATE translation_queue SET status = 'running', started_at = ?, attempts = attempts + 1 WHERE id = ?",
                                 (now_str, item["id"])
                             )
                             conn.commit()
-                            # Return the updated item dict with updated status/started_at/attempts
                             item["status"] = "running"
                             item["started_at"] = now_str
                             item["attempts"] += 1
@@ -383,9 +422,87 @@ class TranslationQueue:
                         raise
             except sqlite3.OperationalError as e:
                 if ("locked" in str(e).lower() or "busy" in str(e).lower()) and attempt < max_retries - 1:
-                    time.sleep(0.1 * (2 ** attempt) + random.uniform(0.02, 0.1))
+                    time.sleep(0.05 * (attempt + 1))
                     continue
                 raise
+        return None
+
+    def _claim(self, kind: str, max_priority: Optional[int] = None, exclude_agent: bool = False) -> Optional[Dict]:
+        return self.dequeue_next(work_types=(kind,), max_priority=max_priority, exclude_agent=exclude_agent)
+
+    def postpone_item(self, item_id: Union[int, str]) -> bool:
+        """Sets status = 'postponed', updated_at = now for an item that is queued/pending or failed."""
+        now_str = datetime.now(timezone.utc).isoformat()
+        item_id_str = str(item_id)
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE translation_queue
+                SET status = 'postponed', updated_at = ?
+                WHERE (id = ? OR id = ?) AND status IN ('queued', 'pending', 'failed', 'paused_daily_limit')
+                """,
+                (now_str, item_id_str, item_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def continue_item(self, item_id: Union[int, str], boost_priority: bool = True) -> bool:
+        """Sets status = 'queued', clears next_retry_at = None, and if boost_priority=True, sets priority = 10."""
+        now_str = datetime.now(timezone.utc).isoformat()
+        item_id_str = str(item_id)
+        with self._conn() as conn:
+            if boost_priority:
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET status = 'queued', next_retry_at = NULL, priority = 10, updated_at = ?
+                    WHERE id = ? OR id = ?
+                    """,
+                    (now_str, item_id_str, item_id)
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET status = 'queued', next_retry_at = NULL, updated_at = ?
+                    WHERE id = ? OR id = ?
+                    """,
+                    (now_str, item_id_str, item_id)
+                )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def stop_item(self, item_id: Union[int, str]) -> bool:
+        """Cancels queued/postponed/pending items (status = 'cancelled'), and if status == 'running',
+        requests cancellation via jobs_manager / worker and marks status = 'cancelled'."""
+        now_str = datetime.now(timezone.utc).isoformat()
+        item_id_str = str(item_id)
+
+        try:
+            from utils.jobs_manager import jobs
+            job = jobs.get(f"bg_{item_id_str}")
+            if job:
+                job.request_cancel()
+        except Exception:
+            pass
+
+        try:
+            from services.background_worker import worker
+            worker.cancel_task(item_id_str)
+        except Exception:
+            pass
+
+        with self._conn() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE translation_queue
+                SET status = 'cancelled', updated_at = ?
+                WHERE id = ? OR id = ?
+                """,
+                (now_str, item_id_str, item_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     def claim_backlog_window(self, limit: int = 200) -> List[Dict]:
         """Atomically claim up to ``limit`` pending BACKLOG items (-> running) for batch
@@ -508,30 +625,70 @@ class TranslationQueue:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def get_all(self, limit: int = 100) -> List[Dict]:
-        """Retrieve all items from queue ordered by status, priority, and created time."""
+    def get_all(
+        self,
+        limit: int = 100,
+        work_types: Optional[Union[tuple, list, str]] = None,
+        include_all_kinds: bool = False,
+    ) -> List[Dict]:
+        """Retrieve items from queue ordered by status, priority, and created time."""
+        if isinstance(work_types, str):
+            types_list = [work_types]
+        elif work_types is not None:
+            types_list = list(work_types)
+        else:
+            types_list = None
+
+        where_clauses = []
+        params = []
+
+        if types_list:
+            placeholders = ",".join("?" for _ in types_list)
+            where_clauses.append(f"kind IN ({placeholders})")
+            params.extend(types_list)
+        elif not include_all_kinds:
+            where_clauses.append("kind = 'translation'")
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        params.append(limit)
+
         with self._conn() as conn:
             cursor = conn.execute(
-                """
+                f"""
                 SELECT * FROM translation_queue
-                WHERE kind = 'translation'
+                {where_sql}
                 ORDER BY 
                     CASE status 
                         WHEN 'running' THEN 1
                         WHEN 'pending' THEN 2
+                        WHEN 'queued' THEN 2
                         WHEN 'paused_daily_limit' THEN 3
-                        WHEN 'failed' THEN 4
-                        WHEN 'completed' THEN 5
-                        WHEN 'cancelled' THEN 6
-                        ELSE 7
+                        WHEN 'postponed' THEN 4
+                        WHEN 'failed' THEN 5
+                        WHEN 'completed' THEN 6
+                        WHEN 'cancelled' THEN 7
+                        ELSE 8
                     END,
-                    priority ASC,
+                    CASE WHEN priority = 10 THEN -1 ELSE priority END ASC,
                     created_at DESC
                 LIMIT ?
                 """,
-                (limit,)
+                params
             )
-            return [dict(row) for row in cursor.fetchall()]
+            items = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                d["work_type"] = d.get("kind") or "translation"
+                items.append(d)
+            return items
+
+    def list_items(
+        self,
+        limit: int = 100,
+        work_types: Optional[Union[tuple, list, str]] = None,
+        include_all_kinds: bool = True,
+    ) -> List[Dict]:
+        return self.get_all(limit=limit, work_types=work_types, include_all_kinds=include_all_kinds)
 
     def get_extractions(self, limit: int = 50) -> List[Dict]:
         """Pending/running/failed embedded-subtitle extractions, newest first.
@@ -575,14 +732,34 @@ class TranslationQueue:
             )
             completed_today = cursor_today.fetchone()["cnt"]
 
+            cursor_postponed = conn.execute(
+                "SELECT COUNT(*) as cnt FROM translation_queue WHERE status = 'postponed'"
+            )
+            postponed_count = cursor_postponed.fetchone()["cnt"]
+
+            cursor_extraction = conn.execute(
+                "SELECT COUNT(*) as cnt FROM translation_queue WHERE kind = 'extraction' AND status IN ('pending', 'queued', 'running')"
+            )
+            extraction_count = cursor_extraction.fetchone()["cnt"]
+
+            cursor_export = conn.execute(
+                "SELECT COUNT(*) as cnt FROM translation_queue WHERE kind = 'export_retry' AND status IN ('pending', 'queued', 'running')"
+            )
+            export_retry_count = cursor_export.fetchone()["cnt"]
+
         return {
-            "pending": counts.get("pending", 0),
+            "pending": counts.get("pending", 0) + counts.get("queued", 0),
+            "queued": counts.get("queued", 0),
             "running": counts.get("running", 0),
             "completed": counts.get("completed", 0),
             "completed_today": completed_today,
             "failed": counts.get("failed", 0),
             "paused_daily_limit": counts.get("paused_daily_limit", 0),
             "cancelled": counts.get("cancelled", 0),
+            "postponed": postponed_count,
+            "postponed_count": postponed_count,
+            "extraction_count": extraction_count,
+            "export_retry_count": export_retry_count,
         }
 
     def get_logs(self, item_id: str) -> List[str]:
@@ -606,9 +783,11 @@ class TranslationQueue:
             elif status in ("all", "*"):
                 cursor = conn.execute("DELETE FROM translation_queue")
             elif status == "active":
-                cursor = conn.execute("DELETE FROM translation_queue WHERE status IN ('pending', 'running', 'paused', 'paused_daily_limit')")
+                cursor = conn.execute("DELETE FROM translation_queue WHERE status IN ('pending', 'queued', 'running', 'paused', 'paused_daily_limit', 'postponed')")
             elif status == "pending":
-                cursor = conn.execute("DELETE FROM translation_queue WHERE status = 'pending'")
+                cursor = conn.execute("DELETE FROM translation_queue WHERE status IN ('pending', 'queued')")
+            elif status == "postponed":
+                cursor = conn.execute("DELETE FROM translation_queue WHERE status = 'postponed'")
             elif status == "cancelled":
                 cursor = conn.execute("DELETE FROM translation_queue WHERE status = 'cancelled'")
             elif status == "failed":
@@ -624,7 +803,7 @@ class TranslationQueue:
         """Cancel a queue item."""
         with self._conn() as conn:
             cursor = conn.execute(
-                "UPDATE translation_queue SET status = 'cancelled' WHERE id = ? AND status IN ('pending', 'running', 'failed', 'paused_daily_limit')",
+                "UPDATE translation_queue SET status = 'cancelled' WHERE id = ? AND status IN ('pending', 'queued', 'running', 'failed', 'paused_daily_limit', 'postponed')",
                 (item_id,)
             )
             conn.commit()
@@ -635,11 +814,11 @@ class TranslationQueue:
         with self._conn() as conn:
             if not status or status in ("all", "active"):
                 cursor = conn.execute(
-                    "UPDATE translation_queue SET status = 'cancelled' WHERE status IN ('pending', 'running', 'paused_daily_limit', 'paused')"
+                    "UPDATE translation_queue SET status = 'cancelled' WHERE status IN ('pending', 'queued', 'running', 'paused_daily_limit', 'paused', 'postponed')"
                 )
-            elif status == "pending":
+            elif status in ("pending", "queued"):
                 cursor = conn.execute(
-                    "UPDATE translation_queue SET status = 'cancelled' WHERE status = 'pending'"
+                    "UPDATE translation_queue SET status = 'cancelled' WHERE status IN ('pending', 'queued')"
                 )
             elif status == "running":
                 cursor = conn.execute(

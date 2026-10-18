@@ -114,7 +114,28 @@ class BackgroundTranslationWorker:
                 # 1. Recover daily-exhausted models and unpause queue items
                 await recover_daily_limits(self.queue)
 
-                # Check global pause switch
+                # Off-peak scheduling ceiling
+                max_priority = self._schedule_ceiling(global_config)
+
+                # Embedded-subtitle extraction lane (runs even when translation worker is paused)
+                self._dispatch_extractions(extraction_tasks, global_config, max_priority)
+
+                # Export retry lane (Requirement R1 - runs even when translation worker is paused)
+                from services.worker.export_retry_worker import dispatch_export_retries
+                dispatch_export_retries(self.queue, export_tasks, global_config, self.trigger)
+
+                # Release abandoned agent claims once a minute.
+                import time as _time
+                _now_mono = _time.monotonic()
+                if _now_mono - self._last_task_sync_at >= 60.0:
+                    self._last_task_sync_at = _now_mono
+                    try:
+                        from services.agent_task_service import agent_task_service
+                        await asyncio.to_thread(agent_task_service.housekeeping)
+                    except Exception:
+                        pass
+
+                # Check global pause switch (pauses only translation claiming)
                 if global_config.get("queue_worker_paused", False):
                     try:
                         await asyncio.wait_for(self._new_item_event.wait(), timeout=5.0)
@@ -127,32 +148,11 @@ class BackgroundTranslationWorker:
                     export_tasks.difference_update(completed)
                     continue
 
-                # Off-peak scheduling ceiling
-                max_priority = self._schedule_ceiling(global_config)
-
-                # Embedded-subtitle extraction lane
-                self._dispatch_extractions(extraction_tasks, global_config, max_priority)
-
-                # Export retry lane (Requirement R1)
-                from services.worker.export_retry_worker import dispatch_export_retries
-                dispatch_export_retries(self.queue, export_tasks, global_config, self.trigger)
-
                 # Translation concurrency gate
                 if len(active_tasks) >= concurrent_episodes:
                     done, _ = await asyncio.wait(active_tasks, return_when=asyncio.FIRST_COMPLETED)
                     active_tasks.difference_update(done)
                     continue
-
-                # Release abandoned agent claims once a minute.
-                import time as _time
-                _now_mono = _time.monotonic()
-                if _now_mono - self._last_task_sync_at >= 60.0:
-                    self._last_task_sync_at = _now_mono
-                    try:
-                        from services.agent_task_service import agent_task_service
-                        await asyncio.to_thread(agent_task_service.housekeeping)
-                    except Exception:
-                        pass
 
                 # 2. Get next pending item and claim it atomically. In agent mode the
                 # translations wait for external agents; only the lanes above run.

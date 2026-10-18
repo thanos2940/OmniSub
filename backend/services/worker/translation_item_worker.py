@@ -95,7 +95,7 @@ async def process_translation_item(*args, **kwargs) -> None:
     item_id = item["id"]
     project_name = item["project_name"]
     episode_name = item["episode_name"]
-    attempts = item["attempts"]
+    attempts = item.get("attempts", 0) if isinstance(item, dict) else 0
     job_id = f"bg_{item_id}"
 
     from utils.jobs_manager import JobStatus, jobs, update_job
@@ -142,10 +142,13 @@ async def process_translation_item(*args, **kwargs) -> None:
     try:
         options = {}
         if item.get("options"):
-            try:
-                options = json.loads(item["options"])
-            except Exception:
-                pass
+            if isinstance(item["options"], dict):
+                options = item["options"]
+            else:
+                try:
+                    options = json.loads(item["options"])
+                except Exception:
+                    pass
 
         translation_type = options.get("translation_type", "saved")
         force_new = (translation_type == "original" or options.get("force", False))
@@ -277,34 +280,28 @@ async def process_translation_item(*args, **kwargs) -> None:
             ep_data = storage.load_episode(project_name, episode_name)
             if ep_data and ep_data.get("data") and any(line.get("translations", {}).get(tgt_lang) or (is_primary_lang and line.get("translated")) for line in ep_data["data"]):
                 update_job(job_id, log="Found saved translation. Re-exporting to disk...")
-                from utils.source_clean import reconstruct_cleaned_srt
-                from utils.language_codes import output_filename_from_original
-                translated_srt_content = reconstruct_cleaned_srt(project_name, episode_name, ep_data["data"], tgt_lang)
-                
-                if media_file:
-                    orig_filename = ep_meta.get("original_filename") or ""
-                    ext = Path(orig_filename).suffix
-                    if not ext:
-                        _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
-                        ext = f".{ext_sub}" if ext_sub else ".srt"
-                    target_filename = output_filename_from_original(f"{media_file.stem}{ext}", tgt_lang)
-                    target_srt_path = media_file.parent / target_filename
-                else:
-                    target_srt_path = storage.episode_dir(project_name, episode_name) / f"{episode_name}.{tgt_lang}.srt"
-                write_success = True
-                write_error_msg = ""
-                try:
-                    if not target_srt_path.parent.exists():
-                        raise FileNotFoundError(
-                            f"Output directory does not exist or is unreachable: '{target_srt_path.parent}'."
-                        )
-                    write_sidecar(target_srt_path, translated_srt_content)
-                    logger.info(f"Successfully re-exported saved translation to: {target_srt_path}")
-                except (OSError, FileNotFoundError) as write_err:
-                    write_error_msg = str(write_err)
-                    logger.error(f"Failed to re-export saved translation to '{target_srt_path}': {write_err}")
+                from services.translation.export_formatter import auto_export_translated_subtitle
+                ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
+                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, ep_data["data"], ep_meta)
+                target_srt_path = Path(exported_path) if exported_path else (Path(ep_meta.get("arr_target_path")) if ep_meta.get("arr_target_path") else None)
+                write_success = bool(target_srt_path and target_srt_path.exists())
+                write_error_msg = ep_meta.get("translation_warning", "")
+
+                if not write_success:
+                    if not target_srt_path:
+                        if media_file:
+                            orig_filename = ep_meta.get("original_filename") or ""
+                            ext = Path(orig_filename).suffix
+                            if not ext:
+                                _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
+                                ext = f".{ext_sub}" if ext_sub else ".srt"
+                            from utils.language_codes import output_filename_from_original
+                            target_filename = output_filename_from_original(f"{media_file.stem}{ext}", tgt_lang)
+                            target_srt_path = media_file.parent / target_filename
+                        else:
+                            target_srt_path = storage.episode_dir(project_name, episode_name) / f"{episode_name}.{tgt_lang}.srt"
+                    logger.error(f"Failed to re-export saved translation to '{target_srt_path}': {write_error_msg}")
                     update_job(job_id, log=f"Warning: Failed to re-export subtitle to unreachable path: {target_srt_path}. Queuing for export retry.")
-                    write_success = False
                     try:
                         from services.queue_service import enqueue_export_retry
                         enqueue_export_retry(
@@ -312,11 +309,13 @@ async def process_translation_item(*args, **kwargs) -> None:
                             episode_name=episode_name,
                             target_path=str(target_srt_path),
                             lang=tgt_lang,
-                            error=str(write_err),
+                            error=write_error_msg or "Export failed",
                             queue=queue,
                         )
                     except Exception as q_err:
                         logger.error(f"Failed to enqueue export retry: {q_err}")
+                else:
+                    logger.info(f"Successfully re-exported saved translation to: {target_srt_path}")
                 
                 logger.info(f"Re-exported saved translation for {episode_name} to {target_srt_path} (success={write_success})")
                 completion_msg = (
@@ -499,34 +498,32 @@ async def process_translation_item(*args, **kwargs) -> None:
 
             translated_data = storage.load_episode(project_name, episode_name)
             if translated_data and translated_data.get("data"):
-                from utils.source_clean import reconstruct_cleaned_srt
-                from utils.language_codes import output_filename_from_original
-                translated_srt_content = reconstruct_cleaned_srt(project_name, episode_name, translated_data["data"], tgt_lang)
-                
-                if media_file:
-                    orig_filename = ep_meta.get("original_filename") or f"{episode_name}.srt"
-                    ext = Path(orig_filename).suffix
-                    if not ext:
-                        _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
-                        ext = f".{ext_sub}" if ext_sub else ".srt"
-                    target_filename = output_filename_from_original(f"{media_file.stem}{ext}", tgt_lang)
-                    target_srt_path = media_file.parent / target_filename
+                from services.translation.export_formatter import auto_export_translated_subtitle
+                ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
+                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, translated_data["data"], ep_meta)
+                target_srt_path = Path(exported_path) if exported_path else (Path(ep_meta.get("arr_target_path")) if ep_meta.get("arr_target_path") else None)
+                write_success = bool(target_srt_path and target_srt_path.exists())
+                write_error_msg = ep_meta.get("translation_warning", "")
+
+                if write_success:
+                    logger.info(f"Successfully exported target subtitle: {target_srt_path}")
+                    _record_target(ep_meta, is_primary_lang, tgt_lang, target_srt_path, current_src_fp)
+                    ep_meta.pop("translation_warning", None)
                 else:
-                    target_srt_path = storage.episode_dir(project_name, episode_name) / f"{episode_name}.{tgt_lang}.srt"
-                write_success = True
-                write_error_msg = ""
-                try:
-                    if not target_srt_path.parent.exists():
-                        raise FileNotFoundError(
-                            f"Output directory does not exist or is unreachable: '{target_srt_path.parent}'."
-                        )
-                    write_sidecar(target_srt_path, translated_srt_content)
-                    logger.info(f"Successfully wrote target subtitle: {target_srt_path}")
-                except (OSError, FileNotFoundError) as write_err:
-                    write_error_msg = str(write_err)
-                    logger.error(f"Failed to write target subtitle to '{target_srt_path}': {write_err}")
+                    if not target_srt_path:
+                        if media_file:
+                            orig_filename = ep_meta.get("original_filename") or f"{episode_name}.srt"
+                            ext = Path(orig_filename).suffix
+                            if not ext:
+                                _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
+                                ext = f".{ext_sub}" if ext_sub else ".srt"
+                            from utils.language_codes import output_filename_from_original
+                            target_filename = output_filename_from_original(f"{media_file.stem}{ext}", tgt_lang)
+                            target_srt_path = media_file.parent / target_filename
+                        else:
+                            target_srt_path = storage.episode_dir(project_name, episode_name) / f"{episode_name}.{tgt_lang}.srt"
+                    logger.error(f"Failed to write target subtitle to '{target_srt_path}': {write_error_msg}")
                     update_job(job_id, log=f"Warning: Failed to write output subtitle to unreachable path: {target_srt_path}. Queuing for export retry.")
-                    write_success = False
                     try:
                         from services.queue_service import enqueue_export_retry
                         enqueue_export_retry(
@@ -534,18 +531,13 @@ async def process_translation_item(*args, **kwargs) -> None:
                             episode_name=episode_name,
                             target_path=str(target_srt_path),
                             lang=tgt_lang,
-                            error=str(write_err),
+                            error=write_error_msg or "Export failed",
                             queue=queue,
                         )
                     except Exception as q_err:
                         logger.error(f"Failed to enqueue export retry: {q_err}")
-
-                ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
-                if write_success:
-                    _record_target(ep_meta, is_primary_lang, tgt_lang, target_srt_path, current_src_fp)
-                    ep_meta.pop("translation_warning", None)
-                else:
                     ep_meta["translation_warning"] = f"Export scheduled for retry: {target_srt_path} ({write_error_msg})"
+
                 storage.save_episode_metadata(project_name, episode_name, ep_meta)
 
                 # Enhance project glossary with newly discovered terms from this episode

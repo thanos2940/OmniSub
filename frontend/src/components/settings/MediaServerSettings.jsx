@@ -383,6 +383,13 @@ const MediaServerSettings = ({ settings, onChange, toast }) => {
                             </p>
                         </div>
                     )}
+
+                    <div className="md:col-span-2 p-3 bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 flex items-start gap-2.5">
+                        <AlertTriangle size={15} className="text-indigo-500 shrink-0 mt-0.5" />
+                        <div>
+                            <strong>Note:</strong> When Autopilot is enabled (Settings &rarr; Autopilot), Autopilot manages the Bazarr grace period (<code className="font-mono bg-white/60 dark:bg-black/20 px-1 py-0.5 rounded">autopilot_grace_minutes</code>) and ownership state machine directly.
+                        </div>
+                    </div>
                 </div>
             </div>
 

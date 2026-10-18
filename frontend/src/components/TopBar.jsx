@@ -59,10 +59,10 @@ const TopBar = () => {
     }, []);
 
     return (
-        <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-6 py-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-4">
+        <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-2">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0 min-w-0">
                 {/* Logo / Home */}
-                <Link to="/" className="flex items-center gap-2 text-gray-900 dark:text-white hover:opacity-80 transition-opacity group">
+                <Link to="/" className="flex items-center gap-2 text-gray-900 dark:text-white hover:opacity-80 transition-opacity group shrink-0">
                     <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-indigo-200 dark:shadow-none shadow-md group-hover:scale-105 transition-transform">
                         <LayoutGrid className="text-white" size={18} />
                     </div>
@@ -73,15 +73,15 @@ const TopBar = () => {
                 <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden md:block"></div>
 
                 {/* Breadcrumbs */}
-                <nav className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-                    <Link to="/" className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all">
-                        <Home size={16} />
+                <nav className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 min-w-0">
+                    <Link to="/" className="p-1 sm:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shrink-0">
+                        <Home size={15} />
                     </Link>
 
                     {isLibrary && (
                         <>
-                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
-                            <span className="px-2 py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
                                 Library
                             </span>
                         </>
@@ -89,8 +89,8 @@ const TopBar = () => {
 
                     {isReview && (
                         <>
-                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
-                            <span className="px-2 py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
                                 Review Queue
                             </span>
                         </>
@@ -98,19 +98,19 @@ const TopBar = () => {
 
                     {isQueue && (
                         <>
-                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
-                            <span className="px-2 py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
-                                Translation Queue
+                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
+                                Queue
                             </span>
                         </>
                     )}
 
                     {projectName && (
                         <>
-                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
+                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
                             <Link
                                 to={`/project/${encodeURIComponent(projectName)}`}
-                                className="px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all truncate max-w-[150px] md:max-w-xs"
+                                className="px-1.5 sm:px-2 py-0.5 sm:py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all truncate max-w-[80px] sm:max-w-[150px] md:max-w-xs"
                             >
                                 {projectName}
                             </Link>
@@ -119,8 +119,8 @@ const TopBar = () => {
 
                     {episodeName && (
                         <>
-                            <ChevronRight size={14} className="text-gray-300 dark:text-gray-600" />
-                            <span className="px-2 py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md truncate max-w-[150px] md:max-w-xs border border-gray-200 dark:border-gray-700">
+                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md truncate max-w-[80px] sm:max-w-[150px] md:max-w-xs border border-gray-200 dark:border-gray-700">
                                 {episodeName}
                             </span>
                         </>
@@ -129,7 +129,7 @@ const TopBar = () => {
             </div>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                 {/* Command Palette Trigger */}
                 <button
                     onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
@@ -144,43 +144,43 @@ const TopBar = () => {
                 </button>
                 <button
                     onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-api-key-modal'))}
-                    className="p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 text-sm font-medium"
+                    className="p-1.5 sm:p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 text-sm font-medium shrink-0"
                     title="Configure Google Gemini API Key"
                 >
-                    <Key size={18} />
+                    <Key size={17} />
                     <span className="hidden lg:inline">API Key</span>
                 </button>
                 {!authEnabled && (
                     <Link
                         to="/settings"
-                        className="p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        className="p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 shrink-0"
                         title="This server is unsecured — click to set a username and password"
                     >
-                        <Lock size={18} />
+                        <Lock size={17} />
                         <span className="hidden md:inline">Unsecured</span>
                     </Link>
                 )}
                 <Link
                     to="/dashboard"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${location.pathname === '/dashboard'
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/dashboard'
                             ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
                             : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
                         }`}
                     title="Dashboard"
                 >
-                    <Gauge size={18} />
+                    <Gauge size={17} />
                     <span className="hidden md:inline">Dashboard</span>
                 </Link>
                 <Link
                     to="/review"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${isReview
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isReview
                             ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-450'
                             : 'text-gray-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20'
                         }`}
                     title="Review Queue"
                 >
                     <div className="relative">
-                        <ShieldAlert size={18} />
+                        <ShieldAlert size={17} />
                         {reviewCount > 0 && (
                             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse"></span>
                         )}
@@ -194,53 +194,53 @@ const TopBar = () => {
                 </Link>
                 <Link
                     to="/queue"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${isQueue
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isQueue
                             ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
                             : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
                         }`}
                     title="Translation Queue"
                 >
-                    <ListTodo size={18} />
+                    <ListTodo size={17} />
                     <span className="hidden md:inline">Queue</span>
                 </Link>
                 <Link
                     to="/autopilot"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${location.pathname === '/autopilot'
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/autopilot'
                             ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
                             : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
                         }`}
                     title="Autopilot"
                 >
-                    <Plane size={18} />
+                    <Plane size={17} />
                     <span className="hidden md:inline">Autopilot</span>
                 </Link>
                 <Link
                     to="/library"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${isLibrary
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isLibrary
                             ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
                             : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                         }`}
                     title="Media Library"
                 >
-                    <Library size={18} />
+                    <Library size={17} />
                     <span className="hidden md:inline">Library</span>
                 </Link>
                 <Link
                     to="/health"
-                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${location.pathname === '/health'
+                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/health'
                             ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400'
                             : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
                         }`}
                     title="System Health"
                 >
-                    <HeartPulse size={18} />
+                    <HeartPulse size={17} />
                     <span className="hidden md:inline">Health</span>
                 </Link>
                 {updateAvailable && (
                     <Link
                         to="/settings"
                         state={{ tab: 'updates' }}
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 hover:bg-amber-500/30 transition-all animate-pulse"
+                        className="px-2 sm:px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 hover:bg-amber-500/30 transition-all animate-pulse shrink-0"
                         title="New OmbiSub update available! Click to view and install."
                     >
                         <ArrowDownCircle size={14} />
@@ -249,10 +249,10 @@ const TopBar = () => {
                 )}
                 <Link
                     to="/settings"
-                    className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"
+                    className="p-1.5 sm:p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all shrink-0"
                     title="Settings"
                 >
-                    <Settings size={20} />
+                    <Settings size={18} />
                 </Link>
             </div>
         </div>

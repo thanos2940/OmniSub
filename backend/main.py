@@ -92,7 +92,7 @@ async def _auto_update_loop():
     while True:
         try:
             config = storage.load_global_config()
-            enabled = config.get("auto_update_enabled", True)
+            enabled = config.get("auto_update_enabled", False)
             interval_hours = max(1, config.get("auto_update_interval_hours", 6))
             # Sleep in 60s increments to react promptly to shutdown or interval changes
             sleep_seconds = interval_hours * 3600
@@ -100,7 +100,7 @@ async def _auto_update_loop():
                 await asyncio.sleep(60)
 
             config = storage.load_global_config()
-            if config.get("auto_update_enabled", True):
+            if config.get("auto_update_enabled", False):
                 status = await update_service.check_for_updates(force=True)
                 if status.get("update_available") and not update_service.has_active_jobs():
                     logger.info(
@@ -232,6 +232,14 @@ async def lifespan(app: FastAPI):
     asyncio.get_running_loop().set_exception_handler(_quiet_client_disconnects)
 
     # Startup tasks
+    if not hasattr(storage, "GLOBAL_CONFIG"):
+        from utils.storage_modules.config_store import GLOBAL_CONFIG, load_config_and_state
+        storage.GLOBAL_CONFIG = GLOBAL_CONFIG
+        storage.load_config_and_state = load_config_and_state
+
+    if not storage.GLOBAL_CONFIG:
+        storage.load_config_and_state()
+
     # Load API key from config.json if not present in environment
     if not os.environ.get("GOOGLE_API_KEY"):
         try:
