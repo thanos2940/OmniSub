@@ -37,6 +37,7 @@ from utils.language_codes import LANG_CODES, to_code, variants_for
 from utils.translation_queue import (
     KIND_EXTRACTION,
     KIND_TRANSLATION,
+    PRIORITY_BACKLOG,
     PRIORITY_MANUAL,
     TranslationQueue,
 )
@@ -608,8 +609,13 @@ def _reenable_project(project_name: str) -> Optional[Dict]:
 
 
 async def _route_unit(engine, config: Dict, project_name: str, unit: _Unit, lang_code: str,
-                      lang_key: str, translation_options: Dict, result, sem: asyncio.Semaphore) -> Dict:
-    """Send one episode down the right entry point; return its stored disposition."""
+                      lang_key: str, translation_options: Dict, result, sem: asyncio.Semaphore,
+                      priority: int = PRIORITY_MANUAL) -> Dict:
+    """Send one episode down the right entry point; return its stored disposition.
+
+    Shared by on-demand requests and "Translate missing" (``translate_missing``): the
+    episode must already have an entry (the filtered sync creates it from the media file).
+    """
     from services.queue_service import enqueue_translation
 
     entry = {
@@ -637,7 +643,7 @@ async def _route_unit(engine, config: Dict, project_name: str, unit: _Unit, lang
         None, storage.original_subtitle_exists, project_name, unit.episode_name
     )
     if has_imported_source:
-        enqueue_translation(project_name, unit.episode_name, PRIORITY_MANUAL, dict(translation_options), lang=lang_key)
+        enqueue_translation(project_name, unit.episode_name, priority, dict(translation_options), lang=lang_key)
         return {**entry, "initial_state": "queued", "detail": None}
 
     if not info["embedded_source"]:
@@ -647,8 +653,8 @@ async def _route_unit(engine, config: Dict, project_name: str, unit: _Unit, lang
         queued = await loop.run_in_executor(
             None, engine._probe_and_enqueue_extraction,
             project_name, unit.episode_name, media_path, unit.import_metadata,
-            PRIORITY_MANUAL, result, None,
-            {"auto_translate": False, "translate_after": {"options": dict(translation_options), "lang": lang_key}},
+            priority, result, None,
+            {"translate_after": {"options": dict(translation_options), "lang": lang_key}},
         )
         if queued:
             return {**entry, "initial_state": "extracting", "detail": None}
@@ -656,8 +662,112 @@ async def _route_unit(engine, config: Dict, project_name: str, unit: _Unit, lang
 
     # The extraction lane is switched off; the translation worker extracts a muxed
     # track inline when an episode has no source (translation_item_worker).
-    enqueue_translation(project_name, unit.episode_name, PRIORITY_MANUAL, dict(translation_options), lang=lang_key)
+    enqueue_translation(project_name, unit.episode_name, priority, dict(translation_options), lang=lang_key)
     return {**entry, "initial_state": "queued", "detail": None}
+
+
+# ---------------------------------------------------------------------------
+# "Translate missing" for one library title
+# ---------------------------------------------------------------------------
+
+_MAX_REPORTED_UNAVAILABLE = 50
+
+
+async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG) -> Dict:
+    """Queue every episode of a library title that has no translation yet.
+
+    Episodes whose source subtitle is already imported go straight to the queue
+    (``enqueue_missing_for_project``). For a Sonarr/Radarr title, the episodes OmbiSub has
+    never imported (no sidecar was ever there) get an entry created from the media file and
+    are routed exactly like an on-demand request: a muxed text track goes to the extraction
+    lane chained into translation, or to the translation queue when the lane is off (the
+    runner and the model worker extract inline). Nothing usable is reported with its reason.
+    The extraction and translation are queued for the title's primary language.
+
+    Returns ``enqueued_count`` (queue items created) plus the counts ``queued_for_translation``,
+    ``queued_for_extraction``, ``no_usable_source`` and ``already_available``;
+    ``unavailable`` lists the episodes without a usable source and ``error`` says why the
+    Sonarr/Radarr part could not run (the imported episodes are queued regardless).
+    """
+    from integrations.media_sync_engine import SyncResult
+    from services.queue_service import enqueue_missing_for_project, translation_options_for
+    from utils.srt_parser import parse_srt
+
+    loop = asyncio.get_running_loop()
+    meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
+    if not meta:
+        raise OnDemandError(404, "project_not_found", f"Project '{project_name}' not found.")
+
+    queued = await loop.run_in_executor(None, enqueue_missing_for_project, project_name, priority)
+    report: Dict = {
+        "status": "success", "project": project_name,
+        "queued_for_translation": len([q for q in queued if q]), "queued_for_extraction": 0,
+        "no_usable_source": 0, "already_available": 0, "unavailable": [],
+    }
+
+    is_movie = (meta.get("arr_media_type") or meta.get("type")) == "movie"
+    has_arr_id = meta.get("arr_radarr_id") if is_movie else meta.get("arr_sonarr_id")
+    if meta.get("arr_disabled") or not (meta.get("arr_source") or has_arr_id):
+        report["enqueued_count"] = report["queued_for_translation"]
+        return report
+
+    config = storage.load_global_config()
+    engine = _engine(config)
+    try:
+        if is_movie:
+            query = MediaQuery(media_type="movie", radarr_id=meta.get("arr_radarr_id"), title=meta.get("show_name"))
+            movie, _, units = await _movie_units(engine, query)
+            for unit in units:
+                unit.episode_name = project_name
+        else:
+            query = MediaQuery(media_type="series", sonarr_id=meta.get("arr_sonarr_id"), title=meta.get("show_name"))
+            series, _, units, _ = await _series_units(engine, query, require_selection=False)
+        pending = []
+        for unit in units:
+            if unit.has_file and not await loop.run_in_executor(
+                    None, storage.original_subtitle_exists, project_name, unit.episode_name):
+                pending.append(unit)
+
+        entries = []
+        if pending:
+            sync_result = SyncResult()
+            existing = set(await loop.run_in_executor(None, storage.list_projects))
+            if is_movie:
+                await engine._sync_movie(movie, project_name, sync_result, storage, parse_srt, existing)
+            else:
+                await engine._sync_series(series, project_name, sync_result, storage, parse_srt, existing,
+                                          episode_filter={u.episode_name for u in pending})
+            fresh = await loop.run_in_executor(None, storage.load_project_metadata, project_name) or meta
+            lang_code, lang_name = _language(config, fresh.get("target_language"))
+            lang_key = _lang_key(fresh, lang_code)
+            options = {**{k: v for k, v in translation_options_for(project_name).items() if v is not None},
+                       "target_language_name": lang_name, "ensure_context": True}
+            sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
+            entries = await asyncio.gather(*[
+                _route_unit(engine, config, project_name, unit, lang_code, lang_key, options, sync_result, sem,
+                            priority)
+                for unit in pending
+            ])
+    except OnDemandError as e:
+        report["error"] = e.message
+    except Exception as e:
+        logger.warning(f"Translate missing for '{project_name}' could not read Sonarr/Radarr: {e}")
+        report["error"] = f"Sonarr/Radarr could not be read: {e}"
+    else:
+        for entry in entries:
+            state = entry["initial_state"]
+            if state == "queued":
+                report["queued_for_translation"] += 1
+            elif state == "extracting":
+                report["queued_for_extraction"] += 1
+            elif state == "available":
+                report["already_available"] += 1
+            else:
+                report["no_usable_source"] += 1
+                if len(report["unavailable"]) < _MAX_REPORTED_UNAVAILABLE:
+                    report["unavailable"].append({"episode": entry["episode_name"], "reason": entry.get("detail")})
+    report["enqueued_count"] = report["queued_for_translation"] + report["queued_for_extraction"]
+    return report
 
 
 def capabilities() -> Dict:

@@ -367,7 +367,7 @@ async def test_embedded_ass_is_routed_to_extraction_chained_into_translation(env
     assert row["status"] == "pending" and row["priority"] == 0
     opts = json.loads(row["options"])
     assert opts["media_path"] == item["media_path"] and opts["stream_index"] == 2
-    assert opts["output_format"] == "ass" and opts["auto_translate"] is False
+    assert opts["output_format"] == "ass"
     after = opts["translate_after"]
     assert after["lang"] == "" and after["options"]["target_language_name"] == "Greek"
     assert {"model", "ai_provider"} <= set(after["options"])
@@ -745,17 +745,14 @@ async def test_expected_outputs_use_the_exporters_naming(env):
         "Show.S01E01.1080p.WEB-DL.el.ass", "Show.S01E01.1080p.WEB-DL.el.srt"]
 
 
-def test_translation_options_for_matches_the_webhook_options(env):
-    from services.queue_service import enqueue_webhook_episode, translation_options_for
+def test_translation_options_for_carries_the_standard_options(env):
+    from services.queue_service import translation_options_for
     storage.create_project("Show", {"show_name": "Show", "target_language": "Greek"})
     storage.save_episode("Show", "S01E01", [], {"arr_source": True})
     opts = translation_options_for("Show")
     assert {"model", "ai_provider", "temperature", "top_k", "top_p"} <= set(opts)
     assert opts["target_language_name"] == "Greek"
     assert translation_options_for("Nope")["target_language_name"] == "Greek"  # unknown project: global default
-    (queued,) = enqueue_webhook_episode("Show", "S01E01", delay_seconds=0)
-    sent = json.loads(env.queue.get_item(queued)["options"])
-    assert sent == {k: v for k, v in opts.items() if v is not None}
 
 
 # --- ownership-aware Greek check / blocked export ------------------------------------

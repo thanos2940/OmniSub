@@ -8,7 +8,6 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from utils.translation_queue import TranslationQueue, PRIORITY_WEBHOOK, KIND_TRANSLATION
-from services.queue_service import enqueue_translation, enqueue_webhook_episode
 from utils import storage
 
 
@@ -74,75 +73,6 @@ class TestQueueDelayMechanism:
         assert claimed["id"] == item_id
 
 
-class TestSmartAutoTranslatePolicy:
-    def test_anime_webhook_enqueued_immediately(self, tmp_path, monkeypatch):
-        projects_dir = tmp_path / "projects"
-        projects_dir.mkdir()
-        monkeypatch.setattr(storage, "PROJECTS_DIR", projects_dir)
-
-        # Create anime project
-        anime_proj = "Naruto"
-        storage.create_project(anime_proj, {
-            "series_type": "anime",
-            "target_language": "Greek",
-            "arr_disabled": False,
-        })
-        storage.save_episode(anime_proj, "S01E01", [{"index": 1, "text": "Hello"}], {"line_count": 1})
-        storage.save_original_subtitle(anime_proj, "S01E01", "1\n00:00:01,000 --> 00:00:02,000\nHello\n", "S01E01.en.srt")
-
-        config_mock = {
-            "arr_auto_translate": "smart",
-            "arr_non_anime_delay_minutes": 30,
-            "default_translation_model": "gemini-3.1-flash-lite",
-        }
-        monkeypatch.setattr(storage, "load_global_config", lambda: config_mock)
-
-        db_path = tmp_path / "queue.db"
-        queue = TranslationQueue(db_path)
-        monkeypatch.setattr("services.queue_service.TranslationQueue", lambda *args, **kwargs: queue)
-
-        enqueued = enqueue_webhook_episode(anime_proj, "S01E01")
-        assert len(enqueued) == 1
-        item = queue.get_item(enqueued[0])
-        # Anime should have NO next_retry_at delay (or None)
-        assert item["next_retry_at"] is None
-
-    def test_non_anime_webhook_enqueued_with_delay(self, tmp_path, monkeypatch):
-        projects_dir = tmp_path / "projects"
-        projects_dir.mkdir()
-        monkeypatch.setattr(storage, "PROJECTS_DIR", projects_dir)
-
-        # Create live-action TV project
-        show_proj = "Breaking Bad"
-        storage.create_project(show_proj, {
-            "series_type": "standard",
-            "target_language": "Greek",
-            "arr_disabled": False,
-        })
-        storage.save_episode(show_proj, "S01E01", [{"index": 1, "text": "Science"}], {"line_count": 1})
-        storage.save_original_subtitle(show_proj, "S01E01", "1\n00:00:01,000 --> 00:00:02,000\nScience\n", "S01E01.en.srt")
-
-        config_mock = {
-            "arr_auto_translate": "smart",
-            "arr_non_anime_delay_minutes": 30,
-            "default_translation_model": "gemini-3.1-flash-lite",
-        }
-        monkeypatch.setattr(storage, "load_global_config", lambda: config_mock)
-
-        db_path = tmp_path / "queue.db"
-        queue = TranslationQueue(db_path)
-        monkeypatch.setattr("services.queue_service.TranslationQueue", lambda *args, **kwargs: queue)
-
-        enqueued = enqueue_webhook_episode(show_proj, "S01E01")
-        assert len(enqueued) == 1
-        item = queue.get_item(enqueued[0])
-        # Non-anime should have next_retry_at ~30 minutes in future
-        assert item["next_retry_at"] is not None
-        next_dt = datetime.fromisoformat(item["next_retry_at"])
-        diff = (next_dt - datetime.now(timezone.utc)).total_seconds()
-        assert 1700 < diff <= 1800
-
-
 @pytest.mark.asyncio
 class TestZeroTokenBazarrPreCheck:
     async def test_worker_skips_when_bazarr_target_exists(self, tmp_path, monkeypatch):
@@ -181,7 +111,6 @@ class TestZeroTokenBazarrPreCheck:
         item = queue.get_item(item_id)
 
         config_mock = {
-            "arr_auto_translate": "smart",
             "arr_source_language": "en",
             "default_translation_model": "gemini-3.1-flash-lite",
         }

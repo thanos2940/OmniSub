@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from services import plex_refresh
 from services.autopilot import service as service_module
 from services.autopilot.service import AutopilotService
 from services.autopilot.store import AutopilotStore, iso_utc
@@ -84,8 +85,8 @@ class FakePlex:
         self.ok = ok
         self.last_error = None if ok else "Plex answered HTTP 401"
 
-    def refresh_path(self, path):
-        self.calls.append(path)
+    def refresh_paths(self, paths):
+        self.calls.extend(paths)
         return self.ok
 
 
@@ -105,9 +106,10 @@ def env(tmp_path):
     e.notifier = MagicMock()
     e.plex = FakePlex()
     e.plex_enabled = True
+    plex_refresh.set_refresher(
+        plex_refresh.PlexRefresher(delay=0, client_factory=lambda cfg: e.plex if e.plex_enabled else None))
     e.svc = AutopilotService(store=e.store, watcher=e.watcher, pipeline=e.pipeline, notifier=e.notifier,
-                             clock=e.clock, runner_provider=lambda: e.runner,
-                             plex_factory=lambda cfg: e.plex if e.plex_enabled else None)
+                             clock=e.clock, runner_provider=lambda: e.runner)
     storage.save_global_config({"autopilot_enabled": True, "autopilot_enabled_at": iso_utc(T0),
                                 "autopilot_digest_hour": -1})
     e.n = 0

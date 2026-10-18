@@ -199,7 +199,6 @@ class MediaSyncEngine:
         target_language: str = "Greek",      # Human-readable name for metadata
         embedded_extraction: bool = False,
         embedded_keywords: Optional[str] = None,
-        embedded_auto_translate: bool = False,
         scan_ass: bool = True,
     ):
         self.sonarr = sonarr_config
@@ -213,7 +212,6 @@ class MediaSyncEngine:
         # Embedded ASS extraction (docs/PLAN_embedded_ass_extraction.md). Off by default
         # or when scan_ass is disabled.
         self.embedded_extraction = embedded_extraction and scan_ass
-        self.embedded_auto_translate = embedded_auto_translate
         from integrations import embedded_subs as _embedded_subs
         self.embedded_keywords = _embedded_subs.parse_keywords(embedded_keywords)
         self._embedded_tools = None
@@ -2174,7 +2172,6 @@ class MediaSyncEngine:
                 "candidates": embedded_subs.describe_candidates(tracks),
                 "import_metadata": import_metadata,
                 "project_metadata": project_metadata,
-                "auto_translate": self.embedded_auto_translate,
                 **(extra_options or {}),
             },
         )

@@ -34,7 +34,6 @@
   "arr_path_mappings": [],
   "arr_sync_interval": 0,
   "arr_source_language": "en",
-  "arr_auto_translate": false,
   "embedded_extraction_enabled": false,
   "embedded_deprioritize_keywords": "signs, songs, s&s, signs & songs, forced, commentary, karaoke",
   "embedded_extraction_concurrency": 1,
