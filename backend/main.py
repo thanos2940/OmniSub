@@ -562,6 +562,18 @@ if _STATIC_DIR.is_dir():
     if _assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=_assets_dir), name="spa-assets")
 
+    # The web app's pages (App.jsx routes). A browser loading one directly (address bar, refresh)
+    # gets the app even where an API alias shares the path (GET /queue) or the API-key gate covers
+    # it (/settings); API clients ask for JSON and still reach the API.
+    _SPA_PAGES = {"project", "settings", "library", "dashboard", "health", "autopilot", "review", "queue"}
+
+    @app.middleware("http")
+    async def spa_pages_for_browsers(request: Request, call_next):
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            if request.url.path.strip("/").split("/", 1)[0] in _SPA_PAGES:
+                return FileResponse(_STATIC_DIR / "index.html")
+        return await call_next(request)
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa_fallback(full_path: str):
         if full_path.startswith("api/"):
