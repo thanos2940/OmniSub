@@ -273,6 +273,9 @@ async def test_apply_update_release_tag_writes_version_file_and_restarts(tmp_pat
 
     version_file = tmp_path / "release_version.json"
     monkeypatch.setattr(svc, "RELEASE_VERSION_FILE", version_file)
+    monkeypatch.setattr(svc, "CHECK_CACHE_FILE", tmp_path / "update_check.json")
+    monkeypatch.setattr(svc, "frontend_dir", tmp_path / "frontend")  # a real build must not replace backend/static
+    monkeypatch.setattr(svc, "static_dir", tmp_path / "static")
 
     calls = []
     def mock_git(args, timeout=15.0):
@@ -382,6 +385,7 @@ def test_system_router_endpoints(client, monkeypatch):
         }
 
     monkeypatch.setattr(update_service, "check_for_updates", mock_check)
+    monkeypatch.setattr(update_service, "schedule_refresh", lambda: False)  # no network from the status endpoint
 
     # 1. /api/system/version
     res_ver = client.get("/api/system/version")
@@ -390,8 +394,9 @@ def test_system_router_endpoints(client, monkeypatch):
     assert data_ver["tag_name"] == "v2.2.0"
     assert data_ver["installed_release"]["tag_name"] == "v2.2.0"
 
-    # 2. /api/system/check-update
-    res_check = client.post("/api/system/check-update")
+    # 2. /api/system/updates/check (the old duplicate /api/system/check-update is gone)
+    assert client.post("/api/system/check-update").status_code in (404, 405)
+    res_check = client.post("/api/system/updates/check")
     assert res_check.status_code == 200
     data_check = res_check.json()
     assert data_check["update_available"] is True
@@ -407,12 +412,13 @@ def test_system_router_endpoints(client, monkeypatch):
     assert res_auto_post.status_code == 200
     assert res_auto_post.json()["auto_update_enabled"] is True
 
-    # 4. /api/system/update
+    # 4. /api/system/updates/apply (the old duplicate /api/system/update is gone)
     async def mock_apply(force=False, target_tag=None):
         return {"success": True, "status": "restarting", "message": "Server restarting..."}
 
     monkeypatch.setattr(update_service, "apply_update", mock_apply)
-    res_up = client.post("/api/system/update", json={"force": False, "target_tag": "v2.3.0"})
+    assert client.post("/api/system/update", json={}).status_code in (404, 405)
+    res_up = client.post("/api/system/updates/apply", json={"force": False, "target_tag": "v2.3.0"})
     assert res_up.status_code == 200
     assert res_up.json()["status"] == "restarting"
 

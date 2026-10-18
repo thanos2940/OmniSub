@@ -5,9 +5,10 @@ Manages official GitHub release tracking, dependency synchronization,
 frontend static rebuilding, and graceful server restarts.
 
 Features:
-- Tracks Official GitHub Releases (/releases/latest) by default.
-- Prevents untracked/intermediate commits from triggering false updates.
-- Preserves backward-compatible Git commit tracking for fallback and test suites.
+- Two update channels (setting ``update_channel``): ``main`` follows origin/main (every pushed commit is
+  an update, the commit subjects are the release notes) and ``releases`` follows GitHub Releases
+  (intermediate commits never trigger an update). ``auto`` (the default) is ``main`` while the repository
+  has no release tags and ``releases`` once it has.
 - Safe update execution: guards against interrupting active translation jobs
   and refuses to erase uncommitted or unpushed local changes.
 - Automatically updates Python dependencies (pip install) and frontend static
@@ -47,26 +48,40 @@ if not PYTHON_EXE.is_file():
 
 GITHUB_REPO = "thanos2940/OmbiSub---Google-Seminar-Capstone-Project"
 DEFAULT_BRANCH = "main"
+CHANNEL_MAIN = "main"
+CHANNEL_RELEASES = "releases"
+UPDATE_CHANNELS = ("auto", CHANNEL_MAIN, CHANNEL_RELEASES)
+MAX_CHANGELOG = 20  # commit subjects shown as the release notes of the main channel
 
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 RELEASE_VERSION_FILE = DATA_DIR / "release_version.json"
+# The result of the last update check. The status endpoint (called by the UI on every page load) only
+# reads this; the network is touched by an explicit check, the auto-update loop, or a background refresh
+# when the result is older than CHECK_MAX_AGE_SECONDS (GitHub's API rate-limits anonymous callers hard).
+CHECK_CACHE_FILE = DATA_DIR / "update_check.json"
+CHECK_MAX_AGE_SECONDS = 6 * 3600
+CHECK_RETRY_SECONDS = 600  # minimum gap between two background refreshes, successful or not
 
 
 class UpdateService:
     """Manages update checking, dependency synchronization, and graceful restarts."""
 
     RELEASE_VERSION_FILE = RELEASE_VERSION_FILE
+    CHECK_CACHE_FILE = CHECK_CACHE_FILE
 
     def __init__(self):
-        self._last_check_time: float = 0.0
         self._cached_status: Optional[Dict[str, Any]] = None
-        self._cache_ttl_seconds: float = 45.0
+        self._last_attempt: float = 0.0
+        self._refresh_task: Optional["asyncio.Task"] = None
         self._updating: bool = False
         self.github_repo: str = GITHUB_REPO
+        self.backend_dir: Path = BACKEND_DIR
+        self.frontend_dir: Path = FRONTEND_DIR
+        self.static_dir: Path = BACKEND_DIR / "static"
 
     def is_git_repo(self) -> bool:
         """Check if root directory is a valid git repository."""
-        return (ROOT_DIR / ".git").is_dir()
+        return (ROOT_DIR / ".git").exists()  # a directory, or a file in a git worktree
 
     def _run_git(self, args: List[str], timeout: float = 15.0) -> subprocess.CompletedProcess:
         """Execute a git command in ROOT_DIR with timeout."""
@@ -79,6 +94,20 @@ class UpdateService:
             check=False,
             creationflags=CREATE_NO_WINDOW,
         )
+
+    def resolve_channel(self, release_only: Optional[bool] = None) -> str:
+        """The channel in force: ``release_only`` (True = releases, False = main) wins, then the
+        ``update_channel`` setting; ``auto`` means releases once the repository has release tags."""
+        if release_only is not None:
+            return CHANNEL_RELEASES if release_only else CHANNEL_MAIN
+        configured = str(storage.load_global_config().get("update_channel") or "auto").strip().lower()
+        if configured in (CHANNEL_MAIN, CHANNEL_RELEASES):
+            return configured
+        if self.is_git_repo():
+            tags = self._run_git(["tag", "--list"], timeout=5.0)
+            if tags.returncode == 0 and str(tags.stdout).strip():
+                return CHANNEL_RELEASES
+        return CHANNEL_MAIN
 
     def get_current_version_info(self) -> Dict[str, Any]:
         """Get current local Git commit information."""
@@ -233,25 +262,19 @@ class UpdateService:
     async def check_for_updates(self, force: bool = False, release_only: Optional[bool] = None) -> Dict[str, Any]:
         """Check for updates using Official GitHub Releases or Git commit fallback."""
         now = time.time()
-        if not force and self._cached_status and (now - self._last_check_time < self._cache_ttl_seconds):
-            return self._cached_status
+        self._last_attempt = now
+        if not force:
+            cached = self.cached_status()
+            if cached.get("checked") and now - cached.get("checked_at", 0) < CHECK_MAX_AGE_SECONDS:
+                return cached
 
         local_info = self.get_current_version_info()
         branch = local_info.get("branch") or DEFAULT_BRANCH
         installed_release = self.get_installed_release()
 
-        # Determine release mode vs legacy commit tracking
-        config = storage.load_global_config() if hasattr(storage, "load_global_config") else {}
-        update_channel = config.get("update_channel", "releases")
-
-        # Detect if running under legacy unit test that mocks _run_git without mock_releases
-        legacy_mock = getattr(self._run_git, "__name__", "") == "mock_run_git"
-
-        use_releases = (release_only is True) or (
-            release_only is None and not legacy_mock and update_channel == "releases"
-        )
-
-        latest_release = await asyncio.to_thread(self.fetch_latest_github_release)
+        channel = self.resolve_channel(release_only)
+        use_releases = channel == CHANNEL_RELEASES
+        latest_release = await asyncio.to_thread(self.fetch_latest_github_release) if use_releases else None
 
         # -------------------------------------------------------------
         # Mode A: Official GitHub Releases
@@ -287,6 +310,10 @@ class UpdateService:
                 }]
 
             status = {
+                "channel": CHANNEL_RELEASES,
+                "behind": 1 if update_available else 0,
+                "ahead": 0,
+                "commits": [],
                 "update_available": update_available,
                 "release_mode": "github_release",
                 "release_status": release_status,
@@ -309,15 +336,15 @@ class UpdateService:
                 "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
             }
 
-            self._cached_status = status
-            self._last_check_time = now
-            return status
+            return self._remember(status, now)
 
         # -------------------------------------------------------------
-        # Mode B: Backward-Compatible Commit Tracking (legacy / dev mode)
+        # Mode B: the main channel - follow origin/main
         # -------------------------------------------------------------
+        remote = DEFAULT_BRANCH  # the main channel always follows origin/main
         update_available = False
         commits_behind = 0
+        commits_ahead = 0
         changelog: List[Dict[str, str]] = []
         remote_commit_hash = local_info.get("commit_hash", "")
         remote_commit_short = local_info.get("commit_short", "")
@@ -328,22 +355,27 @@ class UpdateService:
         git_success = False
         if self.is_git_repo():
             try:
-                fetch_res = await asyncio.to_thread(self._run_git, ["fetch", "origin", branch], 20.0)
+                fetch_res = await asyncio.to_thread(self._run_git, ["fetch", "origin", remote], 20.0)
                 if fetch_res.returncode == 0:
                     git_success = True
-                    rev_res = self._run_git(["rev-parse", f"origin/{branch}"], timeout=5.0)
+                    rev_res = self._run_git(["rev-parse", f"origin/{remote}"], timeout=5.0)
                     if rev_res.returncode == 0:
                         remote_commit_hash = rev_res.stdout.strip()
                         remote_commit_short = remote_commit_hash[:7]
 
-                    count_res = self._run_git(["rev-list", "--count", f"HEAD..origin/{branch}"], timeout=5.0)
+                    count_res = self._run_git(["rev-list", "--count", f"HEAD..origin/{remote}"], timeout=5.0)
                     if count_res.returncode == 0 and count_res.stdout.strip().isdigit():
                         commits_behind = int(count_res.stdout.strip())
                         update_available = commits_behind > 0
 
+                    ahead_res = self._run_git(["rev-list", "--count", f"origin/{remote}..HEAD"], timeout=5.0)
+                    if ahead_res.returncode == 0 and ahead_res.stdout.strip().isdigit():
+                        commits_ahead = int(ahead_res.stdout.strip())
+
                     if update_available:
                         log_res = self._run_git(
-                            ["log", f"HEAD..origin/{branch}", "--pretty=format:%h|%s|%an|%ad", "--date=short"],
+                            ["log", f"HEAD..origin/{remote}", f"--max-count={MAX_CHANGELOG}",
+                             "--pretty=format:%h|%s|%an|%ad", "--date=short"],
                             timeout=5.0
                         )
                         if log_res.returncode == 0 and log_res.stdout.strip():
@@ -364,9 +396,10 @@ class UpdateService:
                 logger.warning(f"git fetch failed, will try GitHub API fallback: {e}")
 
         # GitHub API fallback if git fetch didn't succeed
+        api_success = False
         if not git_success:
             try:
-                api_url = f"https://api.github.com/repos/{self.github_repo}/commits/{branch}"
+                api_url = f"https://api.github.com/repos/{self.github_repo}/commits/{remote}"
                 req = Request(api_url, headers={"User-Agent": "OmbiSub-UpdateService"})
 
                 def _fetch_api():
@@ -391,10 +424,15 @@ class UpdateService:
                             "author": remote_author,
                             "date": remote_date,
                         }]
+                api_success = True
             except Exception as e:
                 logger.warning(f"GitHub API update check fallback failed: {e}")
 
         status = {
+            "channel": CHANNEL_MAIN,
+            "behind": commits_behind,
+            "ahead": commits_ahead,
+            "commits": changelog,
             "update_available": update_available,
             "release_mode": "commits",
             "latest_release": latest_release,
@@ -414,9 +452,91 @@ class UpdateService:
             "last_checked": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
         }
 
+        if not (git_success or api_success):
+            # Neither git nor GitHub answered: report it, but do not cache "up to date" as a result.
+            status["checked"] = False
+            status["error"] = "Could not reach GitHub to check for updates."
+            return status
+        return self._remember(status, now)
+
+    # ------------------------------------------------------------------ cached check result
+
+    def _remember(self, status: Dict[str, Any], now: float) -> Dict[str, Any]:
+        status["checked"] = True
+        status["checked_at"] = now
         self._cached_status = status
-        self._last_check_time = now
+        try:
+            self.CHECK_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.CHECK_CACHE_FILE.with_suffix(".tmp")
+            tmp.write_text(json.dumps(status), encoding="utf-8")
+            os.replace(tmp, self.CHECK_CACHE_FILE)
+        except Exception as e:
+            logger.debug(f"Could not persist the update check: {e}")
         return status
+
+    def _forget_check(self) -> None:
+        self._cached_status = None
+        try:
+            self.CHECK_CACHE_FILE.unlink()
+        except OSError:
+            pass
+
+    def cached_status(self) -> Dict[str, Any]:
+        """The last check result, without touching the network. Falls back to a status built from the
+        local checkout alone ("checked": False) when there is none, or when it describes another
+        commit or channel than the ones in force now."""
+        local = self.get_current_version_info()
+        channel = self.resolve_channel()
+        status = self._cached_status
+        if status is None and self.CHECK_CACHE_FILE.is_file():
+            try:
+                loaded = json.loads(self.CHECK_CACHE_FILE.read_text(encoding="utf-8"))
+                status = loaded if isinstance(loaded, dict) else None
+            except Exception:
+                status = None
+        if status and status.get("current_commit_full") == local.get("commit_hash") and status.get("channel") == channel:
+            self._cached_status = status
+            return status
+        commit = local.get("commit_hash", "")
+        return {
+            "checked": False,
+            "checked_at": 0,
+            "channel": channel,
+            "update_available": False,
+            "release_mode": "github_release" if channel == CHANNEL_RELEASES else "commits",
+            "release_status": "not_checked",
+            "latest_release": None,
+            "installed_release": self.get_installed_release(),
+            "commits_behind": 0, "behind": 0, "ahead": 0, "commits": [], "changelog": [],
+            "current_commit": local.get("commit_short", ""),
+            "current_commit_full": commit,
+            "current_message": local.get("message", ""),
+            "current_date": local.get("date", ""),
+            "latest_commit": local.get("commit_short", ""),
+            "latest_commit_full": commit,
+            "latest_message": "", "latest_author": "", "latest_date": "",
+            "branch": local.get("branch") or DEFAULT_BRANCH,
+            "last_checked": "",
+        }
+
+    def is_stale(self, status: Optional[Dict[str, Any]] = None) -> bool:
+        status = status if status is not None else self.cached_status()
+        return time.time() - float(status.get("checked_at") or 0) >= CHECK_MAX_AGE_SECONDS
+
+    def schedule_refresh(self) -> bool:
+        """Start one background check when the cached result is old (or missing). Single flight, and at
+        most one attempt per CHECK_RETRY_SECONDS even when it fails. Never blocks the caller."""
+        now = time.time()
+        if self._refresh_task is not None and not self._refresh_task.done():
+            return False
+        if now - self._last_attempt < CHECK_RETRY_SECONDS or not self.is_stale():
+            return False
+        try:
+            self._refresh_task = asyncio.get_running_loop().create_task(self.check_for_updates(force=True))
+        except RuntimeError:  # no running loop
+            return False
+        self._last_attempt = now
+        return True
 
     def has_active_jobs(self) -> bool:
         """Check whether translation or sync jobs are currently in-flight."""
@@ -429,7 +549,7 @@ class UpdateService:
             pass
         try:
             from services import agent_runner
-            if agent_runner.get_runner().status().running:
+            if agent_runner.get_runner().status == "running":  # translating now; "idle" (watching) does not count
                 return True
         except Exception:
             pass
@@ -476,10 +596,12 @@ class UpdateService:
 
         self._updating = True
         try:
-            # Determine target ref: target_tag -> latest official release tag -> branch
+            channel = CHANNEL_RELEASES if target_tag else self.resolve_channel()
+
+            # Determine target ref: target_tag -> latest official release tag (releases channel) -> origin/<branch>
             tag_name = target_tag
             latest_rel = None
-            if not tag_name:
+            if not tag_name and channel == CHANNEL_RELEASES:
                 latest_rel = await asyncio.to_thread(self.fetch_latest_github_release)
                 if latest_rel and latest_rel.get("tag_name"):
                     tag_name = latest_rel["tag_name"]
@@ -512,7 +634,17 @@ class UpdateService:
                             ),
                         }
             else:
-                branch = self.get_current_version_info().get("branch") or DEFAULT_BRANCH
+                current_branch = self.get_current_version_info().get("branch") or DEFAULT_BRANCH
+                branch = DEFAULT_BRANCH if channel == CHANNEL_MAIN else current_branch
+                if channel == CHANNEL_MAIN and current_branch not in (DEFAULT_BRANCH, "HEAD"):
+                    # The reset below would move whatever branch is checked out onto origin/main.
+                    self._updating = False
+                    return {
+                        "success": False,
+                        "status": "wrong_branch",
+                        "message": f"The checkout is on branch '{current_branch}', not '{DEFAULT_BRANCH}'; "
+                                   f"the {CHANNEL_MAIN} channel only updates the {DEFAULT_BRANCH} branch.",
+                    }
                 logger.info(f"Applying update: pulling from origin/{branch}...")
                 fetch_res = await asyncio.to_thread(self._run_git, ["fetch", "origin", branch], 30.0)
                 if fetch_res.returncode != 0:
@@ -572,25 +704,12 @@ class UpdateService:
 
             # Install updated requirements if changed
             if reqs_changed:
-                logger.info("backend/requirements.txt changed; running pip install...")
-                try:
-                    req = "requirements.lock.txt" if (BACKEND_DIR / "requirements.lock.txt").is_file() else "requirements.txt"
-                    pip_cmd = [str(PYTHON_EXE), "-m", "pip", "install", "-r", req]
-                    await asyncio.to_thread(
-                        subprocess.run,
-                        pip_cmd,
-                        cwd=str(BACKEND_DIR),
-                        capture_output=True,
-                        timeout=180.0,
-                        check=False,
-                        creationflags=CREATE_NO_WINDOW,
-                    )
-                except Exception as e:
-                    logger.warning(f"pip install completed with warning: {e}")
+                logger.info("backend/requirements changed; running pip install...")
+                await asyncio.to_thread(self._pip_install)
 
-            # Rebuild frontend static assets if changed
-            if frontend_changed:
-                logger.info("frontend/ files changed in release diff; rebuilding static assets...")
+            # Rebuild frontend static assets if changed (or if there is no build at all)
+            if frontend_changed or not (self.static_dir / "index.html").is_file():
+                logger.info("frontend/ changed (or no UI build exists); refreshing static assets...")
                 static_downloaded = False
                 if latest_rel and latest_rel.get("assets"):
                     static_asset = next(
@@ -604,7 +723,7 @@ class UpdateService:
                             def _extract_zip():
                                 with urlopen(req, timeout=30.0) as resp:
                                     zf = zipfile.ZipFile(io.BytesIO(resp.read()))
-                                    dest = BACKEND_DIR / "static"
+                                    dest = self.static_dir
                                     dest.mkdir(parents=True, exist_ok=True)
                                     zf.extractall(dest)
                             await asyncio.to_thread(_extract_zip)
@@ -613,32 +732,15 @@ class UpdateService:
                         except Exception as e:
                             logger.warning(f"Failed extracting static.zip from release asset: {e}")
 
-                if not static_downloaded and shutil.which("npm"):
-                    try:
-                        logger.info("Building frontend via npm run build...")
-                        await asyncio.to_thread(
-                            subprocess.run,
-                            ["npm", "run", "build"],
-                            cwd=str(FRONTEND_DIR),
-                            shell=(sys.platform == "win32"),
-                            capture_output=True,
-                            timeout=180.0,
-                            check=False,
-                            creationflags=CREATE_NO_WINDOW,
-                        )
-                        dist_dir = FRONTEND_DIR / "dist"
-                        static_dir = BACKEND_DIR / "static"
-                        if dist_dir.is_dir():
-                            shutil.copytree(dist_dir, static_dir, dirs_exist_ok=True)
-                            logger.info("Copied frontend/dist into backend/static.")
-                    except Exception as e:
-                        logger.warning(f"npm build/copy completed with warning: {e}")
+                if not static_downloaded:
+                    await asyncio.to_thread(self._build_frontend)
 
             # Write release_version.json
             new_version = self.get_current_version_info()
             version_data = {
                 "tag_name": tag_name or new_version.get("commit_short", "latest"),
                 "commit_sha": new_version.get("commit_hash", ""),
+                "channel": CHANNEL_RELEASES if tag_name else channel,
                 "installed_at": datetime.now(timezone.utc).isoformat(),
             }
             try:
@@ -649,8 +751,7 @@ class UpdateService:
                 logger.warning(f"Failed writing release_version.json: {e}")
 
             # Invalidate cached status
-            self._cached_status = None
-            self._last_check_time = 0.0
+            self._forget_check()
 
             # Trigger graceful restart
             logger.info("Update applied successfully. Triggering server restart...")
@@ -665,6 +766,78 @@ class UpdateService:
             self._updating = False
             logger.error(f"Failed to apply update: {e}", exc_info=True)
             return {"success": False, "status": "error", "message": str(e)}
+
+    def _pip_install(self) -> None:
+        """Install the locked requirements (the plain list when there is no lock file) into this Python."""
+        req = "requirements.lock.txt" if (self.backend_dir / "requirements.lock.txt").is_file() else "requirements.txt"
+        try:
+            res = subprocess.run(
+                [str(PYTHON_EXE), "-m", "pip", "install", "-r", req],
+                cwd=str(self.backend_dir),
+                capture_output=True,
+                text=True,
+                timeout=600.0,
+                check=False,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            if res.returncode != 0:
+                logger.warning(f"pip install -r {req} failed ({res.returncode}): {str(res.stderr)[-500:]}")
+        except Exception as e:
+            logger.warning(f"pip install completed with warning: {e}")
+
+    def _build_frontend(self) -> bool:
+        """``npm ci && npm run build`` in frontend/, then swap frontend/dist into backend/static.
+
+        The previous build stays in place until the new one is complete; without npm (or when the build
+        fails) it is left untouched. Returns whether backend/static was replaced.
+        """
+        npm = shutil.which("npm")
+        if not npm:
+            logger.warning("npm was not found: the web UI was not rebuilt (backend/static is unchanged).")
+            return False
+        try:
+            for cmd in (["npm", "ci"], ["npm", "run", "build"]):
+                logger.info(f"Frontend: {' '.join(cmd)}")
+                res = subprocess.run(
+                    cmd,
+                    cwd=str(self.frontend_dir),
+                    shell=(sys.platform == "win32"),  # npm is npm.cmd on Windows
+                    capture_output=True,
+                    text=True,
+                    timeout=600.0,
+                    check=False,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                if res.returncode != 0:
+                    logger.warning(f"{' '.join(cmd)} failed ({res.returncode}): {str(res.stderr)[-500:]}")
+                    return False
+            dist = self.frontend_dir / "dist"
+            if not (dist / "index.html").is_file():
+                logger.warning("The frontend build produced no dist/index.html; backend/static is unchanged.")
+                return False
+            self._swap_static(dist)
+            logger.info("Web UI rebuilt and installed in backend/static.")
+            return True
+        except Exception as e:
+            logger.warning(f"Frontend build completed with warning: {e}")
+            return False
+
+    def _swap_static(self, dist: Path) -> None:
+        """Replace the static dir with a copy of ``dist``; the old one is only removed once the new is in place."""
+        static = self.static_dir
+        new, old = static.with_name(static.name + ".new"), static.with_name(static.name + ".old")
+        for leftover in (new, old):
+            shutil.rmtree(leftover, ignore_errors=True)
+        shutil.copytree(dist, new)
+        try:
+            if static.exists():
+                static.rename(old)
+            new.rename(static)
+        except OSError:
+            if old.exists() and not static.exists():
+                old.rename(static)  # put the previous build back
+            raise
+        shutil.rmtree(old, ignore_errors=True)
 
     def trigger_restart(self, delay_seconds: float = 1.0):
         """Spawn detached restart helper script or exit with code 42 under tray supervisor."""

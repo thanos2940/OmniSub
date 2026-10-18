@@ -245,8 +245,9 @@ def test_webhook_push_valid_secret(client, monkeypatch):
 # 3. System API Router Tests
 # ===========================================================================
 
-def test_system_updates_status_endpoint(client):
+def test_system_updates_status_endpoint(client, monkeypatch):
     """Verify GET /api/system/updates/status returns valid schema."""
+    monkeypatch.setattr(update_service, "schedule_refresh", lambda: False)
     resp = client.get("/api/system/updates/status")
     assert resp.status_code == 200
     data = resp.json()
