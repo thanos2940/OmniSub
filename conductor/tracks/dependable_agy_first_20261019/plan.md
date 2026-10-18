@@ -48,3 +48,64 @@ Rules for every workstream
 ## Phase 4 — verification
 - [ ] V1 Full pytest, eslint, vite build; preview the UI (light/dark, narrow width).
 - [ ] V2 Update CLAUDE.md, handoff, memory; commit; deployment steps for the server.
+
+## Phase 3 detail — UI spec (from the 2026-10-19 walkthrough of the running UI)
+
+Observed: Home `/` is a bare project list (no progress); `/library` (MediaLibrary) is the useful list
+(progress bars, status chips, priority, Translate missing / View / Disable). Project page: "Back to
+Dashboard", "Guided Pipeline Wizard", "Sync Disk & Server", 8 tabs that overflow into a horizontal
+scrollbar, a "Quick tools" strip (Agent Translate, Translate with runner, Batch Extract Subs, SubtitleEdit
+Polish, Format Conversion) and episode cards with 2 translate icons + 4 tool icons each. Queue page: six
+header buttons (Resume Worker, Sync Agent Tasks, Sync Disk Subtitles, Cancel All Pending, Clear Queue,
+Refresh), a small Agent runner card, a Gemini per-model quota panel. Settings opens on "Gemini AI" with the
+engine radio buried inside; its tab row also overflows. Top bar: Home, search, API Key, Unsecured,
+Dashboard, Review, Queue, Autopilot, Library, Health, gear.
+
+### Global
+- Top bar: logo (= Library), nav **Library · Activity · Review (count) · Settings · System (health dot)**,
+  search/command palette, lock icon (auth state → Settings > Security), runner pill ("agy · 2 translating"
+  / "paused" / "idle" → Activity). Old routes redirect: `/library`→`/`, `/queue`,`/autopilot`→`/activity`,
+  `/health`,`/dashboard`→`/system`.
+- No horizontal tab scrollbars: tabs wrap or become a select on narrow screens. Light + dark, 390 px wide works.
+
+### Library (`/`) — MediaLibrary becomes home
+- Header: "Library", summary (titles, % translated, missing, in queue), actions: Sync now, Translate all
+  missing (confirm with count). No worker buttons.
+- Tabs: Series · Movies · Other (manual projects; "New project" lives here) · Ignored.
+- Filters: search, status, priority, sort. Row: title, status chip, priority menu, progress bar, counts,
+  Translate missing, open.
+
+### Activity (`/activity`)
+- Runner panel on top (engine + model, state, lanes with progress, Pause/Resume, last error, quota pause
+  note). Tabs: Queue (actions: Run now, Postpone, Cancel, Logs; bulk), History (completed/failed; Retry),
+  Autopilot (existing AutopilotPage pieces). Gemini quota panel only when the engine is `model`.
+  Maintenance actions (sync disk subtitles, clear queue, cancel all) in one "More" menu.
+
+### System (`/system`)
+- Status (from `/api/system/status` + existing health checks + Library translation check card; Restart),
+  Logs (pick log, lines, auto-refresh, filter, download), Backup (existing card), Updates (channel, check,
+  apply, auto-update, commits list).
+
+### Project page
+- Breadcrumb Library › Title. Header: type, language, priority, primary **Translate missing**, Sync, ⚙
+  (project settings incl. VisualGuard/formatting). Tabs: **Episodes · Glossary · Context · History**.
+- Episodes: filter chips (All, Translated, Missing, In progress, No subtitle), search, one table grouped
+  by season (no card grid). Row: status, progress, last translated, primary **Translate** (or
+  **Retranslate**), overflow menu (Extract from video, Inspect tracks, SubtitleEdit fixes, Check missing
+  lines, ScriptGuard, Upload subtitle, Delete translation). Bulk bar: Translate, Extract, Delete translation.
+- Glossary: glossary table + character profiles section + "Build with agy" / "Enhance with agy".
+- Context: guide editor + "Build with agy" / "Enhance with agy" + episode summaries (collapsible).
+- History: TM & QC. Removed: Guided Pipeline Wizard, Quick tools strip, Token Stats tab, Agent-vs-model
+  double buttons, model pickers when the engine is agent.
+
+### Settings (`/settings`, side navigation)
+- Translation (how it works: agy first, API for refused lines; runner: CLI, model, fallbacks, lanes, per
+  show, chunk lines, fix rounds, autostart; API rescue: on/off, model, Gemini key set/test/remove, safety
+  filter; Advanced (collapsed): model engine + its rosters/presets/hyperparameters/concurrency/batch).
+- Connections (Sonarr, Radarr, Plex — URL/key/token + Test; path mappings + test; webhook URLs to paste
+  into Sonarr/Radarr; media probe diagnostic collapsed).
+- Subtitles (formats, ASS, lyrics, embedded extraction, SubtitleEdit path, formatting/VisualGuard defaults).
+- Automation (Autopilot; notifications/digest). Security (login, API key for integrations). General
+  (target language and defaults, URL base, trusted proxies; port shown read-only).
+- Removed: Sandbox Tester, Quality Presets / Hyperparameters tabs (folded into Translation › Advanced),
+  legacy Auto-Translate Mode + Bazarr delay.
