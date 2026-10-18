@@ -51,12 +51,21 @@ if (-not (Test-Path (Join-Path $Backend 'run_server.py'))) { Fail "backend\run_s
 # ---------------------------------------------------------------- prerequisites
 Step 'Checking prerequisites'
 function Find-Python {
-    foreach ($cand in @(@('python'), @('py', '-3'))) {
+    # Candidates as a list of arrays (3.11 first: the version the requirements are tested with).
+    $cands = New-Object System.Collections.ArrayList
+    foreach ($p in @("$env:ProgramFiles\Python311\python.exe", "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe")) {
+        if (Test-Path $p) { [void]$cands.Add([string[]]@($p)) }
+    }
+    [void]$cands.Add([string[]]@('py', '-3.11'))
+    [void]$cands.Add([string[]]@('python'))
+    [void]$cands.Add([string[]]@('py', '-3'))
+    foreach ($cand in $cands) {
         $exe = Get-Command $cand[0] -ErrorAction SilentlyContinue
         if (-not $exe) { continue }
         try {
             $extra = @(); if ($cand.Count -gt 1) { $extra = $cand[1..($cand.Count - 1)] }
-            $ver = & $exe.Source @extra -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])' 2>$null
+            # no double quotes in the code: Windows PowerShell 5.1 strips them from native arguments
+            $ver = & $exe.Source @extra -c "import sys;print('.'.join(map(str,sys.version_info[:3])))" 2>$null
             if ($LASTEXITCODE -eq 0 -and $ver) {
                 $v = [version]$ver
                 if ($v -ge [version]'3.11') { return @{ Exe = $exe.Source; Args = $extra; Version = $ver } }
