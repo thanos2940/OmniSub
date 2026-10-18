@@ -26,6 +26,20 @@ from services.translation_service import _gather_project_text, _merge_glossaries
 router = APIRouter()
 
 
+async def _ask_agy_for_context(project_name: str, *, want_guide: bool, want_terms: bool,
+                               improve_guide: bool = False, episodes: Optional[List[str]] = None) -> Dict:
+    """Agent mode: one request to the agent CLI for a project's context guide and/or glossary terms (the shared
+    brief prompt of services/project_bootstrap.py). Returns {guide, terms, prompt, text}."""
+    import asyncio
+    from services import agy_llm, project_bootstrap
+
+    def ask(prompt: str) -> str:
+        return agy_llm.complete(prompt, purpose="context_guide" if want_guide else "glossary", project=project_name)
+
+    return await asyncio.to_thread(project_bootstrap.ask_for_context, project_name, ask, want_guide=want_guide,
+                                   want_terms=want_terms, improve_guide=improve_guide, episodes=episodes)
+
+
 @router.delete("/projects/{project_name}/glossary")
 async def delete_glossary(project_name: str):
     metadata = storage.load_project_metadata(project_name)
@@ -140,14 +154,29 @@ async def _process_create_glossary(job_id: str, project_name: str, episode_names
         if not text_lines:
             update_job(job_id, message="No episodes, using research mode...", log="Research mode")
 
-        result, debug_info = await generate_glossary_adk(
-            text_lines,
-            effective_show_name,
-            metadata.get("target_language", "English"),
-            existing_glossary=existing_glossary,
-            model_name=model,
-            enable_research=enable_research
-        )
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            # Agent mode: the agent CLI proposes the terms; they join the glossary through the same merge an
+            # episode's submit uses (everyday words are left out, genders reach the character profiles).
+            from services.agent_task_service import agent_task_service
+            from utils.language_codes import to_code
+            update_job(job_id, progress=30.0, message="Asking the agent CLI...", log="Agent CLI glossary request")
+            found = await _ask_agy_for_context(project_name, want_guide=False, want_terms=True)
+            if not found["terms"]:
+                raise RuntimeError(f"The agent CLI returned no glossary terms: {found['text'][:200]!r}")
+            agent_task_service._merge_terms(project_name, found["terms"], to_code(metadata.get("target_language", "Greek")))
+            metadata = storage.load_project_metadata(project_name) or metadata
+            result = metadata.get("glossary") or {"terms": []}
+            debug_info = {"prompt": found["prompt"], "response": found["text"]}
+        else:
+            result, debug_info = await generate_glossary_adk(
+                text_lines,
+                effective_show_name,
+                metadata.get("target_language", "English"),
+                existing_glossary=existing_glossary,
+                model_name=model,
+                enable_research=enable_research
+            )
 
         metadata["glossary"] = result
         _invalidate_translation_cache(metadata)
@@ -179,6 +208,24 @@ async def _process_enhance_glossary(
         target_language = metadata.get("target_language", "English")
         show_name = metadata.get("show_name", project_name)
         existing_terms = metadata.get("glossary", {}).get("terms", [])
+
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            # Agent mode: candidate terms from the agent CLI (research is the CLI model's own knowledge of the show).
+            from services.agent_task_service import agent_task_service
+            from utils.language_codes import to_code
+            update_job(job_id, progress=30.0, message="Asking the agent CLI...", log="Agent CLI glossary request")
+            found = await _ask_agy_for_context(project_name, want_guide=False, want_terms=True,
+                                               episodes=episode_names or None)
+            from utils.glossary_judgment import accept_new_term
+            known = {t.get("term", "").lower() for t in existing_terms}
+            vocab = agent_task_service._vocab(project_name)
+            new_terms = [t for t in agent_task_service._normalize_harvested_terms(found["terms"], to_code(target_language))
+                         if t["term"].lower() not in known and accept_new_term(t, vocab)]
+            update_job(job_id, status="completed", progress=100.0, message="Glossary enhanced",
+                       log=f"Found {len(new_terms)} new candidate terms for {target_language}",
+                       result={"terms": new_terms})
+            return
 
         if episode_names:
             text_lines = await _gather_project_text(project_name, episode_names)
@@ -337,23 +384,31 @@ async def _process_create_context(job_id: str, project_name: str, episode_names:
         if not text_lines:
             update_job(job_id, message="Researching...", log="Research mode (no files selected)")
 
-        update_job(job_id, progress=20.0, message="Researching...", log="Running research agent")
-        research_data, research_debug = await research_project_adk(
-            effective_show_name,
-            text_lines,
-            metadata.get("target_language", "English"),
-            model_name=model
-        )
-        
-        update_job(job_id, progress=60.0, message="Generating instructions...", log="Running prompt engineer")
-        enhanced_context, enhance_debug = await enhance_context_guide_adk(
-            research_data.get("findings", ""),
-            effective_show_name,
-            target_language=metadata.get("target_language", "English"),
-            model_name=model
-        )
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            update_job(job_id, progress=30.0, message="Asking the agent CLI...", log="Agent CLI context guide request")
+            found = await _ask_agy_for_context(project_name, want_guide=True, want_terms=False)
+            if not found["guide"]:
+                raise RuntimeError(f"The agent CLI returned no context guide: {found['text'][:200]!r}")
+            enhanced_context = found["guide"]
+        else:
+            update_job(job_id, progress=20.0, message="Researching...", log="Running research agent")
+            research_data, research_debug = await research_project_adk(
+                effective_show_name,
+                text_lines,
+                metadata.get("target_language", "English"),
+                model_name=model
+            )
 
-        
+            update_job(job_id, progress=60.0, message="Generating instructions...", log="Running prompt engineer")
+            enhanced_context, enhance_debug = await enhance_context_guide_adk(
+                research_data.get("findings", ""),
+                effective_show_name,
+                target_language=metadata.get("target_language", "English"),
+                model_name=model
+            )
+
+
         metadata["context_guide"] = enhanced_context
         _invalidate_translation_cache(metadata)
         storage.save_project_metadata(project_name, metadata)
@@ -382,27 +437,38 @@ async def _process_enhance_context(job_id: str, project_name: str, model: str, w
             update_job(job_id, status="failed", message="No context to enhance")
             return
  
-        if with_research:
-            update_job(job_id, progress=20.0, message="Researching...", log="Fresh research")
-            text_lines = await _gather_project_text(project_name)
-            research_data, _ = await research_project_adk(
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            # Agent mode: the agent CLI revises the current guide (or writes one when there is none) from the
+            # show's facts and a spread of its dialogue; "research" is the CLI model's own knowledge of the show.
+            update_job(job_id, progress=30.0, message="Asking the agent CLI...", log="Agent CLI context guide request")
+            found = await _ask_agy_for_context(project_name, want_guide=True, want_terms=False,
+                                               improve_guide=bool(current_guide))
+            if not found["guide"]:
+                raise RuntimeError(f"The agent CLI returned no context guide: {found['text'][:200]!r}")
+            enhanced_guide = found["guide"]
+        else:
+            if with_research:
+                update_job(job_id, progress=20.0, message="Researching...", log="Fresh research")
+                text_lines = await _gather_project_text(project_name)
+                research_data, _ = await research_project_adk(
+                    metadata.get("show_name", project_name),
+                    text_lines,
+                    metadata.get("target_language", "English"),
+                    model_name=model
+                )
+                input_data = research_data.get("findings", "")
+            else:
+                input_data = current_guide
+
+            update_job(job_id, progress=60.0, message="Generating instructions...")
+            enhanced_guide, _ = await enhance_context_guide_adk(
+                input_data,
                 metadata.get("show_name", project_name),
-                text_lines,
-                metadata.get("target_language", "English"),
+                target_language=metadata.get("target_language", "English"),
                 model_name=model
             )
-            input_data = research_data.get("findings", "")
-        else:
-            input_data = current_guide
- 
-        update_job(job_id, progress=60.0, message="Generating instructions...")
-        enhanced_guide, _ = await enhance_context_guide_adk(
-            input_data,
-            metadata.get("show_name", project_name),
-            target_language=metadata.get("target_language", "English"),
-            model_name=model
-        )
-        
+
         metadata["context_guide"] = enhanced_guide
         _invalidate_translation_cache(metadata)
         storage.save_project_metadata(project_name, metadata)

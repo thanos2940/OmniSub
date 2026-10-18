@@ -84,6 +84,14 @@ async def _repair_chunk(
 
     prompt = build_repair_prompt_items(chunk, target_lang_name)
 
+    from services import agy_llm
+    if agy_llm.agent_mode():
+        # Agent mode: the agent CLI corrects the lines (the Gemini API only for a prompt its filter refuses).
+        from services import agent_prompts as ap
+        response = await agy_llm.acomplete(ap.repair_prompt(prompt), purpose="script_repair")
+        parsed = parse_translations_from_text(strip_reasoning_blocks(response or ""))
+        return {p["index"]: (p["text"] or "").strip() for p in parsed}
+
     async def _call():
         return await generate(
             model_name=model_name,

@@ -47,6 +47,13 @@ def empty_queue():
 
 
 @pytest.fixture(autouse=True)
+def no_bootstrap(monkeypatch):
+    """The show-context request before a first episode is its own test class; elsewhere it would add a prompt
+    to every count (``bootstrap=True`` turns it on for a run)."""
+    monkeypatch.setitem(agent_runner.DEFAULT_CONFIG, "bootstrap", False)
+
+
+@pytest.fixture(autouse=True)
 def fake_env(monkeypatch, tmp_path):
     for var in ("FAKE_AGY_SKIP_AT", "FAKE_AGY_QUOTA_MODELS", "FAKE_AGY_BLOCK_MODELS", "FAKE_AGY_BLOCK_WORD",
                 "FAKE_AGY_CUT"):
@@ -60,7 +67,8 @@ def _api_answers(prompt):
     out, inside = [], False
     for line in prompt.splitlines():
         if line.startswith("## "):
-            inside = line.startswith("## Lines to translate") or line.startswith("## Lines to fix")
+            inside = (line.startswith("## Lines to translate") or line.startswith("## Lines to fix")
+                      or line.startswith("## Line to translate"))
             continue
         m = re.match(r"^(\d+)\| (.*)$", line) if inside else None
         if m:

@@ -160,10 +160,11 @@ class SettingsRequest(BaseModel):
     webhook_secret: Optional[str] = ""
     # --- CORS (Plan 06) ---
     cors_allow_origins: Optional[List[str]] = None
-    # --- Translation engine: "model" = the background worker translates with the
-    # configured Gemini/local model; "agent" = queue items wait for an external AI
-    # agent (scripts/agent_task.py). Extraction and export lanes run either way. ---
-    translation_engine: Optional[str] = "model"
+    # --- Translation engine: "agent" (default) = the agent runner translates through the agent
+    # CLI (Antigravity first; the Gemini API only for lines its safety filter refuses);
+    # "model" = the background worker translates with the configured Gemini/local model.
+    # Extraction and export lanes run either way. ---
+    translation_engine: Optional[str] = "agent"
     # An agent claim with no workspace activity for this long goes back to the queue.
     agent_claim_ttl_hours: Optional[float] = 12
     # Gemini API content filter for every Gemini request (utils/gemini_safety.py):

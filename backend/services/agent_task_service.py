@@ -45,6 +45,8 @@ logger = logging.getLogger("omnisub.agent_task")
 
 AGENT_TASKS_DIR = DATA_DIR / "agent_tasks"
 DEFAULT_CLAIM_TTL_HOURS = 12.0
+GUIDE_MAX_CHARS = 6000           # the context guide stops growing here (every prompt carries it)
+GUIDE_ADDITIONS_HEADING = "## Story so far"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 # Legacy output names accepted in place of the work file (older skills wrote these).
@@ -1343,6 +1345,7 @@ These are the same rules the API translator follows.
         terms = proj_meta.setdefault("glossary", {}).setdefault("terms", [])
         by_key = {(t.get("term") or t.get("source") or "").strip().lower(): t for t in terms if isinstance(t, dict)}
         added, updated, conflicts, skipped = 0, 0, [], 0
+        fresh: List[Dict[str, Any]] = []
         for t in normalized:
             key = t["term"].lower()
             wants_update = t.pop("_update", False)
@@ -1353,6 +1356,7 @@ These are the same rules the API translator follows.
             if existing is None:
                 terms.append(t)
                 by_key[key] = t
+                fresh.append(t)
                 added += 1
             elif (existing.get("translation") or "").strip() != t["translation"]:
                 if wants_update:
@@ -1367,7 +1371,62 @@ These are the same rules the API translator follows.
             except Exception:
                 pass
             storage.save_project_metadata(project_name, proj_meta)
+        if fresh:
+            try:  # a character's gender also goes where the prompts read speakers from
+                from utils.character_profiles import CharacterProfileManager
+                CharacterProfileManager(project_name).seed_from_glossary(fresh)
+            except Exception as e:
+                logger.warning(f"Could not seed character profiles for {project_name}: {e}")
         return {"added": added, "updated": updated, "conflicts": conflicts, "skipped": skipped}
+
+    @staticmethod
+    def save_context_guide(project_name: str, guide: str) -> bool:
+        """Store ``guide`` as the project's context guide; False when it is the guide already there."""
+        guide = (guide or "").strip()
+        proj_meta = storage.load_project_metadata(project_name) or {}
+        if not guide or guide == (proj_meta.get("context_guide") or "").strip():
+            return False
+        proj_meta["context_guide"] = guide
+        try:
+            from utils.cache_manager import invalidate_cache
+            invalidate_cache(proj_meta)
+        except Exception:
+            pass
+        storage.save_project_metadata(project_name, proj_meta)
+        return True
+
+    def append_guide_additions(self, project_name: str, additions: List[str]) -> int:
+        """Add short facts to the end of the context guide, under a "Story so far" heading. A fact the
+        guide already has is skipped, and nothing is added once the guide is ``GUIDE_MAX_CHARS`` long.
+        Returns how many were added."""
+        guide = ((storage.load_project_metadata(project_name) or {}).get("context_guide") or "").strip()
+        if not guide:
+            return 0
+
+        def key(text: str) -> str:
+            return re.sub(r"[\W_]+", " ", text.casefold()).strip()
+
+        known = {key(line) for line in guide.splitlines()}
+        entries: List[str] = []
+        used = len(guide) + (0 if GUIDE_ADDITIONS_HEADING in guide else len(GUIDE_ADDITIONS_HEADING) + 2)
+        for raw in additions:
+            fact = re.sub(r"^[-*•\s]+", "", (raw or "").strip())[:300].strip()
+            if len(fact) < 8 or key(fact) in known:
+                continue
+            entry = f"- {fact}"
+            if used + len(entry) + 1 > GUIDE_MAX_CHARS:
+                break
+            known.add(key(fact))
+            entries.append(entry)
+            used += len(entry) + 1
+        if not entries:
+            return 0
+        if GUIDE_ADDITIONS_HEADING in guide:
+            grown = guide + "\n" + "\n".join(entries)
+        else:
+            grown = f"{guide}\n\n{GUIDE_ADDITIONS_HEADING}\n" + "\n".join(entries)
+        self.save_context_guide(project_name, grown)
+        return len(entries)
 
     @staticmethod
     def _export(project_name: str, episode_name: str, cues: List[Dict[str, Any]]) -> Optional[str]:
@@ -1474,16 +1533,8 @@ These are the same rules the API translator follows.
         context_guide_updated = False
         guide = context_guide or self._extract_context_guide(
             (folder / aw.GUIDE_FILE).read_text(encoding="utf-8") if (folder / aw.GUIDE_FILE).is_file() else "", project_name)
-        proj_meta = storage.load_project_metadata(project_name) or {}
-        if guide and guide.strip() != (proj_meta.get("context_guide") or "").strip():
-            proj_meta["context_guide"] = guide.strip()
-            try:
-                from utils.cache_manager import invalidate_cache
-                invalidate_cache(proj_meta)
-            except Exception:
-                pass
-            storage.save_project_metadata(project_name, proj_meta)
-            context_guide_updated = True
+        if guide:
+            context_guide_updated = self.save_context_guide(project_name, guide)
 
         # Glossary
         terms_raw = new_terms

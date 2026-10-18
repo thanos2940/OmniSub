@@ -26,6 +26,18 @@ from utils import storage
 
 logger = logging.getLogger(__name__)
 
+# Glossary term types that name a person, and the spellings of a gender that agents and glossaries use.
+PERSON_TYPES = ("person", "character")
+_GENDERS = {"m": "masculine", "male": "masculine", "masculine": "masculine", "man": "masculine",
+            "f": "feminine", "female": "feminine", "feminine": "feminine", "woman": "feminine",
+            "n": "neuter", "neuter": "neuter", "neutral": "neuter"}
+
+
+def normalize_gender(value) -> str:
+    """masculine | feminine | neuter, or "" when the value says nothing usable (unknown, n/a, empty)."""
+    return _GENDERS.get(str(value or "").strip().lower(), "")
+
+
 # Bookkeeping fields that are never user-settable overrides.
 _OVERRIDE_IGNORE_FIELDS = ("name", "inherited", "inherited_from", "overridden_fields")
 
@@ -250,6 +262,25 @@ class CharacterProfileManager:
             return True
         return False
 
+    def seed_from_glossary(self, terms) -> int:
+        """Give every character term with a known gender a profile of its own (existing and inherited
+        profiles are left alone), so the speaker's gender reaches the prompts that read profiles.
+        Returns how many were created."""
+        known = self.load_all_resolved()
+        local = self.load_all()
+        added = 0
+        for term in terms or []:
+            name = str(term.get("term") or "").strip()
+            gender = normalize_gender(term.get("gender"))
+            if term.get("type") not in PERSON_TYPES or not name or not gender or name in known:
+                continue
+            note = str(term.get("notes") or term.get("description") or "").strip()[:200]
+            local[name] = known[name] = CharacterProfile(name=name, gender=gender, notes=note)
+            added += 1
+        if added:
+            self.save_all(local)
+        return added
+
     def get_profiles_for_chunk(
         self,
         source_lines: List[str],
@@ -277,7 +308,7 @@ class CharacterProfileManager:
         # Build set of person names from glossary
         person_names = set()
         for term in glossary.get("terms", []):
-            if term.get("type") == "person":
+            if term.get("type") in PERSON_TYPES:
                 person_names.add(term.get("term", ""))
 
         # Also include all profile names (they might not all be in the glossary)
