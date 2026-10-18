@@ -49,7 +49,21 @@ except Exception:
     pass
 PY = ".venv/Scripts/python.exe" if sys.platform == "win32" else ".venv/bin/python"
 CMD = f"{PY} scripts/agent_task.py"
-DEFAULT_URL = "http://127.0.0.1:8000"
+
+
+def _server_port() -> str:
+    """The port the running server uses: OMBISUB_PORT, else the server's lock file, else 8000."""
+    port = os.environ.get("OMBISUB_PORT")
+    if not port:
+        try:
+            lock = Path(os.environ["OMNISUB_DATA_DIR"]) / "ombisub_server.lock"
+            port = str(json.loads(lock.read_text(encoding="utf-8")).get("port") or "")
+        except Exception:
+            port = ""
+    return port or "8000"
+
+
+DEFAULT_URL = f"http://127.0.0.1:{_server_port()}"
 
 
 def normalize_url(url: str) -> str:

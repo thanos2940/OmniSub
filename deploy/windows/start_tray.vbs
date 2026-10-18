@@ -20,6 +20,11 @@ If Not fso.FileExists(pythonwExe) Then
 End If
 
 cmd = """" & pythonwExe & """ """ & trayApp & """"
+' Pass on our own arguments (install.ps1 gives --port and --data-dir).
+Dim i
+For i = 0 To WScript.Arguments.Count - 1
+    cmd = cmd & " """ & WScript.Arguments(i) & """"
+Next
 
 WshShell.CurrentDirectory = repoRoot
 WshShell.Run cmd, 0, False

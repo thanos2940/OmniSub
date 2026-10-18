@@ -684,7 +684,7 @@ class UpdateService:
             "--pid", str(parent_pid),
             "--backend-dir", str(BACKEND_DIR),
             "--python-exe", str(PYTHON_EXE),
-            "--port", "8000",
+            "--port", os.environ.get("OMBISUB_PORT") or "8000",
             "--service-name", "OmbiSub",
         ]
 

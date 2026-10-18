@@ -201,6 +201,7 @@ def main(argv=None) -> int:
     data_dir = Path(os.environ.get("OMNISUB_DATA_DIR") or BACKEND_DIR).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["OMNISUB_DATA_DIR"] = str(data_dir)
+    os.environ["OMBISUB_PORT"] = str(args.port)  # read by the updater's restart and agent tools
     os.chdir(BACKEND_DIR)
     sys.path.insert(0, str(BACKEND_DIR))
 

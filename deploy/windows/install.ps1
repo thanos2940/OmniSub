@@ -150,14 +150,15 @@ if (-not $SkipBuild) {
 # ---------------------------------------------------------------- scheduled task
 Step "Registering the scheduled task '$TaskName' (Mode: $Mode)"
 
+$serverArgs = "--port $Port"
+if ($DataDir) { $serverArgs += " --data-dir `"$DataDir`"" }
 if ($Mode -eq 'Tray') {
     $trayScript = Join-Path $InstallDir 'deploy\windows\start_tray.vbs'
-    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//B `"$trayScript`"" -WorkingDirectory $InstallDir
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//B `"$trayScript`" $serverArgs" -WorkingDirectory $InstallDir
 } else {
     $pythonw = Join-Path $Venv 'Scripts\pythonw.exe'
     $exec = if (Test-Path $pythonw) { $pythonw } else { $VenvPy }
-    $argList = "backend\run_server.py --port $Port"
-    if ($DataDir) { $argList += " --data-dir `"$DataDir`"" }
+    $argList = "backend\run_server.py $serverArgs"
     $action = New-ScheduledTaskAction -Execute $exec -Argument $argList -WorkingDirectory $InstallDir
 }
 
@@ -195,11 +196,11 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
             $shortcut = $wsh.CreateShortcut($lnkPath)
             if ($Mode -eq 'Tray') {
                 $shortcut.TargetPath = "wscript.exe"
-                $shortcut.Arguments = "//B `"" + (Join-Path $InstallDir 'deploy\windows\start_tray.vbs') + "`""
+                $shortcut.Arguments = "//B `"" + (Join-Path $InstallDir 'deploy\windows\start_tray.vbs') + "`" $serverArgs"
             } else {
                 $pythonw = Join-Path $Venv 'Scripts\pythonw.exe'
                 $shortcut.TargetPath = if (Test-Path $pythonw) { $pythonw } else { $VenvPy }
-                $shortcut.Arguments = "backend\run_server.py --port $Port"
+                $shortcut.Arguments = "backend\run_server.py $serverArgs"
             }
             $shortcut.WorkingDirectory = $InstallDir
             $shortcut.Description = "OmbiSub 24/7 Subtitle Translator ($Mode)"
