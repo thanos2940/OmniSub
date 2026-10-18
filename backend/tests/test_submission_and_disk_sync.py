@@ -220,6 +220,18 @@ Dialogue: 0,0:00:05.00,0:00:08.00,Default,,0,0,0,,Πώς είσαι;
         item = q.get_item("disk_q_rem")
         assert item["status"] == "pending"
 
+    def test_a_sync_that_nobody_asked_to_requeue_leaves_the_queue_alone(self):
+        el_srt = self.media_dir / "DiskSyncShow - S01E01.el.srt"
+        el_srt.write_text("1\n00:00:01,000 --> 00:00:04,000\nΓεια σου\n", encoding="utf-8")
+        service = DiskSyncService()
+        service.sync_project_disk(self.project_name)
+        el_srt.unlink()
+
+        res = service.sync_project_disk(self.project_name)  # the default: what the project sync job runs
+        assert res["translations_removed"] == 1 and res["queue_requeued"] == 0
+        item = TranslationQueue().find_item(self.project_name, self.ep_name, "", "translation")
+        assert item is None or item["status"] != "pending"
+
     def test_sync_project_disk_api_endpoint(self, client):
         res = client.post(f"/projects/{self.project_name}/sync-disk", json={"re_queue_removed": True})
         assert res.status_code == 200

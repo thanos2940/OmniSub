@@ -43,7 +43,6 @@ from routers.pipeline import _monitor_stage3_queue_progress, _monitor_batch_queu
 from routers.jobs import cancel_job
 from services.queue_service import (
     enqueue_translation,
-    enqueue_webhook_episode,
     enqueue_missing_for_project,
 )
 
@@ -331,65 +330,6 @@ class TestWebhookAndSyncFanOutStress:
         assert claimed_4["priority"] == PRIORITY_BACKLOG
 
         assert queue.claim_next() is None, "No more items left to claim"
-
-    def test_webhook_multilang_fanout_filters_existing_targets(self, tmp_path, monkeypatch):
-        """
-        Test webhook on a multi-language project (Greek primary, Spanish secondary, French secondary).
-        If Greek is already translated, webhook must ONLY fan out queue items for Spanish and French.
-        """
-        project_name = "MultiLangWebhookShow"
-        storage.create_project(project_name, {
-            "show_name": project_name,
-            "target_language": "Greek",
-            "target_languages": ["Greek", "Spanish", "French"],
-            "settings": {"translation_model": "gemini-2.5-flash", "ai_provider": "hybrid"}
-        })
-
-        # Mock episode metadata where Greek (primary) already exists and is not stale
-        mock_ep_meta = {
-            "arr_has_target": True,
-            "arr_target_path": "/fake/Greek.srt",
-            "arr_targets": {} # Spanish and French missing
-        }
-        monkeypatch.setattr(storage, "load_episode_metadata", lambda p, e: mock_ep_meta)
-        monkeypatch.setattr(storage, "episode_has_target", lambda meta, code=None: bool(meta.get("arr_has_target") if code is None else False))
-        monkeypatch.setattr(storage, "episode_translation_is_stale", lambda meta, code=None: False)
-
-        enqueued_records = []
-        def mock_enqueue(proj, ep, prio, opts=None, lang="", *args, **kwargs):
-            enqueued_records.append({"proj": proj, "ep": ep, "prio": prio, "opts": opts, "lang": lang})
-            return f"item_{lang}"
-
-        monkeypatch.setattr("services.queue_service.enqueue_translation", mock_enqueue)
-
-        item_ids = enqueue_webhook_episode(project_name, "S01E01")
-
-        # Greek was skipped because it already has target -> Spanish and French enqueued
-        assert len(item_ids) == 2
-        langs = [r["lang"] for r in enqueued_records]
-        assert "es" in langs
-        assert "fr" in langs
-        assert "" not in langs, "Greek (primary, lang='') must be skipped"
-
-        for r in enqueued_records:
-            assert r["prio"] == PRIORITY_WEBHOOK
-            assert r["opts"]["ai_provider"] == "hybrid"
-            assert r["opts"]["model"] == "gemini-2.5-flash"
-
-    def test_webhook_disabled_project_enqueues_zero(self, monkeypatch):
-        """A project marked arr_disabled=True must reject webhook enqueue completely."""
-        project_name = "DisabledArrProject"
-        storage.create_project(project_name, {
-            "show_name": project_name,
-            "arr_disabled": True,
-        })
-
-        enqueued = []
-        monkeypatch.setattr("services.queue_service.enqueue_translation", lambda *a, **k: enqueued.append(a))
-
-        item_ids = enqueue_webhook_episode(project_name, "S01E01")
-        assert item_ids == []
-        assert len(enqueued) == 0
 
 
 # ===========================================================================

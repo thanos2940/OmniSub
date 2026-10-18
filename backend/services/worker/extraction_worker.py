@@ -204,29 +204,12 @@ async def process_extraction_item(queue, item: dict, global_config: dict) -> Non
         translate_after = options.get("translate_after")
         if isinstance(translate_after, dict):
             # An on-demand request: someone is waiting for this episode, so it goes
-            # straight to translation with the options the request chose — not through
-            # the library-wide auto-translate policy and its "smart" delay.
+            # straight to translation with the options the request chose.
             from services.queue_service import enqueue_translation
             enqueue_translation(
                 project_name, episode_name, item.get("priority", 1),
                 translate_after.get("options") or {}, lang=translate_after.get("lang") or "",
             )
-        elif options.get("auto_translate"):
-            from services.queue_service import enqueue_translation, enqueue_webhook_episode
-            from integrations.media_sync_engine import prefer_ass_for_project
-            proj_meta = storage.load_project_metadata(project_name) or options.get("project_metadata") or {}
-            is_anime = prefer_ass_for_project(proj_meta)
-            global_config = storage.load_global_config()
-            arr_auto = global_config.get("arr_auto_translate", False)
-            delay_sec = 0
-            if not is_anime and (arr_auto == "smart" or global_config.get("arr_non_anime_delay_minutes", 0) > 0):
-                delay_sec = int(global_config.get("arr_non_anime_delay_minutes", 30) * 60)
-
-            prio = item.get("priority", 2)
-            if prio == 0:  # PRIORITY_WEBHOOK
-                enqueue_webhook_episode(project_name, episode_name, delay_seconds=delay_sec)
-            else:
-                enqueue_translation(project_name, episode_name, prio, delay_seconds=delay_sec)
 
     except asyncio.CancelledError:
         queue.update_status(item_id, status="pending", started_at=None)

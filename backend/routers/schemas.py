@@ -122,8 +122,6 @@ class SettingsRequest(BaseModel):
     path_mappings: Optional[List[Dict[str, str]]] = None
     arr_sync_interval: Optional[int] = 0  # Minutes. 0 = manual only
     arr_source_language: Optional[str] = "en"
-    arr_auto_translate: Optional[Union[bool, str]] = "smart"  # Auto-translate on webhook (False, True, "smart")
-    arr_non_anime_delay_minutes: Optional[int] = 30  # Delay in minutes before auto-translating non-anime
     # --- Embedded ASS extraction (docs/PLAN_embedded_ass_extraction.md) ---
     embedded_extraction_enabled: Optional[bool] = True
     # Substrings that mark a track as signs/songs/partial. These DEPRIORITIZE a track,
@@ -325,6 +323,13 @@ class ArrTestRequest(BaseModel):
     sonarr_api_key: Optional[str] = None
     radarr_url: Optional[str] = None
     radarr_api_key: Optional[str] = None
+
+
+class PlexTestRequest(BaseModel):
+    url: Optional[str] = None
+    token: Optional[str] = None
+    plex_url: Optional[str] = None
+    plex_token: Optional[str] = None
 
 
 class PathTestRequest(BaseModel):

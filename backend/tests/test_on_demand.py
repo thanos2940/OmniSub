@@ -142,7 +142,6 @@ async def test_series_request_routes_each_episode_to_the_right_entry_point(od_en
     assert extraction["priority"] == PRIORITY_MANUAL
     ext_opts = _options(extraction)
     assert ext_opts["stream_index"] == 2
-    assert ext_opts["auto_translate"] is False
     assert ext_opts["translate_after"]["options"]["ensure_context"] is True
     assert ext_opts["translate_after"]["lang"] == ""
 
@@ -372,7 +371,6 @@ async def test_on_demand_extraction_chains_straight_into_translation(od_env, mon
         "options": json.dumps({
             "media_path": str(media_path), "stream_index": 2, "source_lang_code": "en",
             "output_format": "srt", "track": {"codec": "subrip"},
-            "auto_translate": False,
             "translate_after": {"options": {"ensure_context": True}, "lang": ""},
         }),
     }
@@ -380,6 +378,34 @@ async def test_on_demand_extraction_chains_straight_into_translation(od_env, mon
 
     assert storage.original_subtitle_exists("Severance", "S01E02")
     assert captured == [(("Severance", "S01E02", 1, {"ensure_context": True}), {"lang": ""})]
+
+
+@pytest.mark.asyncio
+async def test_an_extraction_without_a_follow_up_translates_nothing(od_env, monkeypatch):
+    """The old library-wide auto-translate flag on a queued extraction is ignored: only the Autopilot,
+    an on-demand request or an explicit "Translate missing" (all via ``translate_after``) chain a translation."""
+    from services.worker.extraction_worker import process_extraction_item
+    import services.queue_service as queue_service
+
+    season = od_env["season_dir"]
+    media_path = season / "Severance.S01E02.mkv"
+    (season / "Severance.S01E02.en.srt").write_text(SAMPLE_SRT, encoding="utf-8")
+    storage.create_project("Severance", {"show_name": "Severance", "target_language": "Greek"})
+
+    captured = []
+    monkeypatch.setattr(queue_service, "enqueue_translation", lambda *a, **k: captured.append((a, k)) or "id")
+
+    item = {
+        "id": "x2", "project_name": "Severance", "episode_name": "S01E02", "attempts": 1, "priority": 2,
+        "options": json.dumps({
+            "media_path": str(media_path), "stream_index": 2, "source_lang_code": "en",
+            "output_format": "srt", "track": {"codec": "subrip"}, "auto_translate": True,
+        }),
+    }
+    await process_extraction_item(od_env["queue"], item, storage.load_global_config())
+
+    assert storage.original_subtitle_exists("Severance", "S01E02")
+    assert captured == []
 
 
 # ---------------------------------------------------------------------------

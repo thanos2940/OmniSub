@@ -243,8 +243,11 @@ def _foreign_blocked(path: Path, metadata: Dict, protect: bool, force: bool) -> 
 
 
 def _register_written(path: Path, project_name: Optional[str], episode_name: Optional[str]) -> None:
+    """Record ``path`` as OmbiSub's own and let Plex know it is there (debounced, off-thread)."""
     from services.autopilot import ownership
     ownership.register_file(path, project_name, episode_name)
+    from services.plex_refresh import request_refresh
+    request_refresh(path)
 
 
 def _remove_superseded_target(previous: Optional[str], current: Path, metadata: Optional[Dict] = None) -> None:

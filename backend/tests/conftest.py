@@ -50,5 +50,17 @@ def isolate_test_data_dir(monkeypatch, tmp_path):
     
     (test_data_dir / "projects").mkdir(parents=True, exist_ok=True)
     (test_data_dir / "translation_memory").mkdir(parents=True, exist_ok=True)
-    
+
     yield test_data_dir
+
+
+@pytest.fixture(autouse=True)
+def no_real_plex_refresh():
+    """Exports ask Plex for a rescan; a test that switches Plex on must never reach a real server.
+
+    Tests that look at the refresh install their own refresher with a fake client.
+    """
+    from services import plex_refresh
+    plex_refresh.set_refresher(plex_refresh.PlexRefresher(delay=0, client_factory=lambda cfg: None))
+    yield
+    plex_refresh.set_refresher(None)

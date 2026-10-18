@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from integrations import embedded_subs, radarr, sonarr
 from main import app
 from routers import integrations as integrations_router
+from services import plex_refresh
 from services.autopilot import ownership
 from services.autopilot import service as service_module
 from services.autopilot.service import AutopilotService
@@ -136,13 +137,17 @@ def env(tmp_path, monkeypatch):
     class Plex:
         last_error = None
 
-        def refresh_path(self, path):
-            e.plex_calls.append(path)
+        def refresh_paths(self, paths):
+            e.plex_calls.append(list(paths))
             return True
+
+    # A long window: the exports and the autopilot's own request pile up until the test flushes.
+    e.refresher = plex_refresh.PlexRefresher(delay=3600, client_factory=lambda cfg: Plex())
+    plex_refresh.set_refresher(e.refresher)
 
     e.notifier = MagicMock()
     e.store = AutopilotStore(tmp_path / "autopilot-e2e.db", clock=e.clock)
-    e.svc = AutopilotService(store=e.store, notifier=e.notifier, clock=e.clock, plex_factory=lambda cfg: Plex())
+    e.svc = AutopilotService(store=e.store, notifier=e.notifier, clock=e.clock)
     service_module._service = e.svc
     e.queue = TranslationQueue()
     with e.queue._conn() as conn:
@@ -244,8 +249,12 @@ async def test_new_episode_goes_from_sonarr_import_to_greek_subtitles(env):
     assert GREEK[0] in ass.read_text(encoding="utf-8-sig") and GREEK[1] in srt.read_text(encoding="utf-8-sig")
     assert ownership.is_ours(ass) and ownership.is_ours(srt)
 
-    # Integrations ran: Plex was told to rescan the folder, Discord was notified.
-    assert [Path(p) for p in env.plex_calls] == [env.media]
+    # Integrations ran: both exports and the autopilot asked for a Plex scan; they became one
+    # request for the folder. Discord was notified.
+    assert env.plex_calls == []
+    env.refresher.flush()
+    assert len(env.plex_calls) == 1
+    assert {Path(p) if Path(p).is_dir() else Path(p).parent for p in env.plex_calls[0]} == {env.media}
     env.notifier.item_done.assert_called_once()
     assert env.notifier.item_done.call_args.args[0]["id"] == item["id"]
     assert env.svc.status()["counts"]["done"] == 1
@@ -381,7 +390,7 @@ def test_webhooks_feed_the_autopilot_when_it_is_on(env, monkeypatch):
     assert client.post("/api/webhook/sonarr?token=bad", json=sonarr_payload(env.video)).status_code == 401
 
 
-def test_webhooks_keep_the_legacy_import_when_the_autopilot_is_off(env, monkeypatch):
+def test_webhooks_only_refresh_the_library_when_the_autopilot_is_off(env, monkeypatch):
     storage.save_global_config({"webhook_secret": "s3cret", "autopilot_enabled": False})
     integrations_router._webhook_deduplicator.clear()
     legacy = []
@@ -408,10 +417,10 @@ def test_radarr_webhook_feeds_the_autopilot(env):
     assert item["kind"] == "movie" and item["source"] == "radarr" and item["media_path"] == str(movie)
 
 
-# --- the scheduled sync stands down ------------------------------------------------------------
+# --- the scheduled sync only keeps the library fresh ---------------------------------------------
 
-@pytest.mark.parametrize("autopilot,enqueued", [(False, True), (True, False)])
-def test_scheduled_sync_skips_enqueueing_while_the_autopilot_is_on(env, monkeypatch, autopilot, enqueued):
+@pytest.mark.parametrize("autopilot", [False, True])
+def test_scheduled_sync_never_enqueues_translations(env, monkeypatch, autopilot):
     import main
     import services.queue_service as queue_service
 
@@ -448,4 +457,4 @@ def test_scheduled_sync_skips_enqueueing_while_the_autopilot_is_on(env, monkeypa
 
     asyncio.run(go())
     assert calls["sync"] >= 2  # the full sync always runs
-    assert bool(calls["enqueue"]) is enqueued
+    assert calls["enqueue"] == []  # and never queues the library's missing subtitles

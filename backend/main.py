@@ -165,8 +165,11 @@ async def _maintenance_loop():
 
 
 async def _scheduled_arr_sync_loop():
-    """Background loop that runs Sonarr/Radarr sync at the configured interval."""
-    from utils.translation_queue import TranslationQueue, PRIORITY_SYNC
+    """Background loop that keeps the library fresh from Sonarr/Radarr at the configured interval.
+
+    It never queues translations: the Autopilot (its backlog mode) or an explicit "Translate
+    missing" does that.
+    """
     from routers.integrations import _build_arr_engine
 
     while True:
@@ -196,14 +199,6 @@ async def _scheduled_arr_sync_loop():
                 await asyncio.to_thread(metadata_index.backfill)
             except Exception:
                 pass
-
-            # Queue missing subtitles for translation across all enabled projects --
-            # unless the autopilot is on: it owns enqueueing (grace period, Greek check, retries).
-            if storage.load_global_config().get("autopilot_enabled", False):
-                continue
-            from services.queue_service import enqueue_missing_for_project, PRIORITY_SYNC
-            for project_name in storage.list_projects():
-                enqueue_missing_for_project(project_name, priority=PRIORITY_SYNC)
 
         except asyncio.CancelledError:
             break

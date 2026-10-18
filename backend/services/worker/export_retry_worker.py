@@ -89,6 +89,8 @@ async def process_export_retry_item(queue, item: dict, global_config: dict) -> N
         content = reconstruct_cleaned_srt(project_name, episode_name, ep_data["data"], tgt_lang)
         target_path.write_text(content, encoding="utf-8-sig")
         logger.info(f"Successfully exported subtitle on retry: {target_path}")
+        from services.plex_refresh import request_refresh
+        request_refresh(target_path)
 
         # Update episode metadata
         from services.worker.translation_item_worker import _record_target

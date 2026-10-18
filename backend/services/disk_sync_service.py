@@ -421,7 +421,7 @@ class DiskSyncService:
     def sync_project_disk(
         self,
         project_name: str,
-        re_queue_removed: bool = True,
+        re_queue_removed: bool = False,
         import_cues: bool = True,
         auto_add_new_episodes: bool = True,
         auto_rename_matching_media: bool = True,
@@ -429,6 +429,10 @@ class DiskSyncService:
         """Perform disk-level synchronization for a single project.
         Scans all files on disk, updates translation status, handles additions and removals,
         and synchronizes queue items.
+
+        A translation whose subtitle was deleted from disk is queued again only when the
+        caller asks (``re_queue_removed``, the explicit sync buttons): a sync that runs on its
+        own never mass-enqueues.
         """
         proj_meta = storage.load_project_metadata(project_name)
         if not proj_meta:
@@ -704,7 +708,7 @@ class DiskSyncService:
 
         return result
 
-    def sync_all_projects_disk(self, re_queue_removed: bool = True) -> Dict[str, Any]:
+    def sync_all_projects_disk(self, re_queue_removed: bool = False) -> Dict[str, Any]:
         """Perform disk sync across all projects."""
         projects = storage.list_projects()
         results: Dict[str, Any] = {}

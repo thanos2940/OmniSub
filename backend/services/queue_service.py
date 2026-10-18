@@ -181,7 +181,7 @@ def enqueue_missing_for_library(priority: int = PRIORITY_BACKLOG) -> Dict[str, L
 
 def translation_options_for(project_name: str) -> Dict:
     """Standard translation options for a project's episodes (model, provider, sampling,
-    primary target language), as the webhook path enqueues them."""
+    primary target language), as the Autopilot and "Translate missing" enqueue them."""
     proj_meta = storage.load_project_metadata(project_name) or {}
     global_config = storage.load_global_config()
     target_names = storage.project_target_languages(proj_meta)
@@ -196,80 +196,6 @@ def translation_options_for(project_name: str) -> Dict:
             else global_config.get("default_target_language") or "English"
         ),
     }
-
-
-def enqueue_webhook_episode(project_name: str, episode_name: str, delay_seconds: Optional[int] = None) -> List[str]:
-    """
-    Enqueue an episode imported via Sonarr/Radarr webhook for translation.
-    Resolves model based on project metadata, passes standard options,
-    and supports multi-language target fan-out at PRIORITY_WEBHOOK.
-    If delay_seconds is None, applies smart delay:
-      - anime: 0s
-      - non-anime: global_config['arr_non_anime_delay_minutes'] * 60 (default 30 min)
-    """
-    proj_meta = storage.load_project_metadata(project_name)
-    if not proj_meta or proj_meta.get("arr_disabled", False):
-        logger.info(f"Project '{project_name}' is disabled or missing; skipping webhook enqueue.")
-        return []
-
-    global_config = storage.load_global_config()
-    arr_auto_mode = global_config.get("arr_auto_translate", False)
-
-    # Calculate smart delay if not explicitly provided
-    if delay_seconds is None:
-        from integrations.media_sync_engine import prefer_ass_for_project
-        is_anime = prefer_ass_for_project(proj_meta)
-        if not is_anime and (arr_auto_mode == "smart" or global_config.get("arr_non_anime_delay_minutes", 0) > 0):
-            delay_minutes = global_config.get("arr_non_anime_delay_minutes", 30)
-            delay_seconds = int(delay_minutes * 60)
-        else:
-            delay_seconds = 0
-
-    ep_meta = storage.load_episode_metadata(project_name, episode_name)
-
-    from utils.language_codes import to_code
-    target_names = storage.project_target_languages(proj_meta)
-    primary_code = to_code(proj_meta.get("target_language", "English"))
-    base_options = translation_options_for(project_name)
-
-    # Single-language project
-    if len(target_names) <= 1:
-        if ep_meta and storage.episode_has_target(ep_meta) and not storage.episode_translation_is_stale(ep_meta):
-            logger.info(f"Target subtitle already exists and is not stale for {project_name}/{episode_name}; skipping webhook enqueue.")
-            return []
-
-        target_name = target_names[0] if target_names else proj_meta.get("target_language", "English")
-        opts = dict(base_options)
-        opts["target_language_name"] = target_name
-        try:
-            item_id = enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK, opts, delay_seconds=delay_seconds)
-        except TypeError as e:
-            if "delay_seconds" in str(e):
-                item_id = enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK, opts)
-            else:
-                raise
-        return [item_id] if item_id else []
-
-    # Multi-language project fan-out
-    enqueued_ids: List[str] = []
-    for name in target_names:
-        code = to_code(name)
-        is_primary = (code == primary_code)
-        lang_code_for_check = None if is_primary else code
-        if ep_meta and storage.episode_has_target(ep_meta, lang_code_for_check) and not storage.episode_translation_is_stale(ep_meta, lang_code_for_check):
-            continue
-        opts = dict(base_options)
-        opts["target_language_name"] = name
-        try:
-            item_id = enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK, opts, "" if is_primary else code, delay_seconds=delay_seconds)
-        except TypeError as e:
-            if "delay_seconds" in str(e):
-                item_id = enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK, opts, "" if is_primary else code)
-            else:
-                raise
-        if item_id:
-            enqueued_ids.append(item_id)
-    return enqueued_ids
 
 
 def postpone_item(item_id: Union[str, int]) -> bool:

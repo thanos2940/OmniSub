@@ -17,7 +17,7 @@ from integrations.radarr import RadarrConfig, test_connection as radarr_test_con
 from integrations.media_sync_engine import MediaSyncEngine
 from integrations.path_resolver import PathResolver
 
-from routers.schemas import ArrTestRequest, PathTestRequest, ArrSyncRequest
+from routers.schemas import ArrTestRequest, PathTestRequest, PlexTestRequest, ArrSyncRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -60,7 +60,6 @@ def _build_arr_engine(
         target_language=target_lang,
         embedded_extraction=embedded_enabled,
         embedded_keywords=config.get("embedded_deprioritize_keywords"),
-        embedded_auto_translate=config.get("arr_auto_translate", False),
         scan_ass=scan_ass,
     )
 
@@ -108,6 +107,21 @@ async def radarr_test(request: Optional[ArrTestRequest] = None):
         return {"connected": False, "success": False, "error": "Radarr API key not configured"}
     res = await radarr_test_connection(cfg)
     res["success"] = res.get("connected", False)
+    return res
+
+
+@router.post("/integrations/plex/test")
+async def plex_test(request: Optional[PlexTestRequest] = None):
+    """Test the Plex connection with saved or provided settings; lists the server's libraries."""
+    from routers.settings import SECRET_SENTINEL
+    from services.autopilot.plex import check_connection
+    config = storage.load_global_config()
+    url = (request and (request.url or request.plex_url)) or config.get("plex_url") or "http://localhost:32400"
+    token = (request and (request.token or request.plex_token)) or ""
+    if not token or token == SECRET_SENTINEL:
+        token = config.get("plex_token") or ""
+    res = await asyncio.to_thread(check_connection, url, token)
+    res["success"] = res["connected"]
     return res
 
 
@@ -290,10 +304,17 @@ async def arr_enable_entry(project_name: str):
 
 @router.post("/integrations/arr/library/{project_name}/enqueue-missing")
 async def enqueue_project_missing(project_name: str):
-    """Enqueue all missing episodes of a show/movie to the backlog queue."""
-    from services.queue_service import enqueue_missing_for_project, PRIORITY_BACKLOG
-    enqueued = enqueue_missing_for_project(project_name, PRIORITY_BACKLOG)
-    return {"status": "success", "enqueued_count": len(enqueued)}
+    """Queue everything a show/movie still lacks, at backlog priority.
+
+    Episodes OmbiSub has never imported are created from their media file and sent to
+    extraction and translation (``services.on_demand.translate_missing``); the counts say
+    what went where and which episodes have no usable source.
+    """
+    from services import on_demand
+    try:
+        return await on_demand.translate_missing(project_name)
+    except on_demand.OnDemandError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
 
 
 def _verify_webhook_token(token: Optional[str], header_token: Optional[str]) -> None:
@@ -368,7 +389,7 @@ async def sonarr_webhook(
     token: Optional[str] = Query(None),
     x_omnisub_token: Optional[str] = Header(None),
 ):
-    """Receive Sonarr 'Download' events and import the new subtitle."""
+    """Receive Sonarr events: the Autopilot takes them when it is on, otherwise the library entry is refreshed."""
     _verify_webhook_token(token, x_omnisub_token)
 
     # INT-P1-06: Synchronous webhook payload validation
@@ -427,7 +448,7 @@ async def radarr_webhook(
     token: Optional[str] = Query(None),
     x_omnisub_token: Optional[str] = Header(None),
 ):
-    """Receive Radarr 'Download' events and import the new subtitle."""
+    """Receive Radarr events: the Autopilot takes them when it is on, otherwise the library entry is refreshed."""
     _verify_webhook_token(token, x_omnisub_token)
 
     # INT-P1-06: Synchronous webhook payload validation
@@ -474,30 +495,20 @@ async def radarr_webhook(
 
 
 async def _process_sonarr_webhook(payload: Dict):
-    """Background: import episode from Sonarr webhook, optionally auto-translate."""
+    """Background, Autopilot off: import the downloaded episode into the library. Never translates."""
     try:
         from utils.srt_parser import parse_srt
-        config = storage.load_global_config()
-        engine = _build_arr_engine(config)
-        location = await engine.process_sonarr_webhook(payload, storage, parse_srt)
-        if location and config.get("arr_auto_translate"):
-            project_name, episode_name = location.split("/", 1)
-            from services.queue_service import enqueue_webhook_episode
-            enqueue_webhook_episode(project_name, episode_name)
+        engine = _build_arr_engine(storage.load_global_config())
+        await engine.process_sonarr_webhook(payload, storage, parse_srt)
     except Exception as e:
         logger.error(f"Sonarr webhook processing failed: {e}", exc_info=True)
 
 
 async def _process_radarr_webhook(payload: Dict):
-    """Background: import movie from Radarr webhook, optionally auto-translate."""
+    """Background, Autopilot off: import the downloaded movie into the library. Never translates."""
     try:
         from utils.srt_parser import parse_srt
-        config = storage.load_global_config()
-        engine = _build_arr_engine(config)
-        location = await engine.process_radarr_webhook(payload, storage, parse_srt)
-        if location and config.get("arr_auto_translate"):
-            project_name, episode_name = location.split("/", 1)
-            from services.queue_service import enqueue_webhook_episode
-            enqueue_webhook_episode(project_name, episode_name)
+        engine = _build_arr_engine(storage.load_global_config())
+        await engine.process_radarr_webhook(payload, storage, parse_srt)
     except Exception as e:
         logger.error(f"Radarr webhook processing failed: {e}", exc_info=True)

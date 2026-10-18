@@ -469,7 +469,7 @@ class AutopilotPipeline:
         return bool(engine._probe_and_enqueue_extraction(
             project, episode, item["media_path"], self._import_metadata(item, facts), prio,
             SyncResult(), project_meta,
-            {"auto_translate": False, "translate_after": {"options": opts, "lang": ""}},
+            {"translate_after": {"options": opts, "lang": ""}},
         ))
 
     async def _import_external(self, item: Dict, engine, source_path: str, opts: Dict) -> Optional[str]:

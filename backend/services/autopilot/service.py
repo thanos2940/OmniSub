@@ -51,12 +51,10 @@ class AutopilotService:
                  pipeline: Optional[AutopilotPipeline] = None, notifier: Optional[AutopilotNotifier] = None,
                  clock: Optional[Callable[[], datetime]] = None,
                  config_provider: Optional[Callable[[], Dict]] = None,
-                 runner_provider: Optional[Callable[[], Any]] = None,
-                 plex_factory: Optional[Callable[[Dict], Any]] = None):
+                 runner_provider: Optional[Callable[[], Any]] = None):
         self._clock = clock or _utcnow
         self._config_provider = config_provider or storage.load_global_config
         self._runner_provider = runner_provider
-        self._plex_factory = plex_factory
         self._store = store
         self._watcher = watcher
         self._pipeline = pipeline
@@ -70,7 +68,6 @@ class AutopilotService:
         # health bookkeeping
         self._arr_alerted: Dict[str, bool] = {}
         self._runner_waiting_since: Optional[datetime] = None
-        self._plex_state: Dict[str, Any] = {"ok": None, "error": None}
 
     # ------------------------------------------------------------------
     # Components (built lazily so importing the module or asking for status costs nothing)
@@ -255,35 +252,24 @@ class AutopilotService:
     # Pipeline events -> Plex, ownership, Discord
     # ------------------------------------------------------------------
 
-    def _plex_client(self, cfg: Dict):
-        if self._plex_factory is not None:
-            return self._plex_factory(cfg)
-        from services.autopilot.plex import plex_from_config
-        return plex_from_config(cfg)
-
-    def _refresh_plex(self, path) -> None:
-        """Ask Plex to scan the folder of ``path`` (blocking); never raises."""
-        try:
-            client = self._plex_client(self._cfg())
-            if client is None or not path:
-                return
-            ok = bool(client.refresh_path(str(path)))
-            self._plex_state = {"ok": ok, "error": None if ok else getattr(client, "last_error", None)}
-        except Exception as e:
-            self._plex_state = {"ok": False, "error": str(e)}
-            logger.warning(f"Plex refresh failed: {e}")
+    @staticmethod
+    def _refresh_plex(path) -> None:
+        """Ask for a Plex scan of ``path``. It joins the debounced batch the exports feed
+        (services.plex_refresh), so a finished item that was just exported is one scan, not two."""
+        from services.plex_refresh import request_refresh
+        request_refresh(path)
 
     async def on_event(self, kind: str, item: Dict, **data) -> None:
         """The pipeline's ``on_event`` hook."""
         if kind == "done":
             outputs = data.get("outputs") or item.get("outputs") or []
             folder = str(Path(outputs[0]).parent) if outputs else str(Path(item["media_path"]).parent)
-            await asyncio.to_thread(self._refresh_plex, folder)
+            self._refresh_plex(folder)
             await asyncio.to_thread(self.notifier.item_done, item)
         elif kind == "foreign_repaired":
             repaired = [str(p) for p in data.get("paths") or []]
             if repaired:
-                await asyncio.to_thread(self._refresh_plex, str(Path(repaired[0]).parent))
+                self._refresh_plex(str(Path(repaired[0]).parent))
             for path in repaired:
                 await asyncio.to_thread(self.notifier.foreign_repaired, item, path)
                 await asyncio.to_thread(self._forget, path)
@@ -439,6 +425,8 @@ class AutopilotService:
         waiting, _ = self.store.list(state="waiting", limit=1000)
         waiting.sort(key=lambda i: i["due_at"])
         plex_enabled = bool(settings.plex_refresh_enabled and settings.plex_token)
+        from services.plex_refresh import get_refresher
+        plex_state = get_refresher().state
         return {
             "enabled": settings.enabled,
             "running": self._running,
@@ -446,8 +434,8 @@ class AutopilotService:
             "loops": {name: dict(state) for name, state in self._loops.items()},
             "arr": self.watcher.health(),
             "engine": engine,
-            "plex": {"enabled": plex_enabled, "ok": self._plex_state["ok"] if plex_enabled else None,
-                     "error": self._plex_state["error"] if plex_enabled else None},
+            "plex": {"enabled": plex_enabled, "ok": plex_state["ok"] if plex_enabled else None,
+                     "error": plex_state["error"] if plex_enabled else None},
             "counts": counts,
             "next_due": waiting[:5],
         }
