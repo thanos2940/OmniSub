@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Dict, Optional, Any, Union
 
 class CreateProjectRequest(BaseModel):
@@ -194,7 +194,8 @@ class SettingsRequest(BaseModel):
     # --- Auto-Updates (GitHub Sync) ---
     auto_update_enabled: Optional[bool] = False
     auto_update_interval_hours: Optional[int] = 6
-    update_channel: Optional[str] = "releases"
+    # "main" follows origin/main, "releases" follows GitHub Releases, "auto" = main until the repo has release tags.
+    update_channel: Optional[str] = "auto"
     github_webhook_enabled: Optional[bool] = True
     github_webhook_secret: Optional[str] = ""
     # --- Agent Runner Rescue & Boot ---
@@ -271,6 +272,27 @@ class SettingsRequest(BaseModel):
     plex_url: Optional[str] = "http://localhost:32400"
     plex_token: Optional[str] = ""
     translate_lyrics: Optional[bool] = True
+    # --- Reverse proxy (Caddy) ---
+    # Path OmbiSub is served under, e.g. "/ombisub" ("" = the root). Takes effect after a restart.
+    url_base: Optional[str] = ""
+    # Addresses whose X-Forwarded-For/-Proto headers are trusted (comma separated; "*" = any). Takes effect after a restart.
+    trusted_proxies: Optional[str] = "127.0.0.1"
+
+    @field_validator("url_base")
+    @classmethod
+    def _check_url_base(cls, value):
+        from utils.url_base import normalize_url_base
+        return None if value is None else normalize_url_base(value)
+
+    @field_validator("update_channel")
+    @classmethod
+    def _check_update_channel(cls, value):
+        if value is None:
+            return value
+        channel = value.strip().lower()
+        if channel not in ("auto", "main", "releases"):
+            raise ValueError("update_channel must be auto, main or releases")
+        return channel
 
 
 class ProjectSettings(BaseModel):

@@ -23,6 +23,8 @@ load_dotenv(dotenv_path=Path(__file__).parent.parent / '.env')
 from utils import storage
 from utils.rate_limiter import per_model_rate_limiter
 from utils.auth import generate_api_key, generate_webhook_secret
+from utils.spa import install_spa
+from utils.url_base import UrlBaseMiddleware, safe_url_base
 from routers.settings import has_api_key, validate_api_key
 
 from routers import (
@@ -548,43 +550,19 @@ async def sync_all_disk(re_queue_removed: bool = True):
 
 
 
-# Serve the built frontend (backend/static/, populated by the Dockerfile's
-# frontend-builder stage) and hand any non-API GET request to it, so React
-# Router's client-side routes (e.g. /settings, /health, /project/X) resolve
-# correctly on a hard refresh or direct link. In dev, this directory doesn't
-# exist and Vite serves the frontend separately on :5173 — nothing here runs.
+# Serve the built frontend (backend/static/, populated by the Dockerfile's frontend-builder stage or by
+# install.ps1 / the updater) and hand any non-API GET request to it, so React Router's client-side routes
+# (e.g. /settings, /health, /project/X) resolve correctly on a hard refresh or direct link. In dev, this
+# directory doesn't exist and Vite serves the frontend separately on :5173 — nothing here runs.
 _STATIC_DIR = Path(__file__).parent / "static"
+# url_base: the path a reverse proxy serves OmbiSub under ("/ombisub"; "" = root). Read once at startup.
+URL_BASE = safe_url_base(storage.load_global_config().get("url_base"))
+app.state.url_base = URL_BASE
 if _STATIC_DIR.is_dir():
-    from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse
+    install_spa(app, _STATIC_DIR, URL_BASE)
 
-    _assets_dir = _STATIC_DIR / "assets"
-    if _assets_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=_assets_dir), name="spa-assets")
-
-    # The web app's pages (App.jsx routes). A browser loading one directly (address bar, refresh)
-    # gets the app even where an API alias shares the path (GET /queue) or the API-key gate covers
-    # it (/settings); API clients ask for JSON and still reach the API.
-    _SPA_PAGES = {"project", "settings", "library", "dashboard", "health", "autopilot", "review", "queue"}
-
-    @app.middleware("http")
-    async def spa_pages_for_browsers(request: Request, call_next):
-        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
-            if request.url.path.strip("/").split("/", 1)[0] in _SPA_PAGES:
-                return FileResponse(_STATIC_DIR / "index.html")
-        return await call_next(request)
-
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_fallback(full_path: str):
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not found")
-        candidate = (_STATIC_DIR / full_path).resolve()
-        # Serve a real static file (favicon, manifest, etc.) if the path
-        # matches one that exists directly under static/; otherwise fall
-        # through to index.html so React Router owns the route client-side.
-        if full_path and candidate.is_file() and candidate.is_relative_to(_STATIC_DIR.resolve()):
-            return FileResponse(candidate)
-        return FileResponse(_STATIC_DIR / "index.html")
+# Added last = outermost: the prefix is gone before the API-key gate and the routers see the path.
+app.add_middleware(UrlBaseMiddleware, url_base=URL_BASE)
 
 
 if __name__ == "__main__":

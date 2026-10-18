@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react()],
+    // Relative asset URLs: the backend injects <base href> into index.html, so the app also works under a
+    // reverse-proxy path (Caddy example.com/ombisub) without a rebuild.
+    base: './',
     build: {
         rollupOptions: {
             output: {

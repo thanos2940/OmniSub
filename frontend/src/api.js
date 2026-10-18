@@ -2,11 +2,12 @@ import axios from 'axios';
 
 // Resolve the API base at runtime:
 //  1. VITE_API_URL build-time override, else
-//  2. relative ('') in production so the app talks to its own origin (reverse proxy), else
+//  2. in production the path the backend says it is served under (window.__OMBISUB_BASE__, set from the
+//     url_base setting; '' at the root), so the app talks to its own origin (reverse proxy), else
 //  3. localhost:8000 in dev.
 const API_URL =
     import.meta.env.VITE_API_URL ??
-    (import.meta.env.DEV ? 'http://localhost:8000' : '');
+    (import.meta.env.DEV ? 'http://localhost:8000' : (window.__OMBISUB_BASE__ || ''));
 
 // Auth (docs/PLAN_auth_security.md): every call in this file goes through the
 // single global `axios` instance (verified — no other file imports axios

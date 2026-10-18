@@ -145,7 +145,7 @@ function App() {
 
     return (
         <ErrorBoundary title="Application Error">
-            <Router>
+            <Router basename={window.__OMBISUB_BASE__ || undefined}>
                 <JobProvider>
                     <ToastProvider>
                         {needsSetup && (
