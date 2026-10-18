@@ -12,6 +12,12 @@
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Port 8080 -DataDir D:\OmbiSubData -WhatIf
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -OpenFirewall -KeepAwake
 
+  powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Mode Service -Port 2945 -OpenFirewall -KeepAwake
+
+  -Mode Service  runs like Sonarr: starts at boot with nobody logged on, as your account (so the agent
+                 CLIs keep their sign-in), restarts after a crash; console output goes to
+                 logs\service_console.log. Needs an elevated PowerShell and your Windows password.
+  -Mode Tray     starts at logon with a tray icon. -Mode Headless starts at logon without one.
   -OpenFirewall  allows inbound TCP <Port> on Private networks (MorpiceHub and other LAN devices).
   -KeepAwake     sets the active power plan to never sleep or hibernate on AC power.
   Both change system settings and need an elevated PowerShell.
@@ -19,7 +25,8 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string]$InstallDir = '',
-    [ValidateSet('Tray', 'Headless')][string]$Mode = 'Tray',
+    [ValidateSet('Service', 'Tray', 'Headless')][string]$Mode = 'Tray',
+    [System.Management.Automation.PSCredential]$Credential,
     [string]$DataDir = '',
     [int]$Port = 8000,
     [string]$TaskName = 'OmbiSub',
@@ -162,12 +169,31 @@ if ($Mode -eq 'Tray') {
     $action = New-ScheduledTaskAction -Execute $exec -Argument $argList -WorkingDirectory $InstallDir
 }
 
-$triggers = @(New-ScheduledTaskTrigger -AtLogOn -User $User)
+$logDirForTask = if ($DataDir) { Join-Path $DataDir 'logs' } else { Join-Path $Backend 'logs' }
+New-Item -ItemType Directory -Force -Path $logDirForTask | Out-Null
+$restartCount = 3
+if ($Mode -eq 'Service') {
+    if (-not $isAdmin) { Fail 'Service mode registers a boot-time task: run this from an elevated PowerShell (Run as administrator).' }
+    # cmd /c keeps the console output (tracebacks before logging starts) in a file.
+    $consoleLog = Join-Path $logDirForTask 'service_console.log'
+    $cmdLine = "/c `"`"$VenvPy`" backend\run_server.py $serverArgs >> `"$consoleLog`" 2>&1`""
+    $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument $cmdLine -WorkingDirectory $InstallDir
+    $boot = New-ScheduledTaskTrigger -AtStartup
+    $boot.Delay = 'PT1M'  # let the network and the drive shares come up
+    $triggers = @($boot)
+    $restartCount = 999
+    if (-not $Credential) {
+        $Credential = Get-Credential -UserName $User -Message "Windows password of $User (OmbiSub runs as this account at boot; it goes to Task Scheduler only)"
+    }
+    if (-not $Credential) { Fail 'No password given: Service mode needs it to run while nobody is logged on.' }
+} else {
+    $triggers = @(New-ScheduledTaskTrigger -AtLogOn -User $User)
+}
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
-    -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+    -RestartCount $restartCount -RestartInterval (New-TimeSpan -Minutes 1) `
     -MultipleInstances IgnoreNew
 
 if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtLogOn, Interactive)")) {
@@ -176,10 +202,17 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
         Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
-        -User $User -RunLevel Limited `
-        -Description "OmbiSub 24/7 subtitle translator ($Mode mode)" | Out-Null
-    Ok "Task '$TaskName' registered ($Mode mode, Interactive logon)."
+    if ($Mode -eq 'Service') {
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+            -User $Credential.UserName -Password $Credential.GetNetworkCredential().Password -RunLevel Highest `
+            -Description "OmbiSub 24/7 subtitle translator (starts at boot, like a service)" | Out-Null
+        Ok "Task '$TaskName' registered: starts at boot as $($Credential.UserName), restarts after a crash."
+    } else {
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+            -User $User -RunLevel Limited `
+            -Description "OmbiSub 24/7 subtitle translator ($Mode mode)" | Out-Null
+        Ok "Task '$TaskName' registered ($Mode mode, Interactive logon)."
+    }
     try {
         Start-ScheduledTask -TaskName $TaskName
         Ok 'Task started.'
@@ -187,10 +220,15 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
         Warn "Could not start task immediately: $_"
     }
 
-    # Secondary fallback: Windows Startup folder shortcut
+    # Secondary fallback: Windows Startup folder shortcut (not for Service: it must not start twice)
     try {
         $startupFolder = [Environment]::GetFolderPath('Startup')
-        if (Test-Path $startupFolder) {
+        $oldLnk = Join-Path $startupFolder "$TaskName.lnk"
+        if ($Mode -eq 'Service' -and (Test-Path $oldLnk)) {
+            Remove-Item $oldLnk -Force
+            Ok "Removed the logon shortcut $oldLnk (Service mode starts at boot instead)."
+        }
+        if ($Mode -ne 'Service' -and (Test-Path $startupFolder)) {
             $wsh = New-Object -ComObject WScript.Shell
             $lnkPath = Join-Path $startupFolder "$TaskName.lnk"
             $shortcut = $wsh.CreateShortcut($lnkPath)
