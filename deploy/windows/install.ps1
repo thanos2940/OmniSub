@@ -185,7 +185,7 @@ if ($Mode -eq 'Service') {
     if (-not $Credential) {
         $Credential = Get-Credential -UserName $User -Message "Windows password of $User (OmbiSub runs as this account at boot; it goes to Task Scheduler only)"
     }
-    if (-not $Credential) { Fail 'No password given: Service mode needs it to run while nobody is logged on.' }
+    if (-not $Credential) { $Credential = New-Object System.Management.Automation.PSCredential($User, (New-Object System.Security.SecureString)) }
 } else {
     $triggers = @(New-ScheduledTaskTrigger -AtLogOn -User $User)
 }
@@ -203,9 +203,20 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
     if ($Mode -eq 'Service') {
-        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
-            -User $Credential.UserName -Password $Credential.GetNetworkCredential().Password -RunLevel Highest `
-            -Description "OmbiSub 24/7 subtitle translator (starts at boot, like a service)" | Out-Null
+        $plain = $Credential.GetNetworkCredential().Password
+        $desc = "OmbiSub 24/7 subtitle translator (starts at boot, like a service)"
+        if ($plain) {
+            Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+                -User $Credential.UserName -Password $plain -RunLevel Highest -Description $desc | Out-Null
+        } else {
+            # No password (Windows refuses blank-password logons for tasks): S4U runs the task as the
+            # user with nobody logged on and nothing stored, but without network credentials, so
+            # media must be on this machine's drives (it is: the remap turned \\server\x into X:\).
+            $principal = New-ScheduledTaskPrincipal -UserId $Credential.UserName -LogonType S4U -RunLevel Highest
+            Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+                -Principal $principal -Description $desc | Out-Null
+            Warn 'Account without a password: registered with S4U logon (no network shares from the task).'
+        }
         Ok "Task '$TaskName' registered: starts at boot as $($Credential.UserName), restarts after a crash."
     } else {
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
