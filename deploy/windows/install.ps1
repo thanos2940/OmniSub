@@ -14,6 +14,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string]$InstallDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
+    [ValidateSet('Tray', 'Headless')][string]$Mode = 'Tray',
     [string]$DataDir = '',
     [int]$Port = 8000,
     [string]$TaskName = 'OmbiSub',
@@ -96,6 +97,8 @@ if ($PSCmdlet.ShouldProcess($Venv, 'Create/update venv and install backend\requi
     Write-Host '  installing backend\requirements.txt (the first time this downloads several hundred MB) ...'
     & $VenvPy -m pip install -r (Join-Path $Backend 'requirements.txt')
     if ($LASTEXITCODE -ne 0) { Fail 'pip install failed.' }
+    Write-Host '  installing pystray and Pillow for tray support ...'
+    & $VenvPy -m pip install pystray Pillow --quiet
     Ok 'Requirements installed.'
 }
 
@@ -124,37 +127,67 @@ if (-not $SkipBuild) {
 }
 
 # ---------------------------------------------------------------- scheduled task
-Step "Registering the scheduled task '$TaskName'"
-$argList = "backend\run_server.py --port $Port"
-if ($DataDir) { $argList += " --data-dir `"$DataDir`"" }
-$action   = New-ScheduledTaskAction -Execute $VenvPy -Argument $argList -WorkingDirectory $InstallDir
-$triggers = @(New-ScheduledTaskTrigger -AtStartup)
-if ($AlsoAtLogon) { $triggers += New-ScheduledTaskTrigger -AtLogOn -User $User }
+Step "Registering the scheduled task '$TaskName' (Mode: $Mode)"
+
+if ($Mode -eq 'Tray') {
+    $trayScript = Join-Path $InstallDir 'deploy\windows\start_tray.vbs'
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "//B `"$trayScript`"" -WorkingDirectory $InstallDir
+} else {
+    $pythonw = Join-Path $Venv 'Scripts\pythonw.exe'
+    $exec = if (Test-Path $pythonw) { $pythonw } else { $VenvPy }
+    $argList = "backend\run_server.py --port $Port"
+    if ($DataDir) { $argList += " --data-dir `"$DataDir`"" }
+    $action = New-ScheduledTaskAction -Execute $exec -Argument $argList -WorkingDirectory $InstallDir
+}
+
+$triggers = @(New-ScheduledTaskTrigger -AtLogOn -User $User)
 $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) `
+    -ExecutionTimeLimit (New-TimeSpan -Seconds 0) `
+    -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
     -MultipleInstances IgnoreNew
-# no -WakeToRun: not required; keeping the PC awake is a power-plan setting (see the next steps)
 
-if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (startup, run whether logged on or not, restart every 1 min x 999)")) {
-    $cred = Get-Credential -UserName $User -Message "Windows password for $User (used by Task Scheduler only; not stored by this script)"
-    if (-not $cred) { Fail 'No credentials given.' }
-    $plain = $cred.GetNetworkCredential().Password
+if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtLogOn, Interactive)")) {
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
         Warn "Task '$TaskName' exists: stopping and replacing it."
         Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
+        -User $User -RunLevel Limited `
+        -Description "OmbiSub 24/7 subtitle translator ($Mode mode)" | Out-Null
+    Ok "Task '$TaskName' registered ($Mode mode, Interactive logon)."
     try {
-        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
-            -User $cred.UserName -Password $plain -RunLevel Limited `
-            -Description 'OmbiSub subtitle translator + Autopilot (runs backend\run_server.py)' | Out-Null
-    } finally { $plain = $null }
-    Ok "Task '$TaskName' registered."
-    Start-ScheduledTask -TaskName $TaskName
-    Ok 'Task started.'
+        Start-ScheduledTask -TaskName $TaskName
+        Ok 'Task started.'
+    } catch {
+        Warn "Could not start task immediately: $_"
+    }
+
+    # Secondary fallback: Windows Startup folder shortcut
+    try {
+        $startupFolder = [Environment]::GetFolderPath('Startup')
+        if (Test-Path $startupFolder) {
+            $wsh = New-Object -ComObject WScript.Shell
+            $lnkPath = Join-Path $startupFolder "$TaskName.lnk"
+            $shortcut = $wsh.CreateShortcut($lnkPath)
+            if ($Mode -eq 'Tray') {
+                $shortcut.TargetPath = "wscript.exe"
+                $shortcut.Arguments = "//B `"" + (Join-Path $InstallDir 'deploy\windows\start_tray.vbs') + "`""
+            } else {
+                $pythonw = Join-Path $Venv 'Scripts\pythonw.exe'
+                $shortcut.TargetPath = if (Test-Path $pythonw) { $pythonw } else { $VenvPy }
+                $shortcut.Arguments = "backend\run_server.py --port $Port"
+            }
+            $shortcut.WorkingDirectory = $InstallDir
+            $shortcut.Description = "OmbiSub 24/7 Subtitle Translator ($Mode)"
+            $shortcut.Save()
+            Ok "Logon shortcut created in Startup folder: $lnkPath"
+        }
+    } catch {
+        Warn "Could not create Startup folder shortcut: $_"
+    }
 }
 
 # ---------------------------------------------------------------- next steps

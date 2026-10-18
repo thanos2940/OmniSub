@@ -194,9 +194,11 @@ class SettingsRequest(BaseModel):
     # --- Auto-Updates (GitHub Sync) ---
     auto_update_enabled: Optional[bool] = False
     auto_update_interval_hours: Optional[int] = 6
+    update_channel: Optional[str] = "releases"
     github_webhook_enabled: Optional[bool] = True
     github_webhook_secret: Optional[str] = ""
-    # --- Agent Runner Rescue ---
+    # --- Agent Runner Rescue & Boot ---
+    agent_runner_autostart: Optional[bool] = True
     api_rescue: Optional[bool] = True
     rescue_model: Optional[str] = None
     gemini_api_key: Optional[str] = None

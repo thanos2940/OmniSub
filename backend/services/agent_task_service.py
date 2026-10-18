@@ -230,10 +230,16 @@ class AgentTaskService:
                 SELECT id, project_name, episode_name, priority, status, created_at, lang, options
                 FROM translation_queue
                 WHERE status = 'pending' AND kind = ?
-                ORDER BY priority ASC, created_at ASC
+                ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
             """, (KIND_TRANSLATION,)).fetchall()
         items = []
         for r in rows:
+            proj_meta = storage.load_project_metadata(r["project_name"]) or {}
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
+            if tier == "ignored":
+                q.update_status(r["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
+                continue
             opts = _options(r)
             item = {k: r[k] for k in ("id", "project_name", "episode_name", "priority", "status", "created_at", "lang")}
             item["engine"] = opts.get("engine") or "model"
@@ -291,6 +297,37 @@ class AgentTaskService:
 
     # ------------------------------------------------------------------ claiming
 
+    def _claim_from_queue(self, max_priority: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """Claim the next pending queue row, cancelling and skipping any ignored projects."""
+        q = TranslationQueue()
+        now_str = _now()
+        with q._conn() as conn:
+            prio_clause = "AND priority <= ?" if max_priority is not None else ""
+            params = [now_str, KIND_TRANSLATION] + ([max_priority] if max_priority is not None else [])
+            rows = conn.execute(
+                f"""
+                SELECT * FROM translation_queue
+                WHERE status IN ('queued', 'pending')
+                  AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                  AND kind = ?
+                  {prio_clause}
+                ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
+                LIMIT 50
+                """,
+                params
+            ).fetchall()
+        for row in rows:
+            proj_meta = storage.load_project_metadata(row["project_name"]) or {}
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
+            if tier == "ignored":
+                q.update_status(row["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
+                continue
+            claimed = self._claim_specific(row["id"])
+            if claimed:
+                return claimed
+        return None
+
     def prepare_task_workspace(self, queue_item_id: Optional[str] = None) -> Dict[str, Any]:
         """Claim a queue item (a specific one, or the next by priority) and build its workspace.
 
@@ -302,13 +339,19 @@ class AgentTaskService:
         q = TranslationQueue()
         skipped: List[Dict[str, Any]] = []
         for _ in range(50):
-            item = self._claim_specific(queue_item_id) if queue_item_id else q.claim_next_for_agent()
+            item = self._claim_specific(queue_item_id) if queue_item_id else self._claim_from_queue()
             if not item:
                 res = {"success": False, "status": "empty",
                        "message": "No pending translation items available in the queue."}
                 if skipped:
                     res["finalized_without_work"] = skipped
                 return res
+            proj_meta = storage.load_project_metadata(item["project_name"]) or {}
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
+            if tier == "ignored":
+                q.update_status(item["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
+                continue
             res = self._build_workspace(item)
             if res.get("status") in ("nothing_to_translate", "missing_source") and not queue_item_id:
                 skipped.append({k: res.get(k) for k in ("project_name", "episode_name", "status", "message")})

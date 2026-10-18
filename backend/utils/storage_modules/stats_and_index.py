@@ -23,10 +23,10 @@ def _index_episode(project_name: str, episode_name: str, ep_meta: Dict) -> None:
     """Best-effort upsert into the metadata index (Plan 03)."""
     try:
         from utils import metadata_index
-        from utils.storage_modules.project_store import load_project_metadata
+        from utils.storage_modules.project_store import load_project_metadata, resolve_project_priority
         from utils.storage_modules.subtitle_store import original_subtitle_exists
         pmeta = load_project_metadata(project_name) or {}
-        disabled = bool(pmeta.get("arr_disabled"))
+        disabled = (resolve_project_priority(pmeta) == "ignored")
         orig = original_subtitle_exists(project_name, episode_name)
         metadata_index.upsert(project_name, episode_name, ep_meta or {}, orig, disabled)
     except Exception:
@@ -105,7 +105,7 @@ def get_arr_library() -> Dict:
     if _arr_library_cache is not None:
         return _arr_library_cache
 
-    from utils.storage_modules.project_store import list_projects, load_project_metadata
+    from utils.storage_modules.project_store import list_projects, load_project_metadata, resolve_project_priority
     from utils.storage_modules.episode_store import list_episodes, load_episode_metadata, load_episode
 
     all_names = list_projects()
@@ -148,14 +148,19 @@ def get_arr_library() -> Dict:
                     translated += 1
             episode_count = len(non_siblings)
 
+        prio = resolve_project_priority(meta)
+        is_disabled = (prio == "ignored")
+
         entry = {
             **meta,
             "name": p_name,
+            "translation_priority": prio,
+            "arr_disabled": is_disabled,
             "episode_count": episode_count,
             "translated_count": translated,
         }
 
-        if meta.get("arr_disabled"):
+        if is_disabled:
             disabled.append(entry)
         elif meta.get("arr_media_type") == "movie" or meta.get("type") == "movie":
             movies.append(entry)

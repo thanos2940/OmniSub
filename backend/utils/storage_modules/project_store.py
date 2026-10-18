@@ -64,6 +64,24 @@ def list_projects() -> List[str]:
     return sorted([d.name for d in projects_dir.iterdir() if d.is_dir()])
 
 
+VALID_PRIORITY_TIERS = {"high", "normal", "low", "ignored"}
+
+
+def resolve_project_priority(project_meta: Optional[Dict]) -> str:
+    """Resolve the effective priority tier ("high", "normal", "low", "ignored") for a project."""
+    if not project_meta or not isinstance(project_meta, dict):
+        return "normal"
+    arr_disabled = bool(project_meta.get("arr_disabled"))
+    tp = project_meta.get("translation_priority")
+    if tp in VALID_PRIORITY_TIERS:
+        if arr_disabled and tp == "normal":
+            return "ignored"
+        return str(tp)
+    if arr_disabled:
+        return "ignored"
+    return "normal"
+
+
 def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
     """Create a new project with default or custom metadata.
     
@@ -103,6 +121,8 @@ def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
         "context_guide": "",
         "parent_project": None,
         "type": "show",
+        "translation_priority": "normal",
+        "arr_disabled": False,
         "settings": default_settings,
     }
     
@@ -266,6 +286,27 @@ def save_project_metadata(project_name: str, metadata: Dict) -> None:
     """Save project metadata to JSON file under project lock atomically."""
     from utils.storage_modules.stats_and_index import invalidate_arr_library_cache
     invalidate_arr_library_cache()
+
+    if "translation_priority" in metadata:
+        tp = str(metadata.get("translation_priority") or "").lower().strip()
+        if tp not in VALID_PRIORITY_TIERS:
+            tp = "normal"
+        if tp == "normal" and metadata.get("arr_disabled"):
+            tp = "ignored"
+        metadata["translation_priority"] = tp
+        metadata["arr_disabled"] = (tp == "ignored")
+    elif "arr_disabled" in metadata:
+        if metadata["arr_disabled"]:
+            metadata["translation_priority"] = "ignored"
+        elif metadata.get("translation_priority") in ("ignored", None):
+            metadata["translation_priority"] = "normal"
+
+    try:
+        from utils.metadata_index import get_metadata_index
+        get_metadata_index().set_project_disabled(project_name, bool(metadata.get("arr_disabled")))
+    except Exception:
+        pass
+
     metadata_path = _safe_project_dir(project_name) / "project.json"
     with _get_project_lock(project_name):
         _atomic_write_json(metadata_path, metadata)
@@ -300,3 +341,11 @@ def delete_project(project_name: str) -> bool:
             pass
         return True
     return False
+
+
+try:
+    import sys
+    if "utils.storage" in sys.modules:
+        setattr(sys.modules["utils.storage"], "resolve_project_priority", resolve_project_priority)
+except Exception:
+    pass

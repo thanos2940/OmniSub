@@ -18,6 +18,19 @@ from routers.settings import validate_api_key
 
 router = APIRouter()
 
+class ProjectPriorityRequest(BaseModel):
+    priority: str
+
+
+class BulkProjectPriorityRequest(BaseModel):
+    projects: List[str]
+    priority: str
+
+
+class ProjectArrDisabledRequest(BaseModel):
+    arr_disabled: bool
+
+
 def _get_projects_list():
     names = storage.list_projects()
     result = []
@@ -25,17 +38,22 @@ def _get_projects_list():
         meta = storage.load_project_metadata(name)
         if meta:
             meta["name"] = name
+            prio = getattr(storage, "resolve_project_priority", lambda m: m.get("translation_priority", "normal"))(meta)
+            meta["translation_priority"] = prio
+            meta["arr_disabled"] = (prio == "ignored")
             result.append(meta)
     return result
 
 
 @router.get("/projects")
+@router.get("/api/projects")
 async def list_projects():
     import asyncio
     return await asyncio.to_thread(_get_projects_list)
 
 
 @router.post("/projects")
+@router.post("/api/projects")
 async def create_project(request: CreateProjectRequest):
     is_anime = (request.type or "").lower() == "anime" or "anime" in request.name.lower()
     metadata = {
@@ -45,10 +63,96 @@ async def create_project(request: CreateProjectRequest):
         "type": request.type,
         "series_type": "anime" if is_anime else "standard",
         "is_anime": is_anime,
+        "translation_priority": "normal",
+        "arr_disabled": False,
         "glossary": {"terms": []},
         "context_guide": ""
     }
     return storage.create_project(request.name, metadata)
+
+
+@router.put("/projects/{project_name}/priority")
+@router.put("/api/projects/{project_name}/priority")
+async def update_project_priority_endpoint(project_name: str, payload: ProjectPriorityRequest):
+    priority = (payload.priority or "").lower().strip()
+    if priority not in {"high", "normal", "low", "ignored"}:
+        raise HTTPException(status_code=400, detail=f"Invalid priority tier: {payload.priority}. Must be one of: high, normal, low, ignored")
+    
+    proj_meta = storage.load_project_metadata(project_name)
+    if proj_meta is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+    
+    proj_meta["translation_priority"] = priority
+    proj_meta["arr_disabled"] = (priority == "ignored")
+    storage.save_project_metadata(project_name, proj_meta)
+    
+    from utils.translation_queue import get_translation_queue
+    queue_changes = get_translation_queue().update_project_priority(project_name, priority)
+    
+    return {
+        "status": "success",
+        "project": project_name,
+        "translation_priority": priority,
+        "arr_disabled": (priority == "ignored"),
+        "queue_changes": queue_changes,
+    }
+
+
+@router.post("/projects/bulk-priority")
+@router.post("/api/projects/bulk-priority")
+async def bulk_update_project_priority(payload: BulkProjectPriorityRequest):
+    priority = (payload.priority or "").lower().strip()
+    if priority not in {"high", "normal", "low", "ignored"}:
+        raise HTTPException(status_code=400, detail=f"Invalid priority tier: {payload.priority}. Must be one of: high, normal, low, ignored")
+    
+    from utils.translation_queue import get_translation_queue
+    queue = get_translation_queue()
+    total_changes = {"updated": 0, "cancelled": 0}
+    updated_count = 0
+    
+    for project_name in payload.projects:
+        proj_meta = storage.load_project_metadata(project_name)
+        if proj_meta is None:
+            continue
+        proj_meta["translation_priority"] = priority
+        proj_meta["arr_disabled"] = (priority == "ignored")
+        storage.save_project_metadata(project_name, proj_meta)
+        changes = queue.update_project_priority(project_name, priority)
+        total_changes["updated"] += changes.get("updated", 0)
+        total_changes["cancelled"] += changes.get("cancelled", 0)
+        updated_count += 1
+        
+    return {
+        "status": "success",
+        "updated_projects": updated_count,
+        "translation_priority": priority,
+        "queue_changes": total_changes,
+    }
+
+
+@router.put("/projects/{project_name}/arr-disabled")
+@router.put("/api/projects/{project_name}/arr-disabled")
+async def set_project_arr_disabled_endpoint(project_name: str, payload: ProjectArrDisabledRequest):
+    proj_meta = storage.load_project_metadata(project_name)
+    if proj_meta is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
+        
+    is_disabled = bool(payload.arr_disabled)
+    priority = "ignored" if is_disabled else "normal"
+    proj_meta["arr_disabled"] = is_disabled
+    proj_meta["translation_priority"] = priority
+    storage.save_project_metadata(project_name, proj_meta)
+    
+    from utils.translation_queue import get_translation_queue
+    queue_changes = get_translation_queue().update_project_priority(project_name, priority)
+    
+    return {
+        "status": "success",
+        "project": project_name,
+        "arr_disabled": is_disabled,
+        "translation_priority": priority,
+        "queue_changes": queue_changes,
+    }
 
 
 @router.get("/projects/{project_name}/token-summary")
@@ -73,10 +177,14 @@ async def get_project_token_summary(project_name: str):
 
 
 @router.get("/projects/{project_name}")
+@router.get("/api/projects/{project_name}")
 async def get_project(project_name: str):
     metadata = storage.load_resolved_project_metadata(project_name)
     if not metadata:
         raise HTTPException(status_code=404, detail="Project not found")
+    prio = getattr(storage, "resolve_project_priority", lambda m: m.get("translation_priority", "normal"))(metadata)
+    metadata["translation_priority"] = prio
+    metadata["arr_disabled"] = (prio == "ignored")
     return metadata
 
 
@@ -299,6 +407,14 @@ async def update_project(project_name: str, data: Dict, background_tasks: Backgr
         
     storage.save_project_metadata(project_name, metadata)
     await adk_session_manager.update_glossary(project_name, metadata.get("glossary", {"terms": []}))
+
+    if "translation_priority" in data or "arr_disabled" in data:
+        prio = metadata.get("translation_priority", "normal")
+        try:
+            from utils.translation_queue import get_translation_queue
+            get_translation_queue().update_project_priority(project_name, prio)
+        except Exception:
+            pass
     
     if affected_terms:
         # "Does this project have any translated episodes?" — answer from the index

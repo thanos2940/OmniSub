@@ -38,6 +38,8 @@ from utils.storage_modules.config_store import (
 # 3. Project Metadata & Hierarchies
 from utils.storage_modules.project_store import (
     _UNIVERSE_CONTEXT_PREFIX,
+    VALID_PRIORITY_TIERS,
+    resolve_project_priority,
     project_target_languages,
     list_projects,
     create_project,

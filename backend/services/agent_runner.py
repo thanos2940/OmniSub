@@ -38,12 +38,15 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
+
+_SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 from utils import paths, storage
 from utils.translation_queue import TranslationQueue, KIND_TRANSLATION
@@ -80,6 +83,7 @@ DEFAULT_CONFIG = {
     "fix_rounds": 2,             # follow-up requests for lines that came back missing or wrong
     "max_episodes": 0,           # 0: until the queue is empty or the runner is stopped
     "watch": False,              # keep running on an empty queue and take new episodes as they are queued
+    "keep_watching": False,      # alias for watch / daemon mode
     "api_rescue": True,          # lines the CLI model's safety filter refuses go to the Gemini API at the end
     "rescue_model": "",          # ... with this model ("": the project's translation model)
     "api_url": DEFAULT_API_URL,
@@ -160,9 +164,12 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
             out[key] = str(out[key] or "").strip()
     if "api_url" in out:
         out["api_url"] = normalize_api_url(str(out["api_url"] or "").strip())
-    for key in ("watch", "api_rescue"):
+    for key in ("watch", "keep_watching", "api_rescue"):
         if key in out:
             out[key] = out[key] in (True, 1, "1", "true", "True", "yes", "on")
+    # keep_watching is an input alias of watch; only watch is stored.
+    if out.pop("keep_watching", False):
+        out["watch"] = True
     if "fallback_models" in out:
         fb = out["fallback_models"] or []
         if isinstance(fb, str):
@@ -179,7 +186,10 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
 
 
 class RunnerConfig(dict):
-    """Configuration container for AgentRunner."""
+    """Configuration container for AgentRunner supporting dual dict and attribute access.
+
+    ``keep_watching`` is an alias of ``watch``: reading or writing it touches ``watch``.
+    """
     def __init__(self, *args, **kwargs):
         initial = {}
         if args and isinstance(args[0], dict):
@@ -187,8 +197,22 @@ class RunnerConfig(dict):
         initial.update(kwargs)
         cleaned = clean_config(initial)
         super().__init__(cleaned)
-        for k, v in cleaned.items():
-            setattr(self, k, v)
+
+    def __getattr__(self, name: str):
+        if name == "keep_watching":
+            name = "watch"
+        try:
+            return self[name]
+        except KeyError:
+            raise AttributeError(name)
+
+    def __setattr__(self, name: str, value):
+        self[name] = value
+
+    def __setitem__(self, key: str, value):
+        if key == "keep_watching":
+            key, value = "watch", bool(value)
+        super().__setitem__(key, value)
 
 
 class AgentRunner:
@@ -230,7 +254,7 @@ class AgentRunner:
             saved = clean_config(state.get("config") or {})
         except ValueError:
             saved = {}
-        self.config = {**DEFAULT_CONFIG, **saved}
+        self.config = RunnerConfig({**DEFAULT_CONFIG, **saved})
         now = time.time()
         self.pauses: Dict[str, float] = {}
         for m, t in (state.get("pauses") or {}).items():
@@ -428,7 +452,7 @@ class AgentRunner:
                 if other:
                     raise RuntimeError(f"The runner is already working in another Omnisub process (PID {other}); "
                                        f"stop it there first.")
-                self.config = {**self.config, **clean}
+                self.config = RunnerConfig({**self.config, **clean})
                 cfg = self.config
                 if not self._exe():
                     raise FileNotFoundError(f"{agent_cli.ENGINES[cfg['engine']]} is not installed (or not on PATH)")
@@ -1554,14 +1578,27 @@ def nudge() -> None:
 
 
 def autostart() -> bool:
-    """Resume the runner if it was on when Omnisub last stopped."""
+    """Resume the runner if it was on when Omnisub last stopped, or autostart if translation_engine == 'agent'."""
     r = get_runner()
-    if r.enabled and not r.running():
+    global_cfg = storage.load_global_config() or {}
+    agent_auto = (
+        global_cfg.get("translation_engine") == "agent"
+        and global_cfg.get("agent_runner_autostart", True) is True
+    )
+    if (r.enabled or agent_auto) and not r.running():
         try:
-            r.start(resumed=True)
+            r.enabled = True
+            if not isinstance(r.config, RunnerConfig):
+                r.config = RunnerConfig(r.config)
+            r.config.keep_watching = True
+            r.config["watch"] = True
+            r.start(r.config)
+            r.log("Agent runner auto-started on boot (keep_watching=True)", "ok")
+            logger.info("Agent runner auto-started on boot (keep_watching=True)")
             return True
         except Exception as exc:
-            r.log(f"Could not resume: {exc}", "error")
+            r.log(f"Could not autostart: {exc}", "error")
+            logger.error(f"Could not autostart agent runner: {exc}")
     return False
 
 

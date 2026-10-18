@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     RefreshCw, GitCommit, GitBranch, ArrowDownCircle, CheckCircle2,
-    AlertCircle, Clock, Key, Copy, Check, Shield, Terminal, ExternalLink, Loader2
+    AlertCircle, Clock, Key, Copy, Check, Shield, Terminal, ExternalLink, Loader2,
+    Download, Upload, HardDrive, Archive, FileText, CheckCircle, Server, Tag, Info
 } from 'lucide-react';
 import { api } from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -16,6 +17,18 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
     const [copiedSecret, setCopiedSecret] = useState(false);
     const [confirmModalOpen, setConfirmModalOpen] = useState(false);
 
+    // Backup & Migration State
+    const [backupEstimate, setBackupEstimate] = useState(null);
+    const [, setEstimateLoading] = useState(false);
+    const [backupMode, setBackupMode] = useState('compact');
+    const [exporting, setExporting] = useState(false);
+    const [importFile, setImportFile] = useState(null);
+    const [inspecting, setInspecting] = useState(false);
+    const [inspectResult, setInspectResult] = useState(null);
+    const [convertUncPaths, setConvertUncPaths] = useState(true);
+    const [importing, setImporting] = useState(false);
+    const [importSuccess, setImportSuccess] = useState(null);
+
     const webhookUrl = `${window.location.origin}/api/webhooks/github`;
 
     const fetchStatus = useCallback(async (forceCheck = false) => {
@@ -25,23 +38,38 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
             setUpdateStatus(res.data);
             if (forceCheck) {
                 if (res.data.update_available) {
-                    toast.info(`New update available: ${res.data.commits_behind} commit(s) behind.`);
+                    toast.info(`New release available: ${res.data.latest_release?.tag_name || res.data.latest_commit}`);
+                } else if (res.data.release_status === 'no_releases_published') {
+                    toast.info('No official GitHub releases published yet.');
                 } else {
-                    toast.success('OmbiSub is up to date!');
+                    toast.success('OmbiSub is up to date (Official Release)!');
                 }
             }
         } catch (err) {
             console.error('Failed to fetch update status:', err);
-            if (forceCheck) toast.error('Failed to check GitHub for updates.');
+            if (forceCheck) toast.error('Failed to check GitHub for releases.');
         } finally {
             setLoading(false);
             if (forceCheck) setChecking(false);
         }
     }, [toast]);
 
+    const fetchEstimate = useCallback(async () => {
+        setEstimateLoading(true);
+        try {
+            const res = await api.getBackupEstimate();
+            setBackupEstimate(res.data);
+        } catch (err) {
+            console.error('Failed to fetch backup estimate:', err);
+        } finally {
+            setEstimateLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchStatus(false);
-    }, [fetchStatus]);
+        fetchEstimate();
+    }, [fetchStatus, fetchEstimate]);
 
     const handleApplyUpdate = async (force = false) => {
         setApplying(true);
@@ -49,7 +77,6 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
         try {
             const res = await api.applyUpdate(force);
             toast.success(res.data.message || 'Update applied. Server is restarting...');
-            // Wait 5 seconds and check connection
             setTimeout(() => {
                 window.location.reload();
             }, 5000);
@@ -62,6 +89,68 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                 toast.error(`Update failed: ${detail}`);
             }
             setApplying(false);
+        }
+    };
+
+    const handleExportBackup = async () => {
+        setExporting(true);
+        try {
+            const res = await api.exportBackupBundle(backupMode);
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `ombisub_migration_${backupMode}_${new Date().toISOString().slice(0, 10)}.zip`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode?.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            toast.success(`Server migration bundle (${backupMode}) exported successfully!`);
+        } catch (err) {
+            console.error('Export error:', err);
+            toast.error('Failed to export migration bundle.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleFileSelect = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportFile(file);
+        setInspecting(true);
+        setInspectResult(null);
+        setImportSuccess(null);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.inspectBackupBundle(formData);
+            setInspectResult(res.data);
+            toast.info('Migration bundle verified: ready to restore.');
+        } catch (err) {
+            console.error('Inspection failed:', err);
+            toast.error(err.response?.data?.detail || 'Failed to inspect migration bundle.');
+            setImportFile(null);
+        } finally {
+            setInspecting(false);
+        }
+    };
+
+    const handleImportBackup = async () => {
+        if (!importFile) return;
+        setImporting(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', importFile);
+            formData.append('remap_unc_to_local', convertUncPaths);
+            const res = await api.importBackupBundle(formData);
+            setImportSuccess(res.data);
+            toast.success(res.data.message || 'Server migration and restore completed successfully!');
+            fetchEstimate();
+        } catch (err) {
+            console.error('Restore failed:', err);
+            toast.error(err.response?.data?.detail || 'Failed to import migration bundle.');
+        } finally {
+            setImporting(false);
         }
     };
 
@@ -94,26 +183,34 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
         );
     }
 
+    const installedTag = updateStatus?.installed_release?.tag_name || updateStatus?.tag_name || updateStatus?.current_commit;
+    const latestRelease = updateStatus?.latest_release;
+    const isNoReleases = updateStatus?.release_status === 'no_releases_published';
+
     return (
         <div className="space-y-6">
             {/* Version & Status Banner */}
             <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 relative overflow-hidden shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">OmbiSub System Version</h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">OmbiSub Official Releases</h3>
                             {updateStatus?.update_available ? (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                                    Update Available ({updateStatus.commits_behind} commits behind)
+                                    <Tag className="w-3 h-3 mr-1" /> New Release Available: {latestRelease?.tag_name || 'Latest'}
+                                </span>
+                            ) : isNoReleases ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+                                    <Info className="w-3 h-3 mr-1" /> No GitHub Releases Published Yet
                                 </span>
                             ) : (
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Up to Date
+                                    <CheckCircle2 className="w-3 h-3 mr-1" /> Up to Date (Official Release)
                                 </span>
                             )}
                         </div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Connected to <span className="text-gray-700 dark:text-gray-300 font-mono">thanos2940/OmbiSub---Google-Seminar-Capstone-Project</span>
+                            Tracking Official GitHub Releases from <span className="text-gray-700 dark:text-gray-300 font-mono">thanos2940/OmbiSub---Google-Seminar-Capstone-Project</span>
                         </p>
                     </div>
 
@@ -125,7 +222,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             className="inline-flex items-center px-3.5 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700/60 dark:hover:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600/50 transition-colors disabled:opacity-50"
                         >
                             <RefreshCw className={`w-4 h-4 mr-1.5 ${checking ? 'animate-spin' : ''}`} />
-                            {checking ? 'Checking...' : 'Check for Updates'}
+                            {checking ? 'Checking...' : 'Check for Releases'}
                         </button>
 
                         {updateStatus?.update_available && (
@@ -136,30 +233,34 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                                 className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
                             >
                                 <ArrowDownCircle className={`w-4 h-4 mr-1.5 ${applying ? 'animate-spin' : ''}`} />
-                                {applying ? 'Installing...' : 'Update & Restart'}
+                                {applying ? 'Installing...' : `Install ${latestRelease?.tag_name || 'Update'} & Restart`}
                             </button>
                         )}
                     </div>
                 </div>
 
-                {/* Git Metadata Grid */}
+                {/* Release Metadata Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-5 border-t border-gray-200 dark:border-gray-700/60">
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-800">
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mb-1">
-                            <GitCommit className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Current Commit
+                            <Tag className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Installed Release
                         </div>
-                        <div className="font-mono text-sm text-gray-800 dark:text-gray-200">{updateStatus?.current_commit || 'unknown'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={updateStatus?.current_message}>
-                            {updateStatus?.current_message || 'Local working copy'}
+                        <div className="font-mono text-sm text-gray-800 dark:text-gray-200 font-semibold">{installedTag || 'untagged'}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={updateStatus?.current_commit_full}>
+                            Commit: {updateStatus?.current_commit || 'unknown'}
                         </div>
                     </div>
 
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-800">
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mb-1">
-                            <GitBranch className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" /> Branch
+                            <ExternalLink className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" /> Latest GitHub Release
                         </div>
-                        <div className="font-mono text-sm text-gray-800 dark:text-gray-200">{updateStatus?.branch || 'main'}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tracking origin/{updateStatus?.branch || 'main'}</div>
+                        <div className="font-mono text-sm text-gray-800 dark:text-gray-200 font-semibold">
+                            {latestRelease?.tag_name || (isNoReleases ? 'None Published' : installedTag)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {latestRelease?.published_at ? `Published: ${latestRelease.published_at.slice(0, 10)}` : 'Official Release Channel'}
+                        </div>
                     </div>
 
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-800">
@@ -172,60 +273,62 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
 
                     <div className="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3 border border-gray-200 dark:border-gray-800">
                         <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 mb-1">
-                            <Terminal className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /> Latest Remote
+                            <Terminal className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" /> Target Commit
                         </div>
                         <div className="font-mono text-sm text-gray-800 dark:text-gray-200">{updateStatus?.latest_commit || updateStatus?.current_commit}</div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5" title={updateStatus?.latest_message}>
-                            {updateStatus?.latest_message || 'Up to date'}
+                            {latestRelease?.name || updateStatus?.latest_message || 'Up to date'}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Incoming Changelog (if update available) */}
-            {updateStatus?.update_available && updateStatus?.changelog?.length > 0 && (
-                <div className="bg-white dark:bg-gray-800/80 border border-amber-500/30 rounded-xl p-5 shadow-sm">
-                    <h4 className="text-sm font-semibold text-amber-800 dark:text-amber-200 flex items-center gap-2 mb-3">
-                        <GitCommit className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        Incoming Commits ({updateStatus.changelog.length})
-                    </h4>
-                    <div className="divide-y divide-gray-200 dark:divide-gray-700/50 max-h-56 overflow-y-auto space-y-1">
-                        {updateStatus.changelog.map((c, i) => (
-                            <div key={i} className="py-2 flex items-start justify-between text-xs gap-4">
-                                <div>
-                                    <span className="font-mono text-indigo-600 dark:text-indigo-300 font-medium mr-2">{c.hash}</span>
-                                    <span className="text-gray-800 dark:text-gray-200">{c.message}</span>
-                                </div>
-                                <div className="text-gray-500 dark:text-gray-400 whitespace-nowrap text-[11px]">
-                                    {c.author} &bull; {c.date}
-                                </div>
-                            </div>
-                        ))}
+            {/* Formatted Release Notes Card (if release available) */}
+            {latestRelease?.body && (
+                <div className="bg-white dark:bg-gray-800/80 border border-indigo-500/30 rounded-xl p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            Official Release Notes: {latestRelease.name || latestRelease.tag_name}
+                        </h4>
+                        {latestRelease.html_url && (
+                            <a
+                                href={latestRelease.html_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                            >
+                                View on GitHub <ExternalLink className="w-3 h-3" />
+                            </a>
+                        )}
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-900/60 p-4 rounded-lg text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-800 leading-relaxed">
+                        {latestRelease.body}
                     </div>
                 </div>
             )}
 
-            {/* Automated Polling Settings */}
+            {/* Automated Release Installation Settings */}
             <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 space-y-4 shadow-sm">
                 <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
                     <Clock className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
                     Automated Background Updates
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                    OmbiSub periodically checks GitHub in the background. When enabled, it pulls updates and restarts the server as soon as the translation queue is idle.
+                    OmbiSub periodically checks GitHub in the background. When enabled, it pulls new official releases and restarts the server as soon as the translation queue is idle.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
                     <label className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700/60 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-900/80 transition-colors">
                         <input
                             type="checkbox"
-                            checked={settings.auto_update_enabled ?? true}
+                            checked={settings.auto_update_enabled ?? false}
                             onChange={(e) => updateSetting('auto_update_enabled', e.target.checked)}
                             className="w-4 h-4 text-indigo-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-indigo-500"
                         />
                         <div>
-                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Enable Automatic Updates</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">Automatically install updates and restart when idle</div>
+                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">Automatically install new GitHub Releases when idle</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Installs verified official releases when translation queue finishes</div>
                         </div>
                     </label>
 
@@ -246,6 +349,175 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                 </div>
             </div>
 
+            {/* Server Backup & Migration (.zip) Card */}
+            <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 space-y-6 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 dark:border-gray-700/60 pb-4">
+                    <div>
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Archive className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                            Server Backup & Migration (.zip Bundle)
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Snapshot entire server state, databases, translation memories, and glossaries into an encrypted, atomic migration bundle.
+                        </p>
+                    </div>
+                    {backupEstimate && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-800 self-start sm:self-auto">
+                            Server: <span className="font-mono text-gray-700 dark:text-gray-300">{backupEstimate.hostname}</span> &bull; {backupEstimate.project_count} projects &bull; {backupEstimate.episode_count} episodes
+                        </div>
+                    )}
+                </div>
+
+                {/* Export Section */}
+                <div className="space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                        <Download className="w-4 h-4 text-emerald-500" />
+                        Export Server Migration Bundle
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div
+                            onClick={() => setBackupMode('compact')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                backupMode === 'compact'
+                                    ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 ring-1 ring-indigo-500'
+                                    : 'bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Compact Migration Bundle</span>
+                                <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-medium">
+                                    ~{backupEstimate?.compact_size_human || 'Calculating...'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Recommended. Includes all SQLite DBs, Settings, Glossaries, TM, Project metadata, and Greek subtitles. Excludes heavy raw original video/subs.
+                            </p>
+                        </div>
+
+                        <div
+                            onClick={() => setBackupMode('full')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                backupMode === 'full'
+                                    ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 ring-1 ring-indigo-500'
+                                    : 'bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Full Archive Bundle</span>
+                                <span className="text-xs font-mono text-purple-600 dark:text-purple-400 font-medium">
+                                    ~{backupEstimate?.full_size_human || 'Calculating...'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Complete library snapshot including raw extracted subtitles, audio streams, and original episode files.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                        <button
+                            type="button"
+                            onClick={handleExportBackup}
+                            disabled={exporting}
+                            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                        >
+                            <Download className={`w-4 h-4 mr-2 ${exporting ? 'animate-bounce' : ''}`} />
+                            {exporting ? 'Exporting Bundle (.zip)...' : `Export Migration Bundle (${backupMode})`}
+                        </button>
+                    </div>
+                </div>
+
+                <div className="border-t border-gray-200 dark:border-gray-700/60 pt-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                        <Upload className="w-4 h-4 text-indigo-500" />
+                        Import & Restore Migration Bundle (.zip)
+                    </h4>
+
+                    {/* File Dropzone / Picker */}
+                    <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-6 text-center hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors">
+                        <input
+                            type="file"
+                            accept=".zip"
+                            id="backup-file-input"
+                            onChange={handleFileSelect}
+                            className="hidden"
+                        />
+                        <label htmlFor="backup-file-input" className="cursor-pointer block space-y-2">
+                            <Archive className="w-8 h-8 text-gray-400 mx-auto" />
+                            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                {importFile ? importFile.name : 'Click to select or drop OmbiSub migration bundle (.zip)'}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Supports both Compact and Full migration archives
+                            </div>
+                        </label>
+                    </div>
+
+                    {/* Inspection Result Preview */}
+                    {inspecting && (
+                        <div className="flex items-center justify-center p-4 text-xs text-gray-500">
+                            <Loader2 className="w-4 h-4 animate-spin mr-2 text-indigo-500" />
+                            Verifying manifest, checksums, and database integrity...
+                        </div>
+                    )}
+
+                    {inspectResult && (
+                        <div className="bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="text-xs font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                                    <CheckCircle className="w-4 h-4 text-emerald-500" /> Validated Migration Bundle
+                                </div>
+                                <span className="text-[11px] font-mono bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20">
+                                    SHA-256: {inspectResult.sha256} &bull; Verified
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                <div><span className="text-gray-500">Source Host:</span> <span className="font-mono text-gray-800 dark:text-gray-200">{inspectResult.hostname}</span></div>
+                                <div><span className="text-gray-500">Projects:</span> <span className="font-semibold text-gray-800 dark:text-gray-200">{inspectResult.project_count}</span></div>
+                                <div><span className="text-gray-500">Episodes:</span> <span className="font-semibold text-gray-800 dark:text-gray-200">{inspectResult.episode_count}</span></div>
+                                <div><span className="text-gray-500">Mode:</span> <span className="font-semibold text-gray-800 dark:text-gray-200 capitalize">{inspectResult.mode}</span></div>
+                            </div>
+
+                            {/* UNC Path Converter Checkbox */}
+                            <label className="flex items-center gap-2 pt-2 border-t border-indigo-500/20 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={convertUncPaths}
+                                    onChange={(e) => setConvertUncPaths(e.target.checked)}
+                                    className="w-4 h-4 text-indigo-600 rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-700 focus:ring-indigo-500"
+                                />
+                                <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                    Automatically convert UNC network paths (<code className="text-indigo-600 dark:text-indigo-400 font-mono">\\Morpiceserver\e\...</code>) to local server drive paths (<code className="text-indigo-600 dark:text-indigo-400 font-mono">E:\...</code>)
+                                </span>
+                            </label>
+
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleImportBackup}
+                                    disabled={importing}
+                                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg shadow-sm transition-colors disabled:opacity-50"
+                                >
+                                    <Server className={`w-4 h-4 mr-2 ${importing ? 'animate-spin' : ''}`} />
+                                    {importing ? 'Restoring & Migrating Server...' : 'Restore & Migrate Server'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {importSuccess && (
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                            <span>
+                                {importSuccess.message} ({importSuccess.restored_projects} projects, {importSuccess.restored_episodes} episodes migrated).
+                            </span>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* GitHub Push Webhook (Instant Updates) */}
             <div className="bg-white dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700/80 rounded-xl p-6 space-y-4 shadow-sm">
                 <div className="flex items-center justify-between">
@@ -255,7 +527,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             GitHub Push Webhook (Instant Zero-Delay Updates)
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            Trigger automatic updates the exact moment you push from your local PC to GitHub.
+                            Trigger automatic updates the exact moment you push a release or tag to GitHub.
                         </p>
                     </div>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -330,7 +602,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                         <li>Paste the <strong>Payload URL</strong> above</li>
                         <li>Set Content type to <strong>application/json</strong></li>
                         <li>Paste the <strong>Secret</strong> (if generated)</li>
-                        <li>Choose <strong>"Just the push event"</strong> and click <strong>Add webhook</strong></li>
+                        <li>Choose <strong>"Let me select individual events"</strong> &rarr; Select <strong>Releases</strong> and <strong>Pushes</strong></li>
                     </ol>
                 </div>
             </div>
@@ -341,10 +613,10 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                     <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
                         <div className="flex items-center gap-3 text-amber-500">
                             <AlertCircle className="w-6 h-6" />
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Server Update</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm Official Release Install</h3>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-300">
-                            OmbiSub will download the latest commits from <span className="font-mono text-indigo-600 dark:text-indigo-300">origin/main</span>, update any modified dependencies, and gracefully restart the server.
+                            OmbiSub will download release <span className="font-mono text-indigo-600 dark:text-indigo-300">{latestRelease?.tag_name}</span>, update any modified dependencies, rebuild the UI static bundle, and gracefully restart the server.
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                             Your projects, glossaries, and configuration in <code className="text-gray-700 dark:text-gray-300">data/</code> are safely protected and will remain untouched.
@@ -362,7 +634,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                                 onClick={() => handleApplyUpdate(false)}
                                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
                             >
-                                Update & Restart Now
+                                Install & Restart Now
                             </button>
                         </div>
                     </div>

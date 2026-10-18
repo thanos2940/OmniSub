@@ -265,8 +265,11 @@ class AutopilotPipeline:
     async def _skip_reason(self, item: Dict, settings: AutopilotSettings) -> Optional[str]:
         meta = await self._blocking(storage.load_project_metadata, item["project_name"]) \
             if item.get("project_name") else None
-        if meta and meta.get("arr_disabled"):
-            return "arr_disabled"
+        if meta:
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(meta) if callable(prio_fn) else ("ignored" if meta.get("arr_disabled") else meta.get("translation_priority", "normal"))
+            if tier == "ignored" or meta.get("arr_disabled") or meta.get("translation_priority") == "ignored":
+                return "arr_disabled"
         facts = self._media_info(item)
         if _inspect.isawaitable(facts):
             facts = await facts
@@ -452,8 +455,19 @@ class AutopilotPipeline:
         project_meta = engine._new_project_metadata(item.get("title") or project, media_type)
         if facts.get("series_type"):
             project_meta["series_type"] = facts["series_type"]
+
+        prio = PRIORITY_WEBHOOK
+        if project:
+            pmeta = storage.load_project_metadata(project) or {}
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(pmeta) if callable(prio_fn) else ("ignored" if pmeta.get("arr_disabled") else pmeta.get("translation_priority", "normal"))
+            if tier == "high":
+                prio = -1
+            elif tier == "low":
+                prio = 5
+
         return bool(engine._probe_and_enqueue_extraction(
-            project, episode, item["media_path"], self._import_metadata(item, facts), PRIORITY_WEBHOOK,
+            project, episode, item["media_path"], self._import_metadata(item, facts), prio,
             SyncResult(), project_meta,
             {"auto_translate": False, "translate_after": {"options": opts, "lang": ""}},
         ))
@@ -475,7 +489,18 @@ class AutopilotPipeline:
         )
         if not await self._blocking(storage.original_subtitle_exists, project, episode):
             return f"importing {Path(source_path).name} did not create the episode"
-        if not await self._blocking(enqueue_translation, project, episode, PRIORITY_WEBHOOK, opts):
+
+        prio = PRIORITY_WEBHOOK
+        if project:
+            pmeta = await self._blocking(storage.load_project_metadata, project) or {}
+            prio_fn = getattr(storage, "resolve_project_priority", None)
+            tier = prio_fn(pmeta) if callable(prio_fn) else ("ignored" if pmeta.get("arr_disabled") else pmeta.get("translation_priority", "normal"))
+            if tier == "high":
+                prio = -1
+            elif tier == "low":
+                prio = 5
+
+        if not await self._blocking(enqueue_translation, project, episode, prio, opts):
             return "the translation could not be queued"
         return None
 

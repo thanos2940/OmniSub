@@ -173,13 +173,62 @@ def remove_project(project: str) -> None:
         pass
 
 
-def set_project_disabled(project: str, disabled: bool) -> None:
+def set_project_disabled(project: str, disabled: bool) -> int:
     try:
         with _conn() as c:
-            c.execute("UPDATE episodes_index SET disabled=? WHERE project=?", (1 if disabled else 0, project))
+            cursor = c.execute("UPDATE episodes_index SET disabled=? WHERE project=?", (1 if disabled else 0, project))
             c.commit()
-    except Exception:
-        pass
+            return cursor.rowcount
+    except Exception as e:
+        logger.warning(f"metadata_index set_project_disabled failed: {e}")
+        return 0
+
+
+class MetadataIndex:
+    """Class wrapper for metadata index operations."""
+
+    def set_project_disabled(self, project: str, disabled: bool) -> int:
+        return set_project_disabled(project, disabled)
+
+    def is_populated(self) -> bool:
+        return is_populated()
+
+    def list_untranslated(self, project: Optional[str] = None) -> List[Tuple[str, str]]:
+        return list_untranslated(project)
+
+    def count_translated(self, project: str) -> Optional[int]:
+        return count_translated(project)
+
+    def list_translated(self, project: Optional[str] = None) -> List[Tuple[str, str]]:
+        return list_translated(project)
+
+    def set_review_count(self, project: str, episode: str, count: int) -> None:
+        set_review_count(project, episode, count)
+
+    def list_with_review(self, project: Optional[str] = None) -> List[Tuple[str, str]]:
+        return list_with_review(project)
+
+    def count_review(self, project: Optional[str] = None) -> int:
+        return count_review(project)
+
+    def upsert(self, project: str, episode: str, meta: Dict, original_exists: bool, disabled: bool) -> None:
+        upsert(project, episode, meta, original_exists, disabled)
+
+    def remove(self, project: str, episode: str) -> None:
+        remove(project, episode)
+
+    def remove_project(self, project: str) -> None:
+        remove_project(project)
+
+    def backfill(self) -> int:
+        return backfill()
+
+
+_metadata_index_singleton = MetadataIndex()
+
+
+def get_metadata_index() -> MetadataIndex:
+    return _metadata_index_singleton
 
 
 def is_populated() -> bool:

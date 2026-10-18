@@ -62,6 +62,8 @@ export const api = {
     getProjectTokenSummary: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/token-summary`),
     testTranslation: (name, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/test-translation`, data),
     updateProject: (name, data, globalSave = false) => axios.put(`${API_URL}/projects/${encodeURIComponent(name)}`, data, { params: { global_save: globalSave } }),
+    updateProjectPriority: (name, priority) => axios.put(`${API_URL}/projects/${encodeURIComponent(name)}/priority`, { priority }),
+    bulkUpdateProjectPriority: (projects, priority) => axios.post(`${API_URL}/projects/bulk-priority`, { projects, priority }),
     updateGlossary: (projectName, glossary, globalSave = false, suppressedTerms = null) => {
         const payload = { glossary };
         if (suppressedTerms !== null) {
@@ -406,6 +408,10 @@ export const api = {
     checkForUpdates: () => axios.post(`${API_URL}/api/system/updates/check`),
     applyUpdate: (force = false) => axios.post(`${API_URL}/api/system/updates/apply`, { force }),
     restartServer: () => axios.post(`${API_URL}/api/system/restart`),
+    getBackupEstimate: () => axios.get(`${API_URL}/api/backup/estimate`),
+    exportBackupBundle: (mode = 'compact') => axios.get(`${API_URL}/api/backup/export`, { params: { mode }, responseType: 'blob' }),
+    inspectBackupBundle: (formData) => axios.post(`${API_URL}/api/backup/inspect`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    importBackupBundle: (formData) => axios.post(`${API_URL}/api/backup/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 
     // Agent Tasks
     getPendingAgentTasks: () => axios.get(`${API_URL}/api/agent/tasks/pending`),

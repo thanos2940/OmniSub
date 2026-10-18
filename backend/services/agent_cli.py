@@ -18,12 +18,15 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
+
+_SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 ENGINES = {"antigravity": "Antigravity", "claude": "Claude Code", "gemini": "Gemini CLI"}
 CALL_TIMEOUT = 30 * 60
@@ -161,10 +164,9 @@ def family(model: str) -> str:
 def antigravity_quota(exe: List[str]) -> Optional[List[Dict]]:
     """Antigravity's quota groups — ``agy -p /quota --output-format json`` — without spending quota.
     Each group: {name, description, buckets: [{window, remaining_fraction, reset_time}]}."""
-    flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
     try:
         proc = subprocess.run([*exe, "-p", "/quota", "--output-format", "json"], capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", timeout=60, stdin=subprocess.DEVNULL, creationflags=flags)
+                              encoding="utf-8", errors="replace", timeout=60, stdin=subprocess.DEVNULL, creationflags=_SUBPROCESS_FLAGS)
     except (OSError, subprocess.TimeoutExpired):
         return None
     for line in reversed(proc.stdout.splitlines()):
@@ -246,7 +248,7 @@ def kill_process(proc: subprocess.Popen) -> None:
         return
     try:
         if os.name == "nt":
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=20)
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=20, creationflags=_SUBPROCESS_FLAGS)
             return
     except Exception:
         pass
@@ -261,10 +263,9 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
     """Send one prompt and read the answer from the CLI's JSON event stream."""
     cmd, stdin, env = build_command(engine, exe, model, prompt)
     started = time.time()
-    flags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
     try:
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace", creationflags=flags, env=env)
+                                text=True, encoding="utf-8", errors="replace", creationflags=_SUBPROCESS_FLAGS, env=env)
     except OSError as exc:
         return Reply(failure="error", message=f"could not start {ENGINES.get(engine, engine)}: {exc}")
     on_proc(proc)

@@ -3,13 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import {
     ArrowLeft, Settings as SettingsIcon, RefreshCw, Sparkles,
     Film, Book, Users, FileText, ShieldCheck, History, BarChart3,
-    AlertCircle, Loader2, Play, Compass, Wrench, Layers, Bot
+    AlertCircle, Loader2, Play, Compass, Wrench, Layers, Bot,
+    Flame, ArrowDown, Clock, EyeOff
 } from 'lucide-react';
 import { useToast, formatErrorMessage } from '../context/ToastContext';
 import { useJobs } from '../context/JobContext';
 import { useProjectDetail } from '../hooks/useProjectDetail';
 import { useEpisodeSelection } from '../hooks/useEpisodeSelection';
-import { api } from '../api';
+import { api, apiClient } from '../api';
 
 // Modals
 import ProjectSettingsModal from './ProjectSettingsModal';
@@ -296,7 +297,23 @@ const ProjectDetail = () => {
         }
     };
 
+    const [changingPriority, setChangingPriority] = useState(false);
 
+    const handlePriorityChange = async (newPriority) => {
+        const currentPrio = project?.translation_priority || (project?.arr_disabled ? 'ignored' : 'normal');
+        if (!project || currentPrio === newPriority || changingPriority) return;
+        setChangingPriority(true);
+        try {
+            await apiClient.put(`/projects/${encodeURIComponent(effectiveProjectName)}/priority`, { priority: newPriority });
+            toast?.success?.(`Priority updated to ${newPriority}`);
+            await loadData(true);
+        } catch (err) {
+            console.error("Failed to update priority", err);
+            toast?.error?.(err.response?.data?.detail || "Failed to update project priority");
+        } finally {
+            setChangingPriority(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -363,45 +380,107 @@ const ProjectDetail = () => {
             </div>
 
             {/* Project Header Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                            {project.name || effectiveProjectName}
-                        </h1>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                            project.type === 'parent'
-                                ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                                : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
-                        }`}>
-                            {project.type === 'parent' ? 'Universe Hub' : 'Series Project'}
-                        </span>
-                    </div>
+            {(() => {
+                const currentPriority = project.translation_priority || (project.arr_disabled ? 'ignored' : 'normal');
+                return (
+                    <div className="space-y-3">
+                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-3 flex-wrap">
+                                    <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
+                                        {project.name || effectiveProjectName}
+                                    </h1>
+                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                        project.type === 'parent'
+                                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                            : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
+                                    }`}>
+                                        {project.type === 'parent' ? 'Universe Hub' : 'Series Project'}
+                                    </span>
+                                    {currentPriority === 'ignored' && (
+                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
+                                            <EyeOff size={11} /> Ignored
+                                        </span>
+                                    )}
+                                </div>
 
-                    <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        <span>Target Language: <strong className="text-gray-800 dark:text-gray-200">{project.target_language || 'Default'}</strong></span>
-                        <span>&middot;</span>
-                        <span>{episodes.length} Episodes</span>
-                        {project.parent_project && (
-                            <>
-                                <span>&middot;</span>
-                                <span>Parent: <strong className="text-purple-600 dark:text-purple-400">{project.parent_project}</strong></span>
-                            </>
+                                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                    <span>Target Language: <strong className="text-gray-800 dark:text-gray-200">{project.target_language || 'Default'}</strong></span>
+                                    <span>&middot;</span>
+                                    <span>{episodes.length} Episodes</span>
+                                    {project.parent_project && (
+                                        <>
+                                            <span>&middot;</span>
+                                            <span>Parent: <strong className="text-purple-600 dark:text-purple-400">{project.parent_project}</strong></span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* 4-Tier Priority Segmented Control */}
+                                <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700/60 rounded-2xl border border-gray-200 dark:border-gray-700 text-xs">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-400 px-2 select-none">
+                                        Priority:
+                                    </span>
+                                    {[
+                                        { id: 'high', label: 'High', title: 'High — Translate First', icon: Flame, activeClass: 'bg-amber-500 text-white shadow-sm' },
+                                        { id: 'normal', label: 'Normal', title: 'Normal', icon: Clock, activeClass: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' },
+                                        { id: 'low', label: 'Low', title: 'Low — Translate Last', icon: ArrowDown, activeClass: 'bg-blue-500 text-white shadow-sm' },
+                                        { id: 'ignored', label: 'Ignored', title: 'Ignored — Do Not Translate', icon: EyeOff, activeClass: 'bg-rose-500 text-white shadow-sm' },
+                                    ].map(tier => {
+                                        const Icon = tier.icon;
+                                        const isActive = currentPriority === tier.id;
+                                        return (
+                                            <button
+                                                key={tier.id}
+                                                type="button"
+                                                onClick={() => handlePriorityChange(tier.id)}
+                                                disabled={changingPriority}
+                                                title={tier.title}
+                                                className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs ${
+                                                    isActive
+                                                        ? tier.activeClass
+                                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                                                }`}
+                                            >
+                                                <Icon size={12} />
+                                                <span>{tier.label}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setTranslationModal({ open: true, episodeName: null, isBatch: true })}
+                                    disabled={episodes.length === 0 || currentPriority === 'ignored'}
+                                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
+                                    title={currentPriority === 'ignored' ? 'Project is ignored — change priority to translate' : 'Translate all pending episodes'}
+                                >
+                                    <Play size={14} /> Translate All Pending
+                                </button>
+                            </div>
+                        </div>
+
+                        {currentPriority === 'ignored' && (
+                            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 flex items-center justify-between gap-3 text-rose-800 dark:text-rose-300 text-xs">
+                                <div className="flex items-center gap-2 font-medium">
+                                    <EyeOff size={16} className="text-rose-500 shrink-0" />
+                                    <span>This project is marked as <strong>Ignored</strong>. Automatic queueing, autopilot, and translation processing are skipped.</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handlePriorityChange('normal')}
+                                    className="px-3 py-1 bg-white dark:bg-gray-800 text-rose-700 dark:text-rose-300 hover:bg-rose-100 font-bold rounded-lg border border-rose-200 dark:border-rose-800 transition-colors shrink-0"
+                                >
+                                    Un-ignore
+                                </button>
+                            </div>
                         )}
                     </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setTranslationModal({ open: true, episodeName: null, isBatch: true })}
-                        disabled={episodes.length === 0}
-                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
-                    >
-                        <Play size={14} /> Translate All Pending
-                    </button>
-                </div>
-            </div>
+                );
+            })()}
 
             {/* Guided Pipeline Wizard Banner / Modal */}
             {pipelineWizardOpen && (

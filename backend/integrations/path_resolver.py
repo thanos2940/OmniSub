@@ -7,7 +7,9 @@ where Sonarr/Radarr run on a different machine.
 """
 
 import os
-from typing import List, Dict
+import re
+import socket
+from typing import List, Dict, Optional, Any
 
 
 class PathResolver:
@@ -16,14 +18,83 @@ class PathResolver:
     def __init__(self, mappings: List[Dict[str, str]] = None):
         self.mappings = mappings or []
 
-    def resolve(self, remote_path: str) -> str:
-        """Apply the first matching prefix mapping to remote_path.
+    def _try_unc_local_fallback(self, path_str: str) -> Optional[str]:
+        """Attempt automatic dual UNC <-> Local Drive resolution."""
+        if not path_str:
+            return None
 
-        If no mapping matches, return remote_path unchanged.
-        """
+        # Pattern A (UNC single-letter drive share -> Local drive):
+        # Matches: \\server\e\... or //server/e/...
+        unc_m = re.match(r"^(?:\\\\|//)([^\\/]+)[\\/]([a-zA-Z])(?:\$(?:[\\/](.*))?|[\\/](.*)|$)", path_str)
+        if unc_m:
+            server = unc_m.group(1)
+            drive = unc_m.group(2).upper()
+            rest = unc_m.group(3) if unc_m.group(3) is not None else (unc_m.group(4) or "")
+            rest_clean = rest.replace("/", "\\").lstrip("\\")
+            candidate = f"{drive}:\\{rest_clean}" if rest_clean else f"{drive}:\\"
+
+            try:
+                candidate_exists = os.path.exists(candidate)
+            except OSError:
+                candidate_exists = False
+
+            try:
+                drive_root_exists = os.path.exists(f"{drive}:\\")
+            except OSError:
+                drive_root_exists = False
+
+            try:
+                unc_exists = os.path.exists(path_str)
+            except OSError:
+                unc_exists = False
+
+            try:
+                is_server_host = socket.gethostname().lower() == server.lower()
+            except Exception:
+                is_server_host = False
+
+            if candidate_exists:
+                return candidate
+            if is_server_host:
+                return candidate
+            if (not unc_exists) and drive_root_exists:
+                return candidate
+
+        # Pattern B (Local drive -> UNC share from configured mappings):
+        # Matches: E:\... or E:/...
+        local_m = re.match(r"^([a-zA-Z]):[\\/](.*)$", path_str)
+        if local_m:
+            drive_letter = local_m.group(1).lower()
+            rest = local_m.group(2).replace("/", "\\").lstrip("\\")
+
+            try:
+                local_exists = os.path.exists(path_str)
+            except OSError:
+                local_exists = False
+
+            if not local_exists:
+                for m in self.mappings:
+                    for key in ("remote", "local"):
+                        prefix = m.get(key, "")
+                        unc_match = re.match(r"^(?:\\\\|//)([^\\/]+)[\\/]([a-zA-Z])(?:\$(?:[\\/].*)?|[\\/].*|$)", prefix)
+                        if unc_match:
+                            srv = unc_match.group(1)
+                            for d_cand in (drive_letter, drive_letter.upper()):
+                                unc_cand = f"\\\\{srv}\\{d_cand}\\{rest}" if rest else f"\\\\{srv}\\{d_cand}"
+                                try:
+                                    if os.path.exists(unc_cand) or os.path.exists(f"\\\\{srv}\\{d_cand}"):
+                                        return unc_cand
+                                except OSError:
+                                    continue
+
+        return None
+
+    def resolve(self, remote_path: str) -> str:
+        """Apply explicit mappings first with fallback to dual UNC/Local Drive resolution."""
         if not remote_path:
             return ""
 
+        mapped_path = None
         for mapping in self.mappings:
             remote_prefix = mapping.get("remote", "")
             local_prefix = mapping.get("local", "")
@@ -34,13 +105,9 @@ class PathResolver:
             norm_path = remote_path.replace("\\", "/").lower()
             norm_remote = remote_prefix.replace("\\", "/").lower().rstrip("/")
 
-            # Require a path-segment boundary right after the prefix — a plain
-            # startswith would let remote="/data" also match "/database/...",
-            # producing a wrong (but plausible-looking) translated path.
             if norm_path == norm_remote or norm_path.startswith(norm_remote + "/"):
                 suffix = remote_path[len(norm_remote):]
                 
-                # Check if we need to insert a directory separator between local_prefix and suffix
                 has_local_sep = local_prefix.endswith("/") or local_prefix.endswith("\\")
                 has_suffix_sep = suffix.startswith("/") or suffix.startswith("\\")
                 
@@ -52,15 +119,85 @@ class PathResolver:
                 else:
                     translated = local_prefix + suffix
 
-                # Keep slash style consistent with the local prefix
                 if "\\" in local_prefix or (os.name == "nt" and "/" not in local_prefix):
                     translated = translated.replace("/", "\\")
                 else:
                     translated = translated.replace("\\", "/")
 
-                return translated
+                mapped_path = translated
+                break
+
+        if mapped_path is not None:
+            try:
+                if os.path.exists(mapped_path):
+                    return mapped_path
+            except OSError:
+                pass
+
+            # Fallback if mapped path does not exist on disk
+            fallback = self._try_unc_local_fallback(mapped_path)
+            if fallback:
+                try:
+                    if os.path.exists(fallback):
+                        return fallback
+                except OSError:
+                    pass
+
+            fallback_remote = self._try_unc_local_fallback(remote_path)
+            if fallback_remote:
+                try:
+                    if os.path.exists(fallback_remote):
+                        return fallback_remote
+                except OSError:
+                    pass
+
+            return mapped_path
+
+        # If no explicit mapping matched, try UNC/local fallback on remote_path
+        fallback = self._try_unc_local_fallback(remote_path)
+        if fallback:
+            return fallback
 
         return remote_path
+
+    def validate_mappings(self) -> Dict[str, Any]:
+        """Validate configured mappings and check UNC <-> Local Drive auto-resolution health."""
+        hostname = socket.gethostname()
+        mapping_statuses = []
+        for m in self.mappings:
+            remote = m.get("remote", "")
+            local = m.get("local", "")
+            reachable = self.is_reachable(local)
+            mapping_statuses.append({
+                "remote": remote,
+                "local": local,
+                "reachable": reachable,
+            })
+
+        drives_detected = []
+        if os.name == "nt":
+            for char in "CDEFGHIJKLMNOPQRSTUVWXYZ":
+                drive_path = f"{char}:\\"
+                try:
+                    if os.path.exists(drive_path):
+                        drives_detected.append(drive_path)
+                except OSError:
+                    pass
+
+        unc_auto_status = {
+            "active": True,
+            "hostname": hostname,
+            "drives_detected": drives_detected,
+            "status": "healthy",
+        }
+
+        all_reachable = all(ms["reachable"] for ms in mapping_statuses) if mapping_statuses else True
+
+        return {
+            "valid": all_reachable,
+            "mappings": mapping_statuses,
+            "unc_auto_resolution": unc_auto_status,
+        }
 
     def is_reachable(self, path: str) -> bool:
         """Quick check — path exists, its parent is accessible, or root UNC share/drive is reachable."""

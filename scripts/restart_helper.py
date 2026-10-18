@@ -19,6 +19,8 @@ import argparse
 import subprocess
 from pathlib import Path
 
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
 # Setup logging to logs/restart.log
 ROOT_DIR = Path(__file__).resolve().parent.parent
 LOGS_DIR = ROOT_DIR / "logs"
@@ -50,7 +52,8 @@ def is_pid_alive(pid: int) -> bool:
             out = subprocess.check_output(
                 ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
                 text=True,
-                stderr=subprocess.DEVNULL
+                stderr=subprocess.DEVNULL,
+                creationflags=CREATE_NO_WINDOW
             )
             return str(pid) in out
         except Exception:
@@ -71,7 +74,8 @@ def is_windows_service_running(service_name: str) -> bool:
         out = subprocess.check_output(
             ["sc.exe", "query", service_name],
             text=True,
-            stderr=subprocess.DEVNULL
+            stderr=subprocess.DEVNULL,
+            creationflags=CREATE_NO_WINDOW
         )
         return "RUNNING" in out or "START_PENDING" in out
     except Exception:
@@ -83,7 +87,7 @@ def restart_windows_service(service_name: str) -> bool:
     logger.info(f"Restarting Windows Service '{service_name}'...")
     try:
         cmd = ["powershell.exe", "-NoProfile", "-Command", f"Restart-Service -Name '{service_name}' -Force"]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30, creationflags=CREATE_NO_WINDOW)
         if res.returncode == 0:
             logger.info(f"Successfully restarted Windows service '{service_name}'.")
             return True
@@ -93,9 +97,9 @@ def restart_windows_service(service_name: str) -> bool:
 
     # Fallback to net stop / net start
     try:
-        subprocess.run(["net", "stop", service_name], capture_output=True, text=True, timeout=15)
+        subprocess.run(["net", "stop", service_name], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
         time.sleep(2)
-        subprocess.run(["net", "start", service_name], capture_output=True, text=True, timeout=15)
+        subprocess.run(["net", "start", service_name], capture_output=True, text=True, timeout=15, creationflags=CREATE_NO_WINDOW)
         logger.info(f"Service restarted via net stop/start.")
         return True
     except Exception as e:
@@ -109,10 +113,10 @@ def restart_standalone(python_exe: str, backend_dir: str, port: int, host: str =
 
     cmd = [python_exe, "-m", "uvicorn", "main:app", "--host", host, "--port", str(port)]
     
-    flags = 0
+    flags = CREATE_NO_WINDOW
     if sys.platform == "win32":
-        # CREATE_NEW_CONSOLE to give the server its own window if launched interactively
-        flags = subprocess.CREATE_NEW_CONSOLE
+        # CREATE_NEW_CONSOLE or CREATE_NO_WINDOW based on environment
+        flags = subprocess.CREATE_NEW_CONSOLE | CREATE_NO_WINDOW
 
     try:
         subprocess.Popen(

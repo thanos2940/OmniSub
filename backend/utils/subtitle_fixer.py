@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import os
 import tempfile
 import hashlib
@@ -7,6 +8,8 @@ from typing import List, Dict, Optional
 from utils.srt_parser import reconstruct_srt, parse_srt, timecode_to_ms
 from utils.storage import load_global_config
 from utils.text_normalize import sanitize_translation_text
+
+_SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
 
 class SubtitleEditUnavailable(Exception):
@@ -143,6 +146,7 @@ def fix_subtitles_with_se(parsed_data: List[Dict], target_lang_code: Optional[st
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=_SUBPROCESS_FLAGS,
             )
             
             # 3. Read result back
@@ -237,7 +241,7 @@ def _run_se_cli(srt_content: str) -> str:
             "/fixcommonerrors",
             f"/outputfolder:{output_dir}", "/overwrite",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, creationflags=_SUBPROCESS_FLAGS)
         if result.returncode != 0:
             raise RuntimeError(
                 f"SubtitleEdit exited with code {result.returncode}. "

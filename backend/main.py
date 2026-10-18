@@ -47,6 +47,7 @@ from routers import (
     setup,
     embedded,
     system,
+    backup,
     webhooks,
     agent,
     on_demand,
@@ -489,6 +490,7 @@ app.include_router(source_subs.router)
 app.include_router(setup.router)
 app.include_router(embedded.router)
 app.include_router(system.router)
+app.include_router(backup.router)
 app.include_router(webhooks.router)
 app.include_router(agent.router)
 app.include_router(on_demand.router)

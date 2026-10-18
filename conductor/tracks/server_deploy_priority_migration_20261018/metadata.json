@@ -1,0 +1,8 @@
+{
+  "track_id": "server_deploy_priority_migration_20261018",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-10-18T13:01:00Z",
+  "updated_at": "2026-10-18T13:01:00Z",
+  "description": "Bazarr-Style Server Deployment, Autonomous Boot, 4-Tier Project Priorities, Migration Bundle & GitHub Release Auto-Updater"
+}

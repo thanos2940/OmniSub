@@ -37,6 +37,8 @@ from utils.language_codes import output_filename, variants_for
 
 logger = logging.getLogger(__name__)
 
+_SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+
 # Codecs we can turn into a subtitle sidecar.
 ASS_CODECS = ("ass", "ssa")
 SRT_CODECS = ("subrip", "srt", "text", "mov_text", "webvtt")
@@ -274,6 +276,7 @@ def probe_subtitle_tracks(media_path: str, tools: Optional[EmbeddedTools] = None
             encoding="utf-8",
             errors="replace",
             timeout=PROBE_TIMEOUT_SECONDS,
+            creationflags=_SUBPROCESS_FLAGS,
         )
     except subprocess.TimeoutExpired:
         logger.warning(f"ffprobe timed out for {media_path}")
@@ -466,6 +469,7 @@ def _run_sync_cmd(cmd: List[str], timeout: int, proc_ref: Optional[list] = None)
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        creationflags=_SUBPROCESS_FLAGS,
     )
     if proc_ref is not None:
         proc_ref.append(proc)

@@ -5,10 +5,13 @@ from typing import List, Dict, Optional, Union
 from utils import storage
 from utils.translation_queue import (
     TranslationQueue,
+    PRIORITY_HIGH,
     PRIORITY_WEBHOOK,
     PRIORITY_MANUAL,
     PRIORITY_SYNC,
     PRIORITY_BACKLOG,
+    PRIORITY_LOW,
+    PRIORITY_RUN_NOW,
     KIND_TRANSLATION,
     KIND_EXTRACTION,
     KIND_EXPORT_RETRY,
@@ -41,12 +44,27 @@ def _wake_runner() -> None:
         logger.debug(f"Could not nudge the agent runner: {e}")
 
 
-def enqueue_translation(project_name: str, episode_name: str, priority: int, options: Optional[Dict] = None,
+def enqueue_translation(project_name: str, episode_name: str, priority: int = PRIORITY_MANUAL, options: Optional[Dict] = None,
                         lang: str = "", delay_seconds: int = 0, next_retry_at: Optional[str] = None) -> str:
     """Enqueue an episode for translation (target language ``lang``, '' = primary) and wake the worker."""
     if not project_name or not str(project_name).strip() or not episode_name or not str(episode_name).strip():
         logger.warning(f"Skipping enqueue_translation with empty project ({project_name!r}) or episode ({episode_name!r})")
         return ""
+
+    proj_meta = storage.load_project_metadata(project_name) or {}
+    prio_fn = getattr(storage, "resolve_project_priority", None)
+    tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
+
+    if tier == "ignored" and not (options or {}).get("force"):
+        logger.info(f"Project '{project_name}' is ignored; skipping enqueue_translation.")
+        return ""
+
+    if priority != 10:
+        if tier == "high":
+            priority = PRIORITY_HIGH
+        elif tier == "low":
+            priority = PRIORITY_LOW
+
     queue = TranslationQueue()
     item_id = queue.enqueue(
         project_name.strip(), episode_name.strip(), priority, options, lang,

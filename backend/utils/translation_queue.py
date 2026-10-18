@@ -11,10 +11,13 @@ from typing import List, Dict, Optional, Union, Any
 from utils.paths import DB_FILE
 
 # Priority constants
+PRIORITY_HIGH    = -1  # High-priority project
 PRIORITY_WEBHOOK = 0   # new download just landed
 PRIORITY_MANUAL  = 1   # user clicked Translate / Batch / Auto in the UI
 PRIORITY_SYNC    = 2   # scheduled sonarr/radarr gap-fill
 PRIORITY_BACKLOG = 3   # bulk "translate everything missing"
+PRIORITY_LOW     = 5   # Low-priority / deprioritized project
+PRIORITY_RUN_NOW = 10  # Explicit single-episode Run Now
 
 # Queue Status constants
 QUEUE_STATUS_QUEUED = "queued"
@@ -397,7 +400,7 @@ class TranslationQueue:
                               {kind_clause}
                               {prio_clause}
                               {agent_clause}
-                            ORDER BY CASE WHEN priority = 10 THEN -1 ELSE priority END ASC, created_at ASC
+                            ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
                             LIMIT 1
                             """,
                             params
@@ -617,7 +620,7 @@ class TranslationQueue:
                 SELECT * FROM translation_queue
                 WHERE status = 'pending' AND kind = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 {prio_clause}
-                ORDER BY priority ASC, created_at ASC
+                ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
                 LIMIT 1
                 """,
                 params
@@ -669,7 +672,7 @@ class TranslationQueue:
                         WHEN 'cancelled' THEN 7
                         ELSE 8
                     END,
-                    CASE WHEN priority = 10 THEN -1 ELSE priority END ASC,
+                    CASE WHEN priority = 10 THEN -2 ELSE priority END ASC,
                     created_at DESC
                 LIMIT ?
                 """,
@@ -950,3 +953,69 @@ class TranslationQueue:
             )
             conn.commit()
             return cursor.rowcount
+
+    def update_project_priority(self, project_name: str, tier: str) -> Dict[str, int]:
+        """Dynamically update priority or cancel queued translation items when a project's priority tier changes."""
+        tier = (tier or "normal").lower().strip()
+        now_str = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            if tier == "ignored":
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET status = 'cancelled', completed_at = ?, last_error = 'Project set to Ignored'
+                    WHERE project_name = ? COLLATE NOCASE
+                      AND kind = 'translation'
+                      AND status IN ('pending', 'queued', 'postponed', 'paused_daily_limit')
+                    """,
+                    (now_str, project_name)
+                )
+                conn.commit()
+                return {"updated": 0, "cancelled": cursor.rowcount}
+            elif tier == "high":
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET priority = -1
+                    WHERE project_name = ? COLLATE NOCASE
+                      AND kind = 'translation'
+                      AND status IN ('pending', 'queued', 'postponed', 'paused_daily_limit')
+                      AND priority != 10
+                    """,
+                    (project_name,)
+                )
+                conn.commit()
+                return {"updated": cursor.rowcount, "cancelled": 0}
+            elif tier == "low":
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET priority = 5
+                    WHERE project_name = ? COLLATE NOCASE
+                      AND kind = 'translation'
+                      AND status IN ('pending', 'queued', 'postponed', 'paused_daily_limit')
+                      AND priority != 10
+                    """,
+                    (project_name,)
+                )
+                conn.commit()
+                return {"updated": cursor.rowcount, "cancelled": 0}
+            else:  # normal
+                cursor = conn.execute(
+                    """
+                    UPDATE translation_queue
+                    SET priority = 2
+                    WHERE project_name = ? COLLATE NOCASE
+                      AND kind = 'translation'
+                      AND status IN ('pending', 'queued', 'postponed', 'paused_daily_limit')
+                      AND priority IN (-1, 5)
+                    """,
+                    (project_name,)
+                )
+                conn.commit()
+                return {"updated": cursor.rowcount, "cancelled": 0}
+
+
+def get_translation_queue() -> TranslationQueue:
+    """Return a TranslationQueue singleton/instance."""
+    return TranslationQueue()
