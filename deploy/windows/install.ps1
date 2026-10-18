@@ -18,7 +18,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [string]$InstallDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
+    [string]$InstallDir = '',
     [ValidateSet('Tray', 'Headless')][string]$Mode = 'Tray',
     [string]$DataDir = '',
     [int]$Port = 8000,
@@ -36,6 +36,11 @@ function Ok($m)    { Write-Host "  [ok]   $m" -ForegroundColor Green }
 function Warn($m)  { Write-Host "  [warn] $m" -ForegroundColor Yellow }
 function Fail($m)  { Write-Host "  [FAIL] $m" -ForegroundColor Red; throw $m }
 
+# $PSScriptRoot can be empty while param() defaults are evaluated (Windows PowerShell 5.1)
+if (-not $InstallDir) {
+    $here = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+    $InstallDir = Join-Path $here '..\..'
+}
 $InstallDir = (Resolve-Path $InstallDir).Path
 $Backend  = Join-Path $InstallDir 'backend'
 $Frontend = Join-Path $InstallDir 'frontend'
