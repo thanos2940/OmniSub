@@ -492,6 +492,25 @@ class UpdateService:
                 if fetch_tags_res.returncode != 0:
                     logger.warning(f"fetch --tags returned {fetch_tags_res.returncode}: {fetch_tags_res.stderr.strip()}")
                 target_ref = f"tags/{tag_name}"
+
+                # The reset below would drop commits that are not part of the release
+                # (a development checkout ahead of it).
+                if not force:
+                    ahead_res = await asyncio.to_thread(
+                        self._run_git, ["rev-list", "--count", f"{target_ref}..HEAD"], 10.0
+                    )
+                    ahead = ahead_res.stdout.strip() if ahead_res.returncode == 0 else ""
+                    if ahead.isdigit() and int(ahead) > 0:
+                        self._updating = False
+                        logger.warning(f"Update not applied: {ahead} local commit(s) are not part of {tag_name}.")
+                        return {
+                            "success": False,
+                            "status": "local_commits",
+                            "message": (
+                                f"{ahead} local commit(s) are not part of release {tag_name}; installing it "
+                                "would discard them. Push them and publish a newer release first."
+                            ),
+                        }
             else:
                 branch = self.get_current_version_info().get("branch") or DEFAULT_BRANCH
                 logger.info(f"Applying update: pulling from origin/{branch}...")

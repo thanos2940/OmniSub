@@ -606,7 +606,8 @@ class MediaSyncEngine:
             except Exception as e:
                 logger.warning(f"Failed to load metadata for project '{p_name}' during re-enable check: {e}")
                 meta = None
-            if meta and meta.get("arr_disabled"):
+            # A title the user set to Ignored stays ignored; only sync's own disables are undone.
+            if meta and meta.get("arr_disabled") and not meta.get("ignored_by_user"):
                 meta["arr_disabled"] = False
                 meta.pop("arr_disabled_at", None)
                 await loop.run_in_executor(None, storage.save_project_metadata, p_name, meta)

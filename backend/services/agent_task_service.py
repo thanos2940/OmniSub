@@ -73,6 +73,12 @@ def _options(row: Any) -> Dict[str, Any]:
         return {}
 
 
+def _ignored_item(row: Any, opts: Dict[str, Any]) -> bool:
+    """A queue row its project's Ignored tier rules out (``queue_service.skips_ignored``)."""
+    from services.queue_service import skips_ignored
+    return skips_ignored(storage.load_project_metadata(row["project_name"]) or {}, row["priority"], opts)
+
+
 def cli_command(*args: str) -> str:
     """The agent CLI invocation to show agents, runnable from the repo root."""
     venv_py = REPO_ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
@@ -229,18 +235,14 @@ class AgentTaskService:
             rows = conn.execute("""
                 SELECT id, project_name, episode_name, priority, status, created_at, lang, options
                 FROM translation_queue
-                WHERE status = 'pending' AND kind = ?
+                WHERE status IN ('pending', 'queued') AND kind = ?
                 ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
             """, (KIND_TRANSLATION,)).fetchall()
         items = []
         for r in rows:
-            proj_meta = storage.load_project_metadata(r["project_name"]) or {}
-            prio_fn = getattr(storage, "resolve_project_priority", None)
-            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
-            if tier == "ignored":
-                q.update_status(r["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
-                continue
             opts = _options(r)
+            if _ignored_item(r, opts):
+                continue  # cancelled when it would be claimed
             item = {k: r[k] for k in ("id", "project_name", "episode_name", "priority", "status", "created_at", "lang")}
             item["engine"] = opts.get("engine") or "model"
             item["mode"] = opts.get("mode") or "gaps"
@@ -317,10 +319,7 @@ class AgentTaskService:
                 params
             ).fetchall()
         for row in rows:
-            proj_meta = storage.load_project_metadata(row["project_name"]) or {}
-            prio_fn = getattr(storage, "resolve_project_priority", None)
-            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
-            if tier == "ignored":
+            if _ignored_item(row, _options(row)):
                 q.update_status(row["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
                 continue
             claimed = self._claim_specific(row["id"])
@@ -346,10 +345,7 @@ class AgentTaskService:
                 if skipped:
                     res["finalized_without_work"] = skipped
                 return res
-            proj_meta = storage.load_project_metadata(item["project_name"]) or {}
-            prio_fn = getattr(storage, "resolve_project_priority", None)
-            tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
-            if tier == "ignored":
+            if _ignored_item(item, _options(item)):
                 q.update_status(item["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
                 continue
             res = self._build_workspace(item)
@@ -368,14 +364,15 @@ class AgentTaskService:
     def _claim_specific(self, queue_item_id: str) -> Optional[Dict[str, Any]]:
         q = TranslationQueue()
         with q._conn() as conn:
-            row = conn.execute("SELECT * FROM translation_queue WHERE id = ? AND status = 'pending'",
+            # 'queued' is a pending item someone pressed Continue / Run Now on.
+            row = conn.execute("SELECT * FROM translation_queue WHERE id = ? AND status IN ('pending', 'queued')",
                                (queue_item_id,)).fetchone()
             if not row:
                 return None
             now = _now()
             cur = conn.execute(
                 "UPDATE translation_queue SET status = 'running', started_at = ?, attempts = attempts + 1 "
-                "WHERE id = ? AND status = 'pending'", (now, queue_item_id))
+                "WHERE id = ? AND status IN ('pending', 'queued')", (now, queue_item_id))
             conn.commit()
             if cur.rowcount != 1:
                 return None

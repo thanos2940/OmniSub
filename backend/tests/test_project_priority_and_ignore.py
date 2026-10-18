@@ -63,13 +63,14 @@ def test_4_tier_persistence_and_sync(temp_project):
     assert saved2["arr_disabled"] is True
     assert project_store.resolve_project_priority(saved2) == "ignored"
 
-    # 3. Setting arr_disabled = False when ignored -> sets translation_priority = "normal"
+    # 3. Setting arr_disabled = False when ignored -> restores the tier it had before ("high")
     del saved2["translation_priority"]
     saved2["arr_disabled"] = False
     storage.save_project_metadata(temp_project, saved2)
     saved3 = storage.load_project_metadata(temp_project)
-    assert saved3["translation_priority"] == "normal"
+    assert saved3["translation_priority"] == "high"
     assert saved3["arr_disabled"] is False
+    assert "priority_before_ignore" not in saved3 and "ignored_by_user" not in saved3
 
     # 4. Setting arr_disabled = True -> sets translation_priority = "ignored"
     saved3["arr_disabled"] = True
@@ -231,3 +232,80 @@ def test_priority_endpoints(temp_project, monkeypatch, tmp_path):
     res_get = client.get(f"/api/projects/{temp_project}")
     assert res_get.status_code == 200
     assert res_get.json()["translation_priority"] == "low"
+
+
+# ---------------------------------------------------------------------------
+# Paths that only flip arr_disabled (Sonarr/Radarr sync, on-demand, legacy routes)
+# ---------------------------------------------------------------------------
+
+def _set(project, **fields):
+    meta = storage.load_project_metadata(project)
+    meta.update(fields)
+    storage.save_project_metadata(project, meta)
+    return storage.load_project_metadata(project)
+
+
+def test_title_leaving_and_returning_to_the_library_keeps_its_tier(temp_project):
+    _set(temp_project, translation_priority="high")
+
+    meta = _set(temp_project, arr_disabled=True)  # sync: the title left Sonarr
+    assert meta["translation_priority"] == "ignored" and meta["arr_disabled"] is True
+    assert not meta.get("ignored_by_user")
+
+    meta = _set(temp_project, arr_disabled=False)  # ... and came back
+    assert meta["translation_priority"] == "high" and meta["arr_disabled"] is False
+
+
+def test_a_users_ignore_survives_a_returning_title(temp_project):
+    from services.on_demand import _reenable_project
+
+    meta = _set(temp_project, translation_priority="ignored")
+    assert meta["ignored_by_user"] is True and meta["arr_disabled"] is True
+
+    _reenable_project(temp_project)  # someone asked for the title from MorpiceHub
+    meta = storage.load_project_metadata(temp_project)
+    assert meta["translation_priority"] == "ignored" and meta["arr_disabled"] is True
+
+    meta = _set(temp_project, context_guide="unrelated edit")
+    assert meta["translation_priority"] == "ignored" and meta["ignored_by_user"] is True
+
+
+def test_legacy_enable_and_disable_routes_follow_the_tier(temp_project):
+    _set(temp_project, arr_source="sonarr", translation_priority="low")
+    client = TestClient(app)
+
+    assert client.post(f"/integrations/arr/library/{temp_project}/disable").status_code == 200
+    meta = storage.load_project_metadata(temp_project)
+    assert meta["translation_priority"] == "ignored" and meta["ignored_by_user"] is True
+
+    assert client.post(f"/integrations/arr/library/{temp_project}/enable").status_code == 200
+    meta = storage.load_project_metadata(temp_project)
+    assert meta["translation_priority"] == "low" and meta["arr_disabled"] is False
+
+
+def test_ignored_project_takes_explicit_requests_only(temp_project):
+    from services.queue_service import enqueue_translation
+
+    _set(temp_project, translation_priority="ignored")
+    q = TranslationQueue()
+    try:
+        assert enqueue_translation(temp_project, "S01E01", PRIORITY_SYNC) == ""
+        assert enqueue_translation(temp_project, "S01E02", PRIORITY_WEBHOOK) == ""
+        item_id = enqueue_translation(temp_project, "S01E03", PRIORITY_MANUAL)  # the user clicked Translate
+        assert item_id and q.get_item(item_id)["status"] == "pending"
+    finally:
+        with q._conn() as conn:
+            conn.execute("DELETE FROM translation_queue WHERE project_name = ?", (temp_project,))
+            conn.commit()
+
+
+def test_requeueing_a_finished_item_takes_the_new_priority(temp_queue):
+    q = temp_queue
+    item_id = q.enqueue("ShowP", "Ep1", priority=PRIORITY_HIGH)  # queued while the show was "high"
+    q.update_status(item_id, status="completed")
+
+    assert q.enqueue("ShowP", "Ep1", priority=PRIORITY_LOW) == item_id  # the show is "low" now
+    assert q.get_item(item_id)["priority"] == PRIORITY_LOW
+
+    assert q.enqueue("ShowP", "Ep1", priority=PRIORITY_MANUAL) == item_id  # still pending: the more urgent wins
+    assert q.get_item(item_id)["priority"] == PRIORITY_MANUAL

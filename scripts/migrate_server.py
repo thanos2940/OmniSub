@@ -2,12 +2,12 @@
 r"""Omnisub Server Migration CLI Tool.
 
 Supports:
-  - export: Create a portable migration bundle (.zip) in compact or full mode
+  - export: Create a portable migration bundle (.zip) in full (server move) or compact mode
   - inspect: Validate bundle checksums and view manifest details
   - import: Restore bundle to target server and optionally remap UNC / custom paths
 
 Examples:
-  python scripts/migrate_server.py export --output backup.zip --mode compact
+  python scripts/migrate_server.py export --output backup.zip
   python scripts/migrate_server.py inspect --input backup.zip
   python scripts/migrate_server.py import --input backup.zip --remap-unc-to-local
   python scripts/migrate_server.py import --input backup.zip --replace "\\\\Morpiceserver\\e=E:\\"
@@ -15,6 +15,7 @@ Examples:
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -85,9 +86,27 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+def _running_server(data_dir: Path) -> int:
+    """PID of a live OmbiSub server that owns data_dir, else 0."""
+    import run_server
+    try:
+        pid = int(run_server._read_lock(data_dir / run_server.LOCK_NAME).get("pid") or 0)
+    except (TypeError, ValueError):
+        return 0
+    return pid if pid and pid != os.getpid() and run_server._pid_alive(pid) else 0
+
+
 def cmd_import(args: argparse.Namespace) -> int:
     input_path = Path(args.input)
     target_dir = Path(args.target_dir) if args.target_dir else None
+
+    from utils import paths
+    pid = _running_server(target_dir or paths.DATA_DIR)
+    if pid and not args.allow_running:
+        print(f"[-] OmbiSub is running (PID {pid}) for this data folder. Stop it first (tray icon > Exit, "
+              "or stop the OmbiSub task), then import again; it would otherwise keep writing its old "
+              "state over the imported one. (--allow-running skips this check.)", file=sys.stderr)
+        return 1
 
     # Parse path replacements (format: OLD=NEW)
     path_replacements = []
@@ -143,8 +162,9 @@ def main() -> int:
     p_export.add_argument(
         "--mode",
         choices=["compact", "full"],
-        default="compact",
-        help="Export mode: 'compact' (excludes original video/subs) or 'full' (includes original subtitles)",
+        default="full",
+        help="'full' (default, for moving the server) includes each episode's source subtitle; 'compact' leaves "
+             "those out (a backup of settings and translations: ASS episodes cannot be re-exported from it)",
     )
     p_export.add_argument("--data-dir", help="Source OMNISUB_DATA_DIR (defaults to configured data dir)", default=None)
     p_export.set_defaults(func=cmd_export)
@@ -172,6 +192,11 @@ def main() -> int:
         "--target-dir",
         help="Target data directory (defaults to configured OMNISUB_DATA_DIR)",
         default=None,
+    )
+    p_import.add_argument(
+        "--allow-running",
+        action="store_true",
+        help="Import even while an OmbiSub server is running for the target folder",
     )
     p_import.set_defaults(func=cmd_import)
 

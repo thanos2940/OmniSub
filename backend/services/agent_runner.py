@@ -747,8 +747,8 @@ class AgentRunner:
             rows = conn.execute("""
                 SELECT id, project_name, episode_name
                 FROM translation_queue
-                WHERE status = 'pending' AND kind = ?
-                ORDER BY priority ASC, created_at ASC
+                WHERE status IN ('pending', 'queued') AND kind = ?
+                ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
             """, (KIND_TRANSLATION,)).fetchall()
         return [{k: r[k] for k in ("id", "project_name", "episode_name")} for r in rows]
 
@@ -759,7 +759,7 @@ class AgentRunner:
             return count
         try:
             with TranslationQueue()._conn() as conn:
-                count = conn.execute("SELECT COUNT(*) FROM translation_queue WHERE status = 'pending' AND kind = ?",
+                count = conn.execute("SELECT COUNT(*) FROM translation_queue WHERE status IN ('pending', 'queued') AND kind = ?",
                                      (KIND_TRANSLATION,)).fetchone()[0]
         except Exception:
             pass  # keep the last count
@@ -1587,14 +1587,8 @@ def autostart() -> bool:
     )
     if (r.enabled or agent_auto) and not r.running():
         try:
-            r.enabled = True
-            if not isinstance(r.config, RunnerConfig):
-                r.config = RunnerConfig(r.config)
-            r.config.keep_watching = True
-            r.config["watch"] = True
-            r.start(r.config)
-            r.log("Agent runner auto-started on boot (keep_watching=True)", "ok")
-            logger.info("Agent runner auto-started on boot (keep_watching=True)")
+            r.start({**r.config, "watch": True}, resumed=r.enabled)
+            logger.info("Agent runner auto-started on boot (keep watching)")
             return True
         except Exception as exc:
             r.log(f"Could not autostart: {exc}", "error")

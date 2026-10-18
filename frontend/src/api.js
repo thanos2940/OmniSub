@@ -409,7 +409,11 @@ export const api = {
     applyUpdate: (force = false) => axios.post(`${API_URL}/api/system/updates/apply`, { force }),
     restartServer: () => axios.post(`${API_URL}/api/system/restart`),
     getBackupEstimate: () => axios.get(`${API_URL}/api/backup/estimate`),
-    exportBackupBundle: (mode = 'compact') => axios.get(`${API_URL}/api/backup/export`, { params: { mode }, responseType: 'blob' }),
+    // A one-time link the browser downloads straight to disk (bundles are several GB).
+    backupDownloadLink: async (mode = 'full') => {
+        const res = await axios.post(`${API_URL}/api/backup/export-link`, null, { params: { mode } });
+        return `${API_URL}${res.data.url}`;
+    },
     inspectBackupBundle: (formData) => axios.post(`${API_URL}/api/backup/inspect`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
     importBackupBundle: (formData) => axios.post(`${API_URL}/api/backup/import`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
 

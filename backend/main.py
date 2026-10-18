@@ -440,7 +440,8 @@ else:
 # are still individually hardened regardless of this gate).
 _PROTECTED_PREFIXES = ("/api/", "/projects", "/jobs", "/integrations", "/rate-limit", "/settings")
 _AUTH_EXEMPT_PATHS = {"/api/health", "/docs", "/openapi.json", "/redoc", "/api/events", "/api/events/poll", "/api/ws", "/ws"}
-_AUTH_EXEMPT_PREFIXES = ("/api/auth/login", "/api/auth/status", "/api/webhook/")
+# /api/backup/download/<token>: a one-time link minted by the authenticated /api/backup/export-link.
+_AUTH_EXEMPT_PREFIXES = ("/api/auth/login", "/api/auth/status", "/api/webhook/", "/api/backup/download/")
 
 
 @app.middleware("http")

@@ -305,8 +305,8 @@ class TranslationQueue:
                         conn.execute(
                             """
                             UPDATE translation_queue
-                            SET status = 'pending',
-                                priority = MIN(priority, ?),
+                            SET priority = CASE WHEN status = 'pending' THEN MIN(priority, ?) ELSE ? END,
+                                status = 'pending',
                                 next_retry_at = ?,
                                 attempts = 0,
                                 options = COALESCE(?, options),
@@ -317,7 +317,7 @@ class TranslationQueue:
                             WHERE project_name = ? COLLATE NOCASE AND episode_name = ? COLLATE NOCASE AND lang = ? AND kind = ?
                               AND status IN ('completed', 'failed', 'cancelled', 'paused_daily_limit', 'pending')
                             """,
-                            (priority, next_retry_at, options_str, project_name, episode_name, lang, kind)
+                            (priority, priority, next_retry_at, options_str, project_name, episode_name, lang, kind)
                         )
                         conn.commit()
                         return existing_id
@@ -618,7 +618,7 @@ class TranslationQueue:
             cursor = conn.execute(
                 f"""
                 SELECT * FROM translation_queue
-                WHERE status = 'pending' AND kind = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
+                WHERE status IN ('pending', 'queued') AND kind = ? AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 {prio_clause}
                 ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
                 LIMIT 1

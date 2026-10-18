@@ -19,6 +19,7 @@ import shutil
 import socket
 import sqlite3
 import tempfile
+import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,20 +61,27 @@ def _compute_sha256_and_size(path: Path) -> Tuple[str, int]:
     return hasher.hexdigest(), size
 
 
+def _sqlite_copy(src_conn: sqlite3.Connection, dst_path: Path) -> None:
+    """Copy a database through SQLite's backup API (WAL-aware), closing the source connection."""
+    try:
+        dst_conn = sqlite3.connect(str(dst_path), timeout=30.0)
+        try:
+            src_conn.backup(dst_conn)
+        finally:
+            dst_conn.close()
+    finally:
+        src_conn.close()
+
+
 def _backup_sqlite_db(src_path: Path, dst_temp_path: Path) -> None:
     """Safely snapshot a live SQLite database including WAL state using sqlite3 backup API."""
     dst_temp_path.parent.mkdir(parents=True, exist_ok=True)
+    src = src_path.resolve()
     try:
-        src_conn = sqlite3.connect(f"file:{src_path.resolve()}?mode=ro", uri=True)
-    except Exception:
-        src_conn = sqlite3.connect(str(src_path.resolve()), timeout=30.0)
-
-    dst_conn = sqlite3.connect(str(dst_temp_path))
-    try:
-        src_conn.backup(dst_conn)
-    finally:
-        dst_conn.close()
-        src_conn.close()
+        _sqlite_copy(sqlite3.connect(f"{src.as_uri()}?mode=ro", uri=True, timeout=30.0), dst_temp_path)
+    except sqlite3.Error:
+        # A read-only connection cannot open a WAL database whose -shm file is missing.
+        _sqlite_copy(sqlite3.connect(str(src), timeout=30.0), dst_temp_path)
 
 
 def _find_databases(data_dir: Path) -> List[Path]:
@@ -255,7 +263,7 @@ def get_backup_estimate(data_dir: Optional[Path] = None) -> dict:
 
 def create_migration_bundle(
     output_path: Optional[Path] = None,
-    mode: str = "compact",
+    mode: str = "full",
     data_dir: Optional[Path] = None,
 ) -> Path:
     """Create a .zip migration bundle."""
@@ -434,7 +442,14 @@ def import_migration_bundle(
     path_replacements: Optional[List[Dict[str, str]]] = None,
     target_data_dir: Optional[Path] = None,
 ) -> dict:
-    """Import a migration bundle into target_data_dir."""
+    """Import a migration bundle into target_data_dir.
+
+    The bundle is unpacked into a staging folder inside target_data_dir and its paths
+    are remapped there; the live data is only touched once all of that worked. Every
+    database the bundle replaces is first snapshotted to ``<name>.pre_import.bak``,
+    then restored through SQLite's backup API, so a database the running server holds
+    open (WAL mode) is replaced consistently rather than overwritten under it.
+    """
     target_dir = Path(target_data_dir) if target_data_dir else paths.DATA_DIR
     target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -442,250 +457,15 @@ def import_migration_bundle(
     bundle_info = inspect_migration_bundle(zip_path)
     manifest = bundle_info.get("manifest", {})
 
-    # 2. Safety pre-import backup of existing config.json and omnisub.db
-    existing_cfg = target_dir / "config.json"
-    if existing_cfg.is_file():
-        shutil.copy2(existing_cfg, target_dir / "config.json.pre_import.bak")
-
-    existing_db = target_dir / "omnisub.db"
-    if existing_db.is_file():
-        shutil.copy2(existing_db, target_dir / "omnisub.db.pre_import.bak")
-
-    # 3. Extract files from zip
-    target_resolved = target_dir.resolve()
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        for member in zf.namelist():
-            if member == "manifest.json" or member.endswith("/"):
-                continue
-
-            # Determine extraction path
-            if member.startswith("databases/"):
-                rel = member[len("databases/"):]
-                dest = target_dir / rel
-            else:
-                dest = target_dir / member
-
-            # Prevent Zip Slip / path traversal
-            dest_resolved = dest.resolve()
-            try:
-                dest_resolved.relative_to(target_resolved)
-            except ValueError:
-                raise ValueError(f"Path traversal detected in zip entry: {member}")
-
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(member, "r") as src_f, open(dest, "wb") as dst_f:
-                shutil.copyfileobj(src_f, dst_f)
-
-    # 4. Normalize paths across configs, metadata, and SQLite DBs
-    remapped_count = 0
-
-    def _remap(path_val: Any) -> Any:
-        nonlocal remapped_count
-        if not path_val or not isinstance(path_val, str):
-            return path_val
-        new_val = normalize_path_for_local_server(
-            path_val,
-            remap_unc_to_local=remap_unc_to_local,
-            path_replacements=path_replacements,
-        )
-        if new_val != path_val:
-            remapped_count += 1
-        return new_val
-
-    if remap_unc_to_local or path_replacements:
-        # A. config.json
-        cfg_file = target_dir / "config.json"
-        if cfg_file.is_file():
-            try:
-                with open(cfg_file, "r", encoding="utf-8") as f:
-                    cfg_data = json.load(f)
-                cfg_modified = False
-                for pkey in ("arr_path_mappings", "path_mappings"):
-                    if pkey in cfg_data and isinstance(cfg_data[pkey], list):
-                        for mapping in cfg_data[pkey]:
-                            if isinstance(mapping, dict):
-                                for lk in ("local", "local_path"):
-                                    if lk in mapping and isinstance(mapping[lk], str):
-                                        orig = mapping[lk]
-                                        mapping[lk] = _remap(orig)
-                                        if mapping[lk] != orig:
-                                            cfg_modified = True
-                if cfg_modified:
-                    with open(cfg_file, "w", encoding="utf-8") as f:
-                        json.dump(cfg_data, f, indent=2)
-            except Exception as e:
-                logger.warning(f"Error remapping paths in config.json: {e}")
-
-        # B. Walk projects/*/episodes/*/metadata.json
-        projects_dir = target_dir / "projects"
-        if projects_dir.is_dir():
-            for p in projects_dir.iterdir():
-                if not p.is_dir():
-                    continue
-                ep_dir = p / "episodes"
-                if not ep_dir.is_dir():
-                    continue
-                for e in ep_dir.iterdir():
-                    if not e.is_dir():
-                        continue
-                    meta_path = e / "metadata.json"
-                    if meta_path.is_file():
-                        try:
-                            with open(meta_path, "r", encoding="utf-8") as f:
-                                meta = json.load(f)
-                            meta_modified = False
-                            for k in ("arr_media_path", "arr_sub_path", "arr_target_path", "media_path"):
-                                if k in meta and isinstance(meta[k], str):
-                                    orig = meta[k]
-                                    meta[k] = _remap(orig)
-                                    if meta[k] != orig:
-                                        meta_modified = True
-
-                            if "arr_targets" in meta and isinstance(meta["arr_targets"], list):
-                                for tgt in meta["arr_targets"]:
-                                    if isinstance(tgt, dict):
-                                        for tk in ("target_path", "sub_path", "path"):
-                                            if tk in tgt and isinstance(tgt[tk], str):
-                                                orig = tgt[tk]
-                                                tgt[tk] = _remap(orig)
-                                                if tgt[tk] != orig:
-                                                    meta_modified = True
-                            if meta_modified:
-                                with open(meta_path, "w", encoding="utf-8") as f:
-                                    json.dump(meta, f, indent=2)
-                        except Exception as e:
-                            logger.warning(f"Error remapping paths in {meta_path}: {e}")
-
-        # C. Update SQLite databases
-        for db_file in _find_databases(target_dir):
-            try:
-                conn = sqlite3.connect(str(db_file), timeout=30.0)
-                try:
-                    tables = [
-                        r[0] for r in conn.execute(
-                            "SELECT name FROM sqlite_master WHERE type='table'"
-                        ).fetchall()
-                    ]
-
-                    # 1) autopilot items table (either 'items' or 'autopilot_items')
-                    for item_tbl in ("items", "autopilot_items"):
-                        if item_tbl in tables:
-                            cols = [
-                                r[1] for r in conn.execute(f"PRAGMA table_info({item_tbl})").fetchall()
-                            ]
-                            if "media_path" in cols:
-                                rows = conn.execute(
-                                    f"SELECT id, media_path FROM {item_tbl} WHERE media_path IS NOT NULL"
-                                ).fetchall()
-                                for r_id, old_mp in rows:
-                                    new_mp = _remap(old_mp)
-                                    if new_mp != old_mp:
-                                        conn.execute(
-                                            f"UPDATE {item_tbl} SET media_path = ? WHERE id = ?",
-                                            (new_mp, r_id),
-                                        )
-
-                            out_col = "outputs" if "outputs" in cols else ("outputs_json" if "outputs_json" in cols else None)
-                            if out_col:
-                                rows = conn.execute(
-                                    f"SELECT id, {out_col} FROM {item_tbl} WHERE {out_col} IS NOT NULL"
-                                ).fetchall()
-                                for r_id, raw_out in rows:
-                                    if not raw_out:
-                                        continue
-                                    try:
-                                        data = json.loads(raw_out)
-                                        obj_changed = False
-
-                                        def _remap_obj(val: Any) -> Any:
-                                            nonlocal obj_changed
-                                            if isinstance(val, str):
-                                                nv = _remap(val)
-                                                if nv != val:
-                                                    obj_changed = True
-                                                return nv
-                                            elif isinstance(val, list):
-                                                return [_remap_obj(x) for x in val]
-                                            elif isinstance(val, dict):
-                                                return {k: _remap_obj(v) for k, v in val.items()}
-                                            return val
-
-                                        new_data = _remap_obj(data)
-                                        if obj_changed:
-                                            conn.execute(
-                                                f"UPDATE {item_tbl} SET {out_col} = ? WHERE id = ?",
-                                                (json.dumps(new_data), r_id),
-                                            )
-                                    except Exception:
-                                        pass
-
-                    # 2) subtitle_ownership.db ('owned_files')
-                    if "owned_files" in tables:
-                        cols = [r[1] for r in conn.execute("PRAGMA table_info(owned_files)").fetchall()]
-                        if "path" in cols:
-                            has_disp = "display_path" in cols
-                            query = (
-                                "SELECT path, display_path, sha1, size, project_name, episode_name, written_at FROM owned_files"
-                                if has_disp
-                                else "SELECT path, sha1, size, project_name, episode_name, written_at FROM owned_files"
-                            )
-                            rows = conn.execute(query).fetchall()
-                            for r in rows:
-                                if has_disp:
-                                    old_p, disp_p, sha1, sz, prj, ep, wrt = r
-                                    new_p = _remap(old_p)
-                                    new_disp = _remap(disp_p)
-                                    if new_p != old_p or new_disp != disp_p:
-                                        conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
-                                        conn.execute(
-                                            "INSERT OR REPLACE INTO owned_files "
-                                            "(path, display_path, sha1, size, project_name, episode_name, written_at) "
-                                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                            (new_p, new_disp, sha1, sz, prj, ep, wrt),
-                                        )
-                                else:
-                                    old_p, sha1, sz, prj, ep, wrt = r
-                                    new_p = _remap(old_p)
-                                    if new_p != old_p:
-                                        conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
-                                        conn.execute(
-                                            "INSERT OR REPLACE INTO owned_files "
-                                            "(path, sha1, size, project_name, episode_name, written_at) "
-                                            "VALUES (?, ?, ?, ?, ?, ?)",
-                                            (new_p, sha1, sz, prj, ep, wrt),
-                                        )
-
-                    # 3) media_probe_cache ('media_path')
-                    if "media_probe_cache" in tables:
-                        cols = [r[1] for r in conn.execute("PRAGMA table_info(media_probe_cache)").fetchall()]
-                        if "media_path" in cols:
-                            rows = conn.execute("SELECT media_path, fingerprint FROM media_probe_cache").fetchall()
-                            for old_mp, fp in rows:
-                                new_mp = _remap(old_mp)
-                                if new_mp != old_mp:
-                                    conn.execute(
-                                        "UPDATE media_probe_cache SET media_path = ? WHERE media_path = ? AND fingerprint = ?",
-                                        (new_mp, old_mp, fp),
-                                    )
-
-                    # 4) translation_blacklist ('file_path')
-                    if "translation_blacklist" in tables:
-                        cols = [r[1] for r in conn.execute("PRAGMA table_info(translation_blacklist)").fetchall()]
-                        if "file_path" in cols:
-                            rows = conn.execute("SELECT file_path FROM translation_blacklist").fetchall()
-                            for (old_fp,) in rows:
-                                new_fp = _remap(old_fp)
-                                if new_fp != old_fp:
-                                    conn.execute(
-                                        "UPDATE translation_blacklist SET file_path = ? WHERE file_path = ?",
-                                        (new_fp, old_fp),
-                                    )
-
-                    conn.commit()
-                finally:
-                    conn.close()
-            except Exception as e:
-                logger.warning(f"Error remapping database {db_file}: {e}")
+    staging = Path(tempfile.mkdtemp(prefix=".migration_import_", dir=target_dir))
+    try:
+        db_rels = _extract_bundle(zip_path, manifest, staging)
+        remapped_count = 0
+        if remap_unc_to_local or path_replacements:
+            remapped_count = _remap_staged_paths(staging, remap_unc_to_local, path_replacements)
+        _install_staged(staging, target_dir, db_rels)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
     # Count restored projects & episodes
     projects_restored = 0
@@ -712,3 +492,290 @@ def import_migration_bundle(
         "mode": manifest.get("mode", "compact"),
         "restart_required": True,
     }
+
+
+def _extract_bundle(zip_path: Path, manifest: dict, staging: Path) -> List[str]:
+    """Unpack the manifest's (checksum-verified) entries into staging; return the database paths."""
+    staging_resolved = staging.resolve()
+    db_rels: List[str] = []
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in manifest.get("files", {}):
+            rel = member[len("databases/"):] if member.startswith("databases/") else member
+            dest = staging / rel
+            try:  # Zip Slip: every entry must land inside the staging folder
+                dest.resolve().relative_to(staging_resolved)
+            except ValueError:
+                raise ValueError(f"Path traversal detected in zip entry: {member}")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(member, "r") as src_f, open(dest, "wb") as dst_f:
+                shutil.copyfileobj(src_f, dst_f)
+            if member.startswith("databases/"):
+                db_rels.append(rel)
+    return db_rels
+
+
+def _replace_file(src: Path, dest: Path, attempts: int = 5) -> None:
+    """os.replace with a short retry: on Windows a reader holding the file blocks it briefly."""
+    for i in range(attempts):
+        try:
+            os.replace(src, dest)
+            return
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.2 * (i + 1))
+
+
+def _install_staged(staging: Path, target_dir: Path, db_rels: List[str]) -> None:
+    """Move the staged bundle into target_dir (databases through SQLite, after a snapshot)."""
+    # Translation memory is one LanceDB dataset: swap the whole folder, never merge two.
+    staged_tm = staging / "translation_memory"
+    live_tm = target_dir / "translation_memory"
+    if staged_tm.is_dir() and live_tm.exists():
+        old_tm = target_dir / "translation_memory.pre_import.bak"
+        shutil.rmtree(old_tm, ignore_errors=True)
+        try:
+            os.replace(live_tm, old_tm)
+        except OSError as e:
+            raise RuntimeError(
+                f"The translation memory is in use ({e}); stop OmbiSub and import again."
+            ) from e
+
+    cfg = target_dir / "config.json"
+    if cfg.is_file() and (staging / "config.json").is_file():
+        shutil.copy2(cfg, target_dir / "config.json.pre_import.bak")
+    for rel in db_rels:
+        dest = target_dir / rel
+        if dest.is_file():
+            _backup_sqlite_db(dest, dest.with_name(dest.name + ".pre_import.bak"))
+    for rel in db_rels:
+        dest = target_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _sqlite_copy(sqlite3.connect(str(staging / rel), timeout=30.0), dest)
+
+    db_set = {Path(r) for r in db_rels}
+    for src in sorted(p for p in staging.rglob("*") if p.is_file()):
+        rel = src.relative_to(staging)
+        if rel in db_set or src.name.endswith(("-wal", "-shm", "-journal")):
+            continue
+        dest = target_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        _replace_file(src, dest)
+
+
+def _remap_staged_paths(
+    staged_dir: Path,
+    remap_unc_to_local: bool,
+    path_replacements: Optional[List[Dict[str, str]]],
+) -> int:
+    """Rewrite media/subtitle paths in the staged config, episode metadata and databases."""
+    remapped_count = 0
+
+    def _remap(path_val: Any) -> Any:
+        nonlocal remapped_count
+        if not path_val or not isinstance(path_val, str):
+            return path_val
+        new_val = normalize_path_for_local_server(
+            path_val,
+            remap_unc_to_local=remap_unc_to_local,
+            path_replacements=path_replacements,
+        )
+        if new_val != path_val:
+            remapped_count += 1
+        return new_val
+
+    # A. config.json
+    cfg_file = staged_dir / "config.json"
+    if cfg_file.is_file():
+        try:
+            with open(cfg_file, "r", encoding="utf-8") as f:
+                cfg_data = json.load(f)
+            cfg_modified = False
+            for pkey in ("arr_path_mappings", "path_mappings"):
+                if pkey in cfg_data and isinstance(cfg_data[pkey], list):
+                    for mapping in cfg_data[pkey]:
+                        if isinstance(mapping, dict):
+                            for lk in ("local", "local_path"):
+                                if lk in mapping and isinstance(mapping[lk], str):
+                                    orig = mapping[lk]
+                                    mapping[lk] = _remap(orig)
+                                    if mapping[lk] != orig:
+                                        cfg_modified = True
+            if cfg_modified:
+                with open(cfg_file, "w", encoding="utf-8") as f:
+                    json.dump(cfg_data, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Error remapping paths in config.json: {e}")
+
+    # B. Walk projects/*/episodes/*/metadata.json
+    projects_dir = staged_dir / "projects"
+    if projects_dir.is_dir():
+        for p in projects_dir.iterdir():
+            if not p.is_dir():
+                continue
+            ep_dir = p / "episodes"
+            if not ep_dir.is_dir():
+                continue
+            for e in ep_dir.iterdir():
+                if not e.is_dir():
+                    continue
+                meta_path = e / "metadata.json"
+                if meta_path.is_file():
+                    try:
+                        with open(meta_path, "r", encoding="utf-8") as f:
+                            meta = json.load(f)
+                        meta_modified = False
+                        for k in ("arr_media_path", "arr_sub_path", "arr_target_path", "media_path"):
+                            if k in meta and isinstance(meta[k], str):
+                                orig = meta[k]
+                                meta[k] = _remap(orig)
+                                if meta[k] != orig:
+                                    meta_modified = True
+
+                        if "arr_targets" in meta and isinstance(meta["arr_targets"], list):
+                            for tgt in meta["arr_targets"]:
+                                if isinstance(tgt, dict):
+                                    for tk in ("target_path", "sub_path", "path"):
+                                        if tk in tgt and isinstance(tgt[tk], str):
+                                            orig = tgt[tk]
+                                            tgt[tk] = _remap(orig)
+                                            if tgt[tk] != orig:
+                                                meta_modified = True
+                        if meta_modified:
+                            with open(meta_path, "w", encoding="utf-8") as f:
+                                json.dump(meta, f, indent=2)
+                    except Exception as e:
+                        logger.warning(f"Error remapping paths in {meta_path}: {e}")
+
+    # C. Update SQLite databases
+    for db_file in _find_databases(staged_dir):
+        try:
+            conn = sqlite3.connect(str(db_file), timeout=30.0)
+            try:
+                tables = [
+                    r[0] for r in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                ]
+
+                # 1) autopilot items table (either 'items' or 'autopilot_items')
+                for item_tbl in ("items", "autopilot_items"):
+                    if item_tbl in tables:
+                        cols = [
+                            r[1] for r in conn.execute(f"PRAGMA table_info({item_tbl})").fetchall()
+                        ]
+                        if "media_path" in cols:
+                            rows = conn.execute(
+                                f"SELECT id, media_path FROM {item_tbl} WHERE media_path IS NOT NULL"
+                            ).fetchall()
+                            for r_id, old_mp in rows:
+                                new_mp = _remap(old_mp)
+                                if new_mp != old_mp:
+                                    conn.execute(
+                                        f"UPDATE {item_tbl} SET media_path = ? WHERE id = ?",
+                                        (new_mp, r_id),
+                                    )
+
+                        out_col = "outputs" if "outputs" in cols else ("outputs_json" if "outputs_json" in cols else None)
+                        if out_col:
+                            rows = conn.execute(
+                                f"SELECT id, {out_col} FROM {item_tbl} WHERE {out_col} IS NOT NULL"
+                            ).fetchall()
+                            for r_id, raw_out in rows:
+                                if not raw_out:
+                                    continue
+                                try:
+                                    data = json.loads(raw_out)
+                                    obj_changed = False
+
+                                    def _remap_obj(val: Any) -> Any:
+                                        nonlocal obj_changed
+                                        if isinstance(val, str):
+                                            nv = _remap(val)
+                                            if nv != val:
+                                                obj_changed = True
+                                            return nv
+                                        elif isinstance(val, list):
+                                            return [_remap_obj(x) for x in val]
+                                        elif isinstance(val, dict):
+                                            return {k: _remap_obj(v) for k, v in val.items()}
+                                        return val
+
+                                    new_data = _remap_obj(data)
+                                    if obj_changed:
+                                        conn.execute(
+                                            f"UPDATE {item_tbl} SET {out_col} = ? WHERE id = ?",
+                                            (json.dumps(new_data), r_id),
+                                        )
+                                except Exception:
+                                    pass
+
+                # 2) subtitle_ownership.db ('owned_files')
+                if "owned_files" in tables:
+                    cols = [r[1] for r in conn.execute("PRAGMA table_info(owned_files)").fetchall()]
+                    if "path" in cols:
+                        has_disp = "display_path" in cols
+                        query = (
+                            "SELECT path, display_path, sha1, size, project_name, episode_name, written_at FROM owned_files"
+                            if has_disp
+                            else "SELECT path, sha1, size, project_name, episode_name, written_at FROM owned_files"
+                        )
+                        rows = conn.execute(query).fetchall()
+                        for r in rows:
+                            if has_disp:
+                                old_p, disp_p, sha1, sz, prj, ep, wrt = r
+                                new_p = _remap(old_p)
+                                new_disp = _remap(disp_p)
+                                if new_p != old_p or new_disp != disp_p:
+                                    conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
+                                    conn.execute(
+                                        "INSERT OR REPLACE INTO owned_files "
+                                        "(path, display_path, sha1, size, project_name, episode_name, written_at) "
+                                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                        (new_p, new_disp, sha1, sz, prj, ep, wrt),
+                                    )
+                            else:
+                                old_p, sha1, sz, prj, ep, wrt = r
+                                new_p = _remap(old_p)
+                                if new_p != old_p:
+                                    conn.execute("DELETE FROM owned_files WHERE path = ?", (old_p,))
+                                    conn.execute(
+                                        "INSERT OR REPLACE INTO owned_files "
+                                        "(path, sha1, size, project_name, episode_name, written_at) "
+                                        "VALUES (?, ?, ?, ?, ?, ?)",
+                                        (new_p, sha1, sz, prj, ep, wrt),
+                                    )
+
+                # 3) media_probe_cache ('media_path')
+                if "media_probe_cache" in tables:
+                    cols = [r[1] for r in conn.execute("PRAGMA table_info(media_probe_cache)").fetchall()]
+                    if "media_path" in cols:
+                        rows = conn.execute("SELECT media_path, fingerprint FROM media_probe_cache").fetchall()
+                        for old_mp, fp in rows:
+                            new_mp = _remap(old_mp)
+                            if new_mp != old_mp:
+                                conn.execute(
+                                    "UPDATE media_probe_cache SET media_path = ? WHERE media_path = ? AND fingerprint = ?",
+                                    (new_mp, old_mp, fp),
+                                )
+
+                # 4) translation_blacklist ('file_path')
+                if "translation_blacklist" in tables:
+                    cols = [r[1] for r in conn.execute("PRAGMA table_info(translation_blacklist)").fetchall()]
+                    if "file_path" in cols:
+                        rows = conn.execute("SELECT file_path FROM translation_blacklist").fetchall()
+                        for (old_fp,) in rows:
+                            new_fp = _remap(old_fp)
+                            if new_fp != old_fp:
+                                conn.execute(
+                                    "UPDATE translation_blacklist SET file_path = ? WHERE file_path = ?",
+                                    (new_fp, old_fp),
+                                )
+
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.warning(f"Error remapping database {db_file}: {e}")
+
+    return remapped_count

@@ -1,5 +1,6 @@
 """Unit and Integration Tests for Omnisub Backup, Migration & CLI."""
 
+import io
 import json
 import os
 import shutil
@@ -447,3 +448,84 @@ def test_router_backup_endpoints(sample_data_dir: Path, monkeypatch):
     import_data = resp.json()
     assert import_data["status"] == "success"
     assert import_data["projects_restored"] == 1
+
+
+def test_import_replaces_a_live_wal_database_consistently(sample_data_dir: Path, tmp_path: Path):
+    """The server keeps omnisub.db open (WAL) while a bundle is imported: no stale WAL content survives."""
+    bundle_zip = tmp_path / "bundle.zip"
+    create_migration_bundle(output_path=bundle_zip, mode="full", data_dir=sample_data_dir)
+    target_dir = tmp_path / "live_server"
+    target_dir.mkdir()
+
+    live = sqlite3.connect(str(target_dir / "omnisub.db"))
+    live.execute("PRAGMA journal_mode=WAL")
+    live.execute("CREATE TABLE stale (x INTEGER)")
+    live.executemany("INSERT INTO stale VALUES (?)", [(i,) for i in range(500)])
+    live.commit()  # sits in omnisub.db-wal, not checkpointed
+    try:
+        import_migration_bundle(zip_path=bundle_zip, remap_unc_to_local=True, target_data_dir=target_dir)
+        seen_live = {r[0] for r in live.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    finally:
+        live.close()
+
+    fresh = sqlite3.connect(str(target_dir / "omnisub.db"))
+    try:
+        assert fresh.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        seen_fresh = {r[0] for r in fresh.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert fresh.execute("SELECT project_name FROM translation_queue").fetchall() == [("Attack on Titan",)]
+    finally:
+        fresh.close()
+    assert "stale" not in seen_live and "stale" not in seen_fresh
+    assert "translation_queue" in seen_live
+
+    snap = sqlite3.connect(str(target_dir / "omnisub.db.pre_import.bak"))
+    try:
+        assert snap.execute("SELECT COUNT(*) FROM stale").fetchone()[0] == 500
+    finally:
+        snap.close()
+    assert not any(p.name.startswith(".migration_import_") for p in target_dir.iterdir())
+
+
+def test_import_swaps_translation_memory_instead_of_merging(sample_data_dir: Path, tmp_path: Path):
+    """Two LanceDB datasets must never be mixed: the old one is set aside whole."""
+    bundle_zip = tmp_path / "bundle.zip"
+    create_migration_bundle(output_path=bundle_zip, mode="compact", data_dir=sample_data_dir)
+    target_dir = tmp_path / "server_with_tm"
+    stale = target_dir / "translation_memory" / "old_show_el.lance" / "data" / "fragment.lance"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"old")
+
+    import_migration_bundle(zip_path=bundle_zip, target_data_dir=target_dir)
+
+    assert not (target_dir / "translation_memory" / "old_show_el.lance").exists()
+    assert (target_dir / "translation_memory").is_dir()
+    assert (target_dir / "translation_memory.pre_import.bak" / "old_show_el.lance" / "data" / "fragment.lance").is_file()
+
+
+def test_one_time_download_link(sample_data_dir: Path, monkeypatch):
+    """The browser downloads through a link minted by an authenticated call; the link works once."""
+    from utils import paths
+
+    monkeypatch.setattr(paths, "DATA_DIR", sample_data_dir)
+    monkeypatch.setattr(paths, "PROJECTS_DIR", sample_data_dir / "projects")
+    app = FastAPI()
+    app.include_router(backup_router)
+    client = TestClient(app)
+
+    assert client.post("/api/backup/export-link?mode=everything").status_code == 400
+    link = client.post("/api/backup/export-link").json()
+    assert link["mode"] == "full"
+
+    resp = client.get(link["url"])
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+        assert "projects/Attack on Titan/episodes/S01E01/original.srt" in zf.namelist()
+
+    assert client.get(link["url"]).status_code == 404  # used up
+
+
+def test_download_link_path_is_exempt_from_the_api_key_gate():
+    import main
+    assert "/api/backup/download/abc".startswith(main._AUTH_EXEMPT_PREFIXES)
+    assert not "/api/backup/export".startswith(main._AUTH_EXEMPT_PREFIXES)

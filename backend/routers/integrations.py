@@ -266,13 +266,11 @@ async def arr_disable_entry(project_name: str):
     if not meta.get("arr_source"):
         raise HTTPException(status_code=400, detail="Not an arr-synced project")
     meta["arr_disabled"] = True
+    meta["ignored_by_user"] = True
     meta["arr_disabled_at"] = datetime.now().isoformat()
     storage.save_project_metadata(project_name, meta)
-    try:
-        from utils import metadata_index
-        metadata_index.set_project_disabled(project_name, True)
-    except Exception:
-        pass
+    from utils.translation_queue import get_translation_queue
+    get_translation_queue().update_project_priority(project_name, "ignored")
     return {"status": "disabled", "project": project_name}
 
 
@@ -284,12 +282,9 @@ async def arr_enable_entry(project_name: str):
         raise HTTPException(status_code=404, detail="Project not found")
     meta["arr_disabled"] = False
     meta.pop("arr_disabled_at", None)
-    storage.save_project_metadata(project_name, meta)
-    try:
-        from utils import metadata_index
-        metadata_index.set_project_disabled(project_name, False)
-    except Exception:
-        pass
+    storage.save_project_metadata(project_name, meta)  # restores the tier it had before
+    from utils.translation_queue import get_translation_queue
+    get_translation_queue().update_project_priority(project_name, meta["translation_priority"])
     return {"status": "enabled", "project": project_name}
 
 

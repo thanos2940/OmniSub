@@ -44,6 +44,21 @@ def _wake_runner() -> None:
         logger.debug(f"Could not nudge the agent runner: {e}")
 
 
+# An explicit request for one episode: allowed even for a project set to Ignored.
+EXPLICIT_PRIORITIES = (PRIORITY_MANUAL, PRIORITY_RUN_NOW)
+
+
+def skips_ignored(project_meta: Optional[Dict], priority: int, options: Optional[Dict] = None) -> bool:
+    """True when an Ignored project must not get this work.
+
+    Ignored stops automatic work (webhook, sync, backlog); an explicit request for an
+    episode (Translate, Run Now, an on-demand request, or ``force``) still goes through.
+    """
+    return (storage.resolve_project_priority(project_meta) == "ignored"
+            and priority not in EXPLICIT_PRIORITIES
+            and not (options or {}).get("force"))
+
+
 def enqueue_translation(project_name: str, episode_name: str, priority: int = PRIORITY_MANUAL, options: Optional[Dict] = None,
                         lang: str = "", delay_seconds: int = 0, next_retry_at: Optional[str] = None) -> str:
     """Enqueue an episode for translation (target language ``lang``, '' = primary) and wake the worker."""
@@ -52,14 +67,12 @@ def enqueue_translation(project_name: str, episode_name: str, priority: int = PR
         return ""
 
     proj_meta = storage.load_project_metadata(project_name) or {}
-    prio_fn = getattr(storage, "resolve_project_priority", None)
-    tier = prio_fn(proj_meta) if callable(prio_fn) else ("ignored" if proj_meta.get("arr_disabled") else proj_meta.get("translation_priority", "normal"))
-
-    if tier == "ignored" and not (options or {}).get("force"):
-        logger.info(f"Project '{project_name}' is ignored; skipping enqueue_translation.")
+    if skips_ignored(proj_meta, priority, options):
+        logger.info(f"Project '{project_name}' is ignored; not queueing {episode_name} (priority {priority}).")
         return ""
 
-    if priority != 10:
+    tier = storage.resolve_project_priority(proj_meta)
+    if priority != PRIORITY_RUN_NOW:
         if tier == "high":
             priority = PRIORITY_HIGH
         elif tier == "low":

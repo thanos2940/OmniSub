@@ -595,9 +595,12 @@ async def create_request(q: MediaQuery, requested_by: Optional[str] = None,
 
 
 def _reenable_project(project_name: str) -> Optional[Dict]:
-    """A title someone just asked for is, by definition, back in the library."""
+    """A title someone just asked for is, by definition, back in the library.
+
+    A title the owner set to Ignored stays ignored: the request's own episodes are
+    still queued (an explicit request is not automatic work), nothing else is."""
     meta = storage.load_project_metadata(project_name)
-    if meta and meta.get("arr_disabled"):
+    if meta and meta.get("arr_disabled") and not meta.get("ignored_by_user"):
         meta["arr_disabled"] = False
         meta.pop("arr_disabled_at", None)
         storage.save_project_metadata(project_name, meta)

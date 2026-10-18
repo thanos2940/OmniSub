@@ -123,6 +123,20 @@ def test_unc_to_local_resolution_candidate_exists(monkeypatch):
     assert resolved == r"D:\Media\test.mkv"
 
 
+def test_unc_target_is_not_sent_to_an_unrelated_local_drive(monkeypatch):
+    r"""A subtitle not written yet on \\server\e\... stays on the share when this PC merely has an E: drive."""
+    resolver = path_resolver.PathResolver([])
+    monkeypatch.setattr("socket.gethostname", lambda: "Workstation")
+    monkeypatch.setattr(os.path, "exists", lambda p: p == "E:\\")
+    monkeypatch.setattr(os.path, "isdir", lambda p: p == "E:\\")
+    target = r"\\Morpiceserver\e\Shows\Foo\S01E01.el.srt"
+    assert resolver.resolve(target) == target
+
+    # Its folder is on this machine's E: and the share is not reachable: write it locally.
+    monkeypatch.setattr(os.path, "isdir", lambda p: p in ("E:\\", r"E:\Shows\Foo"))
+    assert resolver.resolve(target) == r"E:\Shows\Foo\S01E01.el.srt"
+
+
 def test_local_to_unc_resolution_via_configured_mapping(monkeypatch):
     """Local drive path non-existent locally resolves to UNC share found in mappings."""
     mappings = [{"remote": r"\\Morpiceserver\e\Media", "local": r"E:\Media"}]
@@ -168,7 +182,7 @@ def test_autostart_when_translation_engine_is_agent(monkeypatch):
     start_calls = []
 
     def mock_start(cfg=None, resumed=False):
-        start_calls.append(cfg)
+        start_calls.append((cfg, resumed))
         return {}
 
     monkeypatch.setattr(runner, "start", mock_start)
@@ -180,11 +194,10 @@ def test_autostart_when_translation_engine_is_agent(monkeypatch):
     result = agent_runner.autostart()
 
     assert result is True
-    assert runner.enabled is True
-    assert runner.config.keep_watching is True
-    assert runner.config["watch"] is True
     assert len(start_calls) == 1
-    assert start_calls[0].get("watch") is True
+    cfg, resumed = start_calls[0]
+    assert cfg.get("watch") is True
+    assert resumed is False  # a fresh start on boot, not a resume
 
 
 def test_autostart_when_runner_already_enabled(monkeypatch):
@@ -196,14 +209,16 @@ def test_autostart_when_runner_already_enabled(monkeypatch):
     monkeypatch.setattr(runner, "running", lambda: False)
 
     start_calls = []
-    monkeypatch.setattr(runner, "start", lambda cfg=None, resumed=False: start_calls.append(cfg))
+    monkeypatch.setattr(runner, "start", lambda cfg=None, resumed=False: start_calls.append((cfg, resumed)))
     monkeypatch.setattr("utils.storage.load_global_config", lambda: {"translation_engine": "gemini"})
 
     result = agent_runner.autostart()
 
     assert result is True
-    assert runner.config.keep_watching is True
     assert len(start_calls) == 1
+    cfg, resumed = start_calls[0]
+    assert cfg.get("watch") is True
+    assert resumed is True
 
 
 def test_autostart_noops_when_not_enabled_and_not_agent(monkeypatch):

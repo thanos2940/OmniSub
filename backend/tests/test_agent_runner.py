@@ -475,6 +475,30 @@ class TestClaiming:
         assert light == heavy
         assert [episode for _, _, episode in light] == ["E5", "E3", "E4", "E2", "E1"]
 
+    def test_run_now_item_is_claimed_before_everything_else(self, tmp_path):
+        """Continue / Run Now leaves an item 'queued' at priority 10; the runner takes it first."""
+        first, _, third = _show(episodes=("S01E01", "S01E02", "S01E03"))
+        q = TranslationQueue()
+        assert q.continue_item(third)
+        assert q.get_item(third)["status"] == "queued"
+        _run(tmp_path, max_episodes=1)
+        assert q.get_item(third)["status"] == "completed"
+        assert q.get_item(first)["status"] == "pending"
+
+    def test_ignored_show_keeps_only_explicit_requests(self, tmp_path):
+        manual, automatic = _show("Ignored Show", episodes=("E1", "E2"))
+        q = TranslationQueue()
+        with q._conn() as conn:  # a webhook item that was queued before the show was ignored
+            conn.execute("UPDATE translation_queue SET priority = 0 WHERE id = ?", (automatic,))
+            conn.commit()
+        meta = storage.load_project_metadata("Ignored Show")
+        meta["translation_priority"] = "ignored"
+        storage.save_project_metadata("Ignored Show", meta)
+        service = AgentTaskService(tasks_dir=tmp_path / "agent_tasks")
+        assert [i["id"] for i in service.list_pending_tasks()] == [manual]
+        assert service._claim_from_queue()["id"] == manual
+        assert q.get_item(automatic)["status"] == "cancelled"
+
     def test_claiming_does_not_list_every_pending_episode(self, tmp_path, monkeypatch):
         def boom(self):
             raise AssertionError("list_pending_tasks loads the metadata of every pending episode")

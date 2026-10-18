@@ -58,3 +58,20 @@
 - Full suite: 1,587 passed + 158 re-verified after integration fixes; eslint 0 errors; vite build OK; dist synced to backend/static.
 - Integration fixes by orchestrator: removed duplicate /api/backup routes from system.py (backup.py is canonical); auto_update default False everywhere; tray Exit no longer calls /api/system/restart; keep_watching folded into watch (single stored key); autopilot skip reason kept as arr_disabled; api.js gained priority + backup methods.
 - Not done (out of scope / follow-up): firewall + power-plan automation in install.ps1 (printed as next steps instead).
+
+## Phase 5: Post-Implementation Review Fixes (2026-10-18)
+- [x] Task 5.1: Priority tier vs `arr_disabled` consistency
+  - [x] `save_project_metadata` diffs against the stored copy: a path that only flips `arr_disabled` (Sonarr/Radarr sync, on-demand re-enable, legacy enable/disable routes) is no longer silently reverted; un-ignoring restores `priority_before_ignore`; explicit Ignore sets `ignored_by_user`, which sync and on-demand re-enables respect.
+  - [x] Ignored blocks automatic work only (`queue_service.skips_ignored`); a Translate click, Run Now or MorpiceHub request still queues instead of returning an empty item id. Agent claim paths use the same rule and `list_pending_tasks` no longer mutates the queue.
+  - [x] Re-enqueueing a finished row takes the new priority (was `MIN` with a stale tier priority).
+- [x] Task 5.2: Agent runner claims Run Now / Continue items (`queued` status) and orders priority 10 first (`_pending_items`, `_pending_count`, `_claim_specific`, `list_pending_tasks`, `peek`).
+- [x] Task 5.3: `PathResolver` no longer maps a not-yet-written UNC target onto an unrelated local drive that merely has the same letter.
+- [x] Task 5.4: Migration import stages and verifies before touching live data, restores DBs through the SQLite backup API (no stale `-wal`), snapshots every replaced DB, swaps `translation_memory/` whole, only extracts manifest-listed entries; read-only snapshot URI fixed. `full` is now the default bundle (compact drops `original.*`, which ASS export needs); UI downloads through a one-time link instead of an in-memory blob; CLI refuses to import over a running server.
+- [x] Task 5.5: Updater refuses to reset a checkout onto a release tag that lacks its local commits (unless forced).
+- [x] Task 5.6: `install.ps1 -OpenFirewall` (inbound TCP on Private networks) and `-KeepAwake` (no sleep/hibernate on AC) — the Phase 4 follow-up.
+- [x] Task 5.7: Regression tests for each fix (each fails on the pre-fix code); full suite, eslint and vite build green.
+
+## Remaining (operational, needs the owner)
+- [ ] Move to `Morpiceserver`: export a **full** bundle, install with `install.ps1 -Mode Tray -OpenFirewall -KeepAwake`, stop OmbiSub, import with `--remap-unc-to-local`, start it.
+- [ ] Publish the first GitHub Release tag so the updater has something to track.
+

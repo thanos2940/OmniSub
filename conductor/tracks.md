@@ -19,5 +19,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Bazarr-Style Server Deployment, Autonomous Boot, 4-Tier Project Priorities, Migration Bundle & GitHub Release Auto-Updater (`server_deploy_priority_migration_20261018`)**
+- [x] **Track: Bazarr-Style Server Deployment, Autonomous Boot, 4-Tier Project Priorities, Migration Bundle & GitHub Release Auto-Updater (`server_deploy_priority_migration_20261018`)**
   *Link: [./tracks/server_deploy_priority_migration_20261018/index.md](./tracks/server_deploy_priority_migration_20261018/index.md)*

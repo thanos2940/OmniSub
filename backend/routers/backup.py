@@ -3,6 +3,8 @@
 Endpoints:
   - GET  /api/backup/estimate: estimates bundle size and item counts
   - GET/POST /api/backup/export: streams a generated .zip migration bundle
+  - POST /api/backup/export-link + GET /api/backup/download/{token}: the same bundle through
+    a one-time link, so a browser saves it straight to disk (no API key header needed)
   - POST /api/backup/inspect: validates uploaded bundle and returns manifest
   - POST /api/backup/import: restores bundle, pauses worker, updates metadata index
 """
@@ -10,11 +12,13 @@ Endpoints:
 import asyncio
 import json
 import logging
+import secrets
 import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional, Tuple
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -31,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/backup", tags=["backup"])
 
+DOWNLOAD_LINK_TTL = 600  # seconds a one-time download link stays valid
+_download_links: Dict[str, Tuple[str, float]] = {}  # token -> (mode, expires at)
+
 
 @router.get("/estimate")
 async def estimate_backup():
@@ -38,8 +45,35 @@ async def estimate_backup():
     return await asyncio.to_thread(get_backup_estimate)
 
 
+@router.post("/export-link")
+async def export_link(mode: str = Query("full")):
+    """A one-time link to download the bundle.
+
+    A library bundle is several GB: a browser fetching it through the API client would
+    hold all of it in memory. Following this link instead streams it to disk, and the
+    link itself needs no API key (the request that made it did)."""
+    if mode not in ("compact", "full"):
+        raise HTTPException(status_code=400, detail="mode must be 'compact' or 'full'")
+    now = time.time()
+    for token, (_, expires) in list(_download_links.items()):
+        if expires < now:
+            _download_links.pop(token, None)
+    token = secrets.token_urlsafe(32)
+    _download_links[token] = (mode, now + DOWNLOAD_LINK_TTL)
+    return {"url": f"/api/backup/download/{token}", "mode": mode, "expires_in": DOWNLOAD_LINK_TTL}
+
+
+@router.get("/download/{token}")
+async def download_by_link(token: str):
+    """Build and stream the bundle a link from ``/export-link`` stands for (once)."""
+    mode, expires = _download_links.pop(token, ("", 0.0))
+    if not mode or expires < time.time():
+        raise HTTPException(status_code=404, detail="This download link is unknown or has expired.")
+    return await _bundle_response(mode)
+
+
 @router.api_route("/export", methods=["GET", "POST"])
-async def export_backup(mode: str = Query("compact"), request: Request = None):
+async def export_backup(mode: str = Query("full"), request: Request = None):
     """Build and stream migration .zip bundle (compact or full)."""
     if request and request.method == "POST":
         try:
@@ -49,6 +83,10 @@ async def export_backup(mode: str = Query("compact"), request: Request = None):
         except Exception:
             pass
 
+    return await _bundle_response(mode)
+
+
+async def _bundle_response(mode: str) -> FileResponse:
     if mode not in ("compact", "full"):
         raise HTTPException(status_code=400, detail="mode must be 'compact' or 'full'")
 

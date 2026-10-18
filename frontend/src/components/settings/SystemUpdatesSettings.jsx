@@ -20,7 +20,7 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
     // Backup & Migration State
     const [backupEstimate, setBackupEstimate] = useState(null);
     const [, setEstimateLoading] = useState(false);
-    const [backupMode, setBackupMode] = useState('compact');
+    const [backupMode, setBackupMode] = useState('full');
     const [exporting, setExporting] = useState(false);
     const [importFile, setImportFile] = useState(null);
     const [inspecting, setInspecting] = useState(false);
@@ -95,16 +95,14 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
     const handleExportBackup = async () => {
         setExporting(true);
         try {
-            const res = await api.exportBackupBundle(backupMode);
-            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const href = await api.backupDownloadLink(backupMode);
             const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `ombisub_migration_${backupMode}_${new Date().toISOString().slice(0, 10)}.zip`);
+            link.href = href;
+            link.setAttribute('download', '');
             document.body.appendChild(link);
             link.click();
             link.parentNode?.removeChild(link);
-            window.URL.revokeObjectURL(url);
-            toast.success(`Server migration bundle (${backupMode}) exported successfully!`);
+            toast.success('Building the bundle: your browser starts the download when it is ready (a few minutes for a large library).');
         } catch (err) {
             console.error('Export error:', err);
             toast.error('Failed to export migration bundle.');
@@ -377,25 +375,6 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div
-                            onClick={() => setBackupMode('compact')}
-                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                                backupMode === 'compact'
-                                    ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 ring-1 ring-indigo-500'
-                                    : 'bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-gray-300'
-                            }`}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Compact Migration Bundle</span>
-                                <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-medium">
-                                    ~{backupEstimate?.compact_size_human || 'Calculating...'}
-                                </span>
-                            </div>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                Recommended. Includes all SQLite DBs, Settings, Glossaries, TM, Project metadata, and Greek subtitles. Excludes heavy raw original video/subs.
-                            </p>
-                        </div>
-
-                        <div
                             onClick={() => setBackupMode('full')}
                             className={`p-4 rounded-xl border cursor-pointer transition-all ${
                                 backupMode === 'full'
@@ -404,15 +383,34 @@ export default function SystemUpdatesSettings({ settings, updateSetting }) {
                             }`}
                         >
                             <div className="flex items-center justify-between mb-1">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Full Archive Bundle</span>
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Full Migration Bundle</span>
                                 <span className="text-xs font-mono text-purple-600 dark:text-purple-400 font-medium">
                                     ~{backupEstimate?.full_size_human || 'Calculating...'}
                                 </span>
                             </div>
                             <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
-                                Complete library snapshot including raw extracted subtitles, audio streams, and original episode files.
+                                Recommended for moving the server. Everything in Compact plus the source subtitle each episode was translated from (needed to re-export ASS typesetting and to retranslate). No video files.
                             </p>
                         </div>
+                        <div
+                            onClick={() => setBackupMode('compact')}
+                            className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                backupMode === 'compact'
+                                    ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-500 ring-1 ring-indigo-500'
+                                    : 'bg-gray-50 dark:bg-gray-900/50 border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                            }`}
+                        >
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-sm font-semibold text-gray-900 dark:text-white">Compact Backup</span>
+                                <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-medium">
+                                    ~{backupEstimate?.compact_size_human || 'Calculating...'}
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                                Settings, databases, glossaries, translation memory and every translation, without the source subtitle files. A backup of your work, not a server move: ASS episodes cannot be re-exported or retranslated from it.
+                            </p>
+                        </div>
+
                     </div>
 
                     <div className="flex justify-end">

@@ -82,6 +82,53 @@ def resolve_project_priority(project_meta: Optional[Dict]) -> str:
     return "normal"
 
 
+def _stored_tier(meta: Dict) -> str:
+    tp = str(meta.get("translation_priority") or "").lower().strip()
+    return tp if tp in VALID_PRIORITY_TIERS else ""
+
+
+def _sync_priority_fields(metadata: Dict, previous: Optional[Dict]) -> None:
+    """Keep ``translation_priority`` and ``arr_disabled`` in step (disabled == tier "ignored").
+
+    Older code paths flip only ``arr_disabled`` (Sonarr/Radarr sync when a title leaves
+    or returns to the library, the on-demand re-enable, the legacy enable/disable
+    routes); the priority API sets ``translation_priority``. Whichever of the two the
+    caller changed against the stored copy wins. Ignoring remembers the tier it
+    replaced (``priority_before_ignore``) so re-enabling restores it, and a tier set to
+    "ignored" explicitly is marked ``ignored_by_user`` so sync never re-enables it.
+    """
+    if not previous:
+        tier = resolve_project_priority(metadata)
+        if tier != "ignored":
+            metadata.pop("ignored_by_user", None)
+        metadata["translation_priority"] = tier
+        metadata["arr_disabled"] = tier == "ignored"
+        return
+
+    prev_tier = resolve_project_priority(previous)
+    tier = _stored_tier(metadata)
+    disabled = bool(metadata.get("arr_disabled"))
+    if tier and tier != prev_tier:                       # an explicit priority choice
+        if tier == "ignored":
+            metadata["ignored_by_user"] = True
+    elif disabled != (prev_tier == "ignored"):           # a path that only flips arr_disabled
+        before = metadata.get("priority_before_ignore") or previous.get("priority_before_ignore")
+        tier = "ignored" if disabled else (before if before in ("high", "normal", "low") else "normal")
+    else:
+        tier = prev_tier
+
+    if tier == "ignored":
+        if prev_tier != "ignored":
+            metadata["priority_before_ignore"] = prev_tier
+        elif previous.get("ignored_by_user"):
+            metadata.setdefault("ignored_by_user", True)
+    else:
+        metadata.pop("priority_before_ignore", None)
+        metadata.pop("ignored_by_user", None)
+    metadata["translation_priority"] = tier
+    metadata["arr_disabled"] = tier == "ignored"
+
+
 def create_project(project_name: str, metadata: Optional[Dict] = None) -> Dict:
     """Create a new project with default or custom metadata.
     
@@ -287,29 +334,22 @@ def save_project_metadata(project_name: str, metadata: Dict) -> None:
     from utils.storage_modules.stats_and_index import invalidate_arr_library_cache
     invalidate_arr_library_cache()
 
-    if "translation_priority" in metadata:
-        tp = str(metadata.get("translation_priority") or "").lower().strip()
-        if tp not in VALID_PRIORITY_TIERS:
-            tp = "normal"
-        if tp == "normal" and metadata.get("arr_disabled"):
-            tp = "ignored"
-        metadata["translation_priority"] = tp
-        metadata["arr_disabled"] = (tp == "ignored")
-    elif "arr_disabled" in metadata:
-        if metadata["arr_disabled"]:
-            metadata["translation_priority"] = "ignored"
-        elif metadata.get("translation_priority") in ("ignored", None):
-            metadata["translation_priority"] = "normal"
-
-    try:
-        from utils.metadata_index import get_metadata_index
-        get_metadata_index().set_project_disabled(project_name, bool(metadata.get("arr_disabled")))
-    except Exception:
-        pass
-
     metadata_path = _safe_project_dir(project_name) / "project.json"
     with _get_project_lock(project_name):
+        try:
+            previous = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else None
+        except (OSError, ValueError):
+            previous = None
+        was_disabled = bool((previous or {}).get("arr_disabled"))
+        _sync_priority_fields(metadata, previous)
         _atomic_write_json(metadata_path, metadata)
+
+    if previous is None or bool(metadata.get("arr_disabled")) != was_disabled:
+        try:
+            from utils.metadata_index import set_project_disabled
+            set_project_disabled(project_name, bool(metadata.get("arr_disabled")))
+        except Exception:
+            pass
 
 
 def delete_project(project_name: str) -> bool:

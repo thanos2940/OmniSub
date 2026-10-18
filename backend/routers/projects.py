@@ -138,10 +138,11 @@ async def set_project_arr_disabled_endpoint(project_name: str, payload: ProjectA
         raise HTTPException(status_code=404, detail=f"Project '{project_name}' not found")
         
     is_disabled = bool(payload.arr_disabled)
-    priority = "ignored" if is_disabled else "normal"
     proj_meta["arr_disabled"] = is_disabled
-    proj_meta["translation_priority"] = priority
-    storage.save_project_metadata(project_name, proj_meta)
+    if is_disabled:
+        proj_meta["ignored_by_user"] = True
+    storage.save_project_metadata(project_name, proj_meta)  # re-enabling restores the earlier tier
+    priority = proj_meta["translation_priority"]
     
     from utils.translation_queue import get_translation_queue
     queue_changes = get_translation_queue().update_project_priority(project_name, priority)

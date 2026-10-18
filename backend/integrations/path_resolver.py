@@ -39,26 +39,22 @@ class PathResolver:
                 candidate_exists = False
 
             try:
-                drive_root_exists = os.path.exists(f"{drive}:\\")
-            except OSError:
-                drive_root_exists = False
-
-            try:
-                unc_exists = os.path.exists(path_str)
-            except OSError:
-                unc_exists = False
-
-            try:
                 is_server_host = socket.gethostname().lower() == server.lower()
             except Exception:
                 is_server_host = False
 
-            if candidate_exists:
+            if candidate_exists or is_server_host:
                 return candidate
-            if is_server_host:
-                return candidate
-            if (not unc_exists) and drive_root_exists:
-                return candidate
+
+            # A file not written yet (an export target) maps to the local drive only when
+            # its folder is there and the share is not: the drive letter alone could be an
+            # unrelated disk of this machine.
+            try:
+                folder_exists = os.path.isdir(os.path.dirname(candidate))
+                if folder_exists and not os.path.exists(path_str):
+                    return candidate
+            except OSError:
+                pass
 
         # Pattern B (Local drive -> UNC share from configured mappings):
         # Matches: E:\... or E:/...

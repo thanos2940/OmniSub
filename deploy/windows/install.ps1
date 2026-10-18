@@ -10,6 +10,11 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Port 8080 -DataDir D:\OmbiSubData -WhatIf
+  powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -OpenFirewall -KeepAwake
+
+  -OpenFirewall  allows inbound TCP <Port> on Private networks (MorpiceHub and other LAN devices).
+  -KeepAwake     sets the active power plan to never sleep or hibernate on AC power.
+  Both change system settings and need an elevated PowerShell.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -20,7 +25,9 @@ param(
     [string]$TaskName = 'OmbiSub',
     [string]$User = "$env:USERDOMAIN\$env:USERNAME",
     [switch]$SkipBuild,
-    [switch]$AlsoAtLogon
+    [switch]$AlsoAtLogon,
+    [switch]$OpenFirewall,
+    [switch]$KeepAwake
 )
 
 $ErrorActionPreference = 'Stop'
@@ -190,6 +197,32 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
     }
 }
 
+# ---------------------------------------------------------------- host settings (opt-in)
+if ($OpenFirewall) {
+    Step "Windows Firewall: inbound TCP $Port on Private networks"
+    $ruleName = "OmbiSub (TCP $Port)"
+    if ($PSCmdlet.ShouldProcess($ruleName, 'Create or replace the inbound firewall rule')) {
+        try {
+            Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $Port `
+                -Action Allow -Profile Private | Out-Null
+            Ok "Rule '$ruleName' allows inbound TCP $Port on Private networks."
+        } catch {
+            Warn "Could not create the firewall rule (needs an elevated PowerShell): $_"
+        }
+    }
+}
+if ($KeepAwake) {
+    Step 'Power plan: never sleep or hibernate on AC power'
+    if ($PSCmdlet.ShouldProcess('active power plan', 'standby-timeout-ac 0, hibernate-timeout-ac 0')) {
+        powercfg /change standby-timeout-ac 0
+        $standby = $LASTEXITCODE
+        powercfg /change hibernate-timeout-ac 0
+        if ($standby -eq 0 -and $LASTEXITCODE -eq 0) { Ok 'The machine stays awake while plugged in.' }
+        else { Warn 'powercfg could not change the power plan (needs an elevated PowerShell).' }
+    }
+}
+
 # ---------------------------------------------------------------- next steps
 $logDir = if ($DataDir) { Join-Path $DataDir 'logs' } else { Join-Path $Backend 'logs' }
 Write-Host @"
@@ -200,9 +233,9 @@ Next steps
      then switch Autopilot on (grace: 5 minutes).
   3. Sign in to the agent CLIs AS $User : run 'agy' (and/or 'claude') once in a normal terminal as that user.
   4. Queue page -> Agent runner -> Keep watching.
-  5. Keep the machine awake while plugged in:  powercfg /change standby-timeout-ac 0
-     (and hibernate-timeout-ac 0). Task Scheduler cannot do this for you.
-  6. Windows Firewall: allow inbound TCP $Port only if other devices must reach the UI.
+  5. Keep the machine awake while plugged in: re-run with -KeepAwake, or
+     powercfg /change standby-timeout-ac 0  (and hibernate-timeout-ac 0).
+  6. Windows Firewall: only if other devices (MorpiceHub) must reach the UI, re-run with -OpenFirewall.
 Logs: $logDir\ombisub.log   (rotating, 10 MB x 5)
 Update later: Stop-ScheduledTask $TaskName ; git pull ; deploy\windows\install.ps1
 "@

@@ -415,3 +415,29 @@ def test_system_router_endpoints(client, monkeypatch):
     res_up = client.post("/api/system/update", json={"force": False, "target_tag": "v2.3.0"})
     assert res_up.status_code == 200
     assert res_up.json()["status"] == "restarting"
+
+
+@pytest.mark.asyncio
+async def test_apply_update_release_tag_refuses_to_drop_local_commits(monkeypatch):
+    """A checkout with commits the release does not contain is not reset onto the tag."""
+    svc = UpdateService()
+    monkeypatch.setattr(svc, "has_active_jobs", lambda: False)
+    monkeypatch.setattr(svc, "is_git_repo", lambda: True)
+
+    calls = []
+
+    def mock_git(args, timeout=15.0):
+        cmd = " ".join(args)
+        calls.append(cmd)
+        res = MagicMock()
+        res.returncode = 0
+        res.stdout = "3\n" if cmd == "rev-list --count tags/v2.1.0..HEAD" else ""
+        return res
+
+    monkeypatch.setattr(svc, "_run_git", mock_git)
+
+    res = await svc.apply_update(force=False, target_tag="v2.1.0")
+    assert res["success"] is False
+    assert res["status"] == "local_commits"
+    assert not any(c.startswith("reset --hard") for c in calls)
+    assert svc._updating is False
