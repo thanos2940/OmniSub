@@ -76,7 +76,7 @@ def normalize_api_url(url: Optional[str]) -> str:
 DEFAULT_CONFIG = {
     "engine": "antigravity",
     "model": "gemini-3.8-flash-low",
-    "fallback_models": ["claude-sonnet-4-6"],   # tried while the main model's quota is used up
+    "fallback_models": ["claude-sonnet-5-5-low"],   # tried while the main model's quota is used up
     "lanes": 3,                  # episodes translated at the same time
     "per_show": 2,               # at most this many of them from one show
     "chunk_lines": 250,          # lines per request; longer episodes are split at scene changes
@@ -185,6 +185,17 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
     return out
 
 
+# Model names an engine dropped, and what replaces them there (Antigravity names carry an
+# effort suffix: `agy models`). Stored runner settings are upgraded when they are loaded.
+RETIRED_MODELS = {
+    "claude-sonnet-4-6": {"antigravity": "claude-sonnet-5-5-low", "claude": "claude-sonnet-5-5"},
+}
+
+
+def current_model_name(model: str, engine: str) -> str:
+    return RETIRED_MODELS.get(model, {}).get(engine, model)
+
+
 class RunnerConfig(dict):
     """Configuration container for AgentRunner supporting dual dict and attribute access.
 
@@ -196,6 +207,11 @@ class RunnerConfig(dict):
             initial.update(args[0])
         initial.update(kwargs)
         cleaned = clean_config(initial)
+        engine = cleaned.get("engine") or DEFAULT_CONFIG["engine"]
+        if cleaned.get("model"):
+            cleaned["model"] = current_model_name(cleaned["model"], engine)
+        if cleaned.get("fallback_models"):
+            cleaned["fallback_models"] = [current_model_name(m, engine) for m in cleaned["fallback_models"]]
         super().__init__(cleaned)
 
     def __getattr__(self, name: str):
@@ -267,6 +283,7 @@ class AgentRunner:
         self.recovering: Dict[str, Optional[int]] = {k: None for k in self.pauses}
         self.quota: Optional[Dict] = None
         self.quota_lock = threading.Lock()
+        self.quota_unsupported = False  # this agy answers /quota with a model turn: stop asking
         self.status = "stopped"
         self.message = "" if self.enabled else state.get("message", "")
         self._read_log_tail()
@@ -646,13 +663,16 @@ class AgentRunner:
             self.quota_streak[model or "default"] = 0
 
     def quota_status(self, force: bool = False) -> Optional[Dict]:
-        if self.config["engine"] != "antigravity":
+        if self.config["engine"] != "antigravity" or self.quota_unsupported:
             return None
         with self.quota_lock:
             fresh = self.quota and time.time() - self.quota["fetched"] < QUOTA_CACHE_SECONDS
             if force or not fresh:
                 exe = self._exe()
                 groups = agent_cli.antigravity_quota(exe) if exe else None
+                if groups == []:
+                    self.quota_unsupported = True
+                    self.log("Antigravity has no /quota report in this version; quota is tracked from errors only.", "warn")
                 self.quota = {"groups": groups or [], "fetched": time.time()}  # failures are cached too
             return self.quota if self.quota and self.quota["groups"] else None
 
@@ -809,7 +829,7 @@ class AgentRunner:
                 if status == "nothing_to_translate":
                     self.log(f"{item['project_name']} {item['episode_name']}: already fully translated (re-exported).")
                 elif status == "missing_source":
-                    self.log(f"{item['project_name']} {item['episode_name']}: no source subtitle — skipped.", "warn")
+                    self.log(res.get("message") or f"{item['project_name']} {item['episode_name']}: no source subtitle.", "warn")
         return None
 
     def _keep_claims(self) -> None:

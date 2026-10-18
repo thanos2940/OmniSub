@@ -29,7 +29,7 @@ import sys
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -380,6 +380,27 @@ class AgentTaskService:
             item.update(status="running", started_at=now)
             return item
 
+    def _extract_missing_source(self, project_name: str, episode_name: str):
+        """An episode without a source subtitle: pull the embedded track out of its video (as the model
+        worker does) and return ``(cues, error)``. Runs on its own thread and event loop, so it works
+        from the runner's threads and from API requests alike."""
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        from services.embedded_extractor import extract_embedded_for_episode
+
+        def _run():
+            return asyncio.run(extract_embedded_for_episode(project_name, episode_name, force=False, migrate_srt=True))
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                res = ex.submit(_run).result()
+        except Exception as e:
+            logger.warning(f"No source subtitle for {project_name}/{episode_name} and extraction failed: {e}")
+            return [], e
+        logger.info(f"Extracted the source subtitle of {project_name}/{episode_name} from its video "
+                    f"(stream {res.get('stream_index')}, {res.get('format')}, {res.get('line_count')} lines).")
+        return storage.load_episode_data(project_name, episode_name) or [], None
+
     def _release(self, item_id: str, reason: str) -> None:
         """Hand a claimed item back to the queue."""
         q = TranslationQueue()
@@ -406,9 +427,21 @@ class AgentTaskService:
                 cues = parse_subtitle(raw_text, filename=f"sub.{(ext or 'srt').lstrip('.')}")
                 if cues:
                     storage.save_episode(project_name, episode_name, cues)
+        extract_error = None
         if not cues:
-            msg = f"No source subtitle cues for {project_name}/{episode_name} (extract or import a subtitle first)."
-            q.update_status(item["id"], status="failed", error=msg, completed_at=_now())
+            cues, extract_error = self._extract_missing_source(project_name, episode_name)
+        if not cues:
+            msg = f"No source subtitle cues for {project_name}/{episode_name}"
+            msg += f": extracting one from the video failed ({extract_error})." if extract_error else "."
+            ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
+            # A share that dropped out is worth retrying; a video without a usable track is not.
+            offline = (extract_error is not None and ep_meta.get("arr_media_path")
+                       and "reachable" in str(extract_error).lower() and int(item.get("attempts") or 0) < 5)
+            if offline:
+                retry_at = (datetime.now(timezone.utc) + timedelta(minutes=30)).isoformat()
+                q.update_status(item["id"], status="pending", error=msg, started_at=None, next_retry_at=retry_at)
+            else:
+                q.update_status(item["id"], status="failed", error=msg, completed_at=_now())
             self._set_item_options(item["id"], agent_task_id=None)
             return {"success": False, "status": "missing_source", "project_name": project_name,
                     "episode_name": episode_name, "message": msg}

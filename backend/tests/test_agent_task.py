@@ -933,3 +933,64 @@ class TestMisalignedTranslations:
         assert not aw.looks_untranslated("Gunther is...", "Ο Γκούντερ είναι...", "el")
         assert not aw.looks_untranslated("We now begin the 57th\nExterior Scouting Mission!",
                                          r"Ξεκινάμε τώρα την 57η\NΑποστολή Εξερεύνησης!", "el")
+
+
+# ---------------------------------------------------------------- no source subtitle yet
+
+def _no_source_project(name, **ep_meta):
+    storage.create_project(name, {"show_name": name, "target_language": "Greek"})
+    storage.save_episode(name, "S01E01", [])
+    if ep_meta:
+        storage.save_episode_metadata(name, "S01E01", ep_meta)
+
+
+def test_missing_source_is_extracted_from_the_video(service, monkeypatch):
+    """An episode with only a video gets its embedded English track pulled, then is claimed as usual."""
+    import services.embedded_extractor as ex
+    calls = []
+
+    async def fake_extract(project, episode, **kw):
+        calls.append((project, episode))
+        storage.save_episode(project, episode, [
+            {"index": 1, "start": "00:00:01,000", "end": "00:00:02,000", "original": "Where were you?"},
+            {"index": 2, "start": "00:00:03,000", "end": "00:00:04,000", "original": "At the station."},
+        ])
+        return {"stream_index": 2, "format": "ass", "line_count": 2}
+
+    monkeypatch.setattr(ex, "extract_embedded_for_episode", fake_extract)
+    _no_source_project("Video Only Show")
+    qid = _enqueue("Video Only Show")
+    res = service.prepare_task_workspace(qid)
+    assert calls == [("Video Only Show", "S01E01")]
+    assert res["status"] == "claimed", res
+    assert _row(qid)["status"] == "running"
+
+
+def test_video_without_a_usable_track_fails_with_the_reason(service, monkeypatch):
+    import services.embedded_extractor as ex
+
+    async def no_tracks(project, episode, **kw):
+        raise ValueError("No subtitle tracks found in media file: ep.mkv")
+
+    monkeypatch.setattr(ex, "extract_embedded_for_episode", no_tracks)
+    _no_source_project("No Track Show", arr_media_path=r"E:\Shows\No Track Show\ep.mkv")
+    qid = _enqueue("No Track Show")
+    res = service.prepare_task_workspace(qid)
+    assert res["status"] == "missing_source"
+    row = _row(qid)
+    assert row["status"] == "failed"
+    assert "No subtitle tracks found" in row["last_error"]
+
+
+def test_unreachable_video_is_retried_later(service, monkeypatch):
+    import services.embedded_extractor as ex
+
+    async def offline(project, episode, **kw):
+        raise ValueError("No reachable media file linked for episode 'S01E01'.")
+
+    monkeypatch.setattr(ex, "extract_embedded_for_episode", offline)
+    _no_source_project("Offline Show", arr_media_path=r"E:\Shows\Offline Show\ep.mkv")
+    qid = _enqueue("Offline Show")
+    service.prepare_task_workspace(qid)
+    row = _row(qid)
+    assert row["status"] == "pending" and row["next_retry_at"]

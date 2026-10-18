@@ -290,7 +290,7 @@ const AgentRunnerPanel = ({ toast }) => {
                     </label>
                     <label className="text-[11px] font-semibold text-gray-500 space-y-1 col-span-2">
                         <span>Fallback models (while the main one is out of quota)</span>
-                        <input className={field} value={form.fallback_models} placeholder="e.g. claude-sonnet-4-6"
+                        <input className={field} value={form.fallback_models} placeholder="e.g. claude-sonnet-5-5-low"
                             onChange={e => setForm({ ...form, fallback_models: e.target.value })} />
                     </label>
                     <label className="text-[11px] font-semibold text-gray-500 space-y-1">

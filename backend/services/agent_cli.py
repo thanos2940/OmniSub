@@ -163,7 +163,8 @@ def family(model: str) -> str:
 
 def antigravity_quota(exe: List[str]) -> Optional[List[Dict]]:
     """Antigravity's quota groups — ``agy -p /quota --output-format json`` — without spending quota.
-    Each group: {name, description, buckets: [{window, remaining_fraction, reset_time}]}."""
+    Each group: {name, description, buckets: [{window, remaining_fraction, reset_time}]}.
+    None: no report this time; []: this CLI version has no /quota (asking again would spend quota)."""
     try:
         proc = subprocess.run([*exe, "-p", "/quota", "--output-format", "json"], capture_output=True, text=True,
                               encoding="utf-8", errors="replace", timeout=60, stdin=subprocess.DEVNULL, creationflags=_SUBPROCESS_FLAGS)
@@ -173,6 +174,8 @@ def antigravity_quota(exe: List[str]) -> Optional[List[Dict]]:
         if line.startswith("{"):
             try:
                 data = json.loads(line)
+                if "command" not in data and ("conversation_id" in data or "response" in data):
+                    return []  # this agy has no /quota command: it ran it as a prompt (a spent request)
                 return ((data.get("command") or {}).get("data") or {}).get("groups") or None
             except json.JSONDecodeError:
                 return None

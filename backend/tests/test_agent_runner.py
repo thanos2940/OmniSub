@@ -278,7 +278,7 @@ class TestRunner:
         runner = _run(tmp_path)
         assert all(t == f"Ελ: {s}" for s, t in _greek())
         assert "gemini-3.8-flash-low" in runner.pauses
-        assert all(p.startswith("model: claude-sonnet-4-6") for p in _prompts(tmp_path))
+        assert all(p.startswith("model: claude-sonnet-5-5-low") for p in _prompts(tmp_path))
         saved = json.loads((tmp_path / "state" / "agent_runner.json").read_text(encoding="utf-8"))
         assert "gemini-3.8-flash-low" in saved["pauses"]  # pauses survive a restart
 
@@ -299,7 +299,7 @@ class TestRunner:
         assert all(t == f"Ελ: {s}" for s, t in _greek())
         log = _log(runner)
         assert len(gemini_api["calls"]) == 1 and "the Gemini API did not translate" in log  # tried first
-        assert "trying claude-sonnet-4-6" in log
+        assert "trying claude-sonnet-5-5-low" in log
 
     def test_refused_part_is_set_aside_and_sent_to_the_gemini_api_at_the_end(self, tmp_path, monkeypatch, gemini_api):
         monkeypatch.setenv("FAKE_AGY_BLOCK_MODELS", "gemini")
@@ -339,9 +339,9 @@ class TestRunner:
         runner = _run(tmp_path)
         assert all(t == f"Ελ: {s}" for s, t in _greek())
         assert gemini_api["calls"] == []
-        assert f"sending the {len(LINES)} refused line(s) of Runner Show — S01E01 to claude-sonnet-4-6" in _log(runner)
+        assert f"sending the {len(LINES)} refused line(s) of Runner Show — S01E01 to claude-sonnet-5-5-low" in _log(runner)
         assert [p.splitlines()[0] for p in _prompts(tmp_path)] == ["model: gemini-3.8-flash-low",
-                                                                   "model: claude-sonnet-4-6"]
+                                                                   "model: claude-sonnet-5-5-low"]
 
     def test_rescue_switched_off_narrows_the_refusal_down_on_the_spot(self, tmp_path, monkeypatch, gemini_api):
         monkeypatch.setenv("FAKE_AGY_BLOCK_MODELS", "gemini")
@@ -827,3 +827,32 @@ class TestNudge:
         monkeypatch.setattr(agent_runner, "_runner", None)
         queue_service.enqueue_translation("Nudge Show", "S01E03", PRIORITY_MANUAL, {})
         assert agent_runner._runner is None
+
+
+def test_stored_retired_fallback_model_is_upgraded(tmp_path):
+    """Antigravity dropped claude-sonnet-4-6; a runner saved with it uses Sonnet 5.5 instead."""
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "agent_runner.json").write_text(json.dumps(
+        {"config": {"engine": "antigravity", "fallback_models": ["claude-sonnet-4-6", "gemini-3.8-flash-high"]}}),
+        encoding="utf-8")
+    runner = AgentRunner(service=AgentTaskService(tasks_dir=tmp_path / "t"), exe_override={"antigravity": FAKE},
+                         state_dir=state)
+    assert runner.config["fallback_models"] == ["claude-sonnet-5-5-low", "gemini-3.8-flash-high"]
+
+
+def test_quota_is_not_asked_again_when_agy_has_no_quota_command(tmp_path, monkeypatch):
+    """A CLI that runs /quota as a prompt spends a request each time: ask once, then stop."""
+    calls = []
+    monkeypatch.setattr(agent_cli, "antigravity_quota", lambda exe: calls.append(exe) or [])
+    runner = AgentRunner(service=AgentTaskService(tasks_dir=tmp_path / "t"), exe_override={"antigravity": FAKE},
+                         state_dir=tmp_path / "state")
+    assert runner.quota_status(force=True) is None
+    assert runner.quota_status(force=True) is None
+    assert len(calls) == 1 and runner.quota_unsupported
+
+
+def test_antigravity_quota_recognises_a_prompt_reply(monkeypatch):
+    reply = '{"conversation_id":"x","status":"SUCCESS","response":"","usage":{"total_tokens":29728}}'
+    monkeypatch.setattr(agent_cli.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=reply + "\n"))
+    assert agent_cli.antigravity_quota(["agy"]) == []
