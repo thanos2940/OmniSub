@@ -6,6 +6,8 @@ pydantic>=2.10.0
 google-adk>=1.10.0
 google-genai>=0.1.1
 aiosqlite>=0.19.0
+# ADK session store uses SQLAlchemy asyncio; SQLAlchemy 2.1 no longer installs greenlet itself
+greenlet>=3.0
 lancedb>=0.20.0
 sentence-transformers>=4.0.0
 pyarrow>=14.0.0
