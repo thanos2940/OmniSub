@@ -164,3 +164,8 @@ def get_or_create_cache(
         metadata["context_cache_fingerprint"] = current_fingerprint
         metadata["context_cache_expiry"] = None
         return None, metadata
+
+
+# Backward-compatibility alias
+get_or_create_context_cache = get_or_create_cache
+

@@ -10,7 +10,7 @@ from typing import Dict, List
 
 from utils.srt_parser import timecode_to_ms
 
-_TAG_RE = re.compile(r"<[^>]+>")
+_TAG_RE = re.compile(r"(<[^>]+>|\{[^}]+\})")
 
 
 def _duration_seconds(timecode: str) -> float:

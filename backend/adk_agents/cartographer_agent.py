@@ -11,6 +11,15 @@ from typing import Dict, List, Literal, Optional
 
 
 def _build_instruction(target_language: str) -> str:
+    jp_names_rule = ""
+    if (target_language or "").strip().lower() in ("greek", "el", "ελληνικά"):
+        jp_names_rule = (
+            "\n- JAPANESE NAMES TONOS ACCENTUATION IN GREEK: When transliterating Japanese names into Greek, "
+            "the accent (τόνος) is placed on the FIRST syllable (e.g. Tanjiro -> Τάντζιρο, NOT Ταντζίρο; "
+            "Zenitsu -> Ζένιτσου, NOT Ζενίτσου; Nezuko -> Νέζουκο, NOT Νεζούκο; Naruto -> Νάρουτο; Sasuke -> Σάσκε; "
+            "Sakura -> Σάκουρα; Inosuke -> Ίνοσουκε; Sanji -> Σάντζι; Kibutsuji -> Κίμπουτσουτζι). Never place the tonos on the middle or final syllable."
+        )
+
     return f"""You are a glossary builder for subtitle translation. Your job is to produce a COMPREHENSIVE glossary of terms for a show/movie, translated into {target_language}.
 
 You have TWO sources of terms:
@@ -26,7 +35,7 @@ Categories to cover thoroughly:
 - Episode/arc-specific terminology, catchphrases, invented words
 
 Skip: common words, generic verbs/adjectives, terms with no show-specific meaning.
-Deduplication: skip any term already in the provided existing-terms list (case-insensitive).
+Deduplication: skip any term already in the provided existing-terms list (case-insensitive).{jp_names_rule}
 
 AIM FOR 40-80+ TERMS. Be thorough — a translator needs every proper noun and special term to maintain consistency.
 
@@ -65,13 +74,7 @@ def create_cartographer_agent(
     Returns:
         ADK Agent for tag-based extraction
     """
-    is_local = model_name.startswith("local/")
-    is_gemma = "gemma" in model_name.lower()
-    
     instruction = _build_instruction(target_language)
-    if is_local and is_gemma:
-        # User requested thinking trigger for Gemma
-        instruction = "<|think|> " + instruction
     
     return Agent(
         name="CartographerAgent",
@@ -80,7 +83,8 @@ def create_cartographer_agent(
             temperature=temperature,
             top_k=top_k,
             top_p=top_p,
-            response_schema=None
+            response_schema=None,
+            role="glossary",
         ),
         instruction=instruction,
         tools=[],

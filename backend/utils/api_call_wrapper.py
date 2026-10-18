@@ -2,31 +2,52 @@ import inspect
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable, Awaitable, Optional
 import google.api_core.exceptions
 import re
 
 logger = logging.getLogger(__name__)
 
+
 def parse_retry_after(exception: Exception) -> float:
     """
-    Attempt to extract retry-after time from Gemini exception message or headers.
+    Attempt to extract retry-after time from Gemini exception message, details, or headers.
     """
-    message = str(exception)
-    # Search for "retry after X seconds" or similar patterns
-    match = re.search(r"retry after (\d+)\.?\d* seconds", message, re.IGNORECASE)
+    parts = [str(exception)]
+    if hasattr(exception, "message") and exception.message:
+        parts.append(str(exception.message))
+    if hasattr(exception, "details") and callable(exception.details):
+        try:
+            parts.append(str(exception.details()))
+        except Exception:
+            pass
+    if hasattr(exception, "args"):
+        for arg in exception.args:
+            if isinstance(arg, (str, dict)):
+                parts.append(str(arg))
+
+    message = " ".join(parts)
+
+    # 1. "retry after X seconds" or "retry after X s"
+    match = re.search(r"retry[-_\s]after\s*[:=]?\s*(\d+\.?\d*)\s*(?:seconds?|s)?", message, re.IGNORECASE)
     if match:
         return float(match.group(1))
-    
-    # Try looking for retryDelay or retry in seconds patterns in JSON-like strings
-    match_delay = re.search(r"retryDelay':\s*'(\d+)s'", message, re.IGNORECASE)
+
+    # 2. "retryDelay': 'Xs'" or "retry_delay"
+    match_delay = re.search(r"retry_?delay['\"]?\s*[:=]\s*['\"]?(\d+\.?\d*)s?['\"]?", message, re.IGNORECASE)
     if match_delay:
         return float(match_delay.group(1))
 
-    match_retry_in = re.search(r"retry in (\d+)\.?\d*s", message, re.IGNORECASE)
+    # 3. "retry in X seconds" or "retry in Xs"
+    match_retry_in = re.search(r"retry\s+in\s+(\d+\.?\d*)\s*(?:seconds?|s)?", message, re.IGNORECASE)
     if match_retry_in:
         return float(match_retry_in.group(1))
-    
+
+    # 4. "quota reset in X seconds"
+    match_reset = re.search(r"reset\s+in\s+(\d+\.?\d*)\s*(?:seconds?|s)?", message, re.IGNORECASE)
+    if match_reset:
+        return float(match_reset.group(1))
+
     # Default to 60s if we know it's a rate limit but can't find a time
     return 60.0
 
@@ -39,8 +60,31 @@ def is_daily_quota_error(exception: Exception) -> bool:
     "per day" phrasing. We match those markers rather than counting requests
     ourselves. A plain per-minute 429 returns False (handled as backoff).
     """
-    msg = str(exception).lower()
-    
+    parts = [str(exception).lower()]
+    if hasattr(exception, "message") and exception.message:
+        parts.append(str(exception.message).lower())
+    if hasattr(exception, "details") and callable(exception.details):
+        try:
+            parts.append(str(exception.details()).lower())
+        except Exception:
+            pass
+    if hasattr(exception, "args"):
+        for arg in exception.args:
+            if isinstance(arg, (str, dict)):
+                parts.append(str(arg).lower())
+
+    msg = " ".join(parts)
+
+    # Exact daily quotaId metric markers always indicate daily quota exhaustion
+    definite_daily_metric_markers = (
+        "generaterequestsperday",
+        "requestsperday",
+        "perdayperproject",
+        "generaterequestsperdayperprojectpermodel",
+    )
+    if any(m in msg for m in definite_daily_metric_markers):
+        return True
+
     # If the message explicitly mentions per-minute or token-per-minute limits,
     # it is a short-term throttle, not a daily quota exhaustion.
     per_minute_markers = (
@@ -54,6 +98,7 @@ def is_daily_quota_error(exception: Exception) -> bool:
         "tokensperminute",
         "tpm",
         "rpm",
+        "generaterequestsperminute",
     )
     if any(m in msg for m in per_minute_markers):
         return False
@@ -71,8 +116,10 @@ def is_daily_quota_error(exception: Exception) -> bool:
         "exhausted your daily",
         "free tier limit",
         "tomorrow",
+        "daily request limit",
     )
     return any(m in msg for m in daily_markers)
+
 
 async def rate_limited_call(
     coro_factory: Callable[[], Awaitable[Any]],
@@ -85,10 +132,10 @@ async def rate_limited_call(
     Wraps an API call with proactive throttling and reactive backoff.
     """
     last_exception = None
-    
+
     for attempt in range(max_retries + 1):
         await rate_limiter.acquire()
-        
+
         try:
             res_or_coro = coro_factory()
             if inspect.isawaitable(res_or_coro):
@@ -100,7 +147,7 @@ async def rate_limited_call(
             elif hasattr(rate_limiter, "clear_daily_limit"):
                 rate_limiter.clear_daily_limit()
             return res
-        
+
         except (google.api_core.exceptions.ResourceExhausted,
                 google.api_core.exceptions.TooManyRequests) as e:
             last_exception = e
@@ -122,40 +169,39 @@ async def rate_limited_call(
             if attempt == max_retries:
                 logger.error("Max retries reached for rate limit.")
                 raise
-            
+
             # Exponential backoff
             delay = min(base_delay * (2 ** attempt), max_delay)
             # Ensure we wait at least as long as the API suggested
             delay = max(delay, retry_after)
             await asyncio.sleep(delay)
-            
+
         except (google.api_core.exceptions.ServiceUnavailable,
                 google.api_core.exceptions.DeadlineExceeded) as e:
             # Transient 503 or 504 errors
             last_exception = e
             logger.warning(f"Transient error ({type(e).__name__}). Attempt {attempt + 1}/{max_retries + 1}. Retrying...")
-            
+
             if attempt == max_retries:
                 logger.error(f"Max retries reached for transient error: {e}")
                 raise
-            
+
             delay = min(base_delay * (2 ** attempt), max_delay)
             await asyncio.sleep(delay)
-            
+
         except Exception as e:
             # Check for rate limit indicators in the exception type or message
-            # This catches internal types like _ResourceExhaustedError or gRPC variants
             e_name = type(e).__name__
             msg = str(e).lower()
-            
+
             is_rate_limit = (
-                "ResourceExhausted" in e_name or 
+                "ResourceExhausted" in e_name or
                 "TooManyRequests" in e_name or
                 "429" in msg or
                 "resource_exhausted" in msg or
                 "quota exceeded" in msg
             )
-            
+
             if is_rate_limit:
                 last_exception = e
                 retry_after = parse_retry_after(e)
@@ -168,21 +214,64 @@ async def rate_limited_call(
                     from utils.rate_limiter import DailyLimitExhausted
                     reset_time = getattr(rate_limiter, "_daily_reset", None)
                     raise DailyLimitExhausted(getattr(rate_limiter, "_daily_count", 0), getattr(rate_limiter, "daily_limit", 0), reset_time)
-                
+
                 logger.warning(f"Throttling (caught as {e_name}). Attempt {attempt + 1}/{max_retries + 1}. Retrying...")
                 rate_limiter.report_rate_limit(retry_after)
-                
+
                 if attempt == max_retries:
                     raise
-                
+
                 delay = min(base_delay * (2 ** attempt), max_delay)
                 delay = max(delay, retry_after)
                 await asyncio.sleep(delay)
                 continue
 
-            # Other errors (400, 401, 500 etc) should probably fail immediately
+            # The google-genai SDK raises its own ServerError (with .code) instead of the
+            # api_core exceptions above: a 502/503/504 ("model is experiencing high demand")
+            # is just as transient.
+            if getattr(e, "code", None) in (502, 503, 504) or "UNAVAILABLE" in str(e):
+                last_exception = e
+                logger.warning(f"Transient error ({e_name} {getattr(e, 'code', '')}). "
+                               f"Attempt {attempt + 1}/{max_retries + 1}. Retrying...")
+                if attempt == max_retries:
+                    logger.error(f"Max retries reached for transient error: {e}")
+                    raise
+                await asyncio.sleep(min(base_delay * (2 ** attempt), max_delay))
+                continue
+
+            # Other errors (400, 401, 500 etc) should fail immediately
             logger.error(f"Non-retryable error in rate_limited_call: {e_name}: {e}")
             raise
 
     if last_exception:
         raise last_exception
+
+
+async def call_with_retry(
+    func: Callable[..., Any],
+    *args,
+    rate_limiter: Any = None,
+    max_retries: int = 3,
+    base_delay: float = 2.0,
+    max_delay: float = 60.0,
+    **kwargs,
+) -> Any:
+    """Universal call wrapper with proactive throttling and reactive backoff.
+
+    Supports both sync and async callable targets.
+    """
+    if rate_limiter is None:
+        from utils.rate_limiter import translation_rate_limiter
+        rate_limiter = translation_rate_limiter
+
+    def _coro_factory():
+        res = func(*args, **kwargs)
+        return res
+
+    return await rate_limited_call(
+        _coro_factory,
+        rate_limiter=rate_limiter,
+        max_retries=max_retries,
+        base_delay=base_delay,
+        max_delay=max_delay,
+    )

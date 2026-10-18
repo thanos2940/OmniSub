@@ -1,8 +1,10 @@
 import os
 import asyncio
 import logging
+import time
+import threading
 from datetime import datetime
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Header, Query
@@ -85,51 +87,73 @@ async def arr_status():
 async def sonarr_test(request: Optional[ArrTestRequest] = None):
     """Test Sonarr connection with saved or provided settings."""
     config = storage.load_global_config()
-    cfg = SonarrConfig(
-        base_url=(request and request.url) or config.get("sonarr_url", "http://localhost:8989"),
-        api_key=(request and request.api_key) or config.get("sonarr_api_key", ""),
-    )
+    target_url = (request and (request.url or request.sonarr_url)) or config.get("sonarr_url", "http://localhost:8989")
+    target_key = (request and (request.api_key or request.sonarr_api_key)) or config.get("sonarr_api_key", "")
+    cfg = SonarrConfig(base_url=target_url, api_key=target_key)
     if not cfg.api_key:
-        return {"connected": False, "error": "Sonarr API key not configured"}
-    return await sonarr_test_connection(cfg)
+        return {"connected": False, "success": False, "error": "Sonarr API key not configured"}
+    res = await sonarr_test_connection(cfg)
+    res["success"] = res.get("connected", False)
+    return res
 
 
 @router.post("/integrations/radarr/test")
 async def radarr_test(request: Optional[ArrTestRequest] = None):
     """Test Radarr connection with saved or provided settings."""
     config = storage.load_global_config()
-    cfg = RadarrConfig(
-        base_url=(request and request.url) or config.get("radarr_url", "http://localhost:7878"),
-        api_key=(request and request.api_key) or config.get("radarr_api_key", ""),
-    )
+    target_url = (request and (request.url or request.radarr_url)) or config.get("radarr_url", "http://localhost:7878")
+    target_key = (request and (request.api_key or request.radarr_api_key)) or config.get("radarr_api_key", "")
+    cfg = RadarrConfig(base_url=target_url, api_key=target_key)
     if not cfg.api_key:
-        return {"connected": False, "error": "Radarr API key not configured"}
-    return await radarr_test_connection(cfg)
+        return {"connected": False, "success": False, "error": "Radarr API key not configured"}
+    res = await radarr_test_connection(cfg)
+    res["success"] = res.get("connected", False)
+    return res
+
+
+def _probe_path_sync(resolver: PathResolver, remote_path: str):
+    """Synchronous filesystem probing offloaded to worker thread (INT-P1-01)."""
+    resolved = resolver.resolve(remote_path)
+    exists = resolver.is_reachable(resolved)
+    is_file = False
+    readable = False
+    if exists:
+        try:
+            p_obj = Path(resolved)
+            is_file = p_obj.is_file()
+            readable = os.access(resolved, os.R_OK)
+        except Exception:
+            pass
+    return resolved, exists, is_file, readable
 
 
 @router.post("/integrations/arr/test-path")
 async def arr_test_path(request: PathTestRequest):
     """Test path mapping: resolve a remote path and check local accessibility."""
     resolver = PathResolver(request.path_mappings)
-    resolved_path = resolver.resolve(request.remote_path)
-    exists = resolver.is_reachable(resolved_path)
-    is_file = False
-    readable = False
-    if exists:
-        try:
-            p_obj = Path(resolved_path)
-            is_file = p_obj.is_file()
-            readable = os.access(resolved_path, os.R_OK)
-        except Exception:
-            pass
-    return {
-        "remote_path": request.remote_path,
-        "resolved_path": resolved_path,
-        "exists": exists,
-        "is_file": is_file,
-        "readable": readable,
-        "error": None if exists else f"Path does not exist or is unreachable: {resolved_path}",
-    }
+    try:
+        resolved_path, exists, is_file, readable = await asyncio.wait_for(
+            asyncio.to_thread(_probe_path_sync, resolver, request.remote_path),
+            timeout=5.0,
+        )
+        return {
+            "remote_path": request.remote_path,
+            "resolved_path": resolved_path,
+            "exists": exists,
+            "is_file": is_file,
+            "readable": readable,
+            "error": None if exists else f"Path does not exist or is unreachable: {resolved_path}",
+        }
+    except asyncio.TimeoutError:
+        resolved_path = resolver.resolve(request.remote_path)
+        return {
+            "remote_path": request.remote_path,
+            "resolved_path": resolved_path,
+            "exists": False,
+            "is_file": False,
+            "readable": False,
+            "error": f"Path probe timed out after 5.0s (SMB share or network host may be offline): {resolved_path}",
+        }
 
 
 @router.post("/integrations/sonarr/sync")
@@ -297,6 +321,51 @@ def _verify_webhook_token(token: Optional[str], header_token: Optional[str]) -> 
         raise HTTPException(status_code=401, detail="Invalid or missing webhook token")
 
 
+class WebhookDeduplicator:
+    """In-memory sliding window deduplicator for rapid-fire *arr webhooks (INT-P1-02)."""
+
+    def __init__(self, window_seconds: float = 60.0):
+        self.window_seconds = window_seconds
+        self._seen: Dict[Tuple[str, str, str], float] = {}
+        self._lock = threading.Lock()
+
+    def is_duplicate(self, service: str, entity_id: Any, file_id: Any) -> bool:
+        if entity_id is None or file_id is None:
+            return False
+        key = (service, str(entity_id), str(file_id))
+        now = time.monotonic()
+        with self._lock:
+            # Evict entries older than sliding window
+            expired = [k for k, ts in self._seen.items() if now - ts > self.window_seconds]
+            for k in expired:
+                del self._seen[k]
+
+            if key in self._seen:
+                return True
+            self._seen[key] = now
+            return False
+
+    def clear(self):
+        with self._lock:
+            self._seen.clear()
+
+
+_webhook_deduplicator = WebhookDeduplicator(window_seconds=60.0)
+
+_AUTOPILOT_EXTRA_EVENTS = {"sonarr": ("EpisodeFileDelete",), "radarr": ("MovieFileDelete",)}
+
+
+def _autopilot_enabled() -> bool:
+    return bool(storage.load_global_config().get("autopilot_enabled", False))
+
+
+async def _autopilot_ingest(source: str, payload: Dict) -> Dict:
+    """Hand a validated webhook to the autopilot's watcher (it deduplicates by arr file id)."""
+    from services.autopilot.service import get_service
+    item = await asyncio.to_thread(get_service().watcher.ingest_webhook, source, payload)
+    return {"status": "queued", "autopilot": True, "item_id": item["id"] if item else None}
+
+
 @router.post("/api/webhook/sonarr")
 async def sonarr_webhook(
     payload: Dict,
@@ -306,12 +375,51 @@ async def sonarr_webhook(
 ):
     """Receive Sonarr 'Download' events and import the new subtitle."""
     _verify_webhook_token(token, x_omnisub_token)
+
+    # INT-P1-06: Synchronous webhook payload validation
+    val_err = MediaSyncEngine.validate_sonarr_payload(payload)
+    if val_err:
+        logger.warning(f"Sonarr webhook validation rejected: {val_err}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid Sonarr webhook payload", "details": val_err},
+        )
+
     event_type = payload.get("eventType", "")
     logger.info(f"Sonarr webhook: {event_type}")
     if event_type == "Test":
         return {"status": "success", "message": "Webhook connection verified"}
-    if event_type not in ("Download", "EpisodeFileRenamed"):
+    autopilot = _autopilot_enabled()
+    if event_type not in ("Download", "EpisodeFileRenamed")             and not (autopilot and event_type in _AUTOPILOT_EXTRA_EVENTS["sonarr"]):
         return {"status": "ignored", "eventType": event_type}
+
+    # INT-P1-02: Extract deduplication keys (series_id, episode_file_id)
+    series = payload.get("series") or {}
+    episode_file = payload.get("episodeFile") or {}
+    series_id = series.get("id")
+    episode_file_id = episode_file.get("id")
+    if not episode_file_id:
+        episodes = payload.get("episodes") or []
+        if episodes and isinstance(episodes, list) and isinstance(episodes[0], dict):
+            episode_file_id = episodes[0].get("episodeFileId") or episodes[0].get("id")
+
+    # Autopilot: only the import event is a duplicate worth dropping here (its store deduplicates
+    # by file id anyway); a rename or delete of that file seconds later must still get through.
+    if series_id is not None and episode_file_id is not None and not (autopilot and event_type != "Download"):
+        if _webhook_deduplicator.is_duplicate("sonarr", series_id, episode_file_id):
+            logger.info(
+                f"Sonarr webhook deduplicated (sliding window 60s): "
+                f"series_id={series_id}, episode_file_id={episode_file_id}, eventType={event_type}"
+            )
+            return {
+                "status": "ignored",
+                "reason": "duplicate",
+                "message": f"Deduplicated event within 60s window for series {series_id}, episode file {episode_file_id}",
+                "eventType": event_type,
+            }
+
+    if autopilot:
+        return await _autopilot_ingest("sonarr", payload)
 
     background_tasks.add_task(_process_sonarr_webhook, payload)
     return {"status": "queued"}
@@ -326,12 +434,45 @@ async def radarr_webhook(
 ):
     """Receive Radarr 'Download' events and import the new subtitle."""
     _verify_webhook_token(token, x_omnisub_token)
+
+    # INT-P1-06: Synchronous webhook payload validation
+    val_err = MediaSyncEngine.validate_radarr_payload(payload)
+    if val_err:
+        logger.warning(f"Radarr webhook validation rejected: {val_err}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Invalid Radarr webhook payload", "details": val_err},
+        )
+
     event_type = payload.get("eventType", "")
     logger.info(f"Radarr webhook: {event_type}")
     if event_type == "Test":
         return {"status": "success", "message": "Webhook connection verified"}
-    if event_type not in ("Download", "MovieFileRenamed"):
+    autopilot = _autopilot_enabled()
+    if event_type not in ("Download", "MovieFileRenamed")             and not (autopilot and event_type in _AUTOPILOT_EXTRA_EVENTS["radarr"]):
         return {"status": "ignored", "eventType": event_type}
+
+    # INT-P1-02: Extract deduplication keys (movie_id, movie_file_id)
+    movie = payload.get("movie") or {}
+    movie_file = payload.get("movieFile") or {}
+    movie_id = movie.get("id")
+    movie_file_id = movie_file.get("id")
+
+    if movie_id is not None and movie_file_id is not None and not (autopilot and event_type != "Download"):
+        if _webhook_deduplicator.is_duplicate("radarr", movie_id, movie_file_id):
+            logger.info(
+                f"Radarr webhook deduplicated (sliding window 60s): "
+                f"movie_id={movie_id}, movie_file_id={movie_file_id}, eventType={event_type}"
+            )
+            return {
+                "status": "ignored",
+                "reason": "duplicate",
+                "message": f"Deduplicated event within 60s window for movie {movie_id}, movie file {movie_file_id}",
+                "eventType": event_type,
+            }
+
+    if autopilot:
+        return await _autopilot_ingest("radarr", payload)
 
     background_tasks.add_task(_process_radarr_webhook, payload)
     return {"status": "queued"}
@@ -346,8 +487,8 @@ async def _process_sonarr_webhook(payload: Dict):
         location = await engine.process_sonarr_webhook(payload, storage, parse_srt)
         if location and config.get("arr_auto_translate"):
             project_name, episode_name = location.split("/", 1)
-            from services.queue_service import enqueue_translation, PRIORITY_WEBHOOK
-            enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK)
+            from services.queue_service import enqueue_webhook_episode
+            enqueue_webhook_episode(project_name, episode_name)
     except Exception as e:
         logger.error(f"Sonarr webhook processing failed: {e}", exc_info=True)
 
@@ -361,7 +502,7 @@ async def _process_radarr_webhook(payload: Dict):
         location = await engine.process_radarr_webhook(payload, storage, parse_srt)
         if location and config.get("arr_auto_translate"):
             project_name, episode_name = location.split("/", 1)
-            from services.queue_service import enqueue_translation, PRIORITY_WEBHOOK
-            enqueue_translation(project_name, episode_name, PRIORITY_WEBHOOK)
+            from services.queue_service import enqueue_webhook_episode
+            enqueue_webhook_episode(project_name, episode_name)
     except Exception as e:
         logger.error(f"Radarr webhook processing failed: {e}", exc_info=True)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Sparkles, 
@@ -12,108 +12,156 @@ import {
     Edit3
 } from 'lucide-react';
 import { api } from '../api';
+import { useJobs } from '../context/JobContext';
 
 const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
-    const [job, setJob] = useState(null);
-    const [isPolling, setIsPolling] = useState(false);
+    const { activeJobs, addJob, cancelJob } = useJobs();
+    const [pipelineJobId, setPipelineJobId] = useState(null);
     const [editedContent, setEditedContent] = useState("");
     const [editedGlossary, setEditedGlossary] = useState({ terms: [] });
     const [episodes, setEpisodes] = useState([]);
     const [isConfirming, setIsConfirming] = useState(false);
-    
-    const pollingRef = useRef(null);
+    const [isStarting, setIsStarting] = useState(false);
+    const isMounted = useRef(true);
+    const prevStageRef = useRef(null);
 
-    // Initial load and job polling
+    const activeJobsRef = useRef(activeJobs);
     useEffect(() => {
-        startPipeline();
-        fetchEpisodes();
-        return () => stopPolling();
-    }, []);
+        activeJobsRef.current = activeJobs;
+    }, [activeJobs]);
 
-    const fetchEpisodes = async () => {
+    const isExecutingRef = useRef(false);
+    const hasTriggeredRef = useRef(false);
+    const isConfirmingRef = useRef(false);
+    const hasCompletedRef = useRef(false);
+    const prevProjectRef = useRef(projectName);
+
+    useEffect(() => {
+        if (prevProjectRef.current !== projectName) {
+            prevProjectRef.current = projectName;
+            hasTriggeredRef.current = false;
+            hasCompletedRef.current = false;
+            setPipelineJobId(null);
+        }
+    }, [projectName]);
+
+    const fetchEpisodes = useCallback(async () => {
         try {
             const res = await api.getEpisodes(projectName);
-            setEpisodes(res.data);
+            if (isMounted.current) {
+                setEpisodes(res.data || []);
+            }
         } catch (e) {
             console.error("Failed to fetch episodes", e);
         }
-    };
+    }, [projectName]);
 
-    const startPipeline = async () => {
+    const startPipeline = useCallback(async () => {
+        if (isExecutingRef.current) return;
+        isExecutingRef.current = true;
+        if (isMounted.current) {
+            setIsStarting(true);
+        }
+
         try {
+            const currentJobs = activeJobsRef.current || {};
+            // First check activeJobs to re-use an existing job (resilient to project_name or metadata.projectId)
+            const existingJobId = Object.keys(currentJobs).find(jid => {
+                const j = currentJobs[jid];
+                const matchesProject = j && (
+                    (j.project_name && j.project_name.toLowerCase() === projectName.toLowerCase()) ||
+                    (j.metadata?.projectId && j.metadata.projectId.toLowerCase() === projectName.toLowerCase()) ||
+                    j.project_name === projectName ||
+                    j.metadata?.projectId === projectName
+                );
+                const matchesType = j && (j.pipeline_mode === 'simple' || j.id?.startsWith('simple_pipeline') || j.type === 'simple_pipeline');
+                return matchesProject && matchesType && ['pending', 'running', 'awaiting_review'].includes(j?.status);
+            });
+            if (existingJobId) {
+                if (isMounted.current) {
+                    setPipelineJobId(existingJobId);
+                }
+                return;
+            }
+
             const res = await api.startSimplePipeline(projectName);
             const jobId = res.data.job_id;
-            startPolling(jobId);
+            if (isMounted.current) {
+                setPipelineJobId(jobId);
+                addJob(jobId, 'simple_pipeline', `Translation Pipeline: ${projectName}`, {
+                    projectId: projectName,
+                    link: `/project/${encodeURIComponent(projectName)}`
+                });
+            }
         } catch (e) {
             console.error("Failed to start simple pipeline", e);
-        }
-    };
-
-    const startPolling = (jobId) => {
-        setIsPolling(true);
-        pollingRef.current = setInterval(async () => {
-            try {
-                const res = await api.getJob(jobId);
-                const currentJob = res.data;
-                setJob(currentJob);
-
-                if (currentJob.status === 'completed') {
-                    stopPolling();
-                    if (onComplete) onComplete();
-                } else if (currentJob.status === 'failed') {
-                    stopPolling();
-                } else if (currentJob.status === 'awaiting_review') {
-                    // Update editors with fresh content if they are empty
-                    if (currentJob.pipeline_stage === 'analyze' && currentJob.result?.context_guide && !editedContent) {
-                        setEditedContent(currentJob.result.context_guide);
-                    }
-                    if (currentJob.pipeline_stage === 'glossary' && currentJob.result?.glossary && !editedGlossary.terms.length) {
-                        setEditedGlossary(currentJob.result.glossary);
-                    }
-                }
-                
-                // Refresh episode list during translation stage to show 'translated' status
-                if (currentJob.pipeline_stage === 'translate') {
-                    fetchEpisodes();
-                }
-            } catch (e) {
-                console.error("Polling error", e);
-                stopPolling();
-                
-                // If backend restarted or job was lost, handle UI gracefully instead of getting stuck
-                setJob(prev => prev ? { 
-                    ...prev, 
-                    status: 'failed', 
-                    message: e.response?.status === 404 
-                        ? 'Backend restarted. The translation job was lost.' 
-                        : 'Connection to server lost.'
-                } : null);
+        } finally {
+            isExecutingRef.current = false;
+            if (isMounted.current) {
+                setIsStarting(false);
             }
-        }, 1500);
-    };
-
-    const stopPolling = () => {
-        if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
         }
-        setIsPolling(false);
-    };
+    }, [projectName, addJob]);
+
+    useEffect(() => {
+        isMounted.current = true;
+        if (!hasTriggeredRef.current) {
+            hasTriggeredRef.current = true;
+            startPipeline();
+        }
+        fetchEpisodes();
+        return () => {
+            isMounted.current = false;
+        };
+    }, [startPipeline, fetchEpisodes]);
+
+
+    const job = pipelineJobId ? activeJobs[pipelineJobId] : null;
+
+    // React to pipeline job status updates from centralized JobContext
+    useEffect(() => {
+        if (!job) return;
+
+        if (job.status === 'completed') {
+            if (!hasCompletedRef.current) {
+                hasCompletedRef.current = true;
+                if (onComplete) onComplete();
+            }
+        } else if (job.status === 'awaiting_review') {
+            if (job.pipeline_stage === 'analyze' && job.result?.context_guide && !editedContent) {
+                setEditedContent(job.result.context_guide);
+            }
+            if (job.pipeline_stage === 'glossary' && job.result?.glossary && (!editedGlossary.terms || !editedGlossary.terms.length)) {
+                setEditedGlossary(job.result.glossary);
+            }
+        }
+
+        if (job.pipeline_stage === 'translate' && prevStageRef.current !== 'translate') {
+            fetchEpisodes();
+        }
+        prevStageRef.current = job.pipeline_stage;
+    }, [job, editedContent, editedGlossary.terms, fetchEpisodes, onComplete]);
 
     const handleConfirmContext = async () => {
+        if (!job || isConfirmingRef.current) return;
+        isConfirmingRef.current = true;
         setIsConfirming(true);
         try {
             await api.confirmPipelineContext(projectName, job.id, editedContent);
-            // Result will clear, polling will continue and move to next stage
             setEditedContent(""); 
         } catch (e) {
             console.error("Confirmation error", e);
         } finally {
-            setIsConfirming(false);
+            isConfirmingRef.current = false;
+            if (isMounted.current) {
+                setIsConfirming(false);
+            }
         }
     };
 
     const handleConfirmGlossary = async () => {
+        if (!job || isConfirmingRef.current) return;
+        isConfirmingRef.current = true;
         setIsConfirming(true);
         try {
             await api.confirmPipelineGlossary(projectName, job.id, editedGlossary);
@@ -121,8 +169,18 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
         } catch (e) {
             console.error("Confirmation error", e);
         } finally {
-            setIsConfirming(false);
+            isConfirmingRef.current = false;
+            if (isMounted.current) {
+                setIsConfirming(false);
+            }
         }
+    };
+
+    const handleCancel = () => {
+        if (pipelineJobId) {
+            cancelJob(pipelineJobId);
+        }
+        if (onCancel) onCancel();
     };
 
     const handleDownload = async (episodeName) => {
@@ -172,7 +230,7 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                     })}
                 </div>
                 <button 
-                    onClick={onCancel}
+                    onClick={handleCancel}
                     className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
                     Cancel pipeline
@@ -186,7 +244,7 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                         <motion.div 
                             key="analyze-review"
                             initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y:0 }}
+                            animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             className="space-y-6"
                         >
@@ -204,7 +262,7 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50"
                                 >
                                     {isConfirming ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                                    Confirm & Continue
+                                    Confirm &amp; Continue
                                 </button>
                             </div>
                             <textarea
@@ -219,7 +277,7 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                         <motion.div 
                             key="glossary-review"
                             initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y:0 }}
+                            animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
                             className="space-y-6"
                         >
@@ -237,7 +295,7 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-500/20 flex items-center gap-2 disabled:opacity-50"
                                 >
                                     {isConfirming ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-                                    Confirm & Start Translation
+                                    Confirm &amp; Start Translation
                                 </button>
                             </div>
                             
@@ -251,13 +309,13 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                        {editedGlossary.terms.map((term, i) => (
+                                        {editedGlossary.terms && editedGlossary.terms.map((term, i) => (
                                             <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                                 <td className="px-4 py-3 font-medium">{term.term}</td>
                                                 <td className="px-4 py-3">
                                                     <input 
                                                         type="text"
-                                                        value={term.translation}
+                                                        value={term.translation || ''}
                                                         onChange={(e) => {
                                                             const newTerms = [...editedGlossary.terms];
                                                             newTerms[i].translation = e.target.value;
@@ -335,9 +393,11 @@ const SimplePipelineWizard = ({ projectName, onComplete, onCancel }) => {
                             <p className="text-gray-500 mb-8">{job.message}</p>
                             <button 
                                 onClick={startPipeline}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-bold transition-all"
+                                disabled={isStarting}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
-                                Retry pipeline
+                                {isStarting && <Loader2 className="animate-spin" size={18} />}
+                                <span>{isStarting ? 'Retrying pipeline...' : 'Retry pipeline'}</span>
                             </button>
                         </motion.div>
                     )}

@@ -157,6 +157,6 @@ def test_episode_request_uses_plain_schema_when_echo_off():
     assert '"s"' not in req.system_instruction
 
 
-def test_use_source_echo_off_for_local_model():
-    # Local models route through use_structured_output (off by default) → no echo.
-    assert use_source_echo("local/llama-3-8b") is False
+def test_use_source_echo_disabled_when_structured_output_off():
+    with patch("utils.storage.load_global_config", return_value={"structured_output_enabled": False}):
+        assert use_source_echo("gemini-2.5-flash") is False

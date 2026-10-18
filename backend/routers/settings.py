@@ -1,10 +1,9 @@
 import os
+import asyncio
 import base64
 import logging
 from pathlib import Path
-from typing import Optional
-from urllib.parse import urlparse
-import httpx
+from typing import Any, Optional, Dict
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -103,7 +102,18 @@ def has_api_key() -> bool:
     return get_api_key() is not None
 
 
-def validate_api_key():
+def validate_api_key(project_metadata: Optional[Dict] = None):
+    try:
+        config = storage.load_global_config()
+        if config.get("ai_provider") == "local":
+            return
+        if project_metadata:
+            proj_settings = project_metadata.get("settings", {})
+            if proj_settings.get("ai_provider") == "local":
+                return
+    except Exception:
+        pass
+
     if not has_api_key():
         raise HTTPException(status_code=400, detail={
             "error": "api_key_missing",
@@ -145,23 +155,56 @@ async def delete_api_key():
 
 
 
+# A key is only re-checked this often: the health page and settings both ask.
+_KEY_CHECK_TTL_SECONDS = 600
+_key_checks: Dict[str, tuple] = {}
+
+
+def _looks_like_bad_key(message: str) -> bool:
+    text = message.lower()
+    return any(marker in text for marker in (
+        "api key not valid", "api_key_invalid", "invalid api key", "permission_denied",
+        "api key expired", "unauthenticated", "401", "403",
+    ))
+
+
+async def verify_gemini_key(key: str, *, use_cache: bool = True) -> Dict[str, Any]:
+    """Ask Gemini whether this key works: {"valid": True|False|None, "error": str|None}.
+
+    Lists models rather than generating: it is free, touches no daily quota, and
+    fails the same way a bad key fails a translation. `valid` is None when Gemini
+    could not be reached at all — that says nothing about the key.
+    """
+    import hashlib
+    import time
+    fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    cached = _key_checks.get(fingerprint)
+    if use_cache and cached and time.monotonic() - cached[0] < _KEY_CHECK_TTL_SECONDS:
+        return cached[1]
+
+    from google import genai
+    try:
+        client = genai.Client(api_key=key)
+        await asyncio.wait_for(client.aio.models.list(config={"page_size": 1}), timeout=10)
+        verdict = {"valid": True, "error": None}
+    except Exception as e:
+        message = str(e) or type(e).__name__
+        verdict = {"valid": False if _looks_like_bad_key(message) else None, "error": message[:300]}
+    _key_checks[fingerprint] = (time.monotonic(), verdict)
+    return verdict
+
+
 @router.post("/api/config/test-gemini-key")
 async def test_gemini_key(request: Optional[ApiKeyRequest] = None):
     key = (request and request.api_key) or get_api_key()
     if not key:
         return {"valid": False, "error": "No API key provided or configured."}
-    try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=key)
-        resp = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Say 'OK'",
-            config=types.GenerateContentConfig(max_output_tokens=5, temperature=0.0)
-        )
+    verdict = await verify_gemini_key(key, use_cache=False)
+    if verdict["valid"]:
         return {"valid": True, "message": "Gemini API key is valid and connected successfully!"}
-    except Exception as e:
-        return {"valid": False, "error": str(e)}
+    if verdict["valid"] is None:
+        return {"valid": False, "error": f"Could not reach Gemini to check the key: {verdict['error']}"}
+    return {"valid": False, "error": verdict["error"]}
 
 
 # Keys whose real value is never sent back over the wire. GET masks them with
@@ -176,6 +219,8 @@ SECRET_KEYS = (
     "discord_webhook_url",
     "opensubtitles_api_key",
     "api_key",
+    "github_webhook_secret",
+    "plex_token",
 )
 # Never returned at all, not even masked — there is no legitimate reason for a
 # client to see this, and it isn't a field anyone edits through /settings.
@@ -214,10 +259,21 @@ async def update_settings(settings: SettingsRequest):
     for key in SECRET_KEYS:
         if payload.get(key) == SECRET_SENTINEL:
             payload.pop(key)
+    if "path_mappings" in payload:
+        pm = payload.pop("path_mappings")
+        if pm is not None and "arr_path_mappings" not in payload:
+            payload["arr_path_mappings"] = pm
     if "subtitle_edit_path" in payload:
         _validate_subtitle_edit_path(payload["subtitle_edit_path"])
     if "ffmpeg_path" in payload:
         _validate_ffmpeg_path(payload["ffmpeg_path"])
+    if payload.get("autopilot_enabled"):
+        # Switching the autopilot on starts its clock: only files imported after this are "new".
+        known = payload["autopilot_enabled_at"] if "autopilot_enabled_at" in payload             else storage.load_global_config().get("autopilot_enabled_at")
+        if not known:
+            from services.autopilot.store import iso_utc
+            from datetime import datetime, timezone
+            payload["autopilot_enabled_at"] = iso_utc(datetime.now(timezone.utc))
     storage.save_global_config(payload)
     # Reload rate-limit config in case rpm/rpd or model limits changed.
     per_model_rate_limiter.load_config_and_state()
@@ -304,17 +360,8 @@ async def configure_rate_limit(model: str = "default", rpm: int = 15, rpd: int =
 
 
 @router.get("/api/models")
-async def list_all_models(base_url: Optional[str] = None):
-    """Unified model registry — returns Gemini cloud models and discovered local models.
-
-    Response shape:
-    {
-      "gemini": [{"value": "gemini-flash-latest", "label": "Gemini Flash Latest", "group": "gemini"}, ...],
-      "local":  [{"value": "local/my-model", "label": "my-model", "group": "local"}, ...],
-      "local_endpoint": "http://localhost:1234/v1",
-      "local_online": true | false
-    }
-    """
+async def list_all_models():
+    """Unified model registry — returns available Google Gemini models."""
     gemini_models = [
         {"value": "gemini-flash-latest",     "label": "Gemini Flash Latest",  "group": "gemini"},
         {"value": "gemini-flash-lite-latest","label": "Gemini Flash Lite Latest",      "group": "gemini"},
@@ -326,111 +373,7 @@ async def list_all_models(base_url: Optional[str] = None):
         {"value": "gemma-4-26b-a4b-it",      "label": "Gemma 26B",  "group": "gemini"},
     ]
 
-    from adk_agents.llm_factory import _resolve_local_base_url
-    global_config = storage.load_global_config()
-    resolved_url = _resolve_local_base_url(base_url or global_config.get("local_llm_base_url"))
-
-    local_models: list = []
-    local_online = False
-
-    try:
-        candidates = [resolved_url.rstrip("/") + "/models"]
-        if not resolved_url.rstrip("/").endswith("/v1"):
-            candidates.append(resolved_url.rstrip("/") + "/v1/models")
-
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            for target in candidates:
-                try:
-                    resp = await client.get(target)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        local_models = [
-                            {"value": f"local/{m['id']}", "label": m["id"], "group": "local"}
-                            for m in data.get("data", [])
-                        ]
-                        local_online = True
-                        break
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
     return {
         "gemini": gemini_models,
-        "local": local_models,
-        "local_endpoint": resolved_url,
-        "local_online": local_online,
+        "models": gemini_models,
     }
-
-
-@router.get("/api/config/models/local")
-async def list_local_models(base_url: Optional[str] = None):
-    """Fetch available models from a local OpenAI-compatible server."""
-    from adk_agents.llm_factory import _resolve_local_base_url
-    
-    # Resolve URL from provided arg, then global config, then default
-    if not base_url:
-        global_config = storage.load_global_config()
-        base_url = global_config.get("local_llm_base_url")
-    
-    url = _resolve_local_base_url(base_url)
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            parsed = urlparse(url)
-            root_url = f"{parsed.scheme}://{parsed.netloc}"
-            
-            # Alternative: if netloc is 'localhost', also try '127.0.0.1'
-            alt_root_url = None
-            if parsed.netloc.startswith('localhost:'):
-                alt_root_url = f"{parsed.scheme}://127.0.0.1:{parsed.netloc.split(':')[1]}"
-            elif parsed.netloc == 'localhost':
-                alt_root_url = f"{parsed.scheme}://127.0.0.1"
-            
-            # Endpoints to try with different strategies
-            check_urls = []
-            
-            base_urls = [root_url]
-            if alt_root_url: base_urls.append(alt_root_url)
-            
-            # Add base-relative URL
-            if url.endswith('/v1') or url.endswith('/v1/'):
-                check_urls.append(url.rstrip('/') + "/models")
-                if alt_root_url:
-                    alt_url = url.replace(parsed.netloc, alt_root_url.split('://')[1])
-                    check_urls.append(alt_url.rstrip('/') + "/models")
-            else:
-                check_urls.append(url.rstrip('/') + "/v1/models")
-                
-            for b in base_urls:
-                check_urls.append(b + "/v1/models")
-                check_urls.append(b + "/api/v1/models")
-            
-            # De-duplicate
-            check_urls = list(dict.fromkeys(check_urls))
-            
-            all_errors = []
-            for target_url in check_urls:
-                try:
-                    response = await client.get(target_url, timeout=2.0)
-                    if response.status_code == 200:
-                        data = response.json()
-                        models = [
-                            {"value": f"local/{m['id']}", "label": m['id']} 
-                            for m in data.get("data", [])
-                        ]
-                        if models:
-                            return {"models": models, "active_endpoint": target_url}
-                except Exception as e:
-                    all_errors.append(f"{target_url}: {str(e)}")
-            
-            return {
-                "models": [], 
-                "error": "Models not found at any common endpoint",
-                "diagnostics": {
-                    "tried_urls": check_urls,
-                    "errors": all_errors
-                }
-            }
-    except Exception as e:
-        return {"models": [], "error": str(e)}

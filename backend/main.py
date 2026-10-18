@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Dict, Optional
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
@@ -46,18 +46,73 @@ from routers import (
     source_subs,
     setup,
     embedded,
+    system,
+    webhooks,
+    agent,
+    on_demand,
+    autopilot,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging with bounded RotatingFileHandler (INT-P1-05)
+from logging.handlers import RotatingFileHandler
+from utils.paths import DATA_DIR
+
+log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+logging.basicConfig(level=logging.INFO, format=log_format)
+
+try:
+    logs_dir = DATA_DIR / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    app_log_file = logs_dir / "ombisub.log"
+    root_logger = logging.getLogger()
+    if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
+        file_handler = RotatingFileHandler(
+            str(app_log_file),
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(logging.Formatter(log_format))
+        file_handler.setLevel(logging.INFO)
+        root_logger.addHandler(file_handler)
+except Exception as e:
+    logging.getLogger("omnisub.main").warning(f"Could not initialize RotatingFileHandler: {e}")
+
 logger = logging.getLogger("omnisub.main")
 
 _scheduled_sync_task: Optional[asyncio.Task] = None
 _maintenance_task: Optional[asyncio.Task] = None
 _batch_task: Optional[asyncio.Task] = None
+_auto_update_task: Optional[asyncio.Task] = None
+
+
+async def _auto_update_loop():
+    """Periodically poll GitHub for updates when auto_update_enabled is True."""
+    from services.update_service import update_service
+    while True:
+        try:
+            config = storage.load_global_config()
+            enabled = config.get("auto_update_enabled", True)
+            interval_hours = max(1, config.get("auto_update_interval_hours", 6))
+            # Sleep in 60s increments to react promptly to shutdown or interval changes
+            sleep_seconds = interval_hours * 3600
+            for _ in range(int(sleep_seconds // 60)):
+                await asyncio.sleep(60)
+
+            config = storage.load_global_config()
+            if config.get("auto_update_enabled", True):
+                status = await update_service.check_for_updates(force=True)
+                if status.get("update_available") and not update_service.has_active_jobs():
+                    logger.info(
+                        f"Auto-update: new commits detected on {status.get('branch')}. "
+                        f"Applying update automatically..."
+                    )
+                    await update_service.apply_update(force=False)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.warning(f"Auto-update loop error (non-critical): {e}")
+            await asyncio.sleep(600)
 
 
 async def _batch_loop():
@@ -141,25 +196,13 @@ async def _scheduled_arr_sync_loop():
             except Exception:
                 pass
 
-            # Queue missing subtitles for translation
-            queue = TranslationQueue()
-            
+            # Queue missing subtitles for translation across all enabled projects --
+            # unless the autopilot is on: it owns enqueueing (grace period, Greek check, retries).
+            if storage.load_global_config().get("autopilot_enabled", False):
+                continue
+            from services.queue_service import enqueue_missing_for_project, PRIORITY_SYNC
             for project_name in storage.list_projects():
-                proj_meta = storage.load_project_metadata(project_name) or {}
-                if proj_meta.get("arr_disabled", False):
-                    continue
-                
-                episodes_list = storage.list_episodes(project_name)
-                for ep_name in episodes_list:
-                    ep_meta = storage.load_episode_metadata(project_name, ep_name)
-                    if ep_meta:
-                        original_srt_exists = storage.original_subtitle_exists(project_name, ep_name)
-                        needs_translation = (
-                            not storage.episode_has_target(ep_meta)
-                            or storage.episode_translation_is_stale(ep_meta)
-                        )
-                        if original_srt_exists and needs_translation:
-                            queue.enqueue(project_name, ep_name, priority=PRIORITY_SYNC)
+                enqueue_missing_for_project(project_name, priority=PRIORITY_SYNC)
 
         except asyncio.CancelledError:
             break
@@ -168,8 +211,26 @@ async def _scheduled_arr_sync_loop():
             await asyncio.sleep(300)
 
 
+def _quiet_client_disconnects(loop, context):
+    """Loop exception handler that drops Windows' report of a client hanging up.
+
+    The proactor event loop logs a client that closed its connection mid-response
+    (a browser tab closed, MorpiceHub giving up on a slow call) as an ERROR with a
+    traceback from _call_connection_lost. Nothing is wrong and nothing can be done
+    about it; everything else goes to the default handler unchanged.
+    """
+    exc = context.get("exception")
+    if isinstance(exc, (ConnectionResetError, ConnectionAbortedError)) and \
+            "_call_connection_lost" in str(context.get("message", "")):
+        logger.debug(f"Client disconnected mid-connection: {exc}")
+        return
+    loop.default_exception_handler(context)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    asyncio.get_running_loop().set_exception_handler(_quiet_client_disconnects)
+
     # Startup tasks
     # Load API key from config.json if not present in environment
     if not os.environ.get("GOOGLE_API_KEY"):
@@ -241,10 +302,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"metadata_index backfill skipped (non-critical): {e}")
 
-    global _scheduled_sync_task, _maintenance_task, _batch_task
+    global _scheduled_sync_task, _maintenance_task, _batch_task, _auto_update_task
+    try:
+        from utils.event_broadcaster import broadcaster
+        broadcaster.set_event_loop(asyncio.get_running_loop())
+    except Exception:
+        pass
+
     _scheduled_sync_task = asyncio.create_task(_scheduled_arr_sync_loop())
     _maintenance_task = asyncio.create_task(_maintenance_loop())
     _batch_task = asyncio.create_task(_batch_loop())
+    _auto_update_task = asyncio.create_task(_auto_update_loop())
 
     # Warm the global review-queue cache in the background (off the event loop) so the
     # TopBar badge / Review page don't trigger a cold full-library scan on first poll.
@@ -258,18 +326,29 @@ async def lifespan(app: FastAPI):
     from services.background_worker import worker
     worker.start()
 
-    # Run migration for messy Bazarr movie episode names on first boot
+    # Resume the direct agent runner if it was on when Omnisub last stopped
     try:
-        from integrations.media_sync_engine import MediaSyncEngine
-        fixed = MediaSyncEngine.migrate_old_episode_names(storage)
-        if fixed:
-            logger.info(f"Migration: renamed episodes in {len(fixed)} projects: {fixed}")
+        from services import agent_runner
+        await asyncio.to_thread(agent_runner.autostart)
     except Exception as e:
-        logger.warning(f"Migration skipped (non-critical): {e}")
+        logger.warning(f"Agent runner resume skipped (non-critical): {e}")
+
+    # Autopilot: follows Sonarr/Radarr and queues Greek subtitles (idles while autopilot_enabled is off)
+    try:
+        from services.autopilot.service import get_service as get_autopilot
+        await get_autopilot().start()
+    except Exception as e:
+        logger.error(f"Autopilot failed to start (non-critical): {e}", exc_info=True)
 
     yield
 
     # Shutdown tasks
+    try:
+        from services.autopilot.service import get_service as get_autopilot
+        await get_autopilot().stop()
+    except Exception as e:
+        logger.warning(f"Autopilot stop failed (non-critical): {e}")
+
     if _scheduled_sync_task:
         _scheduled_sync_task.cancel()
         _scheduled_sync_task = None
@@ -279,10 +358,20 @@ async def lifespan(app: FastAPI):
     if _batch_task:
         _batch_task.cancel()
         _batch_task = None
+    if _auto_update_task:
+        _auto_update_task.cancel()
+        _auto_update_task = None
 
     # Stop background translation worker
     from services.background_worker import worker
     worker.stop()
+
+    # Stop the agent runner's CLI processes (it stays enabled and resumes on the next start)
+    try:
+        from services import agent_runner
+        agent_runner.stop_all()
+    except Exception:
+        pass
 
     # Persist any debounced rate-limiter state before exit.
     try:
@@ -341,7 +430,7 @@ else:
 # bug, not an RCE — the executable-path/settings/webhook endpoints themselves
 # are still individually hardened regardless of this gate).
 _PROTECTED_PREFIXES = ("/api/", "/projects", "/jobs", "/integrations", "/rate-limit", "/settings")
-_AUTH_EXEMPT_PATHS = {"/api/health", "/docs", "/openapi.json", "/redoc"}
+_AUTH_EXEMPT_PATHS = {"/api/health", "/docs", "/openapi.json", "/redoc", "/api/events", "/api/events/poll", "/api/ws", "/ws"}
 _AUTH_EXEMPT_PREFIXES = ("/api/auth/login", "/api/auth/status", "/api/webhook/")
 
 
@@ -391,6 +480,11 @@ app.include_router(consistency.router)
 app.include_router(source_subs.router)
 app.include_router(setup.router)
 app.include_router(embedded.router)
+app.include_router(system.router)
+app.include_router(webhooks.router)
+app.include_router(agent.router)
+app.include_router(on_demand.router)
+app.include_router(autopilot.router)
 
 
 @app.get("/api/health")
@@ -405,6 +499,42 @@ async def health_check():
         "adk_enabled": True,
         "api_key_configured": has_api_key()
     }
+
+
+@app.websocket("/api/ws")
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Real-time event feed for browser UI (agent submissions, queue updates, disk sync)."""
+    from utils.event_broadcaster import broadcaster
+    await broadcaster.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        broadcaster.disconnect(websocket)
+    except Exception:
+        broadcaster.disconnect(websocket)
+
+
+@app.get("/api/events")
+@app.get("/api/events/poll")
+async def poll_events(since: int = 0, limit: int = 50):
+    """Event stream polling fallback for clients unable to maintain WebSockets."""
+    from utils.event_broadcaster import broadcaster
+    return {
+        "events": broadcaster.get_events(since_id=since, limit=limit),
+        "latest_id": broadcaster.latest_id,
+    }
+
+
+@app.post("/api/sync/disk")
+async def sync_all_disk(re_queue_removed: bool = True):
+    """Trigger library-wide filesystem disk sync for subtitles and reconcile queue status."""
+    from services.disk_sync_service import disk_sync_service
+    return await asyncio.to_thread(disk_sync_service.sync_all_projects_disk, re_queue_removed=re_queue_removed)
+
 
 
 # Serve the built frontend (backend/static/, populated by the Dockerfile's

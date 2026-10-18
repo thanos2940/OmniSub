@@ -1,3 +1,5 @@
+import asyncio
+from datetime import datetime, timezone
 from io import BytesIO
 from zipfile import ZipFile
 from typing import List, Dict, Optional
@@ -141,18 +143,41 @@ async def save_episode(project_name: str, episode_name: str, request: SaveEpisod
 
     if previous and previous.get("data"):
         try:
-            _record_user_edits(project_name, episode_name, previous["data"], request.data, lang=request.lang)
+            await asyncio.to_thread(_record_user_edits, project_name, episode_name, previous["data"], request.data, lang=request.lang)
         except Exception:
             pass
 
     # Auto-export if this save includes translated lines
     exported_path = None
-    if any(line.get("translated") or line.get("translations", {}).get(lang_code) for line in request.data):
+    has_translated = any(line.get("translated") or line.get("translations", {}).get(lang_code) for line in request.data)
+    if has_translated:
         try:
             metadata = storage.load_episode_metadata(project_name, episode_name) or {}
-            exported_path = auto_export_translated_subtitle(project_name, episode_name, request.data, metadata)
+            metadata["translated"] = True
+            metadata["translation_status"] = "completed"
+            metadata["last_translated_at"] = datetime.now(timezone.utc).isoformat()
+            storage.save_episode_metadata(project_name, episode_name, metadata)
+            exported_path = auto_export_translated_subtitle(project_name, episode_name, request.data, metadata, force=True)
         except Exception:
             pass
+
+        try:
+            from services.agent_task_service import agent_task_service
+            agent_task_service.mark_task_completed(project_name, episode_name)
+        except Exception:
+            try:
+                from utils.translation_queue import TranslationQueue
+                q = TranslationQueue()
+                now_str = datetime.now(timezone.utc).isoformat()
+                with q._conn() as conn:
+                    conn.execute("""
+                        UPDATE translation_queue
+                        SET status = 'completed', completed_at = COALESCE(completed_at, ?)
+                        WHERE project_name = ? AND episode_name = ? AND status IN ('pending', 'running')
+                    """, (now_str, project_name, episode_name))
+                    conn.commit()
+            except Exception:
+                pass
 
     return {"status": "success", "exported_path": exported_path}
 
@@ -201,9 +226,9 @@ async def delete_episode_lines(project_name: str, episode_name: str, request: De
 
     # Refresh the exported file on disk so the deleted lines disappear there too
     exported_path = None
-    has_media = metadata.get("arr_media_path") or metadata.get("bazarr_media_path")
+    has_media = metadata.get("arr_media_path")
     if has_media and any(line.get("translated") for line in new_data):
-        exported_path = auto_export_translated_subtitle(project_name, episode_name, new_data, metadata)
+        exported_path = auto_export_translated_subtitle(project_name, episode_name, new_data, metadata, force=True)
 
     return {
         "status": "success",
@@ -276,7 +301,7 @@ def _apply_fixes_and_persist(project_name: str, episode_name: str, track: str,
     exported_path = None
     if any(e.get("translated") or (e.get("translations") or {}) for e in new_data):
         try:
-            exported_path = auto_export_translated_subtitle(project_name, episode_name, new_data, metadata)
+            exported_path = auto_export_translated_subtitle(project_name, episode_name, new_data, metadata, force=True)
         except Exception:
             pass
 
@@ -437,7 +462,6 @@ def _delete_episode_translation(project_name: str, episode_name: str) -> bool:
     # Remove target flags so background workers do not skip re-translation.
     metadata.pop("arr_has_target", None)
     metadata.pop("arr_target_path", None)
-    metadata.pop("bazarr_has_target", None)
     metadata.pop("arr_targets", None)
 
     # Drop the checkpoint so a fresh translation starts clean.
@@ -476,16 +500,61 @@ async def clear_episode_translation(project_name: str, episode_name: str):
 async def retranslate_episode(
     project_name: str,
     episode_name: str,
-    background_tasks: BackgroundTasks,
     request: TranslateRequest
 ):
     validate_api_key()
-    job_id = create_job("retranslate_compare", project_name=project_name, episode_name=episode_name)
-    background_tasks.add_task(
-        _process_retranslation_for_comparison, job_id, project_name,
-        episode_name, request.model
+    metadata = storage.load_project_metadata(project_name) or {}
+    global_config = storage.load_global_config()
+    from utils.model_resolver import resolve_model
+    model = (
+        request.model
+        or resolve_model("translation", metadata)
     )
-    return {"job_id": job_id}
+    
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    safe_model_tag = model.replace("/", "_").replace(":", "_").replace(".", "_")
+    comparison_key = f"compare_{timestamp}_{safe_model_tag}"
+    target_lang_name = request.target_language_name or metadata.get("target_language", "Greek")
+
+    options = {
+        "model": model,
+        "comparison_mode": True,
+        "comparison_key": comparison_key,
+        "translation_type": "comparison",
+        "target_language_name": target_lang_name,
+        "enhance_glossary": request.enhance_glossary,
+        "temperature": storage.get_project_setting(metadata, "temperature") or global_config.get("temperature"),
+        "top_k": storage.get_project_setting(metadata, "top_k") or global_config.get("top_k"),
+        "top_p": storage.get_project_setting(metadata, "top_p") or global_config.get("top_p")
+    }
+    
+    from routers.pipeline import _pipeline_thread_lock
+    from utils.translation_queue import TranslationQueue
+    from services.queue_service import enqueue_translation, PRIORITY_MANUAL
+
+    tq = TranslationQueue()
+    with _pipeline_thread_lock:
+        active_items = tq.get_all(limit=500)
+        for item in active_items:
+            if (
+                str(item.get("project_name") or "").casefold() == project_name.casefold()
+                and str(item.get("episode_name") or "").casefold() == episode_name.casefold()
+            ):
+                active_id = item["id"]
+                return {
+                    "job_id": f"bg_{active_id}",
+                    "item_id": active_id,
+                    "comparison_key": (item.get("options") or {}).get("comparison_key") or comparison_key,
+                    "already_active": True
+                }
+
+        item_id = enqueue_translation(project_name, episode_name, PRIORITY_MANUAL, options)
+    
+    return {
+        "job_id": f"bg_{item_id}",
+        "item_id": item_id,
+        "comparison_key": comparison_key
+    }
 
 
 @router.post("/projects/{project_name}/episodes/{episode_name}/merge")
@@ -506,7 +575,13 @@ async def merge_episode_translation(project_name: str, episode_name: str, reques
     metadata["translated"] = True
 
     storage.save_episode(project_name, episode_name, data["data"], metadata)
-    auto_export_translated_subtitle(project_name, episode_name, data["data"], metadata)
+    auto_export_translated_subtitle(project_name, episode_name, data["data"], metadata, force=True)
+
+    try:
+        from services.agent_task_service import agent_task_service
+        agent_task_service.mark_task_completed(project_name, episode_name)
+    except Exception:
+        pass
 
     return {"status": "merged"}
 
@@ -526,12 +601,12 @@ async def export_episode_to_path(project_name: str, episode_name: str):
     if not any(line.get("translated") for line in ep_data.get("data", [])):
         raise HTTPException(status_code=400, detail="Episode has no translated content")
 
-    media_path = ep_meta.get("arr_media_path") or ep_meta.get("bazarr_media_path")
+    media_path = ep_meta.get("arr_media_path")
     if not media_path:
         raise HTTPException(status_code=400, detail="No media path recorded for this episode — cannot determine export location")
 
     try:
-        exported_path = auto_export_translated_subtitle(project_name, episode_name, ep_data["data"], ep_meta)
+        exported_path = auto_export_translated_subtitle(project_name, episode_name, ep_data["data"], ep_meta, force=True)
         if not exported_path:
             # The exporter logs the cause and swallows it (background paths must not die on
             # one bad episode) — but a manual export must never report a success that
@@ -567,12 +642,12 @@ async def batch_export_to_path(project_name: str, request: BatchDownloadRequest)
                 failed.append({"name": ep_name, "reason": "no translation"})
                 continue
 
-            media_path = ep_meta.get("arr_media_path") or ep_meta.get("bazarr_media_path")
+            media_path = ep_meta.get("arr_media_path")
             if not media_path:
                 failed.append({"name": ep_name, "reason": "no media path"})
                 continue
 
-            exported_path = auto_export_translated_subtitle(project_name, ep_name, ep_data["data"], ep_meta)
+            exported_path = auto_export_translated_subtitle(project_name, ep_name, ep_data["data"], ep_meta, force=True)
             if not exported_path:
                 failed.append({"name": ep_name, "reason": f"could not write next to {media_path} (stale/unreachable media path)"})
                 continue

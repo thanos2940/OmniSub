@@ -80,7 +80,7 @@ def test_prune_removes_unseen_arr_episode_and_its_target(proj, tmp_path):
     assert removed == 1
     assert "S01E01" in storage.list_episodes(proj)
     assert "S01E02" not in storage.list_episodes(proj)
-    assert not target.exists()  # exported translation removed too
+    assert target.exists()  # INT-P0-01: exported translation preserved on disk
 
 
 def test_prune_leaves_manual_uploads(proj):

@@ -2,6 +2,7 @@
 Reviewer and User Correction Feedback Loop (Plan 28).
 """
 
+from contextlib import contextmanager
 import sqlite3
 from datetime import datetime, timezone
 from typing import List, Dict, Tuple, Optional
@@ -15,14 +16,24 @@ from utils.paths import DB_FILE
 logger = logging.getLogger(__name__)
 
 
+@contextmanager
 def _conn():
-    c = sqlite3.connect(DB_FILE, timeout=10.0)
+    c = sqlite3.connect(DB_FILE, timeout=30.0)
     c.row_factory = sqlite3.Row
-    return c
+    try:
+        c.execute("PRAGMA busy_timeout=30000")
+        yield c
+    finally:
+        c.close()
 
 
 def _init():
     with _conn() as c:
+        try:
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS reviewer_feedback (

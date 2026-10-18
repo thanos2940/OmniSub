@@ -71,13 +71,35 @@ _KARAOKE_EFFECT_RE = re.compile(
 # unaffected. OP/ED lyric layers written in the target-alphabet ("...-English"/plain)
 # are intentionally NOT matched here — those are readable and stay translatable.
 _KARAOKE_STYLE_RE = re.compile(
-    r"roma[jn]i|\bkanji\b|karaoke|\bkara\b|\bk-?fx\b|\bkfx\b", re.IGNORECASE
+    # "ROM" is the common abbreviation of romaji ("OP-ROM", "ED_Rom"); the letter
+    # lookarounds keep it from matching inside words like "Romance" or "from".
+    r"roma[jn]i|(?<![a-z])rom(?![a-z])|\bkanji\b|karaoke|\bkara\b|\bk-?fx\b|\bkfx\b", re.IGNORECASE
 )
 
 # Style names that signal non-dialogue typesetting (signs, titles, captions).
 _SIGN_STYLE_RE = re.compile(
     r"sign|title|caption|note", re.IGNORECASE
 )
+
+# Style names that mark song typesetting (OP/ED/insert songs, lyrics).
+_SONG_STYLE_RE = re.compile(r"(?<![a-z])(?:op|ed|song|lyrics?|insert)(?![a-z])", re.IGNORECASE)
+
+
+# Typesetting filler such as "bbbbbbbb" (a placeholder glyph repeated, e.g. redaction bars).
+_FILLER_RE = re.compile(r"(\w)\1{3,}")
+
+
+def is_untranslatable_text(text: str) -> bool:
+    """Text that is typesetting rather than words: placeholder filler ("bbbbbbbb"), single
+    letters (title-card letter animations) and CJK-only logos. Such events keep their
+    authored text on export, whatever translation may be stored for them."""
+    text = (text or "").strip()
+    if _FILLER_RE.fullmatch(text):
+        return True
+    letters = [ch for ch in text if ch.isalpha()]
+    if len(letters) < 2:
+        return True
+    return not any(ch.isascii() for ch in letters)
 
 
 def _ms_to_srt_timecode(start_ms: int, end_ms: int) -> str:
@@ -239,7 +261,93 @@ def parse_ass(content: str) -> List[Dict]:
     for i, entry in enumerate(raw_entries, start=1):
         entry["id"] = str(i)
 
+    demote_fragmented_styles(raw_entries)
     return raw_entries
+
+
+def find_fragmented_styles(entries: List[Dict]) -> set:
+    """Style names whose events are word-by-word animated lyrics, not readable lines.
+
+    Song typesetting often splits every lyric into one positioned event per word or
+    syllable ("Like", "the", "scar", ...) with no ``\\k`` tag and a style name like
+    "OP-ENG" that none of the karaoke signals catch. Each fragment is meaningless on
+    its own, so translating them produces word salad ("the" -> "την") while
+    multiplying the line count. A style is fragmented when it is almost entirely
+    positioned events (so never a dialogue style) and most of its many distinct texts
+    are single words. Plain sign styles are exempt unless they are also song styles,
+    so a map full of one-word place names keeps being translated.
+    """
+    by_style: Dict[str, List[Dict]] = {}
+    for e in entries:
+        meta = e.get("_ass") or {}
+        if meta.get("translatable") is False:
+            continue
+        by_style.setdefault(meta.get("style") or "", []).append(e)
+
+    fragmented = set()
+    for style, members in by_style.items():
+        if _SIGN_STYLE_RE.search(style) and not _SONG_STYLE_RE.search(style):
+            continue
+        positioned = sum(1 for m in members if (m.get("_ass") or {}).get("kind") == "sign")
+        if positioned < 0.8 * len(members):
+            continue
+        distinct = {(m.get("original") or "").strip() for m in members} - {""}
+        # A style already named as a song needs less evidence than an anonymous one.
+        if len(distinct) < (5 if _SONG_STYLE_RE.search(style) else 12):
+            continue
+        single_words = sum(1 for t in distinct if len(t) <= 12 and not re.search(r"\s", t))
+        if single_words < 0.75 * len(distinct):
+            continue
+        # Lyrics fragments appear one after another; labels on a map or diagram appear
+        # together. Only a style whose events mostly start at different moments is
+        # word-by-word text — unless it is explicitly named as a song.
+        starts = {(m.get("_ass") or {}).get("start_ms") for m in members}
+        if not _SONG_STYLE_RE.search(style) and len(starts) < 0.6 * len(members):
+            continue
+        fragmented.add(style)
+    return fragmented
+
+
+def refresh_passthrough(entries: List[Dict]) -> int:
+    """Re-apply the current karaoke rules to entries parsed by an older version (in place).
+
+    Episodes are parsed once at import, so rule improvements (e.g. recognising
+    "OP-ROM" as romaji) would otherwise never reach existing projects. Only ever
+    turns translatable events into passthrough, never the reverse. Returns how many
+    entries changed; non-ASS rows are ignored.
+    """
+    changed = 0
+    for e in entries:
+        meta = e.get("_ass")
+        if not isinstance(meta, dict) or meta.get("translatable") is False:
+            continue
+        effect = meta.get("effect") or ""
+        if _KARAOKE_STYLE_RE.search(meta.get("style") or "") or (effect and _KARAOKE_EFFECT_RE.search(effect)):
+            meta["kind"] = "karaoke"
+            meta["translatable"] = False
+            e["needs_review"] = False
+            changed += 1
+    return changed + demote_fragmented_styles(entries)
+
+
+def demote_fragmented_styles(entries: List[Dict]) -> int:
+    """Mark events of fragmented lyric styles as karaoke passthrough (in place).
+
+    They then export exactly as authored instead of being translated word by word.
+    Returns how many entries were demoted.
+    """
+    styles = find_fragmented_styles(entries)
+    if not styles:
+        return 0
+    demoted = 0
+    for e in entries:
+        meta = e.get("_ass") or {}
+        if meta.get("translatable") is not False and (meta.get("style") or "") in styles:
+            meta["kind"] = "karaoke"
+            meta["translatable"] = False
+            e["needs_review"] = False
+            demoted += 1
+    return demoted
 
 
 def unify_layer_duplicates(entries: List[Dict], lang_code: Optional[str] = None) -> int:
@@ -357,8 +465,39 @@ def reconstruct_ass(
         # kept untouched. If no entry carries an index (e.g. a structure-authoritative
         # rebuild with plain rows) we can't tell deletions from never-surfaced events,
         # so every event is preserved as before.
+        has_any_translation = any(
+            bool((e.get("translations", {}) or {}).get(target_lang_code) or e.get("translated"))
+            for e in parsed_data
+        )
         can_prune = bool(by_index)
         kept_events = []
+        sign_items = []
+
+        if not by_index and has_any_translation:
+            # Fallback for plain rows (e.g. structure-authoritative or index-less rebuilds):
+            # map translatable non-comment events sequentially to parsed_data entries.
+            plain_idx = 0
+            for ev in subs.events:
+                if ev.is_comment:
+                    kept_events.append(ev)
+                    continue
+                kind = _classify(ev.style or "", ev.text or "", getattr(ev, "effect", "") or "")
+                prefix, suffix, visible, _ = _split_tags(ev.text or "")
+                translatable = kind not in ("karaoke", "drawing") and bool(visible.strip())
+                if translatable and plain_idx < len(parsed_data):
+                    entry = parsed_data[plain_idx]
+                    text = entry.get("translated") or ""
+                    if target_lang_code:
+                        text = (entry.get("translations", {}) or {}).get(target_lang_code) or text
+                    if text:
+                        if chosen_font and "\\fn" in prefix:
+                            prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
+                        ev.text = prefix + _plain_to_ass_text(text) + suffix
+                    plain_idx += 1
+                kept_events.append(ev)
+            subs.events = kept_events
+            return subs.to_string("ass")
+
         for idx, ev in enumerate(subs.events):
             entries = by_index.get(idx)
             if not entries:
@@ -370,20 +509,41 @@ def reconstruct_ass(
                 meta = entry["_ass"]
                 target = ev if part_no == 0 else _copy.copy(ev)
                 if meta.get("translatable"):
-                    text = entry.get("translated") or entry.get("original", "")
-                    prefix = meta.get("prefix_tags", "")
-                    if chosen_font and "\\fn" in prefix:
-                        prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
-                    target.text = (
-                        prefix
-                        + _plain_to_ass_text(text)
-                        + meta.get("suffix_tags", "")
-                    )
+                    text = ""
+                    if has_any_translation:
+                        text = entry.get("translated") or ""
+                        if target_lang_code:
+                            text = (entry.get("translations", {}) or {}).get(target_lang_code) or text
+                    # An event nobody translated keeps its authored text — blanking it
+                    # would silently delete signs and info cards from the output.
+                    if text and not is_untranslatable_text(entry.get("original", "")):
+                        prefix = meta.get("prefix_tags", "")
+                        if chosen_font and "\\fn" in prefix:
+                            prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)
+                        target.text = (
+                            prefix
+                            + _plain_to_ass_text(text)
+                            + meta.get("suffix_tags", "")
+                        )
+                        # Text left as authored keeps the typesetter's layout; only real
+                        # translations need to be fitted to the frame.
+                        if meta.get("kind") == "sign" and text.strip() != (entry.get("original") or "").strip():
+                            sign_items.append((target, prefix, text, meta.get("suffix_tags", ""),
+                                               int(meta.get("start_ms", target.start)),
+                                               int(meta.get("end_ms", target.end))))
+                    # else: pure round trip without translation — target.text remains untouched (ev.text)
                 # else karaoke / drawing — leave raw
                 if meta.get("split"):
                     target.start = int(meta.get("start_ms", target.start))
                     target.end = int(meta.get("end_ms", target.end))
                 kept_events.append(target)
+        if sign_items:
+            # Greek is longer than the English the signs were sized for: keep it inside the frame.
+            from utils.ass_sign_fit import fit_sign_events
+            try:
+                fit_sign_events(subs, sign_items)
+            except Exception:
+                pass  # layout polish must never break an export
         subs.events = kept_events
         return subs.to_string("ass")
 
@@ -399,8 +559,12 @@ def reconstruct_ass(
 
     for entry in parsed_data:
         meta = entry.get("_ass", {}) or {}
+        text = ""
         if meta.get("translatable", True):
-            text = entry.get("translated") or entry.get("original", "")
+            text = entry.get("translated") or ""
+            if target_lang_code:
+                text = (entry.get("translations", {}) or {}).get(target_lang_code) or text
+        if meta.get("translatable", True) and (text or "raw_text" not in meta):
             prefix = meta.get("prefix_tags", "")
             if chosen_font and "\\fn" in prefix:
                 prefix = re.sub(r"\\fn[^\}\\]+", lambda m: f"\\fn{chosen_font}", prefix)

@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { ShieldAlert, Check, CheckCircle, RefreshCw, AlertTriangle, ChevronRight, BookOpen, Plus } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { ShieldAlert, Check, CheckCircle, RefreshCw, AlertTriangle, ChevronRight, BookOpen, Plus, Filter, X } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import ReviewLineResolver from './ReviewLineResolver';
 
 const ReviewQueuePanel = ({ projectName }) => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const queryProject = searchParams.get('project');
+    const queryEpisode = searchParams.get('episode');
+    const effectiveProject = projectName || queryProject;
+
+    const [activeEpisodeFilter, setActiveEpisodeFilter] = useState(queryEpisode || null);
     const [queue, setQueue] = useState([]);
     const [loading, setLoading] = useState(true);
     const [resolvingId, setResolvingId] = useState(null);
@@ -13,12 +20,23 @@ const ReviewQueuePanel = ({ projectName }) => {
     const [suggestions, setSuggestions] = useState([]);
     const toast = useToast();
 
+    useEffect(() => {
+        setActiveEpisodeFilter(queryEpisode || null);
+    }, [queryEpisode]);
+
+    const handleClearEpisodeFilter = () => {
+        setActiveEpisodeFilter(null);
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('episode');
+        setSearchParams(nextParams, { replace: true });
+    };
+
     const loadQueue = async () => {
         setLoading(true);
         try {
-            const res = projectName 
-                ? await api.getReviewQueue(projectName)
-                : await api.getGlobalReviewQueue();
+            const res = effectiveProject 
+                ? await api.getReviewQueue(effectiveProject, activeEpisodeFilter)
+                : await api.getGlobalReviewQueue(activeEpisodeFilter ? { episode: activeEpisodeFilter } : {});
             setQueue(res.data?.items || []);
             setActiveIndex(0);
         } catch (err) {
@@ -29,9 +47,9 @@ const ReviewQueuePanel = ({ projectName }) => {
     };
 
     const loadSuggestions = async () => {
-        if (!projectName) return;
+        if (!effectiveProject) return;
         try {
-            const res = await api.getFeedbackSuggestions(projectName);
+            const res = await api.getFeedbackSuggestions(effectiveProject);
             setSuggestions(res.data?.suggestions || []);
         } catch (err) {
             console.error("Failed to load suggestions", err);
@@ -41,37 +59,43 @@ const ReviewQueuePanel = ({ projectName }) => {
     useEffect(() => {
         loadQueue();
         loadSuggestions();
-    }, [projectName]);
+    }, [effectiveProject, activeEpisodeFilter]);
+
+    const displayedQueue = useMemo(() => {
+        if (!activeEpisodeFilter) return queue;
+        return queue.filter(item => item.episode === activeEpisodeFilter);
+    }, [queue, activeEpisodeFilter]);
 
     // Keyboard navigation listener
     useEffect(() => {
+        if (displayedQueue.length === 0) return;
+
         const handleKeyDown = (e) => {
-            if (queue.length === 0) return;
-            
-            // Only block navigation keys like j, k, and b when typing, allowing Ctrl+Enter to bubble
-            const isTyping = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
-            if (isTyping && (e.key === 'j' || e.key === 'k' || e.key === 'b')) {
+            if (displayedQueue.length === 0) return;
+
+            const isTypingField = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
+            if (isTypingField && (e.key === 'j' || e.key === 'k' || e.key === 'b')) {
                 return;
             }
 
             if (e.key === 'j') {
                 e.preventDefault();
-                setActiveIndex(prev => Math.min(queue.length - 1, prev + 1));
+                setActiveIndex(prev => Math.min(displayedQueue.length - 1, prev + 1));
             } else if (e.key === 'k') {
                 e.preventDefault();
                 setActiveIndex(prev => Math.max(0, prev - 1));
             } else if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
-                const activeItem = queue[activeIndex];
+                const activeItem = displayedQueue[activeIndex];
                 if (activeItem) {
                     handleResolve(activeItem.project_name, activeItem.episode, activeItem.index);
                 }
             } else if (e.key === 'b') {
                 e.preventDefault();
-                const activeItem = queue[activeIndex];
+                const activeItem = displayedQueue[activeIndex];
                 if (activeItem) {
                     if (window.confirm(`Blacklist current translation for line ${activeItem.index + 1} and retry?`)) {
-                        const targetProj = activeItem.project_name || projectName;
+                        const targetProj = activeItem.project_name || effectiveProject;
                         api.blacklistAndRetry(targetProj, activeItem.episode, {
                             line_index: activeItem.index,
                             bad_target: activeItem.translated,
@@ -79,9 +103,14 @@ const ReviewQueuePanel = ({ projectName }) => {
                             reason: "Keyboard shortcut blacklist"
                         }).then(() => {
                             toast.success("Blacklisted and retrying...");
-                            setQueue(prev => prev.filter((_, idx) => idx !== activeIndex));
-                            setActiveIndex(prev => Math.max(0, Math.min(queue.length - 2, prev)));
+                            setQueue(prev => prev.filter(it => !(
+                                (it.project_name || effectiveProject) === targetProj && 
+                                it.episode === activeItem.episode && 
+                                it.index === activeItem.index
+                            )));
+                            setActiveIndex(prev => Math.max(0, Math.min(displayedQueue.length - 2, prev)));
                         }).catch(err => {
+                            console.error("Failed to blacklist and retry", err);
                             toast.error("Failed to blacklist and retry.");
                         });
                     }
@@ -91,7 +120,7 @@ const ReviewQueuePanel = ({ projectName }) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [queue, activeIndex]);
+    }, [displayedQueue, activeIndex, effectiveProject, toast]);
 
     useEffect(() => {
         const activeElement = document.getElementById(`queue-item-${activeIndex}`);
@@ -101,11 +130,11 @@ const ReviewQueuePanel = ({ projectName }) => {
     }, [activeIndex]);
 
     const handleResolve = async (itemProjectName, episode, index) => {
-        const targetProj = itemProjectName || projectName;
+        const targetProj = itemProjectName || effectiveProject;
         setResolvingId(`${targetProj}-${episode}-${index}`);
         try {
             const activeItem = queue.find(item => 
-                (item.project_name || projectName) === targetProj && 
+                (item.project_name || effectiveProject) === targetProj && 
                 item.episode === episode && 
                 item.index === index
             );
@@ -115,11 +144,11 @@ const ReviewQueuePanel = ({ projectName }) => {
             
             // Remove from queue
             setQueue(prev => prev.filter(item => !(
-                (item.project_name || projectName) === targetProj && 
+                (item.project_name || effectiveProject) === targetProj && 
                 item.episode === episode && 
                 item.index === index
             )));
-            setActiveIndex(prev => Math.max(0, Math.min(queue.length - 2, prev)));
+            setActiveIndex(prev => Math.max(0, Math.min(displayedQueue.length - 2, prev)));
         } catch (err) {
             console.error("Failed to resolve item", err);
             toast.error("Failed to resolve item.");
@@ -129,10 +158,11 @@ const ReviewQueuePanel = ({ projectName }) => {
     };
 
     const handleResolveAll = async () => {
+        if (!effectiveProject) return;
         if (!window.confirm("Are you sure you want to dismiss all pending review items?")) return;
         setResolvingAll(true);
         try {
-            await api.resolveAllReviewItems(projectName);
+            await api.resolveAllReviewItems(effectiveProject);
             toast.success("All items resolved");
             setQueue([]);
         } catch (err) {
@@ -150,8 +180,9 @@ const ReviewQueuePanel = ({ projectName }) => {
     };
 
     const handleAcceptSuggestion = async (sug) => {
+        if (!effectiveProject) return;
         try {
-            await api.acceptFeedbackSuggestion(projectName, {
+            await api.acceptFeedbackSuggestion(effectiveProject, {
                 term: sug.term,
                 translation: sug.suggested_translation,
                 type: "other",
@@ -176,19 +207,19 @@ const ReviewQueuePanel = ({ projectName }) => {
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main Review Queue */}
-            <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm ${projectName ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+            <div className={`bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm ${effectiveProject ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
                     <div className="flex flex-col">
                         <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                             <ShieldAlert size={20} className="text-rose-500" /> Review Queue
-                            <span className="text-sm font-normal text-gray-500 ml-2">({queue.length} pending)</span>
+                            <span className="text-sm font-normal text-gray-500 ml-2">({displayedQueue.length} pending)</span>
                         </h3>
                         <p className="text-[10px] text-gray-400 mt-1 hidden sm:block">
                             Keyboard shortcuts: <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border text-gray-600 font-mono text-[9px]">j</kbd> next, <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border text-gray-600 font-mono text-[9px]">k</kbd> prev, <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border text-gray-600 font-mono text-[9px]">ctrl+enter</kbd> resolve, <kbd className="px-1.5 py-0.5 rounded bg-gray-100 border text-gray-600 font-mono text-[9px]">b</kbd> blacklist
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {projectName && queue.length > 0 && (
+                        {effectiveProject && displayedQueue.length > 0 && (
                             <button
                                 onClick={handleResolveAll}
                                 disabled={resolvingAll}
@@ -207,18 +238,47 @@ const ReviewQueuePanel = ({ projectName }) => {
                     </div>
                 </div>
 
+                {/* Active Filter Chip Banner */}
+                {activeEpisodeFilter && (
+                    <div className="mx-6 mt-4 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center justify-between text-xs animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2 text-amber-900 dark:text-amber-200">
+                            <span className="p-1 bg-amber-100 dark:bg-amber-900/60 rounded-md">
+                                <Filter size={13} className="text-amber-600 dark:text-amber-400" />
+                            </span>
+                            <span>
+                                Filtered to episode: <strong className="font-semibold text-amber-950 dark:text-amber-100">{activeEpisodeFilter}</strong>
+                                {effectiveProject && <> &middot; Project: <strong className="font-semibold text-amber-950 dark:text-amber-100">{effectiveProject}</strong></>}
+                                <span className="text-amber-700/70 dark:text-amber-400/70 ml-1.5">
+                                    ({displayedQueue.length} line{displayedQueue.length !== 1 ? 's' : ''})
+                                </span>
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleClearEpisodeFilter}
+                            className="px-2.5 py-1 bg-white hover:bg-amber-100 dark:bg-gray-800 dark:hover:bg-gray-700 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800 rounded-lg flex items-center gap-1 font-semibold transition-colors shadow-xs"
+                            title="Clear filter and view all episodes"
+                        >
+                            <X size={12} />
+                            <span>Clear Filter</span>
+                        </button>
+                    </div>
+                )}
+
                 <div className="p-0">
-                    {queue.length === 0 ? (
+                    {displayedQueue.length === 0 ? (
                         <div className="text-center py-12">
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 mb-4">
                                 <CheckCircle size={32} className="text-emerald-500" />
                             </div>
                             <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">You're all caught up!</h4>
-                            <p className="text-gray-500 text-sm">No items currently need manual review.</p>
+                            <p className="text-gray-500 text-sm">
+                                {activeEpisodeFilter ? `No items in episode "${activeEpisodeFilter}" need manual review.` : 'No items currently need manual review.'}
+                            </p>
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[600px] overflow-y-auto">
-                            {queue.map((item, i) => {
+                            {displayedQueue.map((item, i) => {
                                 const isActive = i === activeIndex;
                                 return (
                                     <div 
@@ -249,7 +309,7 @@ const ReviewQueuePanel = ({ projectName }) => {
                                                         e.stopPropagation();
                                                         handleResolve(item.project_name, item.episode, item.index);
                                                     }}
-                                                    disabled={resolvingId === `${item.project_name || projectName}-${item.episode}-${item.index}`}
+                                                    disabled={resolvingId === `${item.project_name || effectiveProject}-${item.episode}-${item.index}`}
                                                     className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/40 px-2 py-1 rounded transition-colors disabled:opacity-50"
                                                 >
                                                     <Check size={12} /> Resolve
@@ -260,15 +320,19 @@ const ReviewQueuePanel = ({ projectName }) => {
                                         {isActive ? (
                                             <div onClick={(e) => e.stopPropagation()}>
                                                 <ReviewLineResolver
-                                                    projectName={item.project_name || projectName}
+                                                    projectName={item.project_name || effectiveProject}
                                                     episodeName={item.episode}
                                                     line={item}
                                                     onResolved={() => {
-                                                        setQueue(prev => prev.filter((_, idx) => idx !== i));
-                                                        setActiveIndex(prev => Math.max(0, Math.min(queue.length - 2, prev)));
+                                                        setQueue(prev => prev.filter(it => !(
+                                                            (it.project_name || effectiveProject) === (item.project_name || effectiveProject) && 
+                                                            it.episode === item.episode && 
+                                                            it.index === item.index
+                                                        )));
+                                                        setActiveIndex(prev => Math.max(0, Math.min(displayedQueue.length - 2, prev)));
                                                     }}
                                                     onUpdateLineText={handleLocalLineUpdate}
-                                                    onSkip={() => setActiveIndex(prev => Math.min(queue.length - 1, prev + 1))}
+                                                    onSkip={() => setActiveIndex(prev => Math.min(displayedQueue.length - 1, prev + 1))}
                                                 />
                                             </div>
                                         ) : (
@@ -292,7 +356,7 @@ const ReviewQueuePanel = ({ projectName }) => {
             </div>
 
             {/* Glossary Suggestions sidebar */}
-            {projectName && (
+            {effectiveProject && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm flex flex-col gap-4">
                     <h3 className="text-md font-bold text-gray-900 dark:text-white flex items-center gap-2 border-b pb-3 border-gray-100 dark:border-gray-700">
                         <BookOpen size={18} className="text-indigo-500" />

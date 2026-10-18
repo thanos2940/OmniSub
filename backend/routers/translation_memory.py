@@ -1,3 +1,4 @@
+import asyncio
 from typing import List
 from fastapi import APIRouter, HTTPException
 
@@ -11,7 +12,7 @@ async def tm_stats(project_name: str):
     """Get Translation Memory statistics for a project."""
     try:
         tm = TranslationMemory(project_name)
-        return tm.get_stats()
+        return await asyncio.to_thread(tm.get_stats)
     except Exception as e:
         return {"error": str(e), "total_records": 0}
 
@@ -20,7 +21,7 @@ async def tm_stats(project_name: str):
 async def get_edit_stats(project_name: str):
     """Show how many user edits have been recorded and their impact."""
     tm = TranslationMemory(project_name)
-    stats = tm.get_stats()
+    stats = await asyncio.to_thread(tm.get_stats)
     return {
         "total_records": stats.get("total_records", 0),
         "user_edited_records": stats.get("user_edited_count", 0),
@@ -33,7 +34,7 @@ async def tm_clear(project_name: str):
     """Clear all Translation Memory records for a project."""
     try:
         tm = TranslationMemory(project_name)
-        tm.clear()
+        await asyncio.to_thread(tm.clear)
         return {"status": "cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to clear TM: {e}")
@@ -44,7 +45,8 @@ async def tm_search(project_name: str, lines: List[str], top_k: int = 3, thresho
     """Search Translation Memory for similar translations."""
     try:
         tm = TranslationMemory(project_name)
-        results = tm.search(lines, top_k=top_k, similarity_threshold=threshold)
+        results = await asyncio.to_thread(tm.search, lines, top_k=top_k, similarity_threshold=threshold)
         return {"results": {str(k): v for k, v in results.items()}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"TM search failed: {e}")
+

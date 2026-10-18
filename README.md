@@ -1,11 +1,8 @@
 # Omnisub
 
-<<<<<<< HEAD
 [![CI](https://github.com/thanos2940/OmbiSub---Google-Seminar-Capstone-Project/actions/workflows/ci.yml/badge.svg)](https://github.com/thanos2940/OmbiSub---Google-Seminar-Capstone-Project/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-=======
->>>>>>> 0ed0551b5c166ee2dcf737224e5d0abb5fb1c3a4
 Omnisub is a context-aware AI subtitle translator built to overcome the limitations of line-by-line machine translation. Before it translates a single line, it builds a **Spherical Context** for the whole project — a dynamic glossary, character profiles, episode summaries, a lore/context guide, and a translation memory — so terminology, character voice, and gender stay consistent across an entire series or movie. It solves the "amnesiac translation" problem where names, genders, and running jokes get mistranslated line-by-line by standard LLM prompts.
 
 Omnisub is a monorepo:
@@ -114,7 +111,7 @@ npm run dev
 
 The frontend will be available at `http://localhost:5173`.
 
-### Running via Docker
+### Running via Docker & Production Deployment
 
 ```bash
 docker compose up --build
@@ -130,6 +127,9 @@ at your actual media root before enabling Sonarr/Radarr sync or auto-export —
 the container path must match what Sonarr/Radarr report (or be remapped via
 **Settings → Sonarr/Radarr → path mappings**; the Health page has path
 diagnostics if a mount doesn't resolve).
+
+> [!TIP]
+> For advanced deployment topologies (systemd on bare-metal Linux, reverse proxies with Nginx/Caddy, Sonarr/Radarr webhook setup, and external binary paths), see the comprehensive [Deployment Guide](docs/DEPLOYMENT_GUIDE.md).
 
 ### Tests
 

@@ -126,12 +126,16 @@ class BatchTranslator:
     @staticmethod
     def _to_inline_request(req: "TranslationRequest", model: str):
         """Render one scene request into a typed InlinedRequest (per-request config
-        carries the system instruction, schema, and thinking budget)."""
+        carries the system instruction, schema, thinking budget and safety thresholds)."""
         from google.genai import types
+        from utils.gemini_safety import safety_settings
         cfg_kwargs = {
             "system_instruction": req.system_instruction,
             "temperature": 0.3,
         }
+        settings = safety_settings()
+        if settings:
+            cfg_kwargs["safety_settings"] = settings
         if req.structured and req.response_schema is not None:
             cfg_kwargs["response_mime_type"] = "application/json"
             cfg_kwargs["response_schema"] = req.response_schema
@@ -292,6 +296,9 @@ class BatchTranslator:
 
     async def run_once(self, config: Dict) -> int:
         if not config.get("batch_api_enabled", False):
+            return 0
+        # Paused queue, or translations handed to external agents: no model calls.
+        if config.get("queue_worker_paused", False) or config.get("translation_engine", "model") == "agent":
             return 0
         if self._over_budget(config):
             logger.info("Batch: daily budget cap reached; deferring backlog drain.")

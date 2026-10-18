@@ -30,15 +30,8 @@ def create_glossary_orchestrator(
     Returns:
         SequentialAgent orchestrating the glossary creation workflow
     """
-    from .llm_factory import is_local_model
     agents = []
     
-    # Auto-disable research for local models as they lack search tools
-    if enable_research and is_local_model(model_name):
-        # We could also keep it enabled but it won't have tools
-        # For now, let's respect enable_research but log a warning if it has no tools
-        pass
-
     if enable_research:
         agents.append(create_research_agent(model_name))
     

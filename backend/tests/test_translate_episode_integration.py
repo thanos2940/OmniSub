@@ -49,13 +49,14 @@ def _make_rows(n):
     return [{
         "id": str(i + 1),
         "timecode": f"00:00:{i:02d},000 --> 00:00:{i:02d},500",
-        "original": f"Hello number {i}",
+        "original": f"Hello number {i + 1}",
         "translated": "",
         "translations": {},
     } for i in range(n)]
 
 
-def _setup(tmp_path, monkeypatch, n_lines, provider="local"):
+
+def _setup(tmp_path, monkeypatch, n_lines):
     monkeypatch.setattr(storage, "PROJECTS_DIR", tmp_path / "projects")
     # Keep the real metadata index DB untouched by this temp project.
     monkeypatch.setattr(metadata_index, "upsert", lambda *a, **k: None)
@@ -64,7 +65,7 @@ def _setup(tmp_path, monkeypatch, n_lines, provider="local"):
 
     storage.create_project("TP", {
         "target_language": "Greek",
-        "settings": {"ai_provider": provider, "local_translation_model": "test-model"},
+        "settings": {"translation_model": "gemini-2.5-flash"},
     })
     storage.save_episode("TP", "E01", _make_rows(n_lines), {"arr_media_path": None})
 
@@ -77,15 +78,16 @@ class FakeLLM:
     """Scripted generate(): echoes 'N| ΜΕΤ N' per numbered prompt line; can drop
     indices on specific calls and append a new_terms JSON payload."""
 
-    def __init__(self, drop_on_call=None, new_terms_on_first=False):
+    def __init__(self, drop_on_call=None, new_terms_on_first=False, drop_indices=None):
         self.calls = 0
         self.drop_on_call = drop_on_call or {}   # {call_number: {local_indices_to_drop}}
+        self.drop_indices = drop_indices or set()
         self.new_terms_on_first = new_terms_on_first
 
     async def __call__(self, model_name, prompt, **kwargs):
         self.calls += 1
         nums = re.findall(r'^(\d+)\|', prompt, re.M)
-        drops = self.drop_on_call.get(self.calls, set())
+        drops = self.drop_on_call.get(self.calls, set()) | self.drop_indices
         out_lines = [f"{n}| ΜΕΤ {n}" for n in nums if int(n) not in drops]
         if self.new_terms_on_first and self.calls == 1:
             payload = {
@@ -173,7 +175,7 @@ async def test_scene_mode_happy_path(tmp_path, monkeypatch):
     monkeypatch.setattr("adk_agents.llm_factory.generate", fake)
     cfg = {**BASE_CONFIG, "episode_request_mode": "scenes"}
 
-    ok = await _run(job_id, "local/test-model", cfg)
+    ok = await _run(job_id, "gemini-flash-lite-latest", cfg)
 
     assert ok is True
     data = storage.load_episode("TP", "E01")["data"]
@@ -183,12 +185,14 @@ async def test_scene_mode_happy_path(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_scene_mode_partial_failure_flags_gaps(tmp_path, monkeypatch):
     job_id = _setup(tmp_path, monkeypatch, n_lines=10)
-    # Drop scene-local line 5 on every call -> 10% missing -> fill + flag, complete.
-    fake = FakeLLM(drop_on_call={1: {5}})
+    # Drop scene-local line 5 on call 1 and line 1 on repair call 2 -> 10% missing -> flag, complete.
+    fake = FakeLLM(drop_on_call={1: {5}, 2: {1}})
     monkeypatch.setattr("adk_agents.llm_factory.generate", fake)
     cfg = {**BASE_CONFIG, "episode_request_mode": "scenes"}
 
-    ok = await _run(job_id, "local/test-model", cfg)
+
+
+    ok = await _run(job_id, "gemini-flash-lite-latest", cfg)
 
     assert ok is True
     data = storage.load_episode("TP", "E01")["data"]
@@ -200,10 +204,48 @@ async def test_scene_mode_partial_failure_flags_gaps(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_scene_mode_heavy_failure_fails_atomically(tmp_path, monkeypatch):
     job_id = _setup(tmp_path, monkeypatch, n_lines=10)
-    fake = FakeLLM(drop_on_call={1: {1, 2, 3, 4, 5}})  # 50% missing
+    fake = FakeLLM(drop_indices={1, 2, 3, 4, 5})  # 50% missing
     monkeypatch.setattr("adk_agents.llm_factory.generate", fake)
     cfg = {**BASE_CONFIG, "episode_request_mode": "scenes"}
 
-    ok = await _run(job_id, "local/test-model", cfg)
+    ok = await _run(job_id, "gemini-flash-lite-latest", cfg)
 
     assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_scene_mode_scenes_complete_without_post_processing_errors(tmp_path, monkeypatch):
+    """Regression: the scene loop read an undefined `prompt` after every scene, so
+    each scene was marked failed in post-processing even though its lines landed."""
+    job_id = _setup(tmp_path, monkeypatch, n_lines=8)
+    fake = FakeLLM()
+    monkeypatch.setattr("adk_agents.llm_factory.generate", fake)
+    cfg = {**BASE_CONFIG, "episode_request_mode": "scenes"}
+
+    ok = await _run(job_id, "gemini-flash-lite-latest", cfg)
+
+    assert ok is True
+    job = jobs[job_id]
+    assert not any("post-processing failed" in line for line in job.logs)
+    assert set((job.scene_status or {}).values()) <= {"completed"}
+    assert fake.calls == 1, "one scene should cost exactly one model call"
+    assert job.prompt and "Hello number 1" in job.prompt
+
+
+@pytest.mark.asyncio
+async def test_failed_episode_carries_the_model_api_error_as_its_reason(tmp_path, monkeypatch):
+    """The queue used to show only "Translation failed to complete successfully";
+    the cause (a revoked key, an exhausted quota) was buried in the server log."""
+    job_id = _setup(tmp_path, monkeypatch, n_lines=6)
+
+    async def broken(model_name, prompt, **kwargs):
+        raise RuntimeError("400 INVALID_ARGUMENT. API key not valid. Please pass a valid API key.")
+
+    monkeypatch.setattr("adk_agents.llm_factory.generate", broken)
+
+    ok = await _run(job_id, "gemini-flash-lite-latest", {**BASE_CONFIG, "episode_request_mode": "whole"})
+
+    assert ok is False
+    reason = (jobs[job_id].result or {}).get("failure_reason", "")
+    assert "6 of 6 lines could not be translated" in reason
+    assert "API key not valid" in reason

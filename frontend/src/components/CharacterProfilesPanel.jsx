@@ -1,18 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FileText, Sparkles, Plus, Edit2, Trash2, X, Check, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
+import { useJobs } from '../context/JobContext';
 
 const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
     const [characters, setCharacters] = useState({});
     const [loading, setLoading] = useState(true);
-    const [generating, setGenerating] = useState(false);
+    const [generatingJobId, setGeneratingJobId] = useState(null);
     const [editingChar, setEditingChar] = useState(null);
     const [formData, setFormData] = useState({ name: '', gender: 'unknown', formality: 'informal', speech_patterns: '', notes: '' });
     const [saveChoiceDialog, setSaveChoiceDialog] = useState(null);
+    
     const toast = useToast();
+    const { activeJobs, addJob } = useJobs();
+    const isMounted = useRef(true);
 
-    const isMounted = React.useRef(true);
     useEffect(() => {
         isMounted.current = true;
         return () => {
@@ -20,7 +23,7 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
         };
     }, []);
 
-    const loadCharacters = async () => {
+    const loadCharacters = useCallback(async () => {
         if (!isMounted.current) return;
         setLoading(true);
         try {
@@ -35,59 +38,51 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
                 setLoading(false);
             }
         }
-    };
+    }, [projectName]);
 
     useEffect(() => {
         loadCharacters();
-    }, [projectName]);
+    }, [loadCharacters]);
+
+    // Track active character generation job through JobContext
+    useEffect(() => {
+        if (!generatingJobId) return;
+        const job = activeJobs[generatingJobId];
+        if (!job) return;
+
+        if (job.status === 'completed') {
+            if (isMounted.current) {
+                toast.success("Character profiles generated successfully!");
+                loadCharacters();
+                setGeneratingJobId(null);
+            }
+        } else if (job.status === 'failed' || job.status === 'cancelled') {
+            if (isMounted.current) {
+                toast.error(`Profile generation failed: ${job.message || 'Error occurred'}`);
+                setGeneratingJobId(null);
+            }
+        }
+    }, [activeJobs, generatingJobId, loadCharacters, toast]);
 
     const handleGenerate = async () => {
-        if (generating) return;  // guard against double-submit
-        setGenerating(true);
-        // Single exit point so the button-enable state is reset in exactly one place.
-        const finish = (msg, kind = 'error') => {
-            if (!isMounted.current) return;
-            if (msg) toast[kind](msg);
-            setGenerating(false);
-        };
+        if (generatingJobId) return;
         try {
             const model = projectSettings?.context_model || null;
             const res = await api.generateCharacters(projectName, model);
             const jobId = res.data?.job_id;
-            if (!jobId) return finish("Failed to start generation.");
+            if (!jobId) {
+                toast.error("Failed to start generation.");
+                return;
+            }
             toast.success("Character profiles generation started...");
-            // Keep the button disabled until the job actually finishes (not just until
-            // it was enqueued) so the user can't double-submit. Poll up to ~60s.
-            let attempts = 0;
-            const poll = async () => {
-                if (!isMounted.current) return;
-                attempts++;
-                try {
-                    const jobRes = await api.getJob(jobId);
-                    if (!isMounted.current) return;
-                    const status = jobRes.data?.status;
-                    if (status === 'completed') {
-                        loadCharacters();
-                        finish("Character profiles generated!", 'success');
-                    } else if (status === 'failed') {
-                        finish(`Profile generation failed: ${jobRes.data.message}`);
-                    } else if (attempts < 30) {
-                        setTimeout(poll, 2000);
-                    } else {
-                        finish("Character generation is taking longer than expected — use Refresh to check.");
-                    }
-                } catch (e) {
-                    if (attempts < 30) {
-                        setTimeout(poll, 2000);  // transient — keep waiting
-                    } else {
-                        finish("Lost connection while generating characters.");
-                    }
-                }
-            };
-            setTimeout(poll, 2000);
+            addJob(jobId, 'character_profiles', `Generating profiles for ${projectName}`, {
+                projectId: projectName,
+                link: `/project/${encodeURIComponent(projectName)}`
+            });
+            setGeneratingJobId(jobId);
         } catch (err) {
             console.error("Failed to generate characters", err);
-            finish("Failed to generate characters.");
+            toast.error("Failed to generate characters.");
         }
     };
 
@@ -151,6 +146,7 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
     }
 
     const charsList = Object.keys(characters);
+    const isGenerating = !!generatingJobId;
 
     return (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
@@ -162,10 +158,10 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={handleGenerate}
-                        disabled={generating}
+                        disabled={isGenerating}
                         className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium disabled:opacity-50"
                     >
-                        <Sparkles size={14} /> AI Generate
+                        <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} /> {isGenerating ? 'Generating...' : 'AI Generate'}
                     </button>
                     <button
                         onClick={() => openEditModal()}
@@ -204,7 +200,7 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
                                         <div className="flex items-center gap-2">
                                             <h4 className="font-bold text-gray-900 dark:text-white text-lg">{name}</h4>
                                             {char.inherited && (
-                                                <span 
+                                                 <span 
                                                     className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900" 
                                                     title={`Inherited from parent universe project: ${char.inherited_from}`}
                                                 >

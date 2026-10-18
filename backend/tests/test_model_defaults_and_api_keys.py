@@ -28,7 +28,6 @@ def test_new_project_inherits_user_configured_model_parameters(mock_storage, mon
         "default_context_model": "gemini-1.5-pro",
         "default_glossary_model": "gemini-1.5-pro",
         "review_model": "gemini-1.5-flash",
-        "ai_provider": "hybrid",
         "default_target_language": "Greek",
         "apply_subtitle_edit_fixes": True
     }
@@ -50,7 +49,6 @@ def test_new_project_inherits_user_configured_model_parameters(mock_storage, mon
     assert settings.get("context_model") == "gemini-1.5-pro"
     assert settings.get("glossary_model") == "gemini-1.5-pro"
     assert settings.get("review_model") == "gemini-1.5-flash"
-    assert settings.get("ai_provider") == "hybrid"
     assert proj.get("target_language") == "Greek"
 
 

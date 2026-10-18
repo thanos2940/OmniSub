@@ -189,6 +189,7 @@ def parse_translations_from_text(text: str, expected_count: int = 0) -> List[Dic
     # 1. Pipe-delimited format: N| text  (primary)
     pipe_matches = re.findall(r'^(\d+)\s*\|\s*(.*)', clean_text, re.MULTILINE)
     if pipe_matches:
+        from utils.text_normalize import sanitize_translation_text
         # Build ordered list preserving continuation lines (lines without N| prefix)
         idx_map: Dict[int, str] = {}
         current_idx = None
@@ -205,8 +206,11 @@ def parse_translations_from_text(text: str, expected_count: int = 0) -> List[Dic
                 idx_map[current_idx] += " " + stripped
 
         for k in idx_map:
-            idx_map[k] = idx_map[k].replace("<br>", "\n")
+            val_clean = idx_map[k].replace("<br>", "\n")
+            idx_map[k] = sanitize_translation_text(val_clean)
         return [{"index": k, "text": v} for k, v in sorted(idx_map.items())]
+
+    from utils.text_normalize import sanitize_translation_text
 
     # 2. XML tag format: <line index="N">text</line>  (legacy)
     line_matches = list(re.finditer(
@@ -217,7 +221,7 @@ def parse_translations_from_text(text: str, expected_count: int = 0) -> List[Dic
         for match in line_matches:
             results.append({
                 "index": int(match.group(1)),
-                "text": match.group(2).strip().replace("<br>", "\n"),
+                "text": sanitize_translation_text(match.group(2).strip().replace("<br>", "\n")),
             })
         return results
 
@@ -236,5 +240,8 @@ def parse_translations_from_text(text: str, expected_count: int = 0) -> List[Dic
             })
         elif current_idx is not None and results:
             results[-1]["text"] += "\n" + line
+
+    for r in results:
+        r["text"] = sanitize_translation_text(r["text"])
 
     return results

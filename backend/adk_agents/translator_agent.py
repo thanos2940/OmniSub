@@ -11,6 +11,21 @@ from google.adk.agents import Agent
 from .llm_factory import create_model
 from typing import Dict, List, Optional
 
+from utils.translation_rules import (  # noqa: F401 — re-exported for callers/tests
+    GLOSSARY_JUDGMENT_RULE,
+    _spoken_greek_idioms_rule,
+    _pro_drop_rule,
+    _active_voice_rule,
+    _contractions_rule,
+    _register_boundaries_and_slang_rule,
+    _profanity_rule,
+    _subtitle_cadence_rule,
+    _second_person_rule,
+    _morphological_guidance_rule,
+    _script_integrity_rule,
+    _japanese_names_greek_rule,
+)
+
 
 def _flatten_cue(text: str) -> str:
     """Collapse a multi-line subtitle cue to a single line for translation.
@@ -60,49 +75,14 @@ def _build_glossary_context(glossary: Dict) -> str:
         # Only emit non-empty fields
         meta = "|".join(x for x in [t, g, *flags] if x)
         desc = term.get("description", "")
+        sense = (term.get("sense") or "").strip()
+        if sense:  # a word that also has an everyday meaning: the term applies only in this sense
+            desc = f"{desc} — only as {sense}" if desc else f"only as {sense}"
         row = f"{src}|{tgt}|{meta}" + (f"|{desc}" if desc else "")
         rows.append(row)
 
     header = "# source|translation|type|gender|case\n"
     return header + "\n".join(rows)
-
-
-def _second_person_rule(target_language: str) -> str:
-    """Guidance for resolving English 'you' (which marks neither number nor register)
-    into the correct {target_language} form, using the surrounding dialogue."""
-    return (
-        f'- SECOND PERSON ("you"): English "you" shows neither number nor formality. '
-        f"Infer from the surrounding dialogue whether ONE person or SEVERAL are being "
-        f"addressed, and whether the tone is familiar or formal/respectful, then use the "
-        f"matching {target_language} pronoun and verb conjugation. Default to SINGULAR "
-        f"familiar; use the plural or formal form ONLY when the context clearly calls for "
-        f"it (several listeners, a crowd, or a deferential/formal relationship). Keep the "
-        f"chosen form consistent for the same speaker-listener pair across the scene."
-    )
-
-
-def _morphological_guidance_rule(target_language: str) -> str:
-    """Explicit guidance on declensions, grammatical cases, and articles for glossary terms."""
-    lang = (target_language or "").strip().lower()
-    if lang in ("greek", "el", "ελληνικά"):
-        return (
-            '- GLOSSARY MORPHOLOGY & DECLENSIONS: Match glossary translations faithfully, but grammatically DECLINE '
-            'nouns, proper names, and adjectives to fit sentence syntax (Nominative, Genitive, Accusative, Vocative) '
-            'with appropriate definite/indefinite articles (ο/του/τον, η/της/την, το/του/το, etc.). Do NOT force the lemma/nominative '
-            'form where an inflected case is grammatically required.'
-        )
-    return (
-        f"- GLOSSARY MORPHOLOGY: Match glossary translations faithfully while inflecting grammatical cases, pluralization, "
-        f"and gender agreements as required by {target_language} sentence syntax."
-    )
-
-
-def _script_integrity_rule(target_language: str) -> str:
-    """Explicit script hygiene rule to prevent homoglyph contamination and broken characters."""
-    lang = (target_language or "").strip().lower()
-    if lang in ("greek", "el", "ελληνικά"):
-        return "- SCRIPT HYGIENE: Write ONLY in standard Modern Greek monotonic script (Α-Ω, α-ω with standard tonos ά, έ, ή, ί, ό, ύ, ώ). NEVER mix Latin, Cyrillic, or foreign alphabet characters inside Greek words."
-    return ""
 
 
 def _build_instruction(
@@ -116,6 +96,21 @@ def _build_instruction(
     context_section = f"\n{context_guide}\n" if context_guide else ""
     second_person = _second_person_rule(target_language)
     morphology_rule = _morphological_guidance_rule(target_language)
+    idioms_rule = _spoken_greek_idioms_rule(target_language)
+    pro_drop = _pro_drop_rule(target_language)
+    pro_drop_line = f"\n{pro_drop}" if pro_drop else ""
+    active_voice = _active_voice_rule(target_language)
+    active_voice_line = f"\n{active_voice}" if active_voice else ""
+    contractions = _contractions_rule(target_language)
+    contractions_line = f"\n{contractions}" if contractions else ""
+    register_slang = _register_boundaries_and_slang_rule(target_language)
+    register_slang_line = f"\n{register_slang}" if register_slang else ""
+    profanity = _profanity_rule(target_language)
+    profanity_line = f"\n{profanity}" if profanity else ""
+    cadence = _subtitle_cadence_rule(target_language)
+    cadence_line = f"\n{cadence}" if cadence else ""
+    jp_names_rule = _japanese_names_greek_rule(target_language)
+    jp_line = f"\n{jp_names_rule}" if jp_names_rule else ""
     script_rule = _script_integrity_rule(target_language)
     script_line = f"\n{script_rule}" if script_rule else ""
 
@@ -128,11 +123,13 @@ The JSON object has a "lines" key containing an array of objects, each with:
 Rules:
 - STRICT 1:1 MAPPING: Each input line index must appear EXACTLY ONCE in the output. Never split a translation across two JSON entries. The output array length MUST equal the input line count.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks. Never break a cue into multiple lines or entries; subtitle wrapping is applied automatically afterwards.
-- Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
+{GLOSSARY_JUDGMENT_RULE}
 - {morphology_rule}
-{second_person}{script_line}
+- {idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
+{second_person}{script_line}{jp_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
+- TRANSLATION PURITY: Output ONLY the translated target text in {target_language}. NEVER repeat or include the original source text in your translation. NEVER output dual-language or paired text (e.g. "source -> target", "English -> Greek", "EN: ... EL: ..."). Never use arrows ("->", "=>", "→") to separate original and translation.
 - Do NOT output internal reasoning blocks or any text outside the JSON.
 {context_section}
 Glossary (source|translation|type|gender|case):
@@ -147,28 +144,16 @@ Rules:
 - STRICT 1:1 MAPPING: Every input line N must produce EXACTLY ONE output line N|. Never split a translation across two numbered lines. If the translation is long, keep it ALL on a single N| line.
 - The total number of output lines MUST equal the total number of input lines. No extra lines, no missing lines.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks; subtitle wrapping is applied automatically afterwards.
-- Match exact glossary translations. Apply correct grammatical gender for articles/adjectives.
+{GLOSSARY_JUDGMENT_RULE}
 - {morphology_rule}
-{second_person}{script_line}
+- {idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
+{second_person}{script_line}{jp_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
+- TRANSLATION PURITY: Output ONLY the translated target text in {target_language}. NEVER repeat or include the original source text in your translation. NEVER output dual-language or paired text (e.g. "source -> target", "English -> Greek", "EN: ... EL: ..."). Never use arrows ("->", "=>", "→") to separate original and translation.
 {context_section}
 Glossary (source|translation|type|gender|case):
 {glossary_context}"""
-
-
-def _build_gemma_instruction(
-    target_language: str,
-    glossary_context: str,
-    context_guide: str = "",
-    structured: bool = False,
-) -> str:
-    """Gemma-specific instruction with native-speaker fluency hint."""
-    base = _build_instruction(target_language, glossary_context, context_guide, structured)
-    return (
-        f"You are natively fluent in {target_language}. "
-        f"Use correct articles, natural word order, and idiomatic expressions.\n\n" + base
-    )
 
 
 def build_translation_prompt(
@@ -183,6 +168,7 @@ def build_translation_prompt(
     negative_examples: str = "",
     lookahead_line: str = "",
     forced_translations: str = "",
+    context_hint: Optional[str] = None,
 ) -> str:
     """Build a compact translation prompt for a batch of subtitle lines.
 
@@ -198,6 +184,8 @@ def build_translation_prompt(
     Keeping stable sections at the front maximises Gemini implicit cache hits
     across scenes within the same episode.
     """
+    if context_hint is not None:
+        context_line = context_hint
     numbered = "\n".join(
         f"{i + 1}| {_flatten_cue(line)}" for i, line in enumerate(lines)
     )
@@ -230,18 +218,10 @@ def create_translator_agent(
     """Create Translator Agent for context-aware subtitle translation."""
     glossary_context = _build_glossary_context(glossary)
 
-    is_local = model_name.startswith("local/")
-    is_gemma = "gemma" in model_name.lower()
-
     from utils.structured_output import SceneTranslationResponse, use_structured_output
     structured = use_structured_output(model_name)
-
-    if is_local and is_gemma:
-        instruction = _build_gemma_instruction(target_language, glossary_context, context_guide, structured)
-    else:
-        instruction = _build_instruction(target_language, glossary_context, context_guide, structured)
-
-    final_temp = temperature if temperature is not None else (0.5 if is_local and is_gemma else 0.3)
+    instruction = _build_instruction(target_language, glossary_context, context_guide, structured)
+    final_temp = temperature if temperature is not None else 0.3
 
     return Agent(
         name="TranslatorAgent",

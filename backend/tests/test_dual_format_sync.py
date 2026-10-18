@@ -376,7 +376,7 @@ async def test_sibling_pruned_when_source_removed(
     episodes = storage.list_episodes(project_name)
     assert "S01E01" in episodes
     assert "S01E01 [srt]" not in episodes  # Pruned!
-    assert not target_path.exists()  # Orphaned target deleted!
+    assert target_path.exists()  # INT-P0-01: Target subtitle preserved on disk!
     assert result.removed_episodes == 1
 
 
@@ -551,8 +551,9 @@ def test_sibling_export_extension(setup_storage, mock_media_dir):
 
     from services.translation_service import auto_export_translated_subtitle
     
-    base_exported_path = auto_export_translated_subtitle(project_name, "S01E01", ep_data_base, ep_meta_base)
-    sib_exported_path = auto_export_translated_subtitle(project_name, "S01E01 [srt]", ep_data_sib, ep_meta_sib)
+    # The fixture's Greek files are someone else's: an explicit export may replace them.
+    base_exported_path = auto_export_translated_subtitle(project_name, "S01E01", ep_data_base, ep_meta_base, force=True)
+    sib_exported_path = auto_export_translated_subtitle(project_name, "S01E01 [srt]", ep_data_sib, ep_meta_sib, force=True)
     
     assert base_exported_path.endswith(".el.ass")
     assert sib_exported_path.endswith(".el.srt")
@@ -887,6 +888,146 @@ async def test_sync_engine_handles_api_failure_without_disabling_projects(temp_s
         meta = temp_storage.load_project_metadata(project_name)
         assert meta.get("arr_disabled") is False, "Project disabled during API failure!"
         assert len(result.errors) > 0
+
+
+@pytest.mark.asyncio
+async def test_sonarr_only_sync_does_not_disable_radarr_movies(temp_storage, monkeypatch):
+    # Setup: Create an existing active series and an existing active movie
+    temp_storage.create_project("Existing Movie", {
+        "show_name": "Existing Movie",
+        "target_language": "Greek",
+        "arr_source": True,
+        "arr_disabled": False,
+        "arr_media_type": "movie",
+    })
+    temp_storage.create_project("Existing Series", {
+        "show_name": "Existing Series",
+        "target_language": "Greek",
+        "arr_source": True,
+        "arr_disabled": False,
+        "arr_media_type": "series",
+    })
+
+    # Configure engine with ONLY Sonarr (Radarr is None, simulating source="sonarr")
+    sonarr_cfg = SonarrConfig(base_url="http://mock-sonarr", api_key="key", enabled=True)
+    engine = MediaSyncEngine(sonarr_config=sonarr_cfg, radarr_config=None, target_lang_code="el")
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            "integrations.media_sync_engine.get_all_series",
+            AsyncMock(return_value=[{"id": 1, "title": "Existing Series", "path": "/mock/tv/Existing Series", "seriesType": "standard"}])
+        )
+        m.setattr("integrations.media_sync_engine.get_episodes", AsyncMock(return_value=[]))
+        m.setattr("integrations.media_sync_engine.get_episode_files", AsyncMock(return_value=[]))
+
+        result = await engine.full_sync()
+
+        # Movie MUST NOT be disabled just because Radarr was not part of this sync run!
+        movie_meta = temp_storage.load_project_metadata("Existing Movie")
+        assert movie_meta.get("arr_disabled") is False, "Radarr movie was falsely disabled during Sonarr-only sync!"
+
+        series_meta = temp_storage.load_project_metadata("Existing Series")
+        assert series_meta.get("arr_disabled") is False
+
+
+@pytest.mark.asyncio
+async def test_radarr_only_sync_does_not_disable_sonarr_series(temp_storage, monkeypatch):
+    # Setup: Create an existing active series and an existing active movie
+    temp_storage.create_project("Existing Movie", {
+        "show_name": "Existing Movie",
+        "target_language": "Greek",
+        "arr_source": True,
+        "arr_disabled": False,
+        "arr_media_type": "movie",
+        "arr_radarr_id": 1,
+    })
+    temp_storage.create_project("Existing Series", {
+        "show_name": "Existing Series",
+        "target_language": "Greek",
+        "arr_source": True,
+        "arr_disabled": False,
+        "arr_media_type": "series",
+    })
+
+    # Configure engine with ONLY Radarr (Sonarr is None, simulating source="radarr")
+    radarr_cfg = RadarrConfig(base_url="http://mock-radarr", api_key="key", enabled=True)
+    engine = MediaSyncEngine(sonarr_config=None, radarr_config=radarr_cfg, target_lang_code="el")
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            "integrations.media_sync_engine.get_all_movies",
+            AsyncMock(return_value=[{"id": 1, "title": "Existing Movie", "hasFile": False}])
+        )
+
+        result = await engine.full_sync()
+
+        # Series MUST NOT be disabled just because Sonarr was not part of this sync run!
+        series_meta = temp_storage.load_project_metadata("Existing Series")
+        assert series_meta.get("arr_disabled") is False, "Sonarr series was falsely disabled during Radarr-only sync!"
+
+        movie_meta = temp_storage.load_project_metadata("Existing Movie")
+        assert movie_meta.get("arr_disabled") is False
+
+
+@pytest.mark.asyncio
+async def test_empty_api_response_does_not_disable_existing_library(temp_storage, monkeypatch):
+    # Create 3 existing active series
+    for i in range(1, 4):
+        temp_storage.create_project(f"Show{i}", {
+            "show_name": f"Show {i}",
+            "target_language": "Greek",
+            "arr_source": True,
+            "arr_disabled": False,
+            "arr_media_type": "series",
+        })
+
+    sonarr_cfg = SonarrConfig(base_url="http://mock-sonarr", api_key="key", enabled=True)
+    engine = MediaSyncEngine(sonarr_config=sonarr_cfg, target_lang_code="el")
+
+    # Mock Sonarr returning empty array [] (e.g. empty profile, permissions or API glitch)
+    with monkeypatch.context() as m:
+        m.setattr("integrations.media_sync_engine.get_all_series", AsyncMock(return_value=[]))
+
+        result = await engine.full_sync()
+
+        for i in range(1, 4):
+            meta = temp_storage.load_project_metadata(f"Show{i}")
+            assert meta.get("arr_disabled") is False, f"Show{i} was disabled on empty API response!"
+        assert any("safeguard" in w.lower() for w in result.warnings)
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_prevents_mass_disablement(temp_storage, monkeypatch):
+    # Create 20 existing active series
+    for i in range(1, 21):
+        temp_storage.create_project(f"Series{i}", {
+            "show_name": f"Series {i}",
+            "target_language": "Greek",
+            "arr_source": True,
+            "arr_disabled": False,
+            "arr_media_type": "series",
+        })
+
+    sonarr_cfg = SonarrConfig(base_url="http://mock-sonarr", api_key="key", enabled=True)
+    engine = MediaSyncEngine(sonarr_config=sonarr_cfg, target_lang_code="el")
+
+    # Mock Sonarr returning only 5 series (15 missing -> 75% missing, triggers circuit breaker)
+    active_from_sonarr = [
+        {"id": i, "title": f"Series{i}", "path": f"/mock/tv/Series{i}", "seriesType": "standard"}
+        for i in range(1, 6)
+    ]
+    with monkeypatch.context() as m:
+        m.setattr("integrations.media_sync_engine.get_all_series", AsyncMock(return_value=active_from_sonarr))
+        m.setattr("integrations.media_sync_engine.get_episodes", AsyncMock(return_value=[]))
+        m.setattr("integrations.media_sync_engine.get_episode_files", AsyncMock(return_value=[]))
+
+        result = await engine.full_sync()
+
+        # The 15 missing series must NOT be disabled because circuit breaker blocked mass pruning
+        for i in range(6, 21):
+            meta = temp_storage.load_project_metadata(f"Series{i}")
+            assert meta.get("arr_disabled") is False, f"Series{i} was disabled despite circuit breaker!"
+        assert any("circuit breaker" in w.lower() for w in result.warnings)
 
 
 @pytest.mark.asyncio

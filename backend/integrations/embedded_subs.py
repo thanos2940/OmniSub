@@ -31,7 +31,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from utils.language_codes import output_filename, variants_for
 
@@ -268,7 +268,12 @@ def probe_subtitle_tracks(media_path: str, tools: Optional[EmbeddedTools] = None
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=PROBE_TIMEOUT_SECONDS,
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=PROBE_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired:
         logger.warning(f"ffprobe timed out for {media_path}")
@@ -455,28 +460,50 @@ def _decode(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def _run_sync_cmd(cmd: List[str], timeout: int) -> tuple:
+def _run_sync_cmd(cmd: List[str], timeout: int, proc_ref: Optional[list] = None) -> tuple:
+    proc = subprocess.Popen(
+        cmd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc_ref is not None:
+        proc_ref.append(proc)
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
         stdout, stderr = proc.communicate(timeout=timeout)
         return proc.returncode, stdout, stderr
     except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.communicate()
+        try:
+            proc.kill()
+            proc.communicate()
+        except Exception:
+            pass
         raise asyncio.TimeoutError()
+    except Exception:
+        try:
+            proc.kill()
+            proc.communicate()
+        except Exception:
+            pass
+        raise
 
 
 async def _spawn(cmd: List[str], timeout: int) -> tuple:
     """Run ``cmd``, returning (returncode, stdout_bytes, stderr_bytes).
 
-    Runs in a thread to ensure seamless compatibility with Windows and Unix event loops.
+    Runs in a worker thread and terminates the child process immediately if the coroutine is cancelled.
     """
-    return await asyncio.to_thread(_run_sync_cmd, cmd, timeout)
+    proc_ref = []
+    try:
+        return await asyncio.to_thread(_run_sync_cmd, cmd, timeout, proc_ref)
+    except asyncio.CancelledError:
+        if proc_ref and proc_ref[0].poll() is None:
+            try:
+                proc_ref[0].kill()
+                proc_ref[0].communicate()
+            except Exception:
+                pass
+        raise
 
 
 async def extract_track(
@@ -558,19 +585,22 @@ def write_sidecar(path: Path, content: str) -> None:
     temp file in the same directory, then replace with retries for Windows SMB oplocks.
     """
     import time
+    import uuid
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.omnisub-tmp-{os.getpid()}")
+    tmp = path.with_name(f"{path.name}.omnisub-tmp-{os.getpid()}-{uuid.uuid4().hex[:8]}")
+    delays = [0.1, 0.25, 0.5, 1.0, 2.0]
     try:
         tmp.write_text(content, encoding="utf-8-sig")
-        for attempt in range(5):
+        for attempt in range(len(delays)):
             try:
                 os.replace(tmp, path)
-                break
-            except (PermissionError, OSError):
-                if attempt == 4:
+                return
+            except (PermissionError, OSError) as replace_err:
+                if attempt == len(delays) - 1:
+                    # Final fallback: direct write, or re-raise if locked
                     path.write_text(content, encoding="utf-8-sig")
-                else:
-                    time.sleep(0.25)
+                    return
+                time.sleep(delays[attempt])
     finally:
         if tmp.exists():
             try:

@@ -63,14 +63,56 @@ class PathResolver:
         return remote_path
 
     def is_reachable(self, path: str) -> bool:
-        """Quick check — path exists or its parent is accessible."""
+        """Quick check — path exists, its parent is accessible, or root UNC share/drive is reachable."""
+        if not path:
+            return False
         try:
             from pathlib import Path
             p = Path(path)
+            # Windows UNC network share path (e.g. \\server\share\...)
             if str(p).startswith("\\\\"):
                 parts = p.parts
-                if len(parts) >= 2:
-                    return (Path(parts[0]) / parts[1]).exists()
-            return p.exists() or p.parent.exists()
+                if parts:
+                    return Path(parts[0]).exists()
+                return False
+            # Standard existence check for local path or immediate parent
+            if p.exists() or p.parent.exists():
+                return True
+            # Windows drive letter paths (e.g. Z:\media\...) - test drive root directly
+            if p.drive and p.parts:
+                return Path(p.parts[0]).exists()
+            return False
         except OSError:
             return False
+
+    def find_media_file(self, media_path: str, episode_name: str = None) -> str:
+        """Resolve remote media_path, verifying existence or discovering renamed/upgraded files.
+
+        If the file at the resolved path does not exist, but its parent directory exists,
+        searches the parent directory for a video file matching episode_name.
+        Returns the resolved file path string if found, or None.
+        """
+        if not media_path:
+            return None
+
+        resolved = self.resolve(media_path)
+        from pathlib import Path
+        try:
+            p = Path(resolved)
+            if p.exists() and p.is_file():
+                return str(p)
+
+            # If direct path doesn't exist, check parent directory for upgraded/renamed release matching episode
+            if episode_name and p.parent.exists():
+                import re
+                video_exts = {".mkv", ".mp4", ".avi", ".m4v", ".ts", ".mov"}
+                pattern = rf"(?i)(?:\b|_){re.escape(episode_name)}(?:\b|_)"
+                for f in p.parent.iterdir():
+                    if f.is_file() and f.suffix.lower() in video_exts:
+                        if re.search(pattern, f.name) or episode_name.lower() in f.name.lower():
+                            return str(f)
+        except OSError:
+            pass
+
+        return None
+

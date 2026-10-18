@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
@@ -54,16 +54,18 @@ const EpisodeView = () => {
     const activeLangCode = getLangCode(selectedLang || primaryLang);
     const primaryLangCode = getLangCode(primaryLang);
 
-    const editorData = data.map(item => ({
-        ...item,
-        translated: item.translations?.[activeLangCode] || (activeLangCode === primaryLangCode ? item.translated : '') || ''
-    }));
+    const editorData = useMemo(() => {
+        return (data || []).map(item => ({
+            ...item,
+            translated: item.translations?.[activeLangCode] || (activeLangCode === primaryLangCode ? item.translated : '') || ''
+        }));
+    }, [data, activeLangCode, primaryLangCode]);
 
     const handleEditorDataUpdate = (updatedEditorData) => {
-        const newData = data.map((item, idx) => {
-            const updatedItem = updatedEditorData[idx];
+        const newData = (data || []).map((item, idx) => {
+            const updatedItem = (updatedEditorData && updatedEditorData[idx]) || {};
             const translations = { ...(item.translations || {}) };
-            translations[activeLangCode] = updatedItem.translated;
+            translations[activeLangCode] = updatedItem.translated ?? '';
 
             const mapped = {
                 ...item,
@@ -76,7 +78,7 @@ const EpisodeView = () => {
             };
 
             if (activeLangCode === primaryLangCode) {
-                mapped.translated = updatedItem.translated;
+                mapped.translated = updatedItem.translated ?? '';
             }
             return mapped;
         });
@@ -90,36 +92,43 @@ const EpisodeView = () => {
     }, [projectName, episodeName]);
 
     // Watch for completed translation jobs
-    useEffect(() => {
+    const completedJobId = useMemo(() => {
         const jobs = Object.values(activeJobs);
-        const completedTranslation = jobs.find(job =>
+        const completed = jobs.find(job =>
             job.status === 'completed' &&
             ['translate_episode', 'batch_translate', 'auto_translate', 'pipeline', 'retranslate_compare', 'retranslate_invalidated'].includes(job.type) &&
             (job.metadata?.episodeName === episodeName || job.metadata?.projectId === projectName)
         );
+        return completed ? completed.id : null;
+    }, [activeJobs, episodeName, projectName]);
 
-        if (completedTranslation && !handledJobsRef.current.has(completedTranslation.id)) {
+    useEffect(() => {
+        if (completedJobId && !handledJobsRef.current.has(completedJobId)) {
             if (!dirtyRef.current) {
                 loadData();
             } else {
                 toast.info("Translation job finished. Save changes to load the updated translation.");
             }
-            handledJobsRef.current.add(completedTranslation.id);
+            handledJobsRef.current.add(completedJobId);
         }
-    }, [activeJobs, episodeName, projectName]);
+    }, [completedJobId]);
 
     // Live View Polling: Fetch data progressively while any translation job is running in this project
+    const isTranslating = useMemo(() => {
+        return Object.values(activeJobs).some(job =>
+            ['running', 'pending'].includes(job.status) &&
+            ['translate_episode', 'batch_translate', 'auto_translate', 'pipeline', 'retranslate_compare', 'retranslate_invalidated', 'simple_pipeline'].includes(job.type) &&
+            (
+                job.project_name === projectName ||
+                job.metadata?.projectId === projectName ||
+                job.episode_name === episodeName ||
+                job.metadata?.episodeName === episodeName
+            )
+        );
+    }, [activeJobs, projectName, episodeName]);
+
     useEffect(() => {
         let interval;
-        const isTranslating = Object.values(activeJobs).some(job =>
-            ['running', 'pending'].includes(job.status) &&
-            ['translate_episode', 'batch_translate', 'auto_translate', 'pipeline', 'retranslate_compare', 'retranslate_invalidated'].includes(job.type) &&
-            // Only poll for jobs that belong to THIS project/episode. A blanket
-            // `projectId === undefined` match let an unrelated background job trigger
-            // silent reloads of whatever episode happened to be open.
-            (job.metadata?.projectId === projectName || job.metadata?.episodeName === episodeName)
-        );
-
         if (isTranslating) {
             console.log("Translation job active in project, starting live-view polling...");
             // Load once immediately to catch any scenes finished before effect triggered
@@ -133,7 +142,26 @@ const EpisodeView = () => {
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [activeJobs, projectName, episodeName]);
+    }, [isTranslating, projectName, episodeName]);
+
+    // Live update on agent task submission or disk sync completion
+    useEffect(() => {
+        const handleRefresh = (e) => {
+            const detail = e?.detail || {};
+            if (
+                (!detail.project_name || detail.project_name.toLowerCase() === projectName.toLowerCase()) &&
+                (!detail.episode_name || detail.episode_name.toLowerCase() === episodeName.toLowerCase())
+            ) {
+                if (!dirtyRef.current) loadData(true);
+            }
+        };
+        window.addEventListener('omnisub:agent-submitted', handleRefresh);
+        window.addEventListener('omnisub:sync-completed', handleRefresh);
+        return () => {
+            window.removeEventListener('omnisub:agent-submitted', handleRefresh);
+            window.removeEventListener('omnisub:sync-completed', handleRefresh);
+        };
+    }, [projectName, episodeName]);
 
     const loadData = async (silent = false) => {
         if (!episodeName || !projectName) {
@@ -156,9 +184,12 @@ const EpisodeView = () => {
                 setDirty(false);
             } else {
                 etagRef.current = epRes.headers?.etag || null;
-                setData(epRes.data.data);
-                setOriginalFilename(epRes.data.metadata?.original_filename);
-                setEpisodeMetadata(epRes.data.metadata || null);
+                const epData = Array.isArray(epRes.data?.data)
+                    ? epRes.data.data
+                    : (Array.isArray(epRes.data) ? epRes.data : []);
+                setData(epData);
+                setOriginalFilename(epRes.data?.metadata?.original_filename || null);
+                setEpisodeMetadata(epRes.data?.metadata || null);
                 setDirty(false);
             }
         } catch (err) {
@@ -173,7 +204,11 @@ const EpisodeView = () => {
         try {
             const res = await api.enhanceGlossary(projectName, { episode_names: [episodeName] });
             if (res.data?.job_id) {
-                addJob(res.data.job_id, 'enhance_glossary', `AI: Enhance Glossary (${episodeName})`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
+                addJob(res.data.job_id, 'enhance_glossary', `AI: Enhance Glossary (${episodeName})`, {
+                    projectId: projectName,
+                    episodeName: episodeName,
+                    link: `/project/${encodeURIComponent(projectName)}`
+                });
                 toast.info('Enhancing glossary in the background... Review results on the project glossary tab.');
             }
         } catch (err) {
@@ -188,7 +223,11 @@ const EpisodeView = () => {
         try {
             const res = await api.fixConsistency(projectName, selectedTermsArray);
             if (res.data?.job_id) {
-                addJob(res.data.job_id, 'retranslate_invalidated', `Updating scenes with specific glossary terms...`, { link: `/project/${encodeURIComponent(projectName)}`, projectId: projectName });
+                addJob(res.data.job_id, 'retranslate_invalidated', `Updating scenes with specific glossary terms...`, {
+                    projectId: projectName,
+                    episodeName: episodeName,
+                    link: `/project/${encodeURIComponent(projectName)}`
+                });
                 toast.info(`Updating scenes with selected terms...`);
             }
         } catch (err) {
@@ -208,7 +247,11 @@ const EpisodeView = () => {
             const translationModel = settings.translation_model || null;
             const res = await api.translateEpisode(projectName, episodeName, translationModel, false, false, type);
             if (res.data.job_id) {
-                addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`, { projectId: projectName, episodeName });
+                addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`, {
+                    projectId: projectName,
+                    episodeName: episodeName,
+                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
+                });
                 toast.info(`Translation enqueued (${type === 'saved' ? 'Saved' : 'Original'})`);
             }
         } catch (err) {
@@ -275,7 +318,11 @@ const EpisodeView = () => {
             const translationModel = settings.translation_model || null;
             const res = await api.translateEpisode(projectName, episodeName, translationModel, false, true);
             if (res.data.job_id) {
-                addJob(res.data.job_id, 'translate_episode', `Retranslating ${episodeName} from scratch`, { projectId: projectName, episodeName });
+                addJob(res.data.job_id, 'translate_episode', `Retranslating ${episodeName} from scratch`, {
+                    projectId: projectName,
+                    episodeName: episodeName,
+                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
+                });
                 toast.info(`Retranslation from scratch started`);
             }
         } catch (err) {
@@ -290,7 +337,11 @@ const EpisodeView = () => {
             const translationModel = settings.translation_model || null;
             const res = await api.retranslateEpisode(projectName, episodeName, translationModel);
             if (res.data.job_id) {
-                addJob(res.data.job_id, 'retranslate_compare', `Retranslating ${episodeName} (Review Mode)`, { projectId: projectName, episodeName });
+                addJob(res.data.job_id, 'retranslate_compare', `Retranslating ${episodeName} (Review Mode)`, {
+                    projectId: projectName,
+                    episodeName: episodeName,
+                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
+                });
                 toast.info(`Retranslation started. You'll be notified when it's ready for review.`);
             }
         } catch (err) {
@@ -651,7 +702,7 @@ const EpisodeView = () => {
                         const current = glossary?.terms || [];
                         const merged = [...newTerms, ...current];
                         await api.updateProject(projectName, { glossary: { terms: merged } });
-                        fetchData();
+                        loadData();
                     }
                 }}
             />

@@ -9,8 +9,8 @@ import {
     Library, Filter, Search, Play, Pause, Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import EmbeddedTracksModal from './EmbeddedTracksModal';
-import SyncOptionsModal from './SyncOptionsModal';
+import EmbeddedTracksModal from './project/modals/EmbeddedTracksModal';
+import LibrarySyncModal from './LibrarySyncModal';
 
 const TABS = { SHOWS: 'shows', MOVIES: 'movies', DISABLED: 'disabled' };
 
@@ -22,13 +22,17 @@ const StatusBadge = ({ episodeCount, translatedCount, disabled }) => {
     return <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"><Clock size={10} /> Pending</span>;
 };
 
-const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded }) => {
+const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded, isSelected = false, onToggleSelect }) => {
+    const hasSource = ep.has_source !== false && (ep.line_count > 0 || !!ep.metadata?.arr_sub_path);
     const isAss = ['ass', 'ssa'].includes((ep.metadata?.original_format || ep.metadata?.original_extension || '').toLowerCase());
     const isMuxed = !!ep.metadata?.embedded_extracted;
-    const hasMedia = !!(ep.metadata?.arr_media_path || ep.metadata?.bazarr_media_path);
+    const hasMedia = !!ep.metadata?.arr_media_path;
 
     const getBadge = () => {
         const base = "flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full w-fit";
+        if (!hasSource) {
+            return <span className={`${base} bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40`}><AlertCircle size={10} /> No Subtitle</span>;
+        }
         switch (status) {
             case 'translated':
                 return <span className={`${base} bg-green-50 text-green-700 dark:bg-green-950/20 dark:text-green-400`}><Check size={10} /> Complete</span>;
@@ -44,16 +48,30 @@ const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded }) => {
     };
 
     return (
-        <div className="flex items-center justify-between py-2 px-3 bg-white dark:bg-gray-800/80 rounded-xl border border-gray-150 dark:border-gray-700/60 shadow-sm text-sm">
+        <div className={`flex items-center justify-between py-2 px-3 rounded-xl border shadow-sm text-sm transition-colors ${
+            isSelected
+                ? 'bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-300 dark:border-indigo-700'
+                : 'bg-white dark:bg-gray-800/80 border-gray-150 dark:border-gray-700/60'
+        }`}>
             <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                {onToggleSelect && (
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={onToggleSelect}
+                        className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-4 w-4 shrink-0 mr-0.5"
+                    />
+                )}
                 <span className="font-semibold text-gray-800 dark:text-gray-200">{ep.name}</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tight ${
-                    isAss
-                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
-                        : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                }`}>
-                    {isAss ? 'ASS' : 'SRT'}
-                </span>
+                {hasSource && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-tight ${
+                        isAss
+                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                            : 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                    }`}>
+                        {isAss ? 'ASS' : 'SRT'}
+                    </span>
+                )}
                 {isMuxed && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 flex items-center gap-0.5 uppercase tracking-tight">
                         <Film size={9} /> #{ep.metadata?.embedded_track?.index ?? ''}
@@ -67,7 +85,7 @@ const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded }) => {
             </div>
             
             <div className="flex items-center gap-1.5 flex-shrink-0">
-                {hasMedia && (
+                {hasMedia && hasSource && (
                     <button
                         onClick={() => onInspectEmbedded(ep.name)}
                         className="p-1 text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
@@ -77,28 +95,50 @@ const EpisodeRow = ({ ep, status, onTranslate, onInspectEmbedded }) => {
                     </button>
                 )}
                 {getBadge()}
-                {status !== 'translated' && status !== 'running' && status !== 'queued' && (
-                    <button
-                        onClick={() => onTranslate(ep.name)}
-                        className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900/40 rounded-lg transition-colors border border-indigo-100/50 dark:border-indigo-900/30"
-                    >
-                        Translate
-                    </button>
+                {hasSource ? (
+                    status !== 'translated' && status !== 'running' && status !== 'queued' && (
+                        <button
+                            onClick={() => onTranslate(ep.name)}
+                            className="px-2.5 py-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 dark:hover:bg-indigo-900/40 rounded-lg transition-colors border border-indigo-100/50 dark:border-indigo-900/30"
+                        >
+                            Translate
+                        </button>
+                    )
+                ) : (
+                    hasMedia && (
+                        <button
+                            onClick={() => onInspectEmbedded(ep.name)}
+                            className="px-2.5 py-1 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/50 rounded-lg transition-colors border border-purple-200 dark:border-purple-800/40 flex items-center gap-1"
+                            title="Extract subtitle from video"
+                        >
+                            <Film size={11} /> Extract
+                        </button>
+                    )
                 )}
             </div>
         </div>
     );
 };
 
-const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => {
+
+const LibraryCard = ({
+    item,
+    onDisable,
+    onEnable,
+    queueData,
+    refreshQueue,
+    selectedEpisodes = new Set(),
+    toggleEpisode,
+    toggleShowEpisodes,
+}) => {
     const [expanded, setExpanded] = useState(false);
     const [episodes, setEpisodes] = useState([]);
     const [loadingEpisodes, setLoadingEpisodes] = useState(false);
     const [embeddedModalEpisode, setEmbeddedModalEpisode] = useState(null);
     const toast = useToast();
 
-    const isDisabled = item.arr_disabled || item.bazarr_disabled;
-    const isMovie = item.arr_media_type === 'movie' || item.bazarr_media_type === 'movie' || item.type === 'movie';
+    const isDisabled = item.arr_disabled;
+    const isMovie = item.arr_media_type === 'movie' || item.type === 'movie';
 
     // Get queue items for this project
     const projectQueueItems = (queueData?.items || []).filter(q => q.project_name === item.name);
@@ -153,7 +193,7 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
             if (qItem.status === 'failed') return 'failed';
             return 'queued'; // pending / paused_daily_limit
         }
-        if (ep.translated || ep.metadata?.arr_has_target || ep.metadata?.bazarr_has_target) {
+        if (ep.translated || ep.metadata?.arr_has_target) {
             return 'translated';
         }
         return 'pending';
@@ -172,6 +212,15 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
         >
             <div className="p-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {isMovie && toggleEpisode && (
+                        <input
+                            type="checkbox"
+                            checked={selectedEpisodes.has(`${item.name}::${item.name}`)}
+                            onChange={() => toggleEpisode(item.name, item.name)}
+                            className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-4 w-4 shrink-0"
+                            title="Select movie for batch actions"
+                        />
+                    )}
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         isMovie
                             ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400'
@@ -206,8 +255,8 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
                         <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
                             <span>→ {item.target_language}</span>
                             {!isMovie && <span>{item.episode_count} episode{item.episode_count !== 1 ? 's' : ''} imported</span>}
-                            {(item.arr_last_sync || item.bazarr_last_sync) && (
-                                <span>Synced {new Date(item.arr_last_sync || item.bazarr_last_sync).toLocaleDateString()}</span>
+                            {item.arr_last_sync && (
+                                <span>Synced {new Date(item.arr_last_sync).toLocaleDateString()}</span>
                             )}
                         </div>
                     </div>
@@ -280,7 +329,20 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
                         className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/40"
                     >
                         <div className="pt-3 space-y-2">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Episodes List</h4>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Episodes List</h4>
+                                {episodes.length > 0 && toggleShowEpisodes && (
+                                    <label className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={episodes.every(ep => selectedEpisodes.has(`${item.name}::${ep.name}`))}
+                                            onChange={() => toggleShowEpisodes(item.name, episodes)}
+                                            className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500 cursor-pointer h-3.5 w-3.5"
+                                        />
+                                        <span>Select All ({episodes.length})</span>
+                                    </label>
+                                )}
+                            </div>
                             {loadingEpisodes ? (
                                 <div className="text-xs text-gray-500 flex items-center gap-2 py-2">
                                     <RefreshCw size={12} className="animate-spin" /> Loading episodes...
@@ -296,6 +358,8 @@ const LibraryCard = ({ item, onDisable, onEnable, queueData, refreshQueue }) => 
                                                 key={ep.name}
                                                 ep={ep}
                                                 status={status}
+                                                isSelected={selectedEpisodes.has(`${item.name}::${ep.name}`)}
+                                                onToggleSelect={toggleEpisode ? () => toggleEpisode(item.name, ep.name) : undefined}
                                                 onTranslate={handleTranslateEpisode}
                                                 onInspectEmbedded={(epName) => setEmbeddedModalEpisode(epName)}
                                             />
@@ -330,6 +394,8 @@ const MediaLibrary = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterStatus, setFilterStatus] = useState('all');
     const [arrConfigured, setArrConfigured] = useState(true); // assume yes until checked, to avoid a flash
+    const [selectedEpisodes, setSelectedEpisodes] = useState(new Set());
+    const [batchProcessing, setBatchProcessing] = useState(false);
 
     useEffect(() => {
         api.getArrStatus()
@@ -429,7 +495,7 @@ const MediaLibrary = () => {
             if (res.data?.job_id) {
                 setSyncJobId(res.data.job_id);
                 const label = options.source === 'sonarr' ? 'Sonarr' : options.source === 'radarr' ? 'Radarr' : 'Sonarr & Radarr';
-                addJob(res.data.job_id, 'arr_sync', `Syncing ${label} library...`, {});
+                addJob(res.data.job_id, 'arr_sync', `Syncing ${label} library...`, { link: '/library' });
             }
         } catch (err) {
             setSyncing(false);
@@ -481,6 +547,104 @@ const MediaLibrary = () => {
             loadLibrary();
         } catch (err) {
             toast.error('Failed to enable entry');
+        }
+    };
+
+    const toggleEpisode = useCallback((projectName, episodeName) => {
+        const key = `${projectName}::${episodeName}`;
+        setSelectedEpisodes(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    }, []);
+
+    const toggleShowEpisodes = useCallback((projectName, epList) => {
+        if (!epList || epList.length === 0) return;
+        const keys = epList.map(ep => `${projectName}::${ep.name}`);
+        setSelectedEpisodes(prev => {
+            const next = new Set(prev);
+            const allSelected = keys.every(k => next.has(k));
+            if (allSelected) {
+                keys.forEach(k => next.delete(k));
+            } else {
+                keys.forEach(k => next.add(k));
+            }
+            return next;
+        });
+    }, []);
+
+    const handleBatchTranslateSelected = async () => {
+        if (selectedEpisodes.size === 0 || batchProcessing) return;
+        setBatchProcessing(true);
+        try {
+            const grouped = {};
+            for (const key of selectedEpisodes) {
+                const [proj, ep] = key.split('::');
+                if (!grouped[proj]) grouped[proj] = [];
+                grouped[proj].push(ep);
+            }
+            let total = 0;
+            const remaining = new Set(selectedEpisodes);
+            for (const [proj, eps] of Object.entries(grouped)) {
+                try {
+                    await api.enqueueEpisodes(proj, eps);
+                    total += eps.length;
+                    eps.forEach(ep => remaining.delete(`${proj}::${ep}`));
+                    setSelectedEpisodes(new Set(remaining));
+                } catch (projErr) {
+                    console.error(`Failed to enqueue episodes for ${proj}:`, projErr);
+                    toast.error(`Failed to enqueue episodes for ${proj}`);
+                }
+            }
+            if (total > 0) {
+                toast.success(`Enqueued ${total} episode(s) across ${Object.keys(grouped).length} show(s)`);
+            }
+            fetchQueue();
+        } catch (err) {
+            console.error("Batch translation enqueue error:", err);
+            toast.error("Failed to enqueue selected episodes");
+        } finally {
+            setBatchProcessing(false);
+        }
+    };
+
+    const handleBatchExtractSelected = async () => {
+        if (selectedEpisodes.size === 0 || batchProcessing) return;
+        setBatchProcessing(true);
+        try {
+            const grouped = {};
+            for (const key of selectedEpisodes) {
+                const [proj, ep] = key.split('::');
+                if (!grouped[proj]) grouped[proj] = [];
+                grouped[proj].push(ep);
+            }
+            let total = 0;
+            const remaining = new Set(selectedEpisodes);
+            for (const [proj, eps] of Object.entries(grouped)) {
+                try {
+                    const res = await api.batchExtractEmbedded(proj, { episode_names: eps });
+                    if (res.data?.job_id) {
+                        addJob(res.data.job_id, 'batch_extract_embedded', `Extracting embedded subs for ${proj}...`, { link: `/project/${encodeURIComponent(proj)}` });
+                    }
+                    total += eps.length;
+                    eps.forEach(ep => remaining.delete(`${proj}::${ep}`));
+                    setSelectedEpisodes(new Set(remaining));
+                } catch (projErr) {
+                    console.error(`Failed to extract subtitles for ${proj}:`, projErr);
+                    toast.error(`Failed to extract subtitles for ${proj}`);
+                }
+            }
+            if (total > 0) {
+                toast.success(`Started embedded subtitle extraction for ${total} episode(s)`);
+            }
+            loadLibrary();
+        } catch (err) {
+            console.error("Batch extraction error:", err);
+            toast.error("Failed to start embedded subtitle extraction");
+        } finally {
+            setBatchProcessing(false);
         }
     };
 
@@ -688,7 +852,7 @@ const MediaLibrary = () => {
                             {!library?.last_sync && !searchQuery && (
                                 arrConfigured ? (
                                     <button
-                                        onClick={handleSync}
+                                        onClick={handleOpenSyncModal}
                                         disabled={syncing}
                                         className="mt-4 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-all"
                                     >
@@ -721,6 +885,9 @@ const MediaLibrary = () => {
                                     onEnable={handleEnable}
                                     queueData={queueData}
                                     refreshQueue={fetchQueue}
+                                    selectedEpisodes={selectedEpisodes}
+                                    toggleEpisode={toggleEpisode}
+                                    toggleShowEpisodes={toggleShowEpisodes}
                                 />
                             ))}
                         </motion.div>
@@ -751,7 +918,55 @@ const MediaLibrary = () => {
                     </div>
                 )}
             </main>
-            <SyncOptionsModal
+
+            {/* Floating Batch Action Bar */}
+            <AnimatePresence>
+                {selectedEpisodes.size > 0 && (
+                    <motion.div
+                        initial={{ y: 60, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 60, opacity: 0 }}
+                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900/95 dark:bg-gray-800/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-gray-700/60 flex items-center gap-4 text-sm"
+                    >
+                        <div className="flex items-center gap-2 pr-3 border-r border-gray-700">
+                            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+                            <span className="font-semibold text-xs text-gray-200">
+                                {selectedEpisodes.size} item{selectedEpisodes.size !== 1 ? 's' : ''} selected
+                            </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={handleBatchTranslateSelected}
+                                disabled={batchProcessing}
+                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+                            >
+                                <Languages size={13} /> Translate ({selectedEpisodes.size})
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleBatchExtractSelected}
+                                disabled={batchProcessing}
+                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                            >
+                                <Film size={13} /> Extract Subs ({selectedEpisodes.size})
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setSelectedEpisodes(new Set())}
+                                className="px-2.5 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-lg transition-colors"
+                            >
+                                Clear
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <LibrarySyncModal
                 isOpen={syncModalOpen}
                 onClose={() => setSyncModalOpen(false)}
                 onConfirm={handleStartSyncWithOptions}

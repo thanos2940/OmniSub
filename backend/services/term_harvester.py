@@ -10,9 +10,11 @@ import logging
 import os
 import re
 from typing import List, Dict, Optional, Tuple
-from google import genai
 
 from utils import storage
+from utils.llm_utils import loads_tolerant, strip_reasoning_blocks
+from utils.text_normalize import fix_japanese_name_greek_tonos
+from utils.language_codes import to_code
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ Focus on:
 3. Organizations, factions, military units, and groups (e.g., "S.H.I.E.L.D.", "Hydra", "Avengers").
 4. Unique objects, artifacts, spells, weapons, and technology (e.g., "Mjolnir", "Infinity Stones", "Tesseract").
 5. Specialized lore jargon or recurring cultural terms.
+6. For Greek target language, Japanese character names and entities MUST place the Greek accent (τόνος) on the FIRST syllable (e.g., Tanjiro -> Τάντζιρο, Zenitsu -> Ζένιτσου, Nezuko -> Νέζουκο, Inosuke -> Ίνοσουκε, Naruto -> Νάρουτο).
 
 Exclude:
 - Common, everyday conversational words (e.g., "car", "house", "friend", "morning", "police").
@@ -71,18 +74,19 @@ async def harvest_terms_from_lines(
     existing_terms_set = set()
     if existing_glossary and "terms" in existing_glossary:
         for t in existing_glossary["terms"]:
-            term_str = t.get("term", "").lower().strip()
+            term_str = (t.get("term") or t.get("source") or "").lower().strip()
             if term_str:
                 existing_terms_set.add(term_str)
 
     # Format dialogue sample (limit to representative window if huge)
     sample_pairs = []
     max_lines = min(len(source_lines), len(target_lines), 250)
+    tgt_tag = to_code(target_language).upper()
     for i in range(max_lines):
         src = source_lines[i].strip()
         tgt = target_lines[i].strip()
         if src and tgt:
-            sample_pairs.append(f"Line {i+1}: [EN] {src}  -->  [{target_language[:2].upper()}] {tgt}")
+            sample_pairs.append(f"Line {i+1}: [EN] {src}  -->  [{tgt_tag}] {tgt}")
 
     if not sample_pairs:
         return []
@@ -101,26 +105,26 @@ Translated Subtitle Dialogue:
 Analyze the dialogue above and extract all new named entities and key terms. Return JSON with the "discovered_terms" array."""
 
     try:
-        config = storage.load_global_config()
-        chosen_model = model_name or config.get("default_glossary_model") or config.get("default_translation_model") or "gemini-2.5-flash"
-        api_key = config.get("api_key") or os.environ.get("GOOGLE_API_KEY", "")
-        client = genai.Client(api_key=api_key)
+        from adk_agents.llm_factory import generate
+        from utils.model_resolver import resolve_model
 
-        # Call Gemini API
-        response = client.models.generate_content(
-            model=chosen_model,
-            contents=prompt,
-            config={
-                "system_instruction": HARVEST_SYSTEM_INSTRUCTION,
-                "response_mime_type": "application/json",
-                "temperature": 0.2,
-            },
+        dummy_meta = {"settings": {}}
+        chosen_model = model_name or resolve_model("glossary", dummy_meta)
+
+        # Call via LLM seam (handles Gemini, LiteLLM local models, etc.)
+        response_text = await generate(
+            model_name=chosen_model,
+            prompt=prompt,
+            system_instruction=HARVEST_SYSTEM_INSTRUCTION,
+            temperature=0.2,
+            role="glossary",
         )
 
-        text = response.text or ""
-        # Parse JSON
-        data = json.loads(text)
-        candidates = data.get("discovered_terms", [])
+        clean_text = strip_reasoning_blocks(response_text or "")
+        data = loads_tolerant(clean_text) or {}
+        candidates = data.get("discovered_terms", []) if isinstance(data, dict) else []
+
+        is_greek = (target_language or "").strip().lower() in ("greek", "el", "ελληνικά")
 
         # Filter and sanitize
         valid_terms = []
@@ -131,6 +135,9 @@ Analyze the dialogue above and extract all new named entities and key terms. Ret
                 continue
             if term_name.lower() in existing_terms_set:
                 continue
+
+            if is_greek:
+                translation = fix_japanese_name_greek_tonos(translation)
 
             valid_terms.append({
                 "term": term_name,
@@ -165,12 +172,20 @@ async def harvest_terms_for_episode(
     if not episode_data:
         return []
 
+    target_lang = meta.get("target_language", "Greek")
+    target_code = to_code(target_lang)
+
     source_lines = []
     target_lines = []
 
     for item in episode_data:
         orig = item.get("original", "")
-        trans = item.get("translation", "")
+        trans = (
+            item.get("translations", {}).get(target_code)
+            or item.get("translated")
+            or item.get("translation")
+            or ""
+        )
         if orig and trans:
             source_lines.append(orig)
             target_lines.append(trans)
@@ -178,7 +193,6 @@ async def harvest_terms_for_episode(
     if not source_lines:
         return []
 
-    target_lang = meta.get("target_language", "Greek")
     existing_glossary = meta.get("glossary", {"terms": []})
 
     return await harvest_terms_from_lines(

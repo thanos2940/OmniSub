@@ -144,6 +144,24 @@ def validate_lines(
                 "stops mid-sentence; translate the entire source line in full"
             )
 
+        # Zero-token morphology-aware glossary validation
+        if glossary and glossary.get("terms"):
+            from utils.text_normalize import contains_term
+            target_lang_name = "Greek" if target_lang_code.lower() in ("el", "greek") else target_lang_code
+            for term_def in glossary.get("terms", []):
+                src_term = (term_def.get("term") or "").strip()
+                tgt_term = (term_def.get("translation") or "").strip()
+                keep_orig = term_def.get("keep_original", False)
+                if keep_orig or not src_term or not tgt_term:
+                    continue
+
+                if contains_term(original, src_term, lang="English", normalization=True, stemming=False):
+                    if not contains_term(translated, tgt_term, lang=target_lang_name, normalization=True, stemming=True):
+                        issues.append(
+                            f"missing glossary term '{src_term}' -> render as '{tgt_term}' "
+                            f"(inflect case/article naturally for {target_lang_name} syntax)"
+                        )
+
         if issues:
             issues_by_index.setdefault(i, []).extend(issues)
 

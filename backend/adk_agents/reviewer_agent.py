@@ -38,9 +38,15 @@ def _build_glossary_ref(glossary: Dict, max_terms: int = 30) -> str:
         src = t.get("term", "")
         tgt = t.get("translation", src)
         gender = t.get("gender", "")
+        t_type = t.get("type", "")
         keep = " [KEEP]" if t.get("keep_original") else ""
-        gender_tag = f" ({gender})" if gender and gender != "n/a" else ""
-        lines.append(f"- {src} -> {tgt}{gender_tag}{keep}")
+        meta_parts = []
+        if t_type and t_type != "other":
+            meta_parts.append(t_type)
+        if gender and gender not in ("n/a", "unknown", ""):
+            meta_parts.append(gender)
+        meta_str = f" ({', '.join(meta_parts)})" if meta_parts else ""
+        lines.append(f"- {src} -> {tgt}{meta_str}{keep}")
 
     return "\n".join(lines)
 
@@ -67,11 +73,11 @@ def create_reviewer_agent(
         instruction=f"""You are a {target_language} subtitle translation quality reviewer.
 
 For each source/translation pair you receive, score on these dimensions (0.0 to 1.0):
-- glossary: Does it use the correct glossary translations? (1.0 = perfect match)
-- naturalness: Does it read like natural {target_language}? (1.0 = native quality)
-- gender: Are gendered forms (articles, adjectives, past tenses) correct for the speaker? (1.0 = all correct)
-- length: Is it an appropriate length for subtitle display? (1.0 = good CPS)
-- tone: Does the formality/register match the source? (1.0 = perfect match)
+- glossary: Does it use the correct glossary terms declined into the grammatically correct case (Nominative, Genitive, Accusative, Vocative) with agreeing articles (ο/του/τον, η/της/την, το/του/το)? (1.0 = perfect inflected match; < 0.70 = raw nominative lemma forced into an inflected clause)
+- naturalness: Does it read like natural spoken Modern Greek (δημοτική)? Are English conversational idioms ("fair enough", "give me a break", "come on", "you know", "cut it out", "my bad", etc.) adapted into natural spoken Greek idioms rather than literal calques? (1.0 = fluent native demotic Greek; < 0.80 = stiff machine translation / literal calque)
+- gender: Are gendered forms (articles, adjectives, participles, verb forms) grammatically aligned with the speaker and referent? (1.0 = all correct)
+- length: Is it an appropriate length and reading speed for subtitle display (CPS <= 17, CPL <= 42, <= 2 lines)? (1.0 = good CPS/CPL)
+- tone: Does the formality/register match the source dialogue and character voice (e.g., formal πληθυντικός ευγενείας vs familiar ενικός)? (1.0 = perfect match)
 
 Output ONLY a JSON array -- no commentary, no markdown fencing, no extra text:
 [
@@ -82,9 +88,11 @@ Rules:
 - Only include entries where ANY score is below 0.85.
 - If all scores are >= 0.85 for a line, omit it entirely.
 - If everything looks good, output an empty array: []
-- The "suggestion" field must contain a complete corrected translation, not just a note.
-- Be strict about gender correctness -- {target_language} requires matching gender for articles, adjectives, and verb forms.
-- Check that glossary terms are translated exactly as specified, not paraphrased.
+- The "suggestion" field must contain a complete corrected translation in natural Demotic Greek, not just a note.
+- Enforce Greek morphology: do NOT accept raw nominative glossary lemmas in inflected positions. Words must decline naturally according to their syntactic role in the sentence.
+- Prioritize spoken Demotic Greek naturalness: penalize word-for-word calques of English idioms and phrasal verbs.
+- Be strict about gender and number correctness -- {target_language} requires matching gender/case for articles, adjectives, and verb forms.
+- Japanese names in Greek: Ensure Japanese character and proper names have their accent (τόνος) placed on the first syllable (e.g. Tanjiro -> Τάντζιρο, NOT Ταντζίρο; Zenitsu -> Ζένιτσου; Nezuko -> Νέζουκο; Inosuke -> Ίνοσουκε).
 - Flag untranslated words left in the source language unless they are marked [KEEP] in the glossary.
 
 Glossary reference:

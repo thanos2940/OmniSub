@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Dict, Optional
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -17,8 +18,7 @@ from routers.settings import validate_api_key
 
 router = APIRouter()
 
-@router.get("/projects")
-async def list_projects():
+def _get_projects_list():
     names = storage.list_projects()
     result = []
     for name in names:
@@ -29,14 +29,22 @@ async def list_projects():
     return result
 
 
+@router.get("/projects")
+async def list_projects():
+    import asyncio
+    return await asyncio.to_thread(_get_projects_list)
+
+
 @router.post("/projects")
 async def create_project(request: CreateProjectRequest):
+    is_anime = (request.type or "").lower() == "anime" or "anime" in request.name.lower()
     metadata = {
         "show_name": request.name,
         "target_language": request.target_language,
         "parent_project": request.parent_project,
         "type": request.type,
-        "ai_provider": request.ai_provider,
+        "series_type": "anime" if is_anime else "standard",
+        "is_anime": is_anime,
         "glossary": {"terms": []},
         "context_guide": ""
     }
@@ -206,7 +214,8 @@ async def update_project(project_name: str, data: Dict, background_tasks: Backgr
                             term_entry.get("gender") != parent_version.get("gender") or
                             term_entry.get("description") != parent_version.get("description") or
                             term_entry.get("keep_original") != parent_version.get("keep_original") or
-                            term_entry.get("case_sensitive") != parent_version.get("case_sensitive")
+                            term_entry.get("case_sensitive") != parent_version.get("case_sensitive") or
+                            (term_entry.get("sense") or "") != (parent_version.get("sense") or "")
                         )
                         
                         if modified:
@@ -511,7 +520,7 @@ async def harvest_project_terms_endpoint(
         translated_eps = []
         for ep in episodes:
             ep_data = storage.load_episode_data(project_name, ep)
-            if ep_data and any(x.get("translation") for x in ep_data):
+            if ep_data and any(x.get("translated") or x.get("translations") or x.get("translation") for x in ep_data):
                 translated_eps.append(ep)
         for ep_name in translated_eps[:3]:
             ep_terms = await harvest_terms_for_episode(project_name, ep_name, model_name=model)
@@ -596,7 +605,32 @@ async def _run_project_sync(
         def progress_cb(progress=None, message=None):
             update_job(job_id, progress=progress, message=message, log=message)
 
-        result = await engine.sync_project(project_name, progress_callback=progress_cb)
+        try:
+            result = await engine.sync_project(project_name, progress_callback=progress_cb)
+        except ValueError as ve:
+            # Fall back to direct disk synchronization if Sonarr/Radarr is not configured
+            logger.info(f"Arr sync skipped ({ve}), falling back to direct disk sync for '{project_name}'...")
+            from services.disk_sync_service import disk_sync_service
+            disk_res = await asyncio.to_thread(disk_sync_service.sync_project_disk, project_name)
+            update_job(
+                job_id,
+                status="completed",
+                progress=100.0,
+                message=(
+                    f"Disk sync complete: {disk_res.get('translations_found', 0)} translations found, "
+                    f"{disk_res.get('translations_removed', 0)} removed, "
+                    f"{disk_res.get('new_episodes_added', 0)} new episodes."
+                ),
+                result=disk_res,
+            )
+            return
+
+        # Also run disk sync to catch manual files and deletions
+        try:
+            from services.disk_sync_service import disk_sync_service
+            await asyncio.to_thread(disk_sync_service.sync_project_disk, project_name)
+        except Exception:
+            pass
 
         if result.errors:
             for err in result.errors:
@@ -617,6 +651,48 @@ async def _run_project_sync(
         tb = traceback.format_exc()
         logger.error(f"Project sync failed: {e}\n{tb}")
         update_job(job_id, status="failed", message=f"Sync failed: {str(e)}", log=f"{str(e)}\n{tb}")
+
+
+class DiskSyncRequest(BaseModel):
+    re_queue_removed: bool = True
+    import_cues: bool = True
+    auto_add_new_episodes: bool = True
+    auto_rename_matching_media: bool = True
+
+
+@router.post("/projects/{project_name}/sync-disk")
+async def sync_project_disk_endpoint(project_name: str, payload: Optional[DiskSyncRequest] = None):
+    """Scan physical disk for subtitle files and reconcile project & translation queue status."""
+    from services.disk_sync_service import disk_sync_service
+    req = payload or DiskSyncRequest()
+    result = await asyncio.to_thread(
+        disk_sync_service.sync_project_disk,
+        project_name,
+        re_queue_removed=req.re_queue_removed,
+        import_cues=req.import_cues,
+        auto_add_new_episodes=req.auto_add_new_episodes,
+        auto_rename_matching_media=req.auto_rename_matching_media,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Disk sync failed"))
+    return result
+
+
+@router.post("/projects/{project_name}/rename-subtitles")
+async def rename_project_subtitles_endpoint(project_name: str, apply: bool = True):
+    """Find subtitles named after an outdated video file (e.g. after a Sonarr upgrade)
+    and, with ``apply``, rename them to the current video name so Plex/Jellyfin/Emby
+    attach them. ``apply=false`` only reports the mismatches.
+    """
+    from services.disk_sync_service import disk_sync_service
+    result = await asyncio.to_thread(
+        disk_sync_service.rename_subtitles_to_match_media,
+        project_name,
+        apply,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=404, detail=result.get("error", "Rename failed"))
+    return result
 
 
 @router.get("/projects/{project_name}/check-missing")

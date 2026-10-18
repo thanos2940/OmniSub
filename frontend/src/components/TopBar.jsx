@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, ChevronRight, Home, Library, ShieldAlert, ListTodo, Gauge, HeartPulse, Lock, Search, Key } from 'lucide-react';
+import { LayoutGrid, Settings, ChevronRight, Home, Library, ShieldAlert, ListTodo, Plane, Gauge, HeartPulse, Lock, Search, Key, ArrowDownCircle } from 'lucide-react';
 import { api } from '../api';
 
 const TopBar = () => {
@@ -16,6 +16,7 @@ const TopBar = () => {
 
     const [reviewCount, setReviewCount] = useState(0);
     const [authEnabled, setAuthEnabled] = useState(true); // assume secured until checked, to avoid a flash
+    const [updateAvailable, setUpdateAvailable] = useState(false);
 
     useEffect(() => {
         const fetchCount = async () => {
@@ -27,11 +28,28 @@ const TopBar = () => {
                 console.error("Failed to fetch review count", e);
             }
         };
+        const handleVisibility = () => {
+            if (!document.hidden) fetchCount();
+        };
         fetchCount();
         const interval = setInterval(fetchCount, 15000);
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
+    }, []);
+
+    useEffect(() => {
+        const checkUpdates = () => {
+            if (document.hidden) return;
+            api.getUpdateStatus()
+                .then(res => setUpdateAvailable(!!res.data?.update_available))
+                .catch(() => {});
+        };
+        checkUpdates();
+        const interval = setInterval(checkUpdates, 60000);
         return () => clearInterval(interval);
-        // Intentionally NOT keyed on location.pathname — the badge is global, so
-        // re-fetching on every navigation just added load without new information.
     }, []);
 
     useEffect(() => {
@@ -186,6 +204,17 @@ const TopBar = () => {
                     <span className="hidden md:inline">Queue</span>
                 </Link>
                 <Link
+                    to="/autopilot"
+                    className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${location.pathname === '/autopilot'
+                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
+                            : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+                        }`}
+                    title="Autopilot"
+                >
+                    <Plane size={18} />
+                    <span className="hidden md:inline">Autopilot</span>
+                </Link>
+                <Link
                     to="/library"
                     className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium ${isLibrary
                             ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
@@ -207,6 +236,17 @@ const TopBar = () => {
                     <HeartPulse size={18} />
                     <span className="hidden md:inline">Health</span>
                 </Link>
+                {updateAvailable && (
+                    <Link
+                        to="/settings"
+                        state={{ tab: 'updates' }}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 hover:bg-amber-500/30 transition-all animate-pulse"
+                        title="New OmbiSub update available! Click to view and install."
+                    >
+                        <ArrowDownCircle size={14} />
+                        <span className="hidden sm:inline">Update</span>
+                    </Link>
+                )}
                 <Link
                     to="/settings"
                     className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all"

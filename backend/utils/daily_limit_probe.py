@@ -27,10 +27,9 @@ async def probe_model_quota(model_name: str) -> Dict:
     """Make one minimal request to ``model_name`` and classify the outcome.
 
     Returns ``{"model", "available": bool, "reason": str}``.
-    Local models are always reported available (they have no daily quota).
     """
-    if not model_name or model_name.startswith("local/"):
-        return {"model": model_name, "available": True, "reason": "local model — no daily quota"}
+    if not model_name:
+        return {"model": model_name, "available": False, "reason": "no model specified"}
 
     def _call():
         from google import genai

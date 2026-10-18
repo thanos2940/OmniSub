@@ -118,9 +118,9 @@ def select_lines_for_review(
         if score >= 2:
             candidates.append((i, score))
 
-    # Sort by score descending, cap at max_review_pct of total
+    # Sort by score descending, cap at max_review_pct of total (max 100 lines)
     candidates.sort(key=lambda x: -x[1])
-    max_count = max(1, int(total_lines * max_review_pct))
+    max_count = min(100, max(1, int(total_lines * max_review_pct)))
     selected = [idx for idx, _ in candidates[:max_count]]
 
     logger.info(

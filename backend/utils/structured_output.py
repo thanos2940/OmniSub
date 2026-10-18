@@ -8,6 +8,7 @@ import logging
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from utils.llm_utils import strip_reasoning_blocks, parse_translations_from_text
+from utils.text_normalize import sanitize_translation_text
 
 logger = logging.getLogger("omnisub.structured_output")
 
@@ -54,11 +55,7 @@ class VerifiedEpisodeTranslationResponse(BaseModel):
 
 
 def use_source_echo(model_name: str) -> bool:
-    """Whether to request + verify a source echo for this model.
-
-    Piggybacks on ``use_structured_output`` (so it is off for local/Gemma unless the
-    experimental opt-in is set) and is gated by ``source_echo_enabled`` (default on).
-    """
+    """Whether to request + verify a source echo for this model."""
     if not use_structured_output(model_name):
         return False
     try:
@@ -90,25 +87,16 @@ def parse_new_terms(text: str) -> List[Dict[str, str]]:
 
 
 def use_structured_output(model_name: str) -> bool:
-    """Check if structured output is enabled and supported for the given model."""
+    """Check if structured output is enabled for the given model."""
     if not model_name:
         return False
     try:
         from utils.storage import load_global_config
         config = load_global_config()
-        if not config.get("structured_output_enabled", True):
-            return False
+        return bool(config.get("structured_output_enabled", True))
     except Exception as e:
         logger.warning(f"Failed to load global config: {e}")
-        
-    # Auto-off for local or Gemma models, unless experimental opt-in is enabled
-    is_local = model_name.startswith("local/")
-    is_gemma = "gemma" in model_name.lower()
-    
-    if is_local or is_gemma:
-        return config.get("experimental_local_structured_output", False)
-        
-    return True
+        return True
 
 
 def _fix_line_count_mismatch(results: List[Dict[str, Any]], expected_count: int) -> List[Dict[str, Any]]:
@@ -213,43 +201,75 @@ def parse_structured(text: str, expected_count: int = 0) -> List[Dict[str, Any]]
         json_candidate = match.group(0)
 
     try:
-        # Tolerant cleanup: strip trailing commas in arrays/objects
+        from utils.llm_utils import loads_tolerant
         json_candidate_clean = re.sub(r',\s*([\]}])', r'\1', json_candidate)
-        parsed = json.loads(json_candidate_clean)
+        parsed = loads_tolerant(json_candidate_clean)
+        if parsed is None:
+            parsed = json.loads(json_candidate_clean)
         
         lines_data = []
         if isinstance(parsed, dict):
-            if "lines" in parsed:
+            if "lines" in parsed and isinstance(parsed["lines"], list):
                 lines_data = parsed["lines"]
+            elif "translations" in parsed and isinstance(parsed["translations"], list):
+                lines_data = parsed["translations"]
             else:
-                # If model returned a list of dicts directly under a different key
-                for val in parsed.values():
-                    if isinstance(val, list):
-                        lines_data = val
-                        break
+                # Check if parsed is a map from numeric string key to translation: {"1": "...", "2": "..."}
+                valid_num_keys = [k for k in parsed.keys() if isinstance(k, str) and k.strip().isdigit()]
+                if valid_num_keys and len(valid_num_keys) >= len(parsed) * 0.5:
+                    lines_data = []
+                    for k, v in parsed.items():
+                        if str(k).strip().isdigit():
+                            if isinstance(v, dict):
+                                item_dict = dict(v)
+                                item_dict.setdefault("i", int(k))
+                                lines_data.append(item_dict)
+                            elif isinstance(v, str):
+                                lines_data.append({"i": int(k), "t": v})
+                else:
+                    # If model returned a list of dicts directly under a different key
+                    for val in parsed.values():
+                        if isinstance(val, list):
+                            lines_data = val
+                            break
         elif isinstance(parsed, list):
             lines_data = parsed
 
         results = []
         for item in lines_data:
             if isinstance(item, dict):
-                # Use membership, not `or`: a falsy-but-valid value (index 0, an
-                # intentionally empty translation "") must not be coalesced away.
-                idx = item["i"] if "i" in item else item.get("index")
-                if "t" in item:
-                    translated_text = item["t"]
-                elif "text" in item:
-                    translated_text = item["text"]
-                elif "translation" in item:
-                    translated_text = item["translation"]
-                else:
-                    translated_text = None
-                src_head = item.get("s") or item.get("src") or item.get("source") or ""
+                # Normalize keys to lower case for tolerant lookup
+                lower_keys = {k.lower(): v for k, v in item.items() if isinstance(k, str)}
+                idx = None
+                if "i" in lower_keys:
+                    idx = lower_keys["i"]
+                elif "index" in lower_keys:
+                    idx = lower_keys["index"]
+                elif "line" in lower_keys:
+                    idx = lower_keys["line"]
+                elif "line_number" in lower_keys:
+                    idx = lower_keys["line_number"]
+
+                translated_text = None
+                if "t" in lower_keys:
+                    translated_text = lower_keys["t"]
+                elif "text" in lower_keys:
+                    translated_text = lower_keys["text"]
+                elif "translation" in lower_keys:
+                    translated_text = lower_keys["translation"]
+                elif "target" in lower_keys:
+                    translated_text = lower_keys["target"]
+
+                src_head = lower_keys.get("s") or lower_keys.get("src") or lower_keys.get("source") or ""
                 if idx is not None and translated_text is not None:
                     try:
+                        clean_text = sanitize_translation_text(
+                            str(translated_text).replace("<br>", "\n"),
+                            source_text=str(src_head)
+                        )
                         results.append({
                             "index": int(idx),
-                            "text": str(translated_text).replace("<br>", "\n"),
+                            "text": clean_text,
                             "src_head": str(src_head),
                         })
                     except ValueError:

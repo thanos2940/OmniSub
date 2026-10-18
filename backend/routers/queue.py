@@ -16,8 +16,23 @@ class ClearQueueRequest(BaseModel):
     status: Optional[str] = None
 
 
+_last_queue_reconcile_at = 0.0
+
 @router.get("/api/queue")
-async def get_queue_status():
+async def get_queue_status(reconcile: bool = False):
+    global _last_queue_reconcile_at
+    import time, asyncio
+    from services.agent_task_service import agent_task_service
+    now = time.monotonic()
+    if reconcile or (now - _last_queue_reconcile_at >= 5.0):
+        _last_queue_reconcile_at = now
+        try:
+            await asyncio.to_thread(agent_task_service.housekeeping)
+            if reconcile:
+                await asyncio.to_thread(agent_task_service.reconcile_queue_with_storage)
+        except Exception:
+            pass
+
     queue = TranslationQueue()
     from utils import storage
     from utils.concurrency_controller import concurrency_manager
@@ -25,6 +40,26 @@ async def get_queue_status():
     global_config = storage.load_global_config()
 
     items = queue.get_all(limit=100)
+    # Agent-routed items: tag them, and give claimed ones the agent's live progress
+    # (measured from its work file, since no in-process job tracks an external agent).
+    try:
+        active_agent = {t["queue_id"]: t for t in await asyncio.to_thread(agent_task_service.list_active_tasks)}
+    except Exception:
+        active_agent = {}
+    import json as _json
+    for it in items:
+        opts = it.get("options")
+        if isinstance(opts, str):
+            try:
+                opts = _json.loads(opts)
+            except Exception:
+                opts = {}
+        it["engine"] = (opts or {}).get("engine") or "model"
+        agent = active_agent.get(it.get("id"))
+        if agent:
+            it["agent"] = {k: agent.get(k) for k in ("task_id", "units", "units_done", "last_activity", "workspace_dir")}
+            if agent.get("units"):
+                it["progress"] = round(100.0 * (agent.get("units_done") or 0) / agent["units"], 1)
     # Enrich running items with live progress from the in-memory job registry
     # (the worker tracks per-scene status under the "bg_<id>" job), so the queue UI
     # can show a real progress bar instead of just "running".
@@ -37,12 +72,21 @@ async def get_queue_status():
                 it["progress"] = round(job.progress, 1)
                 it["scenes_done"] = done
                 it["scenes_total"] = len(scenes)
+                it["cues_translated"] = job.cues_translated
+                it["cues_total"] = job.cues_total
+                it["eta_seconds"] = job.eta_seconds
+        elif it.get("status") == "completed":
+            ep_meta = storage.load_episode_metadata(it.get("project_name"), it.get("episode_name")) or {}
+            it["auto_repaired_count"] = ep_meta.get("auto_repaired_count", 0)
+            if not it.get("review_count"):
+                it["review_count"] = ep_meta.get("needs_review_count", 0)
 
     return {
         "items": items,
         "summary": queue.get_summary(),
         "rate_limits": per_model_rate_limiter.get_all_stats(),
         "paused": global_config.get("queue_worker_paused", False),
+        "translation_engine": global_config.get("translation_engine", "model"),
         "concurrency": concurrency_manager.stats(),
         # Embedded-subtitle extractions run on their own lane and are listed
         # separately so the translation queue keeps its existing shape.
@@ -74,14 +118,51 @@ async def enqueue_all_missing():
     return {"status": "success", "enqueued_count": total_enqueued, "enqueued": enqueued}
 
 
+class CancelAllRequest(BaseModel):
+    status: Optional[str] = "active"
+
+
+@router.post("/api/queue/cancel-all")
+async def cancel_all_queue_items(request: Optional[CancelAllRequest] = None):
+    """Cancel all pending, running, or active queue items and terminate running worker jobs."""
+    queue = TranslationQueue()
+    target_status = (request.status if request and request.status else "active")
+    
+    # Cancel running background worker jobs
+    from services.background_worker import worker
+    worker.cancel_all_tasks()
+
+    cancelled_count = queue.cancel_all(target_status)
+    return {"status": "success", "cancelled_count": cancelled_count, "target_status": target_status}
+
+
 @router.delete("/api/queue/clear")
 async def clear_queue(status: Optional[str] = None, request: Optional[ClearQueueRequest] = None):
+    """Clear queue items by status ('history', 'pending', 'cancelled', 'active', or 'all')."""
     queue = TranslationQueue()
     target_status = status
     if request and request.status:
         target_status = request.status
+    if not target_status:
+        target_status = "history"
+
+    # If clearing all or active/pending, also abort running worker tasks
+    if target_status in ("all", "active", "pending", "*"):
+        from services.background_worker import worker
+        worker.cancel_all_tasks()
+
     cleared_count = queue.clear(target_status)
-    return {"status": "success", "cleared_count": cleared_count}
+    return {"status": "success", "cleared_count": cleared_count, "target_status": target_status}
+
+
+@router.delete("/api/queue/{item_id}")
+async def delete_queue_item(item_id: str):
+    """Permanently delete a single queue item."""
+    from services.background_worker import worker
+    worker.cancel_task(item_id)
+    queue = TranslationQueue()
+    deleted = queue.delete_item(item_id)
+    return {"status": "success", "deleted": deleted}
 
 
 @router.post("/api/queue/pause")
@@ -135,11 +216,18 @@ async def check_daily_limit():
 async def retry_queue_item(item_id: str):
     queue = TranslationQueue()
     queue.retry_now(item_id)
+    try:
+        from services.background_worker import worker
+        worker.trigger()
+    except Exception:
+        pass
     return {"status": "success"}
 
 
 @router.post("/api/queue/{item_id}/cancel")
 async def cancel_queue_item(item_id: str):
+    from services.background_worker import worker
+    worker.cancel_task(item_id)
     queue = TranslationQueue()
     queue.cancel(item_id)
     return {"status": "success"}

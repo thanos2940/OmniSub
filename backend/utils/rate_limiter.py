@@ -6,6 +6,7 @@ from typing import List, Dict, Optional, Callable
 import contextvars
 from datetime import datetime, time as datetime_time, timedelta
 from zoneinfo import ZoneInfo
+import threading
 
 from utils.paths import RATE_LIMITER_STATE_FILE
 
@@ -13,6 +14,35 @@ logger = logging.getLogger(__name__)
 
 # Task-local active model name
 active_model_var = contextvars.ContextVar("active_model", default="default")
+
+
+class DualLock:
+    """A hybrid lock that supports both synchronous `with` and asynchronous `async with`.
+
+    Uses threading.RLock internally so fast memory state modifications are protected
+    across both asyncio tasks and synchronous threads without blocking the event loop.
+    """
+    def __init__(self):
+        self._lock = threading.RLock()
+
+    def __enter__(self):
+        return self._lock.__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return self._lock.__exit__(exc_type, exc_val, exc_tb)
+
+    async def __aenter__(self):
+        return self._lock.__enter__()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return self._lock.__exit__(exc_type, exc_val, exc_tb)
+
+    def acquire(self, blocking=True, timeout=-1):
+        return self._lock.acquire(blocking, timeout)
+
+    def release(self):
+        return self._lock.release()
+
 
 def _calculate_next_daily_reset(now_ts: float) -> float:
     try:
@@ -27,6 +57,7 @@ def _calculate_next_daily_reset(now_ts: float) -> float:
         return next_midnight.timestamp()
     except Exception:
         return now_ts + 86400
+
 
 def _daily_recheck_seconds() -> float:
     """How long to wait between automatic probes of a daily-exhausted model.
@@ -50,8 +81,15 @@ class DailyLimitExhausted(Exception):
         self.reset_time = reset_time
         super().__init__(f"Daily limit exhausted: {daily_count}/{daily_limit}")
 
+
 class RateLimiter:
-    def __init__(self, requests_per_minute: int = 15, daily_limit: int = 1500, on_change: Optional[Callable[[], None]] = None, model_name: str = "default"):
+    def __init__(
+        self,
+        requests_per_minute: int = 15,
+        daily_limit: int = 1500,
+        on_change: Optional[Callable[[], None]] = None,
+        model_name: str = "default",
+    ):
         self.requests_per_minute = requests_per_minute
         self.daily_limit = daily_limit
         self.on_change = on_change
@@ -61,12 +99,19 @@ class RateLimiter:
         self._last_refill = time.time()
         self._daily_count = 0
         self._daily_reset = _calculate_next_daily_reset(time.time())
-        self._lock = asyncio.Lock()
+        self._lock = DualLock()
         self._backoff_until = 0.0
         self._daily_exhausted = False
         # When (epoch secs) we may next auto-probe the API to see if a latched
         # daily limit has lifted. 0.0 = no probe scheduled (not exhausted).
         self._next_daily_probe = 0.0
+
+    def is_daily_reset_due(self, now: Optional[float] = None) -> bool:
+        """Check if the current time is past the daily reset boundary."""
+        if now is None:
+            now = time.time()
+        with self._lock:
+            return now >= self._daily_reset
 
     async def acquire(self):
         """Acquire a token, waiting if necessary."""
@@ -83,18 +128,18 @@ class RateLimiter:
                     if self.on_change:
                         self.on_change()
 
-                # Daily exhaustion is now detected from the API's own 429 responses
+                # Daily exhaustion is detected from the API's own 429 responses
                 if self._daily_exhausted:
                     raise DailyLimitExhausted(self._daily_count, self.daily_limit, self._daily_reset)
 
-                # Calculate backoff wait
+                # Calculate backoff wait if currently rate-limited by RPM
                 if now < self._backoff_until:
                     backoff_wait = self._backoff_until - now
                 else:
                     # Refill tokens
                     elapsed = now - self._last_refill
                     refill_amount = elapsed * (self.requests_per_minute / 60.0)
-                    self._tokens = min(self.requests_per_minute, self._tokens + refill_amount)
+                    self._tokens = min(float(self.requests_per_minute), self._tokens + refill_amount)
                     self._last_refill = now
 
                     # If no tokens, calculate token wait
@@ -138,7 +183,7 @@ class RateLimiter:
             backoff_wait = 0.0
 
             with self._lock:
-                if self.is_daily_reset_due():
+                if now >= self._daily_reset:
                     self._daily_count = 0
                     self._daily_exhausted = False
                     self._daily_reset = _calculate_next_daily_reset(now)
@@ -153,7 +198,7 @@ class RateLimiter:
                 else:
                     elapsed = now - self._last_refill
                     refill_amount = elapsed * (self.requests_per_minute / 60.0)
-                    self._tokens = min(self.requests_per_minute, self._tokens + refill_amount)
+                    self._tokens = min(float(self.requests_per_minute), self._tokens + refill_amount)
                     self._last_refill = now
 
                     token_wait = 0.0
@@ -177,21 +222,27 @@ class RateLimiter:
                 time.sleep(wait_time)
             break
 
+        try:
+            from utils.concurrency_controller import concurrency_manager
+            concurrency_manager.on_success(self.model_name)
+        except Exception:
+            pass
+
     def report_rate_limit(self, retry_after: float = None):
         """Called when a 429 is received."""
         now = time.time()
         delay = retry_after if retry_after is not None else 60.0
-        self._backoff_until = now + delay
-        # Temporarily halve tokens to slow down proactively
-        self._tokens = self._tokens * 0.5
-        # Adaptive concurrency: a 429 is a "decrease" signal.
-        try:
-            from utils.concurrency_controller import concurrency_manager
-            concurrency_manager.on_rate_limited(self.model_name)
-        except Exception:
-            pass
-        if self.on_change:
-            self.on_change()
+        with self._lock:
+            self._backoff_until = now + delay
+            # Temporarily halve tokens to slow down proactively
+            self._tokens = self._tokens * 0.5
+            try:
+                from utils.concurrency_controller import concurrency_manager
+                concurrency_manager.on_rate_limited(self.model_name)
+            except Exception:
+                pass
+            if self.on_change:
+                self.on_change()
 
     def trigger_daily_limit(self, reset_time: float = None):
         """Latch the daily limit as exhausted.
@@ -201,30 +252,32 @@ class RateLimiter:
         guess exhaustion by counting. ``reset_time`` may carry an API-provided
         retry hint; otherwise we fall back to the next local daily-reset boundary.
         """
-        self._daily_exhausted = True
-        if reset_time and reset_time > time.time():
-            self._daily_reset = reset_time
-        else:
-            self._daily_reset = _calculate_next_daily_reset(time.time())
-        # Schedule the next automatic probe directly at the reset boundary
-        # instead of pinging the API every 30 minutes while latched.
-        self._next_daily_probe = self._daily_reset
-        if self.on_change:
-            self.on_change()
+        with self._lock:
+            self._daily_exhausted = True
+            if reset_time and reset_time > time.time():
+                self._daily_reset = reset_time
+            else:
+                self._daily_reset = _calculate_next_daily_reset(time.time())
+            # Schedule the next automatic probe directly at the reset boundary
+            # instead of pinging the API every 30 minutes while latched.
+            self._next_daily_probe = self._daily_reset
+            if self.on_change:
+                self.on_change()
 
     def should_probe_daily(self) -> bool:
         """True when this model is daily-latched and its next probe window is due."""
-        return self._daily_exhausted and time.time() >= self._next_daily_probe
+        with self._lock:
+            return self._daily_exhausted and time.time() >= self._next_daily_probe
 
     def defer_probe(self) -> None:
         """Push the next automatic probe out to the next daily reset boundary.
 
         Called after a probe confirms the daily limit is still in effect.
         """
-        self._next_daily_probe = _calculate_next_daily_reset(time.time())
-        if self.on_change:
-            self.on_change()
-            self.on_change()
+        with self._lock:
+            self._next_daily_probe = _calculate_next_daily_reset(time.time())
+            if self.on_change:
+                self.on_change()
 
     def clear_daily_limit(self) -> None:
         """Lift the daily-exhausted latch (a probe found the quota available again).
@@ -232,20 +285,22 @@ class RateLimiter:
         Resets the informational counter and recomputes the next reset boundary so
         normal accounting resumes. Idempotent.
         """
-        self._daily_exhausted = False
-        self._daily_count = 0
-        self._next_daily_probe = 0.0
-        self._daily_reset = _calculate_next_daily_reset(time.time())
-        if self.on_change:
-            self.on_change()
+        with self._lock:
+            self._daily_exhausted = False
+            self._daily_count = 0
+            self._next_daily_probe = 0.0
+            self._daily_reset = _calculate_next_daily_reset(time.time())
+            if self.on_change:
+                self.on_change()
 
     def clear_daily_exhausted_latch(self) -> None:
         """Clear the exhausted flag without resetting the daily count."""
-        if self._daily_exhausted:
-            self._daily_exhausted = False
-            self._next_daily_probe = 0.0
-            if self.on_change:
-                self.on_change()
+        with self._lock:
+            if self._daily_exhausted:
+                self._daily_exhausted = False
+                self._next_daily_probe = 0.0
+                if self.on_change:
+                    self.on_change()
 
     def maybe_reset_daily(self) -> bool:
         """Clear the daily-exhausted latch if we've passed the reset boundary.
@@ -256,57 +311,60 @@ class RateLimiter:
         Returns the current exhausted state.
         """
         now = time.time()
-        if now >= self._daily_reset:
-            self._daily_count = 0
-            self._daily_exhausted = False
-            self._daily_reset = _calculate_next_daily_reset(now)
-            if self.on_change:
-                self.on_change()
-        return self._daily_exhausted
+        with self._lock:
+            if now >= self._daily_reset:
+                self._daily_count = 0
+                self._daily_exhausted = False
+                self._daily_reset = _calculate_next_daily_reset(now)
+                if self.on_change:
+                    self.on_change()
+            return self._daily_exhausted
 
     def estimate_requests(self, episode_names: List[str], avg_scenes_per_episode: float = 8) -> Dict:
         """Estimate usage for a list of episodes."""
         total_requests = int(len(episode_names) * avg_scenes_per_episode)
-        remaining_daily = self.daily_limit - self._daily_count
-        exceeds_daily = total_requests > remaining_daily
-        
-        estimated_minutes = total_requests / self.requests_per_minute
-        days_needed = (total_requests // self.daily_limit) + 1
-        
-        return {
-            "total_requests": total_requests,
-            "estimated_minutes": estimated_minutes,
-            "exceeds_daily": exceeds_daily,
-            "days_needed": days_needed,
-            "remaining_daily": remaining_daily
-        }
+        with self._lock:
+            remaining_daily = self.daily_limit - self._daily_count
+            exceeds_daily = total_requests > remaining_daily
+            estimated_minutes = total_requests / self.requests_per_minute
+            days_needed = (total_requests // self.daily_limit) + 1
+
+            return {
+                "total_requests": total_requests,
+                "estimated_minutes": estimated_minutes,
+                "exceeds_daily": exceeds_daily,
+                "days_needed": days_needed,
+                "remaining_daily": remaining_daily,
+            }
 
     def estimate_requests_from_scenes(self, total_scenes: int) -> Dict:
         """Estimate usage for a known number of scenes."""
-        remaining_daily = self.daily_limit - self._daily_count
-        exceeds_daily = total_scenes > remaining_daily
-        
-        estimated_minutes = total_scenes / self.requests_per_minute
-        
-        return {
-            "total_requests": total_scenes,
-            "estimated_minutes": estimated_minutes,
-            "exceeds_daily": exceeds_daily,
-            "remaining_daily": remaining_daily
-        }
+        with self._lock:
+            remaining_daily = self.daily_limit - self._daily_count
+            exceeds_daily = total_scenes > remaining_daily
+            estimated_minutes = total_scenes / self.requests_per_minute
+
+            return {
+                "total_requests": total_scenes,
+                "estimated_minutes": estimated_minutes,
+                "exceeds_daily": exceeds_daily,
+                "remaining_daily": remaining_daily,
+            }
 
     def get_stats(self) -> Dict:
         now = time.time()
-        return {
-            "daily_count": self._daily_count,
-            "daily_limit": self.daily_limit,
-            "tokens_available": round(self._tokens, 2),
-            "is_backing_off": now < self._backoff_until,
-            "backoff_remaining": max(0, round(self._backoff_until - now, 1)),
-            # Response-driven daily-limit state (set only by a real API 429).
-            "daily_exhausted": self._daily_exhausted,
-            "next_probe_in": max(0, round(self._next_daily_probe - now)) if self._daily_exhausted else None,
-        }
+        with self._lock:
+            return {
+                "daily_count": self._daily_count,
+                "daily_limit": self.daily_limit,
+                "tokens_available": round(self._tokens, 2),
+                "is_backing_off": now < self._backoff_until,
+                "backoff_remaining": max(0, round(self._backoff_until - now, 1)),
+                # Response-driven daily-limit state (set only by a real API 429).
+                "daily_exhausted": self._daily_exhausted,
+                "next_probe_in": max(0, round(self._next_daily_probe - now)) if self._daily_exhausted else None,
+            }
+
 
 class NoOpRateLimiter:
     """A rate limiter that never throttles — for local models, which are unmetered.
@@ -324,6 +382,9 @@ class NoOpRateLimiter:
     async def acquire(self):
         return
 
+    def acquire_sync(self):
+        return
+
     def report_rate_limit(self, retry_after: float = None):
         return
 
@@ -336,13 +397,25 @@ class NoOpRateLimiter:
     def should_probe_daily(self) -> bool:
         return False
 
+    def defer_probe(self) -> None:
+        return
+
+    def clear_daily_limit(self) -> None:
+        return
+
     def clear_daily_exhausted_latch(self) -> None:
         return
 
     def get_stats(self) -> Dict:
-        return {"daily_count": 0, "daily_limit": 0, "tokens_available": None,
-                "is_backing_off": False, "daily_exhausted": False, "next_probe_in": None,
-                "local": True}
+        return {
+            "daily_count": 0,
+            "daily_limit": 0,
+            "tokens_available": None,
+            "is_backing_off": False,
+            "daily_exhausted": False,
+            "next_probe_in": None,
+            "local": True,
+        }
 
 
 # Shared singleton — stateless, so one instance is safe across all local work.
@@ -362,104 +435,149 @@ class PerModelRateLimiter:
         self._config = {}
         self._last_save = 0.0
         self._save_pending = False
+        self._deferred_timer: Optional[asyncio.TimerHandle] = None
+        self._lock = DualLock()
         self.load_config_and_state()
 
-    def load_config_and_state(self):
-        # We load config.json
-        from utils.storage import load_global_config
-        cfg = load_global_config()
-        self._config = cfg.get("rate_limits", {})
-        
-        # Default config if not present
-        if "default" not in self._config:
-            self._config["default"] = {"rpm": 15, "rpd": 1500}
-        
-        # Load state
-        state = {}
-        if self.STATE_FILE.exists():
-            try:
-                state = json.loads(self.STATE_FILE.read_text(encoding='utf-8'))
-            except Exception as e:
-                logger.error(f"Failed to load rate limiter state: {e}")
-
-        # Initialize rate limiters from config, applying saved state if valid
-        for model, limits in self._config.items():
-            rpm = limits.get("rpm", 15)
-            rpd = limits.get("rpd", 1500)
-            limiter = RateLimiter(requests_per_minute=rpm, daily_limit=rpd, on_change=self.save_state, model_name=model)
-
-            if model in state:
-                m_state = state[model]
-                limiter._daily_count = m_state.get("daily_count", 0)
-                limiter._daily_reset = m_state.get("daily_reset", time.time() + 86400)
-                limiter._daily_exhausted = m_state.get("daily_exhausted", False)
-                # Exhaustion is API-429-driven, not count-driven (see class docstring).
-                # Do NOT lift the latch just because the informational count is under
-                # the configured rpd — the real per-model daily quota is often far
-                # lower. Only the daily-reset boundary clears it on load, so a key that
-                # hit its real quota stays latched across restarts instead of
-                # immediately re-hammering the API.
-                if limiter._daily_exhausted and time.time() >= limiter._daily_reset:
-                    limiter._daily_exhausted = False
-                    limiter._daily_count = 0
-                    limiter._daily_reset = _calculate_next_daily_reset(time.time())
-                limiter._backoff_until = m_state.get("backoff_until", 0.0)
-                limiter._tokens = m_state.get("tokens", float(rpm))
-                limiter._last_refill = m_state.get("last_refill", time.time())
-                limiter._next_daily_probe = 0.0 if not limiter._daily_exhausted else m_state.get("next_daily_probe", 0.0)
-                
-            self._limiters[model] = limiter
-
-    def save_state(self, force: bool = False):
-        """Persist limiter state, debounced. Pass ``force=True`` to write immediately."""
-        now = time.time()
-        if not force and (now - self._last_save) < self._SAVE_MIN_INTERVAL:
-            self._save_pending = True
-            return
-        state = {}
-        for model, limiter in self._limiters.items():
-            state[model] = {
-                "daily_count": limiter._daily_count,
-                "daily_reset": limiter._daily_reset,
-                "daily_exhausted": limiter._daily_exhausted,
-                "backoff_until": limiter._backoff_until,
-                "tokens": limiter._tokens,
-                "last_refill": limiter._last_refill,
-                "next_daily_probe": limiter._next_daily_probe
-            }
+    def _write_state_to_disk(self, payload: str):
         try:
-            self.STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding='utf-8')
-            self._last_save = now
-            self._save_pending = False
+            self.STATE_FILE.write_text(payload, encoding='utf-8')
         except Exception as e:
             logger.error(f"Failed to save rate limiter state: {e}")
 
+    def _trigger_deferred_save(self):
+        with self._lock:
+            self._deferred_timer = None
+        self.save_state(force=True)
+
+    def load_config_and_state(self):
+        with self._lock:
+            from utils.storage import load_global_config
+            cfg = load_global_config()
+            self._config = cfg.get("rate_limits", {})
+
+            # Default config if not present
+            if "default" not in self._config:
+                self._config["default"] = {"rpm": 15, "rpd": 1500}
+
+            # Load state
+            state = {}
+            if self.STATE_FILE.exists():
+                try:
+                    state = json.loads(self.STATE_FILE.read_text(encoding='utf-8'))
+                except Exception as e:
+                    logger.error(f"Failed to load rate limiter state: {e}")
+
+            # Initialize rate limiters from config, applying saved state if valid
+            for model, limits in self._config.items():
+                rpm = limits.get("rpm", 15)
+                rpd = limits.get("rpd", 1500)
+                limiter = RateLimiter(requests_per_minute=rpm, daily_limit=rpd, on_change=self.save_state, model_name=model)
+
+                if model in state:
+                    m_state = state[model]
+                    limiter._daily_count = m_state.get("daily_count", 0)
+                    limiter._daily_reset = m_state.get("daily_reset", time.time() + 86400)
+                    limiter._daily_exhausted = m_state.get("daily_exhausted", False)
+                    # Exhaustion is API-429-driven, not count-driven.
+                    # Only the daily-reset boundary clears it on load, so a key that
+                    # hit its real quota stays latched across restarts.
+                    if limiter._daily_exhausted and time.time() >= limiter._daily_reset:
+                        limiter._daily_exhausted = False
+                        limiter._daily_count = 0
+                        limiter._daily_reset = _calculate_next_daily_reset(time.time())
+                    limiter._backoff_until = m_state.get("backoff_until", 0.0)
+                    limiter._tokens = m_state.get("tokens", float(rpm))
+                    limiter._last_refill = m_state.get("last_refill", time.time())
+                    limiter._next_daily_probe = 0.0 if not limiter._daily_exhausted else m_state.get("next_daily_probe", 0.0)
+
+                self._limiters[model] = limiter
+
+    def save_state(self, force: bool = False, sync: bool = False):
+        """Persist limiter state, debounced. Pass ``force=True`` to write immediately."""
+        now = time.time()
+        with self._lock:
+            if not force and (now - self._last_save) < self._SAVE_MIN_INTERVAL:
+                self._save_pending = True
+                if self._deferred_timer is None:
+                    try:
+                        loop = asyncio.get_running_loop()
+                        delay = max(0.1, self._SAVE_MIN_INTERVAL - (now - self._last_save))
+                        self._deferred_timer = loop.call_later(delay, self._trigger_deferred_save)
+                    except RuntimeError:
+                        pass
+                return
+
+            if self._deferred_timer is not None:
+                try:
+                    self._deferred_timer.cancel()
+                except Exception:
+                    pass
+                self._deferred_timer = None
+
+            state = {}
+            for model, limiter in self._limiters.items():
+                state[model] = {
+                    "daily_count": limiter._daily_count,
+                    "daily_reset": limiter._daily_reset,
+                    "daily_exhausted": limiter._daily_exhausted,
+                    "backoff_until": limiter._backoff_until,
+                    "tokens": limiter._tokens,
+                    "last_refill": limiter._last_refill,
+                    "next_daily_probe": limiter._next_daily_probe,
+                }
+            payload = json.dumps(state, indent=2, ensure_ascii=False)
+            self._last_save = now
+            self._save_pending = False
+
+        if sync:
+            self._write_state_to_disk(payload)
+        else:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(asyncio.to_thread(self._write_state_to_disk, payload))
+            except RuntimeError:
+                self._write_state_to_disk(payload)
+
     def flush(self):
         """Write any debounced pending state (call periodically / on shutdown)."""
-        if self._save_pending:
-            self.save_state(force=True)
+        with self._lock:
+            pending = self._save_pending
+            if self._deferred_timer is not None:
+                try:
+                    self._deferred_timer.cancel()
+                except Exception:
+                    pass
+                self._deferred_timer = None
+        if pending:
+            self.save_state(force=True, sync=True)
 
     def get_limiter(self, model_name: str) -> RateLimiter:
-        # Normalize model_name (e.g. remove local/ prefix if any)
-        model_key = model_name
-        if model_name.startswith("local/"):
-            model_key = model_name[6:]
-
-        if model_key not in self._limiters:
-            # Try to get from config, fallback to default
-            limits = self._config.get(model_key, self._config.get("default", {"rpm": 15, "rpd": 1500}))
-            rpm = limits.get("rpm", 15)
-            rpd = limits.get("rpd", 1500)
-            self._limiters[model_key] = RateLimiter(requests_per_minute=rpm, daily_limit=rpd, on_change=self.save_state, model_name=model_key)
-            self.save_state()
-        return self._limiters[model_key]
+        model_key = model_name or "default"
+        with self._lock:
+            if model_key not in self._limiters:
+                # Try to get from config, fallback to default (15 RPM / 1500 RPD)
+                limits = self._config.get(model_key, self._config.get("default", {"rpm": 15, "rpd": 1500}))
+                rpm = limits.get("rpm", 15)
+                rpd = limits.get("rpd", 1500)
+                self._limiters[model_key] = RateLimiter(
+                    requests_per_minute=rpm,
+                    daily_limit=rpd,
+                    on_change=self.save_state,
+                    model_name=model_key,
+                )
+                self.save_state()
+            return self._limiters[model_key]
 
     def get_all_stats(self) -> Dict:
-        return {model: limiter.get_stats() for model, limiter in self._limiters.items()}
+        with self._lock:
+            return {model: limiter.get_stats() for model, limiter in self._limiters.items()}
 
     def exhausted_models(self) -> List[str]:
         """Models currently latched as daily-exhausted."""
-        return [m for m, lim in self._limiters.items() if lim._daily_exhausted]
+        with self._lock:
+            return [m for m, lim in self._limiters.items() if lim._daily_exhausted]
+
 
 class ProxyRateLimiter:
     def __init__(self, per_model_limiter: PerModelRateLimiter):
@@ -501,15 +619,12 @@ class ProxyRateLimiter:
         self.current_limiter._daily_exhausted = val
 
     async def acquire(self):
-        model_name = active_model_var.get()
-        if model_name.startswith("local/"):
-            return
         await self.current_limiter.acquire()
 
+    def acquire_sync(self):
+        self.current_limiter.acquire_sync()
+
     def report_rate_limit(self, retry_after: float = None):
-        model_name = active_model_var.get()
-        if model_name.startswith("local/"):
-            return
         self.current_limiter.report_rate_limit(retry_after)
 
     def trigger_daily_limit(self, reset_time: float = None):
@@ -539,6 +654,11 @@ class ProxyRateLimiter:
     def get_stats(self) -> Dict:
         return self.current_limiter.get_stats()
 
+
 # Presets/Global Instances
 per_model_rate_limiter = PerModelRateLimiter()
 translation_rate_limiter = ProxyRateLimiter(per_model_rate_limiter)
+
+
+def get_rate_limiter(model_name: str = "default") -> RateLimiter:
+    return per_model_rate_limiter.get_limiter(model_name)

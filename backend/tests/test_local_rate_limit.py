@@ -115,65 +115,20 @@ async def test_recheck_defers_when_still_limited(monkeypatch):
     assert limiter.should_probe_daily() is False  # deferred
 
 @pytest.mark.asyncio
-async def test_local_model_bypasses_rate_limit():
-    """Test that models starting with local/ are not throttled."""
-    # Setup a limiter with 0 tokens and exhausted daily limit
+async def test_proxy_rate_limiter_throttles_exhausted_model():
+    """Test that ProxyRateLimiter raises DailyLimitExhausted for exhausted models."""
     limiter = RateLimiter(requests_per_minute=1, daily_limit=1)
     limiter._tokens = 0.0
     limiter._daily_count = 1
     limiter._daily_exhausted = True
-    
+
     pml = PerModelRateLimiter()
-    # Mock get_limiter to return our exhausted limiter for 'mistral-7b'
-    # but the ProxyRateLimiter should bypass it if the name is 'local/mistral-7b'
-    pml._limiters['mistral-7b'] = limiter
-    
-    proxy = ProxyRateLimiter(pml)
-    
-    # CASE 1: Cloud model (should fail)
-    active_model_var.set("gemini-1.5-flash")
-    # We need to make sure 'gemini-1.5-flash' also points to an exhausted limiter or the same one
     pml._limiters['gemini-1.5-flash'] = limiter
-    
+    proxy = ProxyRateLimiter(pml)
+
+    active_model_var.set("gemini-1.5-flash")
     with pytest.raises(DailyLimitExhausted):
         await proxy.acquire()
-
-    # CASE 2: Local model (should pass immediately)
-    active_model_var.set("local/mistral-7b")
-    # This should NOT raise DailyLimitExhausted and should NOT wait
-    start_time = time.time()
-    await proxy.acquire()
-    end_time = time.time()
-    
-    # Should be nearly instant despite 0 tokens
-    assert end_time - start_time < 0.1
-
-@pytest.mark.asyncio
-async def test_local_model_bypasses_concurrency_ramp():
-    """Test that local models don't use adaptive concurrency (always use max/base)."""
-    concurrency_manager.set_defaults(enabled=True, base=2, c_max=10)
-    
-    model = "local/any-model"
-    # Even with many successes, it shouldn't "ramp" if we disable it for local
-    # Or more accurately, it should probably just return the max allowed immediately
-    # but the task says "off", so it should return 'base' or 'c_max' without ramping logic.
-    
-    # Current behavior: it ramps.
-    # We want it to either NOT ramp or return a fixed value.
-    # Spec says "force adaptive concurrency off for local".
-    # This means concurrency_manager.current(model) should probably return a constant.
-    
-    # If disabled, it returns 'base'. 
-    # But usually users want MORE concurrency for local if their GPU can handle it.
-    # However, 'adaptive' is what we want off.
-    
-    assert concurrency_manager.current(model) == 2 # Base
-    for _ in range(10):
-        concurrency_manager.on_success(model)
-    
-    # If adaptive is OFF for local, it should still be 2.
-    # (Currently it would be 4 because of the ramp in ConcurrencyController)
-    assert concurrency_manager.current(model) == 2
 
 
 def test_clear_daily_exhausted_latch_preserves_count():

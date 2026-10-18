@@ -1,39 +1,47 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
 // Eagerly loaded: always on screen (chrome + always-mounted widgets).
 import JobProgressWidget from './components/JobProgressWidget';
 import CommandPalette from './components/CommandPalette';
 import TopBar from './components/TopBar';
 import ApiKeyModal from './components/ApiKeyModal';
 import LoginPage from './components/LoginPage';
-// Route components are code-split so the initial bundle stays small and each page
-// only downloads when first visited.
-const SetupWizard = lazy(() => import('./components/setup/SetupWizard'));
-const ProjectList = lazy(() => import('./components/ProjectList'));
-const ProjectDetail = lazy(() => import('./components/ProjectDetail'));
-const SettingsPage = lazy(() => import('./components/SettingsPage'));
-const EpisodeView = lazy(() => import('./components/EpisodeView'));
-const MediaLibrary = lazy(() => import('./components/MediaLibrary'));
-const ReviewQueuePanel = lazy(() => import('./components/ReviewQueuePanel'));
-const TranslationQueuePanel = lazy(() => import('./components/TranslationQueuePanel'));
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const HealthPage = lazy(() => import('./components/HealthPage'));
+import ErrorBoundary from './components/common/ErrorBoundary';
+import LoadingFallback from './components/common/LoadingFallback';
+
+// Route components are code-split with automatic reload retry on stale Vite/HMR chunks
+const lazyWithRetry = (componentImport) =>
+    lazy(async () => {
+        try {
+            const component = await componentImport();
+            window.sessionStorage.removeItem('retry-lazy-refreshed');
+            return component;
+        } catch (error) {
+            const alreadyRefreshed = window.sessionStorage.getItem('retry-lazy-refreshed');
+            if (!alreadyRefreshed) {
+                window.sessionStorage.setItem('retry-lazy-refreshed', 'true');
+                window.location.reload();
+                return new Promise(() => {});
+            }
+            throw error;
+        }
+    });
+
+const SetupWizard = lazyWithRetry(() => import('./components/setup/SetupWizard'));
+const ProjectList = lazyWithRetry(() => import('./components/ProjectList'));
+const ProjectDetail = lazyWithRetry(() => import('./components/ProjectDetail'));
+const SettingsPage = lazyWithRetry(() => import('./components/SettingsPage'));
+const EpisodeView = lazyWithRetry(() => import('./components/EpisodeView'));
+const MediaLibrary = lazyWithRetry(() => import('./components/MediaLibrary'));
+const ReviewQueuePanel = lazyWithRetry(() => import('./components/ReviewQueuePanel'));
+const TranslationQueuePanel = lazyWithRetry(() => import('./components/TranslationQueuePanel'));
+const Dashboard = lazyWithRetry(() => import('./components/Dashboard'));
+const HealthPage = lazyWithRetry(() => import('./components/HealthPage'));
+const AutopilotPage = lazyWithRetry(() => import('./components/autopilot/AutopilotPage'));
 import { JobProvider } from './context/JobContext';
 import { ToastProvider } from './context/ToastContext';
 import { api, AUTH_STORAGE_KEY } from './api';
 
-const RouteFallback = () => (
-    <div className="p-10 text-center text-gray-400">
-        <RefreshCw className="w-6 h-6 animate-spin mx-auto" />
-    </div>
-);
-
-const FullScreenLoader = () => (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-gray-900">
-        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-    </div>
-);
 
 function App() {
     // Auth gate (docs/PLAN_auth_security.md): resolved before anything else
@@ -124,66 +132,77 @@ function App() {
     };
 
     if (!authChecked || (!needsLogin && !setupChecked)) {
-        return <FullScreenLoader />;
+        return <LoadingFallback fullScreen message="Connecting to OmbiSub..." />;
     }
 
     if (needsLogin) {
-        return <LoginPage onLoggedIn={() => setNeedsLogin(false)} />;
+        return (
+            <ErrorBoundary title="Authentication Error">
+                <LoginPage onLoggedIn={() => setNeedsLogin(false)} />
+            </ErrorBoundary>
+        );
     }
 
     return (
-        <Router>
-            <JobProvider>
-                <ToastProvider>
-                    {needsSetup && (
-                        <Suspense fallback={<FullScreenLoader />}>
-                            <SetupWizard onFinished={() => setNeedsSetup(false)} />
-                        </Suspense>
-                    )}
-                    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
-                        <TopBar />
-                        <div className="flex-1 relative">
-                            <Suspense fallback={<RouteFallback />}>
-                            <Routes>
-                                <Route path="/" element={<ProjectList />} />
-                                <Route path="/project/:projectName/*" element={<ProjectDetail />} />
-                                <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
-
-                                <Route path="/settings" element={<SettingsPage />} />
-                                <Route path="/library" element={<MediaLibrary />} />
-                                <Route path="/dashboard" element={<Dashboard />} />
-                                <Route path="/health" element={<HealthPage />} />
-                                <Route path="/review" element={
-                                    <div className="max-w-4xl mx-auto p-8 space-y-6">
-                                        <header className="mb-6">
-                                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Global Review Queue</h1>
-                                            <p className="text-gray-500 dark:text-gray-400">Resolve translations flagged by the AI quality control across all projects.</p>
-                                        </header>
-                                        <ReviewQueuePanel />
-                                    </div>
-                                } />
-                                <Route path="/queue" element={
-                                    <div className="max-w-6xl mx-auto p-8 space-y-6">
-                                        <TranslationQueuePanel />
-                                    </div>
-                                } />
-                            </Routes>
+        <ErrorBoundary title="Application Error">
+            <Router>
+                <JobProvider>
+                    <ToastProvider>
+                        {needsSetup && (
+                            <Suspense fallback={<LoadingFallback fullScreen message="Loading setup wizard..." />}>
+                                <SetupWizard onFinished={() => setNeedsSetup(false)} />
                             </Suspense>
-                            <JobProgressWidget />
+                        )}
+                        <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-gray-900 font-sans text-gray-900 dark:text-white">
+                            <TopBar />
+                            <div className="flex-1 relative">
+                                <ErrorBoundary title="Page Load Error">
+                                    <Suspense fallback={<LoadingFallback message="Loading view..." />}>
+                                        <Routes>
+                                            <Route path="/" element={<ProjectList />} />
+                                            <Route path="/project/:projectName/*" element={<ProjectDetail />} />
+                                            <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
+
+                                            <Route path="/settings" element={<SettingsPage />} />
+                                            <Route path="/library" element={<MediaLibrary />} />
+                                            <Route path="/dashboard" element={<Dashboard />} />
+                                            <Route path="/health" element={<HealthPage />} />
+                                            <Route path="/autopilot" element={<AutopilotPage />} />
+                                            <Route path="/review" element={
+                                                <div className="max-w-4xl mx-auto p-8 space-y-6">
+                                                    <header className="mb-6">
+                                                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Global Review Queue</h1>
+                                                        <p className="text-gray-500 dark:text-gray-400">Resolve translations flagged by the AI quality control across all projects.</p>
+                                                    </header>
+                                                    <ReviewQueuePanel />
+                                                </div>
+                                            } />
+                                            <Route path="/queue" element={
+                                                <div className="max-w-6xl mx-auto p-8 space-y-6">
+                                                    <TranslationQueuePanel />
+                                                </div>
+                                            } />
+                                        </Routes>
+                                    </Suspense>
+                                </ErrorBoundary>
+                                <ErrorBoundary title="Background Task Widget Error">
+                                    <JobProgressWidget />
+                                </ErrorBoundary>
+                            </div>
                         </div>
-                    </div>
 
-                    <ApiKeyModal
-                        isOpen={showApiKeyModal}
-                        onClose={() => setShowApiKeyModal(false)}
-                        onSave={handleApiKeySaved}
-                        allowSkip={true}
-                    />
+                        <ApiKeyModal
+                            isOpen={showApiKeyModal}
+                            onClose={() => setShowApiKeyModal(false)}
+                            onSave={handleApiKeySaved}
+                            allowSkip={true}
+                        />
 
-                    <CommandPalette />
-                </ToastProvider>
-            </JobProvider>
-        </Router>
+                        <CommandPalette />
+                    </ToastProvider>
+                </JobProvider>
+            </Router>
+        </ErrorBoundary>
     );
 }
 

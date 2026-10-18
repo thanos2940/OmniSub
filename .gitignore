@@ -51,6 +51,11 @@ backend/test_greek_save.py
 *.sqlite3
 # Runtime state (regenerated at startup; never tracked)
 backend/rate_limiter_state.json
+backend/agent_runner.json
+backend/agent_runner.pid
+backend/agent_runner.tmp
+backend/library_audit.json
+backend/cache/
 test_greek.json
 config.json
 !backend/config.example.json

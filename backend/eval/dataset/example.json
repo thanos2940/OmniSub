@@ -1,16 +1,145 @@
 [
   {
-    "id": "greek-1",
-    "source": "Captain Reynolds, the ship is losing power.",
-    "reference": "Καπετάνιε Ρέινολντς, το σκάφος χάνει ενέργεια.",
-    "hypothesis": "Καπετάνιε Ρέινολντς, το σκάφος χάνει ενέργεια.",
-    "glossary": [{ "term": "Captain", "translation": "Καπετάνιε" }]
+    "id": "idiom-fair-enough",
+    "source": "Fair enough, we'll do it your way.",
+    "reference": "Πάσο, θα το κάνουμε με τον δικό σου τρόπο.",
+    "hypothesis": "Πάσο, θα το κάνουμε με τον δικό σου τρόπο.",
+    "glossary": []
   },
   {
-    "id": "greek-2",
-    "source": "The Captain ordered a full retreat.",
-    "reference": "Ο Καπετάνιος διέταξε πλήρη υποχώρηση.",
-    "hypothesis": "Ο αρχηγός διέταξε πλήρη υποχώρηση.",
+    "id": "idiom-give-me-a-break",
+    "source": "Give me a break, I've been working all day.",
+    "reference": "Έλεος, δουλεύω όλη μέρα.",
+    "hypothesis": "Έλεος, δουλεύω όλη μέρα.",
+    "glossary": []
+  },
+  {
+    "id": "idiom-come-on",
+    "source": "Come on, we don't have much time left.",
+    "reference": "Έλα, δεν μας έχει απομείνει πολύς χρόνος.",
+    "hypothesis": "Έλα, δεν μας έχει απομείνει πολύς χρόνος.",
+    "glossary": []
+  },
+  {
+    "id": "idiom-you-know",
+    "source": "You know, this might actually be our only chance.",
+    "reference": "Ξέρεις, αυτή μπορεί να είναι η μοναδική μας ευκαιρία.",
+    "hypothesis": "Ξέρεις, αυτή μπορεί να είναι η μοναδική μας ευκαιρία.",
+    "glossary": []
+  },
+  {
+    "id": "idiom-cut-it-out",
+    "source": "Cut it out, you are driving me crazy.",
+    "reference": "Κόψ' το, με τρελαίνεις.",
+    "hypothesis": "Κόψ' το, με τρελαίνεις.",
+    "glossary": []
+  },
+  {
+    "id": "idiom-my-bad",
+    "source": "My bad, I didn't see you standing there.",
+    "reference": "Δικό μου λάθος, δεν σε είδα να στέκεσαι εκεί.",
+    "hypothesis": "Δικό μου λάθος, δεν σε είδα να στέκεσαι εκεί.",
+    "glossary": []
+  },
+  {
+    "id": "morphology-nom-commander",
+    "source": "The Commander entered the command bridge.",
+    "reference": "Ο Διοικητής μπήκε στη γέφυρα διοίκησης.",
+    "hypothesis": "Ο Διοικητής μπήκε στη γέφυρα διοίκησης.",
+    "glossary": [{ "term": "Commander", "translation": "Διοικητής" }]
+  },
+  {
+    "id": "morphology-gen-commander",
+    "source": "The Commander's orders were unambiguous.",
+    "reference": "Οι διαταγές του Διοικητή ήταν ξεκάθαρες.",
+    "hypothesis": "Οι διαταγές του Διοικητή ήταν ξεκάθαρες.",
+    "glossary": [{ "term": "Commander", "translation": "Διοικητής" }]
+  },
+  {
+    "id": "morphology-acc-commander",
+    "source": "We must warn the Commander immediately.",
+    "reference": "Πρέπει να προειδοποιήσουμε τον Διοικητή αμέσως.",
+    "hypothesis": "Πρέπει να προειδοποιήσουμε τον Διοικητή αμέσως.",
+    "glossary": [{ "term": "Commander", "translation": "Διοικητής" }]
+  },
+  {
+    "id": "morphology-voc-commander",
+    "source": "Commander, what are our next orders?",
+    "reference": "Διοικητή, ποιες είναι οι επόμενες διαταγές μας;",
+    "hypothesis": "Διοικητή, ποιες είναι οι επόμενες διαταγές μας;",
+    "glossary": [{ "term": "Commander", "translation": "Διοικητής" }]
+  },
+  {
+    "id": "morphology-nom-captain",
+    "source": "Captain Reynolds is on the bridge.",
+    "reference": "Ο Καπετάνιος Ρέινολντς είναι στη γέφυρα.",
+    "hypothesis": "Ο Καπετάνιος Ρέινολντς είναι στη γέφυρα.",
     "glossary": [{ "term": "Captain", "translation": "Καπετάνιος" }]
+  },
+  {
+    "id": "morphology-gen-captain",
+    "source": "We must follow the Captain's plan.",
+    "reference": "Πρέπει να ακολουθήσουμε το σχέδιο του Καπετάνιου.",
+    "hypothesis": "Πρέπει να ακολουθήσουμε το σχέδιο του Καπετάνιου.",
+    "glossary": [{ "term": "Captain", "translation": "Καπετάνιος" }]
+  },
+  {
+    "id": "morphology-acc-captain",
+    "source": "I will contact the Captain now.",
+    "reference": "Θα επικοινωνήσω με τον Καπετάνιο τώρα.",
+    "hypothesis": "Θα επικοινωνήσω με τον Καπετάνιο τώρα.",
+    "glossary": [{ "term": "Captain", "translation": "Καπετάνιος" }]
+  },
+  {
+    "id": "morphology-voc-captain",
+    "source": "Captain, the ship is losing power.",
+    "reference": "Καπετάνιε, το σκάφος χάνει ενέργεια.",
+    "hypothesis": "Καπετάνιε, το σκάφος χάνει ενέργεια.",
+    "glossary": [{ "term": "Captain", "translation": "Καπετάνιος" }]
+  },
+  {
+    "id": "article-fem-priestess",
+    "source": "The Priestess blessed the sacred sanctuary of the Priestess.",
+    "reference": "Η Ιέρεια ευλόγησε το ιερό άσυλο της Ιέρειας.",
+    "hypothesis": "Η Ιέρεια ευλόγησε το ιερό άσυλο της Ιέρειας.",
+    "glossary": [{ "term": "Priestess", "translation": "Ιέρεια" }]
+  },
+  {
+    "id": "article-neut-council",
+    "source": "The Council reviewed the decision of the Council.",
+    "reference": "Το Συμβούλιο επανεξέτασε την απόφαση του Συμβουλίου.",
+    "hypothesis": "Το Συμβούλιο επανεξέτασε την απόφαση του Συμβουλίου.",
+    "glossary": [{ "term": "Council", "translation": "Συμβούλιο" }]
+  },
+  {
+    "id": "formality-formal",
+    "source": "Could you please sign the document, Professor?",
+    "reference": "Θα μπορούσατε παρακαλώ να υπογράψετε το έγγραφο, Καθηγητά;",
+    "hypothesis": "Θα μπορούσατε παρακαλώ να υπογράψετε το έγγραφο, Καθηγητά;",
+    "glossary": [{ "term": "Professor", "translation": "Καθηγητής" }]
+  },
+  {
+    "id": "formality-familiar",
+    "source": "Can you pass me that wrench, buddy?",
+    "reference": "Μου δίνεις εκείνο το γαλλικό κλειδί, φιλαράκο;",
+    "hypothesis": "Μου δίνεις εκείνο το γαλλικό κλειδί, φιλαράκο;",
+    "glossary": []
+  },
+  {
+    "id": "sync-multiline-1",
+    "source": "We cannot hold the perimeter any longer.\nEvacuate all civilians immediately.",
+    "reference": "Δεν μπορούμε να κρατήσουμε την περίμετρο άλλο.\nΕκκενώστε όλους τους πολίτες αμέσως.",
+    "hypothesis": "Δεν μπορούμε να κρατήσουμε την περίμετρο άλλο.\nΕκκενώστε όλους τους πολίτες αμέσως.",
+    "glossary": []
+  },
+  {
+    "id": "sync-multiline-2",
+    "source": "Captain, incoming transmission.\nIt's the High Council.",
+    "reference": "Καπετάνιε, εισερχόμενη μετάδοση.\nΕίναι το Ανώτατο Συμβούλιο.",
+    "hypothesis": "Καπετάνιε, εισερχόμενη μετάδοση.\nΕίναι το Ανώτατο Συμβούλιο.",
+    "glossary": [
+      { "term": "Captain", "translation": "Καπετάνιος" },
+      { "term": "Council", "translation": "Συμβούλιο" }
+    ]
   }
 ]

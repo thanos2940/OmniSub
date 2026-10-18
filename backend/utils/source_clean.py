@@ -4,10 +4,14 @@ Source Subtitle Cleaning Preprocess (Plan 25).
 
 import re
 import hashlib
+import logging
 from typing import List, Dict, Tuple, Optional
 from utils.srt_parser import timecode_to_ms
 from utils.subtitle_io import detect_format, parse_subtitle, reconstruct_subtitle
+from utils.text_normalize import sanitize_translation_text
 from utils import storage
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_orig_indexes(v) -> List[int]:
@@ -202,6 +206,7 @@ def import_and_clean_srt(
     
     ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
     ep_meta["original_filename"] = filename or ep_meta.get("original_filename") or f"{episode_name}.{fmt}"
+    ep_meta["has_source_sub"] = True
     ep_meta["line_count"] = len(cleaned_data)
     ep_meta["raw_line_count"] = len(parsed_raw)
     ep_meta["arr_sub_fingerprint"] = fingerprint
@@ -209,6 +214,7 @@ def import_and_clean_srt(
     # A fresh import re-establishes the raw-based remap, so drop any prior
     # "authoritative cue list" flag left by a manual SubtitleEdit fix.
     ep_meta.pop("structure_authoritative", None)
+
     
     if target_srt_content:
         parsed_target = parse_subtitle(target_srt_content, fmt=fmt)
@@ -231,6 +237,28 @@ def import_and_clean_srt(
 
     if extra_metadata:
         ep_meta.update(extra_metadata)
+
+    if (target_srt_content and n_aligned > 0) or ep_meta.get("arr_has_target"):
+        ep_meta["translated"] = True
+        ep_meta["translation_status"] = "completed"
+        try:
+            from services.agent_task_service import agent_task_service
+            agent_task_service.mark_task_completed(project_name, episode_name)
+        except Exception:
+            try:
+                from utils.translation_queue import TranslationQueue
+                from datetime import datetime, timezone
+                q = TranslationQueue()
+                now_str = datetime.now(timezone.utc).isoformat()
+                with q._conn() as conn:
+                    conn.execute("""
+                        UPDATE translation_queue
+                        SET status = 'completed', completed_at = COALESCE(completed_at, ?)
+                        WHERE project_name = ? AND episode_name = ? AND status IN ('pending', 'running')
+                    """, (now_str, project_name, episode_name))
+                    conn.commit()
+            except Exception:
+                pass
 
     storage.save_episode(project_name, episode_name, cleaned_data, ep_meta)
 
@@ -435,12 +463,17 @@ def reconstruct_cleaned_srt(
                 txt = (entry.get("translations", {}) or {}).get(target_lang_code) or entry.get("translated") or ""
             else:
                 txt = entry.get("translated") or ""
-            rows.append({
+            orig_txt = entry.get("original", "")
+            txt = sanitize_translation_text(txt, source_text=orig_txt, target_lang_code=target_lang_code)
+            row = {
                 "id": str(i + 1),
                 "timecode": entry.get("timecode", ""),
                 "translated": txt,
-                "original": entry.get("original", ""),
-            })
+                "original": orig_txt,
+            }
+            if "_ass" in entry:
+                row["_ass"] = entry["_ass"]
+            rows.append(row)
         return rows
 
     # After manual SubtitleEdit fixes, the cleaned cue list is authoritative — its
@@ -481,6 +514,7 @@ def reconstruct_cleaned_srt(
     deleted_orig = {int(i) for i in metadata.get("deleted_orig_indexes") or []}
 
     kept_entries = []
+    untranslated_cues = 0
     for orig_idx, orig_entry in enumerate(parsed_raw):
         if orig_idx in deleted_orig:
             continue
@@ -521,9 +555,22 @@ def reconstruct_cleaned_srt(
                 translation = clean_entry.get("translated")
         else:
             translation = clean_entry.get("translated") or ""
+        translation = sanitize_translation_text(
+            translation,
+            source_text=orig_entry.get("original", "") or clean_entry.get("original", ""),
+            target_lang_code=target_lang_code
+        )
         orig_entry["translated"] = translation
+        if (not translation and target_lang_code and str(target_lang_code).lower() not in ("en", "eng")
+                and (orig_entry.get("_ass") or {}).get("translatable") is not False):
+            untranslated_cues += 1
 
         kept_entries.append(orig_entry)
+
+    if untranslated_cues:
+        # Karaoke/drawings are passthrough by design and not counted.
+        logger.warning(f"{project_name}/{episode_name}: {untranslated_cues} translatable cue(s) have no "
+                       f"{target_lang_code} translation; no English fallback was written for them.")
 
     # Renumber sequentially so deletions don't leave gaps in cue numbering
     for i, entry in enumerate(kept_entries):

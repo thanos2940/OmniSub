@@ -1,17 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Film, Sparkles, Edit2, Trash2, X, Check, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Film, Sparkles, Edit2, Trash2, Check, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
+import { useJobs } from '../context/JobContext';
 
 const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
     const [summaries, setSummaries] = useState({});
     const [loading, setLoading] = useState(true);
     const [generatingEp, setGeneratingEp] = useState(null);
+    const [generatingJobId, setGeneratingJobId] = useState(null);
     const [editingEp, setEditingEp] = useState(null);
     const [editContent, setEditContent] = useState('');
+    
     const toast = useToast();
+    const { activeJobs, addJob } = useJobs();
+    const isMounted = useRef(true);
 
-    const isMounted = React.useRef(true);
     useEffect(() => {
         isMounted.current = true;
         return () => {
@@ -19,7 +23,7 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
         };
     }, []);
 
-    const loadSummaries = async () => {
+    const loadSummaries = useCallback(async () => {
         if (!isMounted.current) return;
         setLoading(true);
         try {
@@ -34,11 +38,33 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
                 setLoading(false);
             }
         }
-    };
+    }, [projectName]);
 
     useEffect(() => {
         loadSummaries();
-    }, [projectName]);
+    }, [loadSummaries]);
+
+    // Track active summary generation job through JobContext
+    useEffect(() => {
+        if (!generatingJobId) return;
+        const job = activeJobs[generatingJobId];
+        if (!job) return;
+
+        if (job.status === 'completed') {
+            if (isMounted.current) {
+                toast.success(`Summary for ${generatingEp || 'episode'} ready.`);
+                loadSummaries();
+                setGeneratingJobId(null);
+                setGeneratingEp(null);
+            }
+        } else if (job.status === 'failed' || job.status === 'cancelled') {
+            if (isMounted.current) {
+                toast.error(`Summary generation failed: ${job.message || 'Error'}`);
+                setGeneratingJobId(null);
+                setGeneratingEp(null);
+            }
+        }
+    }, [activeJobs, generatingJobId, generatingEp, loadSummaries, toast]);
 
     const handleGenerate = async (episodeName) => {
         const epToGenerate = episodeName || prompt("Enter episode name to generate a summary for (e.g. S01E01):");
@@ -51,37 +77,12 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
             const jobId = res.data?.job_id;
             toast.success(`Summary generation started for ${epToGenerate}...`);
             if (jobId) {
-                let attempts = 0;
-                const poll = async () => {
-                    if (!isMounted.current) return;
-                    attempts++;
-                    try {
-                        const jobRes = await api.getJob(jobId);
-                        if (jobRes.data?.status === 'completed') {
-                            if (isMounted.current) {
-                                toast.success(`Summary for ${epToGenerate} ready.`);
-                                loadSummaries();
-                                setGeneratingEp(null);
-                            }
-                        } else if (jobRes.data?.status === 'failed') {
-                            if (isMounted.current) {
-                                toast.error(`Summary generation failed: ${jobRes.data.message}`);
-                                setGeneratingEp(null);
-                            }
-                        } else if (attempts < 15) {
-                            setTimeout(poll, 2000);
-                        } else {
-                            if (isMounted.current) setGeneratingEp(null);
-                        }
-                    } catch (e) {
-                        if (attempts < 15) {
-                            setTimeout(poll, 2000);
-                        } else {
-                            if (isMounted.current) setGeneratingEp(null);
-                        }
-                    }
-                };
-                setTimeout(poll, 2000);
+                addJob(jobId, 'episode_summary', `Generating summary for ${epToGenerate} (${projectName})`, {
+                    projectId: projectName,
+                    episodeName: epToGenerate,
+                    link: `/project/${encodeURIComponent(projectName)}`
+                });
+                setGeneratingJobId(jobId);
             } else {
                 setTimeout(() => {
                     if (isMounted.current) {

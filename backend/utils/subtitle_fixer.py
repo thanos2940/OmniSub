@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 from utils.srt_parser import reconstruct_srt, parse_srt, timecode_to_ms
 from utils.storage import load_global_config
+from utils.text_normalize import sanitize_translation_text
 
 
 class SubtitleEditUnavailable(Exception):
@@ -135,7 +136,14 @@ def fix_subtitles_with_se(parsed_data: List[Dict], target_lang_code: Optional[st
         
         try:
             # We use shell=False for security and subprocess.run for blocking execution
-            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            result = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
             
             # 3. Read result back
             # SE usually keeps the same filename in the output folder
@@ -157,9 +165,13 @@ def fix_subtitles_with_se(parsed_data: List[Dict], target_lang_code: Optional[st
                     fixed_text = _balance_block(
                         entry["original"], limits["max_chars_per_line"], limits["max_lines"]
                     )
-                    entry["translated"] = fixed_text
-
                     matched = input_map.get(entry["id"])
+                    fixed_text = sanitize_translation_text(
+                        fixed_text,
+                        source_text=(matched or {}).get("original", ""),
+                        target_lang_code=target_lang_code
+                    )
+                    entry["translated"] = fixed_text
                     # Carry the matched source line's other-language translations, then
                     # overwrite this language with the fixed text. Without a populated
                     # translations dict, the conformance pass reads it as empty and wipes
@@ -350,6 +362,11 @@ def apply_common_fixes(parsed_data: List[Dict], track: str, lang_code: str, prim
             if flagged:
                 entry["review_issues"] = "New line from a SubtitleEdit split — needs translation"
         else:
+            fixed_text = sanitize_translation_text(
+                fixed_text,
+                source_text=(old.get("original") or "") if old else "",
+                target_lang_code=lang_code
+            )
             had_target = bool(_target_text(old).strip())
             translations = dict(old.get("translations") or {})
             if had_target:

@@ -31,6 +31,7 @@ ALLOWLIST = {
     "auth_username",
     "auth_password_hash",
     "api_key",
+    "macro_chunking",
 }
 
 KEY_RE = re.compile(r'(?:global_config|config|cfg)\.get\(\s*"([a-z][a-z0-9_]*)"')

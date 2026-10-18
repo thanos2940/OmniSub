@@ -1,7 +1,7 @@
 """
 MediaSyncEngine — Sonarr + Radarr library synchronization.
 
-Replaces BazarrSyncEngine. Uses Sonarr (/api/v3/series, /api/v3/episode)
+Uses Sonarr (/api/v3/series, /api/v3/episode)
 and Radarr (/api/v3/movie) as the source of truth, then scans the local
 filesystem via SubtitleScannerService to determine translation needs.
 
@@ -20,21 +20,23 @@ import asyncio
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from .sonarr import SonarrConfig, get_all_series, get_episodes, get_episode_file, get_episode_files
 from .radarr import RadarrConfig, get_all_movies
 from .subtitle_scanner import SubtitleScannerService
 from .path_resolver import PathResolver
+from utils.text_repair import decode_subtitle_bytes
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Sanitization helpers (previously in bazarr.py)
+# Sanitization helpers
 # ---------------------------------------------------------------------------
 
 def make_project_name(title: str) -> str:
@@ -87,7 +89,19 @@ def prefer_ass_for_project(project_meta: Optional[Dict]) -> bool:
     elif value is not None:
         return bool(value)
 
-    return (meta.get("series_type") or "").strip().lower() == "anime"
+    if (meta.get("series_type") or "").strip().lower() == "anime":
+        return True
+    if meta.get("is_anime") is True or str(meta.get("type", "")).strip().lower() == "anime":
+        return True
+    genres = meta.get("genres") or []
+    if any(str(g).strip().lower() == "anime" for g in genres):
+        return True
+    tags = meta.get("tags") or []
+    if any("anime" in str(t).strip().lower() for t in tags):
+        return True
+    if "anime" in (meta.get("show_name") or "").strip().lower():
+        return True
+    return False
 
 
 def _movie_disambiguator(movie_data: Dict) -> str:
@@ -206,6 +220,170 @@ class MediaSyncEngine:
         self._embedded_tools_resolved = False
 
     # ------------------------------------------------------------------
+    # Webhook Payload Validation & Translation Reuse Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def validate_sonarr_payload(payload: Any) -> Optional[str]:
+        """Validate Sonarr webhook payload schema synchronously (INT-P1-06).
+        Returns None if valid, or a diagnostic error string if invalid.
+        """
+        if not isinstance(payload, dict):
+            return "Payload body must be a JSON object."
+        event_type = payload.get("eventType")
+        if not event_type or not isinstance(event_type, str):
+            return "Missing or invalid 'eventType' string field."
+        if event_type == "Test":
+            return None
+        if event_type in ("Download", "EpisodeFileRenamed"):
+            errors = []
+            series = payload.get("series")
+            if not isinstance(series, dict) or not series.get("title"):
+                errors.append("missing or invalid 'series.title'")
+            episodes = payload.get("episodes")
+            if not isinstance(episodes, list) or len(episodes) == 0:
+                errors.append("missing or empty 'episodes' list")
+            episode_file = payload.get("episodeFile")
+            if not isinstance(episode_file, dict) or not episode_file.get("path"):
+                errors.append("missing or invalid 'episodeFile.path'")
+            if errors:
+                return f"Invalid Sonarr payload for event '{event_type}': {'; '.join(errors)}"
+        return None
+
+    @staticmethod
+    def validate_radarr_payload(payload: Any) -> Optional[str]:
+        """Validate Radarr webhook payload schema synchronously (INT-P1-06).
+        Returns None if valid, or a diagnostic error string if invalid.
+        """
+        if not isinstance(payload, dict):
+            return "Payload body must be a JSON object."
+        event_type = payload.get("eventType")
+        if not event_type or not isinstance(event_type, str):
+            return "Missing or invalid 'eventType' string field."
+        if event_type == "Test":
+            return None
+        if event_type in ("Download", "MovieFileRenamed"):
+            errors = []
+            movie = payload.get("movie")
+            if not isinstance(movie, dict) or not movie.get("title"):
+                errors.append("missing or invalid 'movie.title'")
+            movie_file = payload.get("movieFile")
+            if not isinstance(movie_file, dict) or not movie_file.get("path"):
+                errors.append("missing or invalid 'movieFile.path'")
+            if errors:
+                return f"Invalid Radarr payload for event '{event_type}': {'; '.join(errors)}"
+        return None
+
+    def _mark_queue_item_completed(self, project_name: str, episode_name: str) -> None:
+        """Mark translation queue items completed when target subtitle exists or is imported."""
+        try:
+            from services.agent_task_service import agent_task_service
+            agent_task_service.mark_task_completed(project_name, episode_name)
+        except Exception:
+            try:
+                from utils.translation_queue import TranslationQueue
+                from datetime import datetime, timezone
+                q = TranslationQueue()
+                now_str = datetime.now(timezone.utc).isoformat()
+                with q._conn() as conn:
+                    conn.execute("""
+                        UPDATE translation_queue
+                        SET status = 'completed', completed_at = COALESCE(completed_at, ?)
+                        WHERE project_name = ? AND episode_name = ? AND status IN ('pending', 'running')
+                    """, (now_str, project_name, episode_name))
+                    conn.commit()
+            except Exception:
+                pass
+
+    def _reuse_and_export_existing_translation(
+        self,
+        project_name: str,
+        episode_name: str,
+        media_path: str,
+        scan,
+        storage,
+        existing_meta: Optional[Dict] = None,
+    ) -> bool:
+        """Reuse existing translation in storage upon media release upgrade/rename (INT-P1-04).
+
+        If storage contains translated cues (data.json), re-exports the existing
+        translation to the new media stem instead of triggering an LLM re-translation.
+        Returns True if an existing translation was successfully reused and re-exported.
+        """
+        if scan.has_target_sub:
+            return False
+
+        if existing_meta is None:
+            existing_meta = storage.load_episode_metadata(project_name, episode_name)
+        if not existing_meta:
+            return False
+
+        ep_data = storage.load_episode(project_name, episode_name)
+        if not ep_data or not ep_data.get("data"):
+            return False
+
+        from utils.language_codes import to_code, output_filename_from_original
+        target_lang = self.target_language or "Greek"
+        target_code = to_code(target_lang) or "el"
+
+        has_translated_cues = any(
+            bool((line.get("translations", {}) or {}).get(target_code) or line.get("translated"))
+            for line in ep_data["data"]
+        )
+        if not has_translated_cues and not existing_meta.get("translated"):
+            return False
+
+        try:
+            from utils.source_clean import reconstruct_cleaned_srt
+            from integrations import embedded_subs
+
+            translated_content = reconstruct_cleaned_srt(
+                project_name, episode_name, ep_data["data"], target_code
+            )
+            if not translated_content or not translated_content.strip():
+                return False
+
+            media_file = Path(media_path)
+            orig_filename = existing_meta.get("original_filename") or ""
+            ext = Path(orig_filename).suffix if orig_filename else ""
+            if not ext:
+                _, ext_sub = storage.load_original_subtitle(project_name, episode_name)
+                ext = f".{ext_sub}" if ext_sub else ".srt"
+
+            target_filename = output_filename_from_original(f"{media_file.stem}{ext}", target_code)
+            new_target_path = media_file.parent / target_filename
+
+            if not new_target_path.parent.exists():
+                logger.warning(f"Cannot re-export translation: parent dir does not exist {new_target_path.parent}")
+                return False
+
+            embedded_subs.write_sidecar(new_target_path, translated_content)
+
+            # Update scan result so downstream callers know target sub is present on disk
+            scan.has_target_sub = True
+            scan.target_sub_path = str(new_target_path)
+
+            # Update metadata
+            existing_meta["arr_media_path"] = media_path
+            existing_meta["arr_has_target"] = True
+            existing_meta["arr_target_path"] = str(new_target_path)
+            existing_meta["translated"] = True
+            existing_meta["translation_status"] = "completed"
+            storage.save_episode_metadata(project_name, episode_name, existing_meta, update_stats=False)
+
+            logger.info(
+                f"Sync/Webhook: Reused existing translation for {project_name}/{episode_name} upon "
+                f"media release upgrade/rename; re-exported to {new_target_path}"
+            )
+            return True
+        except Exception as e:
+            logger.error(
+                f"Failed to reuse and re-export existing translation for {project_name}/{episode_name}: {e}",
+                exc_info=True,
+            )
+            return False
+
+    # ------------------------------------------------------------------
     # Full sync
     # ------------------------------------------------------------------
 
@@ -227,6 +405,7 @@ class MediaSyncEngine:
         existing_projects_set = set(existing_projects)
         
         existing_arr_projects: set = set()
+        existing_project_meta: Dict[str, Dict] = {}
         # Maps a Radarr movie id to the existing project already linked to it, so a
         # movie whose project predates the "Title (year)" disambiguation naming
         # scheme is adopted (reused) instead of spawning a duplicate suffixed
@@ -240,16 +419,20 @@ class MediaSyncEngine:
                 meta = None
             if meta and meta.get("arr_source"):
                 existing_arr_projects.add(p_name)
+                existing_project_meta[p_name] = meta
             if meta:
-                rid = meta.get("arr_radarr_id") or meta.get("bazarr_movie_id")
+                rid = meta.get("arr_radarr_id")
                 if rid is not None:
                     radarr_id_to_project[str(rid)] = p_name
         await asyncio.gather(*[load_meta(p) for p in existing_projects])
 
         # --- Sonarr sync ---
+        sonarr_queried = False
         sonarr_failed = False
+        all_series = []
         if self.sonarr and self.sonarr.enabled and self.sonarr.api_key:
             _progress(5.0, "Fetching series from Sonarr...")
+            sonarr_queried = True
             try:
                 all_series = await get_all_series(self.sonarr)
             except Exception as e:
@@ -288,9 +471,12 @@ class MediaSyncEngine:
                 await asyncio.gather(*[sync_one_series(s) for s in all_series])
 
         # --- Radarr sync ---
+        radarr_queried = False
         radarr_failed = False
+        all_movies = []
         if self.radarr and self.radarr.enabled and self.radarr.api_key:
             _progress(52.0, "Fetching movies from Radarr...")
+            radarr_queried = True
             try:
                 all_movies = await get_all_movies(self.radarr)
             except Exception as e:
@@ -332,6 +518,73 @@ class MediaSyncEngine:
 
         # --- Disable removed projects ---
         _progress(92.0, "Checking for removed entries...")
+
+        existing_series_count = sum(1 for m in existing_project_meta.values() if m.get("arr_media_type") == "series")
+        existing_movies_count = sum(1 for m in existing_project_meta.values() if m.get("arr_media_type") == "movie")
+
+        # Determine if each service is safe to prune from
+        sonarr_safe_to_prune = sonarr_queried and not sonarr_failed
+        if sonarr_safe_to_prune and len(all_series) == 0 and existing_series_count > 0:
+            logger.warning(
+                f"Sonarr returned 0 series while {existing_series_count} series exist in storage. "
+                "Skipping series disablement as an empty-response safeguard."
+            )
+            result.warnings.append("Sonarr returned 0 series; skipped series disablement safeguard.")
+            sonarr_safe_to_prune = False
+
+        radarr_safe_to_prune = radarr_queried and not radarr_failed
+        if radarr_safe_to_prune and len(all_movies) == 0 and existing_movies_count > 0:
+            logger.warning(
+                f"Radarr returned 0 movies while {existing_movies_count} movies exist in storage. "
+                "Skipping movie disablement as an empty-response safeguard."
+            )
+            result.warnings.append("Radarr returned 0 movies; skipped movie disablement safeguard.")
+            radarr_safe_to_prune = False
+
+        series_to_disable = []
+        movies_to_disable = []
+        other_to_disable = []
+
+        for p in existing_arr_projects:
+            if p in seen_project_names:
+                continue
+            meta = existing_project_meta.get(p)
+            if not meta or meta.get("arr_disabled"):
+                continue
+
+            media_type = meta.get("arr_media_type")
+            if media_type == "series":
+                if sonarr_safe_to_prune:
+                    series_to_disable.append(p)
+            elif media_type == "movie":
+                if radarr_safe_to_prune:
+                    movies_to_disable.append(p)
+            else:
+                # Unknown/unspecified type: only allow if BOTH services ran safely
+                if sonarr_safe_to_prune and radarr_safe_to_prune:
+                    other_to_disable.append(p)
+
+        # Circuit breaker: Abort mass disablement if candidate count exceeds threshold
+        if existing_series_count > 0 and len(series_to_disable) > 10 and len(series_to_disable) > 0.3 * existing_series_count:
+            msg = (
+                f"Circuit breaker triggered: Sonarr sync candidate disable count ({len(series_to_disable)}) "
+                f"exceeds 30% of existing series ({existing_series_count}). Disablement skipped."
+            )
+            logger.warning(msg)
+            result.warnings.append(msg)
+            series_to_disable.clear()
+
+        if existing_movies_count > 0 and len(movies_to_disable) > 20 and len(movies_to_disable) > 0.3 * existing_movies_count:
+            msg = (
+                f"Circuit breaker triggered: Radarr sync candidate disable count ({len(movies_to_disable)}) "
+                f"exceeds 30% of existing movies ({existing_movies_count}). Disablement skipped."
+            )
+            logger.warning(msg)
+            result.warnings.append(msg)
+            movies_to_disable.clear()
+
+        candidates_to_disable = series_to_disable + movies_to_disable + other_to_disable
+
         async def disable_project(p_name):
             try:
                 meta = await loop.run_in_executor(None, storage.load_project_metadata, p_name)
@@ -339,17 +592,12 @@ class MediaSyncEngine:
                 logger.warning(f"Failed to load metadata for project '{p_name}' during disable check: {e}")
                 meta = None
             if meta and not meta.get("arr_disabled"):
-                media_type = meta.get("arr_media_type")
-                if media_type == "series" and sonarr_failed:
-                    return
-                if media_type == "movie" and radarr_failed:
-                    return
                 meta["arr_disabled"] = True
                 meta["arr_disabled_at"] = datetime.now().isoformat()
                 await loop.run_in_executor(None, storage.save_project_metadata, p_name, meta)
                 result.disabled_projects += 1
 
-        await asyncio.gather(*[disable_project(p) for p in existing_arr_projects if p not in seen_project_names])
+        await asyncio.gather(*[disable_project(p) for p in candidates_to_disable])
 
         # --- Re-enable projects that reappeared ---
         async def re_enable_project(p_name):
@@ -380,9 +628,17 @@ class MediaSyncEngine:
 
     async def _sync_series(
         self, series_data: Dict, project_name: str,
-        result: SyncResult, storage, parse_srt, existing_projects_set: set
+        result: SyncResult, storage, parse_srt, existing_projects_set: set,
+        episode_filter: Optional[set] = None,
     ) -> Optional[Dict]:
-        """Create/update project and import episodes for one series."""
+        """Create/update project and import episodes for one series.
+
+        ``episode_filter`` (a set of SxxExx names) restricts the pass to those
+        episodes — used by on-demand requests, where importing a whole 500-episode
+        anime to translate one episode would be all cost and no benefit. A filtered
+        pass sees only part of the series, so it must not prune or rewrite the
+        series-wide stats: both read "not seen" as "gone from disk".
+        """
         series_id = series_data.get("id")
         series_title = series_data.get("title", "Unknown")
         series_type = series_data.get("seriesType", "standard")
@@ -454,9 +710,6 @@ class MediaSyncEngine:
                 # so a project created before this field existed (or one Sonarr has since
                 # retyped as anime) would otherwise never pick up the anime behaviour.
                 meta["series_type"] = series_type
-                # Migrate old bazarr_source projects
-                if meta.get("bazarr_source") and not meta.get("arr_source"):
-                    meta["arr_source"] = True
                 await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
 
         # Resolved once per series: gates embedded probing for .srt-only episodes and
@@ -467,12 +720,28 @@ class MediaSyncEngine:
         episodes = await get_episodes(self.sonarr, series_id)
         # Fetch all episode files for the series in a single API call to avoid N+1 requests
         episode_files = await get_episode_files(self.sonarr, series_id)
-        episode_file_map = {ef.get("id"): ef.get("path", "") for ef in episode_files if ef.get("id")}
+
+        # INT-P0-01: Detect Sonarr file API error or empty anomaly
+        has_file_episodes = any(ep.get("hasFile") for ep in episodes)
+        file_api_error = False
+        if episode_files is None:
+            file_api_error = True
+            msg = f"{project_name}: Sonarr episodefile API returned an error for series {series_id} — aborting series pruning to safeguard subtitles."
+            logger.warning(msg)
+            result.warnings.append(msg)
+            episode_file_map = {}
+        elif not episode_files and has_file_episodes:
+            file_api_error = True
+            msg = f"{project_name}: Sonarr episodefile API returned 0 files but {len(episodes)} episodes report hasFile=True — aborting series pruning to safeguard subtitles."
+            logger.warning(msg)
+            result.warnings.append(msg)
+            episode_file_map = {}
+        else:
+            episode_file_map = {ef.get("id"): ef.get("path", "") for ef in episode_files if ef.get("id")}
 
         imported_count = 0
         total_with_file = 0
         translated_count = 0
-        bazarr_episode_names: set = set()
         # Episodes found WITH a source subtitle on disk this sync — anything arr-sourced
         # and NOT in here is pruned below so the dashboard mirrors the directory.
         seen_episode_names: set = set()
@@ -489,7 +758,8 @@ class MediaSyncEngine:
             episode_num = ep.get("episodeNumber", 0)
             ep_title = ep.get("title", "")
             episode_name = make_episode_name(season, episode_num)
-            bazarr_episode_names.add(episode_name)
+            if episode_filter is not None and episode_name not in episode_filter:
+                continue
 
             # Resolve media path
             ep_file = ep.get("episodeFile")
@@ -583,6 +853,60 @@ class MediaSyncEngine:
                 })
 
             if not scan.has_source_sub:
+                # Retain the episode so it is visible in the UI with 'No Subtitle' status and can be extracted
+                seen_episode_names.add(episode_name)
+                existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
+                if not existing_meta:
+                    new_meta = {
+                        "arr_source": True,
+                        "arr_media_path": media_path,
+                        "arr_sonarr_episode_id": ep.get("id"),
+                        "episode_title": ep_title,
+                        "season": season,
+                        "episode": episode_num,
+                        "has_source_sub": False,
+                        "arr_has_target": scan.has_target_sub,
+                        "arr_target_path": scan.target_sub_path if scan.has_target_sub else None,
+                        "translated": scan.has_target_sub,
+                        "line_count": 0,
+                        "original_filename": Path(media_path).name,
+                    }
+                    def _init_empty_ep():
+                        ep_dir = storage.episode_dir(project_name, episode_name)
+                        ep_dir.mkdir(parents=True, exist_ok=True)
+                        storage.save_episode(project_name, episode_name, [], new_meta)
+                    await loop.run_in_executor(None, _init_empty_ep)
+                    if scan.has_target_sub:
+                        self._mark_queue_item_completed(project_name, episode_name)
+                    imported_count += 1
+                    result.new_episodes += 1
+                else:
+                    meta_changed = False
+                    # INT-P1-04: Reuse existing translation if media was upgraded/renamed
+                    if not scan.has_target_sub:
+                        reused = self._reuse_and_export_existing_translation(
+                            project_name, episode_name, media_path, scan, storage, existing_meta
+                        )
+                        if reused:
+                            meta_changed = True
+                            self._mark_queue_item_completed(project_name, episode_name)
+                    if existing_meta.get("arr_media_path") != media_path:
+                        existing_meta["arr_media_path"] = media_path
+                        meta_changed = True
+                    if existing_meta.get("arr_has_target") != scan.has_target_sub:
+                        existing_meta["arr_has_target"] = scan.has_target_sub
+                        if scan.has_target_sub:
+                            existing_meta["translated"] = True
+                            existing_meta["translation_status"] = "completed"
+                            self._mark_queue_item_completed(project_name, episode_name)
+                        meta_changed = True
+                    if existing_meta.get("has_source_sub") is not False and not existing_meta.get("line_count") and not storage.original_subtitle_exists(project_name, episode_name):
+                        existing_meta["has_source_sub"] = False
+                        meta_changed = True
+                    if meta_changed:
+                        await loop.run_in_executor(None, storage.save_episode_metadata, project_name, episode_name, existing_meta, False)
+                    imported_count += 1
+
                 result.skipped_no_subs += 1
                 continue
 
@@ -593,6 +917,7 @@ class MediaSyncEngine:
             fingerprint = await loop.run_in_executor(None, self._fingerprint, scan.source_sub_path)
             logger.debug(f"  [{episode_name}] Loading episode metadata...")
             existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
+
 
             should_import = True
             if existing_meta:
@@ -666,23 +991,39 @@ class MediaSyncEngine:
                         },
                     )
                 await loop.run_in_executor(None, _do_import)
+                if scan.has_target_sub:
+                    self._mark_queue_item_completed(project_name, episode_name)
                 imported_count += 1
                 result.new_episodes += 1
             else:
                 logger.debug(f"  [{episode_name}] Updating existing metadata/target status...")
-                # Update existing_meta if target sub status changed on disk
+                # Update existing_meta if source sub or target sub status changed on disk
                 meta_changed = False
+                if scan.has_source_sub and not existing_meta.get("has_source_sub"):
+                    existing_meta["has_source_sub"] = True
+                    meta_changed = True
+
+                # INT-P1-04: Reuse existing translation if media was upgraded/renamed
+                if not scan.has_target_sub:
+                    reused = self._reuse_and_export_existing_translation(
+                        project_name, episode_name, media_path, scan, storage, existing_meta
+                    )
+                    if reused:
+                        meta_changed = True
+                        self._mark_queue_item_completed(project_name, episode_name)
+
                 if existing_meta.get("arr_has_target") != scan.has_target_sub:
                     existing_meta["arr_has_target"] = scan.has_target_sub
+                    if scan.has_target_sub:
+                        existing_meta["translated"] = True
+                        existing_meta["translation_status"] = "completed"
+                        self._mark_queue_item_completed(project_name, episode_name)
                     meta_changed = True
                 
                 tgt_path_on_disk = scan.target_sub_path if scan.has_target_sub else None
+
                 if existing_meta.get("arr_target_path") != tgt_path_on_disk:
                     existing_meta["arr_target_path"] = tgt_path_on_disk
-                    meta_changed = True
-
-                if existing_meta.get("bazarr_has_target") != scan.has_target_sub:
-                    existing_meta["bazarr_has_target"] = scan.has_target_sub
                     meta_changed = True
 
                 # Source renamed on disk (same content → same fingerprint, but new path):
@@ -752,15 +1093,18 @@ class MediaSyncEngine:
             seen_episode_names.update(seen_siblings)
 
         # Prune arr-sourced episodes whose source subtitle is no longer on disk, so the
-        # dashboard mirrors the directory. Their exported translation files are removed too.
-        removed = await loop.run_in_executor(
-            None, self._prune_removed_episodes, project_name, seen_episode_names, result
-        )
-        result.removed_episodes += removed
+        # dashboard mirrors the directory. Their exported translation files are preserved.
+        if file_api_error:
+            logger.warning(f"{project_name}: skipping series pruning due to Sonarr episode file API error/empty response.")
+        elif episode_filter is None:
+            removed = await loop.run_in_executor(
+                None, self._prune_removed_episodes, project_name, seen_episode_names, result
+            )
+            result.removed_episodes += removed
 
         # Persist stats
         meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
-        if meta:
+        if meta and episode_filter is None:
             meta["arr_total_episodes"] = total_with_file
             meta["arr_translated_episodes"] = translated_count
             await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
@@ -825,19 +1169,12 @@ class MediaSyncEngine:
                     logger.warning(f"Sync: skipping removal of {project_name}/{ep_name} due to directory access error: {e}")
                     continue
 
-            target_paths = [em.get("arr_target_path")]
-            for t in (em.get("arr_targets") or {}).values():
-                if isinstance(t, dict) and t.get("target_path"):
-                    target_paths.append(t["target_path"])
-            for tp in target_paths:
-                if tp and os.path.exists(tp):
-                    try:
-                        os.remove(tp)
-                    except Exception as e:
-                        logger.warning(f"Failed to delete orphaned target {tp}: {e}")
+            # INT-P0-01: Under NO circumstances delete target subtitles (.el.srt / .el.ass) during sync pruning!
+            # Translated subtitles represent expensive LLM work and user edits.
+            # Only unregister the missing episode from project storage.
             storage.delete_episode(project_name, ep_name)
             removed += 1
-            logger.info(f"Sync: removed {project_name}/{ep_name} (source no longer on disk).")
+            logger.info(f"Sync: pruned removed episode {project_name}/{ep_name} from project storage (preserved target subtitles on disk).")
         return removed
 
     def _sync_secondary_formats(
@@ -961,10 +1298,6 @@ class MediaSyncEngine:
                     existing_meta["arr_target_path"] = tgt_path_on_disk
                     meta_changed = True
 
-                if existing_meta.get("bazarr_has_target") != has_target:
-                    existing_meta["bazarr_has_target"] = has_target
-                    meta_changed = True
-
                 if existing_meta.get("arr_sub_path") != source_path:
                     existing_meta["arr_sub_path"] = source_path
                     existing_meta["original_filename"] = Path(source_path).name
@@ -1040,8 +1373,6 @@ class MediaSyncEngine:
                 meta["arr_radarr_id"] = radarr_id
                 meta["arr_media_type"] = "movie"
                 meta["type"] = "movie"
-                if meta.get("bazarr_source") and not meta.get("arr_source"):
-                    meta["arr_source"] = True
                 await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
 
         if not raw_media_path:
@@ -1157,6 +1488,8 @@ class MediaSyncEngine:
                             },
                         )
                     await loop.run_in_executor(None, _do_import_movie)
+                    if has_target:
+                        self._mark_queue_item_completed(project_name, episode_name)
                     imported = True
                     result.new_episodes += 1
                 else:
@@ -1166,15 +1499,15 @@ class MediaSyncEngine:
                 meta_changed = False
                 if existing_meta.get("arr_has_target") != has_target:
                     existing_meta["arr_has_target"] = has_target
+                    if has_target:
+                        existing_meta["translated"] = True
+                        existing_meta["translation_status"] = "completed"
+                        self._mark_queue_item_completed(project_name, episode_name)
                     meta_changed = True
                 
                 tgt_path_on_disk = scan.target_sub_path if has_target else None
                 if existing_meta.get("arr_target_path") != tgt_path_on_disk:
                     existing_meta["arr_target_path"] = tgt_path_on_disk
-                    meta_changed = True
-
-                if existing_meta.get("bazarr_has_target") != has_target:
-                    existing_meta["bazarr_has_target"] = has_target
                     meta_changed = True
 
                 if existing_meta.get("arr_sub_path") != scan.source_sub_path:
@@ -1191,14 +1524,56 @@ class MediaSyncEngine:
                     await loop.run_in_executor(None, storage.save_episode_metadata, project_name, episode_name, existing_meta, False)
                 imported = True
         else:
+
+            # Retain the movie episode so it is visible in the UI with 'No Subtitle' status and can be extracted
+            existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
+            if not existing_meta:
+                new_meta = {
+                    "arr_source": True,
+                    "arr_media_path": media_path,
+                    "arr_radarr_id": radarr_id,
+                    "episode_title": movie_title,
+                    "has_source_sub": False,
+                    "arr_has_target": has_target,
+                    "arr_target_path": scan.target_sub_path if has_target else None,
+                    "translated": has_target,
+                    "line_count": 0,
+                    "original_filename": Path(media_path).name,
+                }
+                def _init_empty_movie():
+                    ep_dir = storage.episode_dir(project_name, episode_name)
+                    ep_dir.mkdir(parents=True, exist_ok=True)
+                    storage.save_episode(project_name, episode_name, [], new_meta)
+                await loop.run_in_executor(None, _init_empty_movie)
+                if has_target:
+                    self._mark_queue_item_completed(project_name, episode_name)
+                imported = True
+                result.new_episodes += 1
+            else:
+                meta_changed = False
+                if existing_meta.get("arr_media_path") != media_path:
+                    existing_meta["arr_media_path"] = media_path
+                    meta_changed = True
+                if existing_meta.get("arr_has_target") != has_target:
+                    existing_meta["arr_has_target"] = has_target
+                    if has_target:
+                        existing_meta["translated"] = True
+                        existing_meta["translation_status"] = "completed"
+                        self._mark_queue_item_completed(project_name, episode_name)
+                    meta_changed = True
+                if existing_meta.get("has_source_sub") is not False and not existing_meta.get("line_count") and not storage.original_subtitle_exists(project_name, episode_name):
+                    existing_meta["has_source_sub"] = False
+                    meta_changed = True
+                if meta_changed:
+                    await loop.run_in_executor(None, storage.save_episode_metadata, project_name, episode_name, existing_meta, False)
+                imported = True
             result.skipped_no_subs += 1
 
-        # Mirror the directory: prune the episode if its source subtitle is gone (the
-        # safety valve in _prune_removed_episodes skips when nothing was seen, so a
-        # transient scan failure won't wipe the movie).
-        _seen = {episode_name} if scan.has_source_sub else set()
+        # Mirror the directory: prune the episode if its media file AND source subtitle are gone
+        _seen = {episode_name}
         if migrated_sibling:
             _seen.add(migrated_sibling)
+
 
         # No sidecar (or no .ass on an ass-preferring project): look inside the container.
         # A queued extraction counts as "seen" so prune leaves the episode (and its
@@ -1325,7 +1700,20 @@ class MediaSyncEngine:
                 logger.info(f"Sonarr webhook: queued embedded extraction for {raw_media_path}")
                 return None
 
+        # INT-P1-04: Reuse existing translation if media was upgraded/renamed
+        existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
+        reused_trans = False
+        if existing_meta and not scan.has_target_sub:
+            reused_trans = await loop.run_in_executor(
+                None,
+                self._reuse_and_export_existing_translation,
+                project_name, episode_name, media_path, scan, storage, existing_meta
+            )
+
         if not scan.has_source_sub:
+            if reused_trans:
+                logger.info(f"Sonarr webhook: re-exported existing translation for upgraded file {raw_media_path} (no new source sub needed).")
+                return None
             logger.info(f"Sonarr webhook: no source subtitle found for {raw_media_path}")
             return None
 
@@ -1401,7 +1789,20 @@ class MediaSyncEngine:
                 logger.info(f"Radarr webhook: queued embedded extraction for {raw_media_path}")
                 return None
 
+        # INT-P1-04: Reuse existing translation if media was upgraded/renamed
+        existing_meta = await loop.run_in_executor(None, storage.load_episode_metadata, project_name, episode_name)
+        reused_trans = False
+        if existing_meta and not scan.has_target_sub:
+            reused_trans = await loop.run_in_executor(
+                None,
+                self._reuse_and_export_existing_translation,
+                project_name, episode_name, media_path, scan, storage, existing_meta
+            )
+
         if not scan.has_source_sub:
+            if reused_trans:
+                logger.info(f"Radarr webhook: re-exported existing translation for upgraded file {raw_media_path} (no new source sub needed).")
+                return None
             logger.info(f"Radarr webhook: no source subtitle found for {raw_media_path}")
             return None
 
@@ -1422,48 +1823,6 @@ class MediaSyncEngine:
         )
 
         return f"{project_name}/{episode_name}" if result.new_episodes > 0 or result.updated_episodes > 0 else None
-
-    # ------------------------------------------------------------------
-    # Migration helper
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def migrate_old_episode_names(storage) -> Dict[str, int]:
-        """Rename messy Bazarr-imported movie episode names to clean titles.
-
-        Old format: "Snow Queen (2002) DVD x265 AAC 2.0 Radarr.en.srt"
-        New format: "Snow Queen"
-
-        Returns dict of {project_name: episodes_renamed}.
-        """
-        fixed: Dict[str, int] = {}
-        for p_name in storage.list_projects():
-            meta = storage.load_project_metadata(p_name)
-            if not meta or meta.get("type") != "movie":
-                continue
-
-            episodes = storage.list_episodes(p_name)
-            clean_name = make_project_name(meta.get("show_name", p_name))
-
-            renames = 0
-            for ep_name in episodes:
-                # Episode names containing spaces + dots = likely old filename
-                if ep_name == clean_name:
-                    continue
-                if "." in ep_name and " " in ep_name:
-                    # Old messy name → rename to clean title
-                    from pathlib import Path as _Path
-                    old_dir = _Path(storage.PROJECTS_DIR) / p_name / "episodes" / ep_name
-                    new_dir = _Path(storage.PROJECTS_DIR) / p_name / "episodes" / clean_name
-                    if old_dir.exists() and not new_dir.exists():
-                        old_dir.rename(new_dir)
-                        renames += 1
-                        logger.info(f"Migration: renamed {p_name}/{ep_name} → {clean_name}")
-
-            if renames:
-                fixed[p_name] = renames
-
-        return fixed
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -1552,6 +1911,8 @@ class MediaSyncEngine:
                 },
             )
         await loop.run_in_executor(None, _do_import_webhook)
+        if scan.has_target_sub:
+            self._mark_queue_item_completed(project_name, episode_name)
         result.new_episodes += 1
 
         project_meta = await loop.run_in_executor(None, storage.load_project_metadata, project_name)
@@ -1585,7 +1946,7 @@ class MediaSyncEngine:
                 meta = storage.load_project_metadata(p_name)
                 if not meta:
                     continue
-                rid = meta.get("arr_radarr_id") or meta.get("bazarr_movie_id")
+                rid = meta.get("arr_radarr_id")
                 if rid is not None and str(rid) == str(radarr_id):
                     return p_name
         except Exception as e:
@@ -1753,6 +2114,7 @@ class MediaSyncEngine:
         self, project_name: str, episode_name: str, media_path: str,
         import_metadata: Dict, priority: int, result: SyncResult,
         project_metadata: Optional[Dict] = None,
+        extra_options: Optional[Dict] = None,
     ) -> bool:
         """Probe a container that has no source sidecar and queue an extraction job.
 
@@ -1760,6 +2122,10 @@ class MediaSyncEngine:
         over SMB, and cached by media fingerprint so a library full of files with no
         embedded subtitles isn't re-probed on every pass. The *extraction* (which streams
         the whole file) is deliberately not done here; it goes to the worker.
+
+        ``extra_options`` is merged over the job options last, so a caller that needs
+        a different follow-up than the library-wide default (on-demand requests
+        translate immediately, with their own options) can say so per job.
 
         Returns True when a job was queued.
         """
@@ -1808,6 +2174,7 @@ class MediaSyncEngine:
                 "import_metadata": import_metadata,
                 "project_metadata": project_metadata,
                 "auto_translate": self.embedded_auto_translate,
+                **(extra_options or {}),
             },
         )
         logger.info(
@@ -1830,31 +2197,42 @@ class MediaSyncEngine:
 
     @staticmethod
     def _read_file(path: Optional[str]) -> Optional[str]:
-        """Read subtitle file with encoding fallback.
+        """Read subtitle file with encoding fallback (``utils.text_repair.decode_subtitle_bytes``).
 
         utf-16 is only attempted when the file actually starts with a utf-16 BOM
         (\\xff\\xfe or \\xfe\\xff). Without that guard, an even-length cp1252/latin-1
         file (e.g. accented Western text with an even byte count) can "successfully"
         decode as BOM-less utf-16 into mojibake instead of falling through to the
         codec that actually matches it — silently corrupting the import.
+        A legacy file is read as cp1253 when its accented bytes are Greek text (read as
+        cp1252 a Greek file became mojibake that was then imported as the translation).
         """
         if not path:
             return None
-        try:
-            head = Path(path).read_bytes()[:2]
-        except OSError:
-            return None
-        has_utf16_bom = head in (b"\xff\xfe", b"\xfe\xff")
-        encodings = ["utf-8-sig", "utf-8"]
-        if has_utf16_bom:
-            encodings.append("utf-16")
-        encodings += ["cp1252", "latin-1"]
-        for enc in encodings:
+        # One read, decoded in memory: on the media shares every read is a network
+        # round-trip, and this runs for every subtitle on every sync. A refused read
+        # is retried briefly — Plex or another scanner holding the file open over SMB
+        # is the usual cause, and it clears in well under a second.
+        raw = None
+        for delay in (0.0, 0.3, 1.0):
+            if delay:
+                time.sleep(delay)
             try:
-                return Path(path).read_text(encoding=enc)
-            except (UnicodeDecodeError, UnicodeError):
+                raw = Path(path).read_bytes()
+                break
+            except FileNotFoundError:
+                return None
+            except OSError:
                 continue
-        return None
+        if raw is None:
+            return None
+        try:
+            text = decode_subtitle_bytes(raw)
+        except Exception as e:
+            logger.warning(f"Could not decode subtitle {path}: {e}")
+            return None
+        # Same newline handling read_text() gave callers before.
+        return text.replace("\r\n", "\n").replace("\r", "\n")
 
     async def sync_project(self, project_name: str, progress_callback=None) -> SyncResult:
         """Sync a single project (series or movie) from Sonarr/Radarr and filesystem."""
@@ -1884,7 +2262,7 @@ class MediaSyncEngine:
             if not self.radarr or not self.radarr.enabled or not self.radarr.api_key:
                 raise ValueError("Radarr is not enabled or api key is missing")
 
-            radarr_id = meta.get("arr_radarr_id") or meta.get("bazarr_movie_id")
+            radarr_id = meta.get("arr_radarr_id")
             movie_data = None
             if radarr_id:
                 _progress(20.0, f"Fetching movie '{project_name}' from Radarr...")
@@ -1915,7 +2293,7 @@ class MediaSyncEngine:
             if not self.sonarr or not self.sonarr.enabled or not self.sonarr.api_key:
                 raise ValueError("Sonarr is not enabled or api key is missing")
 
-            sonarr_id = meta.get("arr_sonarr_id") or meta.get("bazarr_series_id")
+            sonarr_id = meta.get("arr_sonarr_id")
             series_data = None
             if sonarr_id:
                 _progress(20.0, f"Fetching series '{project_name}' from Sonarr...")

@@ -57,6 +57,9 @@ def test_media_sync_engine_scan_ass_toggle():
 
 
 def test_sync_endpoints_accept_options(monkeypatch):
+    from unittest.mock import AsyncMock
+    monkeypatch.setattr("routers.integrations._run_arr_sync", AsyncMock())
+    monkeypatch.setattr("routers.projects._run_project_sync", AsyncMock())
     storage.save_global_config({"sonarr_api_key": "test-key", "radarr_api_key": "test-key"})
     
     # Test POST /integrations/arr/sync with custom options

@@ -7,7 +7,7 @@ about characters, locations, and terminology for translation accuracy.
 
 from google.adk.agents import Agent
 from google.adk.tools import google_search
-from .llm_factory import create_model, is_local_model
+from .llm_factory import create_model
 
 INSTRUCTION = """You are a Research Agent specializing in media research for translation.
 
@@ -44,14 +44,10 @@ Be thorough but concise. Focus on information that would help a translator maint
 
 def create_research_agent(model_name: str = "gemini-flash-lite-latest") -> Agent:
     """Create Research Agent for web-based information gathering."""
-    is_local = is_local_model(model_name)
-    # <|think|> is a Gemma/local thinking trigger — meaningless for Gemini
-    instruction = INSTRUCTION
-
     return Agent(
         name="ResearchAgent",
-        model=create_model(model_name),
-        instruction=instruction,
-        tools=[google_search] if not is_local else [],
+        model=create_model(model_name, role="research"),
+        instruction=INSTRUCTION,
+        tools=[google_search],
         output_key="research_findings",
     )

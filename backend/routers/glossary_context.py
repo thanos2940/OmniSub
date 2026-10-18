@@ -113,17 +113,38 @@ async def _process_create_glossary(job_id: str, project_name: str, episode_names
             update_job(job_id, status="failed", message="Project not found")
             return
 
+        # In a child project, resolve parent metadata so we have full universe context
+        resolved_meta = storage.load_resolved_project_metadata(project_name)
+        parent_name = metadata.get("parent_project")
+        if parent_name:
+            parent_meta = storage.load_project_metadata(parent_name) or {}
+            parent_show = parent_meta.get("show_name") or parent_name
+            current_show = metadata.get("show_name") or project_name
+            if current_show.lower().startswith("season") or current_show.lower().startswith("s0"):
+                effective_show_name = f"{parent_show} - {current_show}"
+            else:
+                effective_show_name = current_show or parent_show
+            existing_glossary = resolved_meta.get("glossary")
+        else:
+            effective_show_name = metadata.get("show_name", project_name)
+            existing_glossary = metadata.get("glossary")
+
         text_lines = await _gather_project_text(project_name, episode_names)
-        enable_research = bool(not text_lines and metadata.get("show_name"))
+        if not text_lines:
+            from services.embedded_extractor import auto_extract_embedded_subs_for_episodes
+            await auto_extract_embedded_subs_for_episodes(project_name, episode_names)
+            text_lines = await _gather_project_text(project_name, episode_names)
+
+        enable_research = bool(not text_lines and effective_show_name)
 
         if not text_lines:
             update_job(job_id, message="No episodes, using research mode...", log="Research mode")
 
         result, debug_info = await generate_glossary_adk(
             text_lines,
-            metadata.get("show_name", project_name),
+            effective_show_name,
             metadata.get("target_language", "English"),
-            existing_glossary=None,
+            existing_glossary=existing_glossary,
             model_name=model,
             enable_research=enable_research
         )
@@ -135,12 +156,13 @@ async def _process_create_glossary(job_id: str, project_name: str, episode_names
 
         update_job(
             job_id, status="completed", progress=100.0,
-            message="Glossary created", result=result,
+            message="Glossary created", result={"terms": result.get("terms", [])},
             prompt=debug_info.get("prompt"),
             ai_response=debug_info.get("response")
         )
     except Exception as e:
         update_job(job_id, status="failed", message=f"Error: {str(e)}", log=str(e))
+
 
 
 async def _process_enhance_glossary(
@@ -288,15 +310,36 @@ async def _process_create_context(job_id: str, project_name: str, episode_names:
             update_job(job_id, status="failed", message="Project not found")
             return
         
+        # In a child project, resolve parent metadata so we have full universe context
+        resolved_meta = storage.load_resolved_project_metadata(project_name)
+        parent_name = metadata.get("parent_project")
+        if parent_name:
+            parent_meta = storage.load_project_metadata(parent_name) or {}
+            parent_show = parent_meta.get("show_name") or parent_name
+            current_show = metadata.get("show_name") or project_name
+            if current_show.lower().startswith("season") or current_show.lower().startswith("s0"):
+                effective_show_name = f"{parent_show} - {current_show}"
+            else:
+                effective_show_name = current_show or parent_show
+        else:
+            effective_show_name = metadata.get("show_name", project_name)
+
         if episode_names:
             text_lines = await _gather_project_text(project_name, episode_names)
         else:
             text_lines = []
+
+        if not text_lines:
+            from services.embedded_extractor import auto_extract_embedded_subs_for_episodes
+            await auto_extract_embedded_subs_for_episodes(project_name, episode_names)
+            text_lines = await _gather_project_text(project_name, episode_names)
+
+        if not text_lines:
             update_job(job_id, message="Researching...", log="Research mode (no files selected)")
 
         update_job(job_id, progress=20.0, message="Researching...", log="Running research agent")
         research_data, research_debug = await research_project_adk(
-            metadata.get("show_name", project_name),
+            effective_show_name,
             text_lines,
             metadata.get("target_language", "English"),
             model_name=model
@@ -305,10 +348,11 @@ async def _process_create_context(job_id: str, project_name: str, episode_names:
         update_job(job_id, progress=60.0, message="Generating instructions...", log="Running prompt engineer")
         enhanced_context, enhance_debug = await enhance_context_guide_adk(
             research_data.get("findings", ""),
-            metadata.get("show_name", project_name),
+            effective_show_name,
             target_language=metadata.get("target_language", "English"),
             model_name=model
         )
+
         
         metadata["context_guide"] = enhanced_context
         _invalidate_translation_cache(metadata)
@@ -393,8 +437,9 @@ async def get_sync_candidates(project_name: str):
     chars_by_name: Dict[str, Dict] = {}
     
     all_projects = storage.list_projects()
-    for child_name in all_projects:
-        if child_name == project_name:
+    for child in all_projects:
+        child_name = child.get("name") if isinstance(child, dict) else child
+        if not child_name or child_name == project_name:
             continue
         child_meta = storage.load_project_metadata(child_name)
         if not child_meta:
@@ -503,7 +548,10 @@ async def sync_import(project_name: str, request: SyncImportRequest):
         await adk_session_manager.update_glossary(project_name, parent_metadata["glossary"])
         
         # Cascade cache invalidation to all descendants
-        for desc_name in storage.get_descendant_projects(project_name):
+        for desc in storage.get_descendant_projects(project_name):
+            desc_name = desc.get("name") if isinstance(desc, dict) else desc
+            if not desc_name:
+                continue
             desc_meta = storage.load_project_metadata(desc_name)
             if desc_meta:
                 _invalidate_translation_cache(desc_meta)

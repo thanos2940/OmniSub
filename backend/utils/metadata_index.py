@@ -13,11 +13,13 @@ import sqlite3
 import logging
 from typing import List, Dict, Optional, Tuple
 
+from contextlib import contextmanager
 from utils.paths import DB_FILE
 
 logger = logging.getLogger(__name__)
 
 
+@contextmanager
 def _conn():
     c = sqlite3.connect(DB_FILE, timeout=30.0)
     c.row_factory = sqlite3.Row
@@ -28,7 +30,13 @@ def _conn():
         c.execute("PRAGMA busy_timeout=30000")
     except Exception:
         pass
-    return c
+    try:
+        yield c
+    finally:
+        try:
+            c.close()
+        except Exception:
+            pass
 
 
 def _init():
@@ -132,7 +140,7 @@ def upsert(project: str, episode: str, meta: Dict, original_exists: bool, disabl
                 """,
                 (
                     project, episode,
-                    1 if (meta.get("arr_has_target") or meta.get("bazarr_has_target")) else 0,
+                    1 if meta.get("arr_has_target") else 0,
                     1 if meta.get("translated") else 0,
                     meta.get("arr_sub_fingerprint"),
                     meta.get("arr_translated_from_fingerprint"),
@@ -240,43 +248,62 @@ def list_translated(project: Optional[str] = None) -> List[Tuple[str, str]]:
 
 def backfill() -> int:
     """Populate the index from the JSON files. Blocking (filesystem-heavy) — callers MUST
-    run it off the event loop via ``asyncio.to_thread``. Uses one connection and batched
-    commits so it doesn't open a fresh connection per row."""
+    run it off the event loop via ``asyncio.to_thread``. Collects rows in memory first
+    to avoid holding any SQLite write lock during filesystem I/O, then commits in fast batches."""
     from utils import storage
     count = 0
+    batch = []
     try:
-        with _conn() as c:
-            for p in storage.list_projects():
-                pmeta = storage.load_project_metadata(p) or {}
-                disabled = bool(pmeta.get("arr_disabled") or pmeta.get("bazarr_disabled"))
-                for ep in storage.list_episodes(p):
-                    meta = storage.load_episode_metadata(p, ep) or {}
-                    original_exists = storage.original_subtitle_exists(p, ep)
-                    c.execute(
-                        """
-                        INSERT INTO episodes_index (project, episode, has_target, translated, src_fp, translated_fp, original_exists, disabled, arr_secondary_of)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(project, episode) DO UPDATE SET
-                            has_target=excluded.has_target, translated=excluded.translated,
-                            src_fp=excluded.src_fp, translated_fp=excluded.translated_fp,
-                            original_exists=excluded.original_exists, disabled=excluded.disabled,
-                            arr_secondary_of=excluded.arr_secondary_of
-                        """,
-                        (
-                            p, ep,
-                            1 if (meta.get("arr_has_target") or meta.get("bazarr_has_target")) else 0,
-                            1 if meta.get("translated") else 0,
-                            meta.get("arr_sub_fingerprint"),
-                            meta.get("arr_translated_from_fingerprint"),
-                            1 if original_exists else 0,
-                            1 if disabled else 0,
-                            meta.get("arr_secondary_of"),
-                        ),
-                    )
-                    count += 1
-                    if count % 500 == 0:
-                        c.commit()  # release the write lock periodically so request-path upserts aren't starved
-            c.commit()
+        for p in storage.list_projects():
+            pmeta = storage.load_project_metadata(p) or {}
+            disabled = bool(pmeta.get("arr_disabled"))
+            for ep in storage.list_episodes(p):
+                meta = storage.load_episode_metadata(p, ep) or {}
+                original_exists = storage.original_subtitle_exists(p, ep)
+                batch.append((
+                    p, ep,
+                    1 if meta.get("arr_has_target") else 0,
+                    1 if meta.get("translated") else 0,
+                    meta.get("arr_sub_fingerprint"),
+                    meta.get("arr_translated_from_fingerprint"),
+                    1 if original_exists else 0,
+                    1 if disabled else 0,
+                    meta.get("arr_secondary_of"),
+                ))
+                if len(batch) >= 200:
+                    with _conn() as c:
+                        c.executemany(
+                            """
+                            INSERT INTO episodes_index (project, episode, has_target, translated, src_fp, translated_fp, original_exists, disabled, arr_secondary_of)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(project, episode) DO UPDATE SET
+                                has_target=excluded.has_target, translated=excluded.translated,
+                                src_fp=excluded.src_fp, translated_fp=excluded.translated_fp,
+                                original_exists=excluded.original_exists, disabled=excluded.disabled,
+                                arr_secondary_of=excluded.arr_secondary_of
+                            """,
+                            batch,
+                        )
+                        c.commit()
+                    count += len(batch)
+                    batch = []
+
+        if batch:
+            with _conn() as c:
+                c.executemany(
+                    """
+                    INSERT INTO episodes_index (project, episode, has_target, translated, src_fp, translated_fp, original_exists, disabled, arr_secondary_of)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(project, episode) DO UPDATE SET
+                        has_target=excluded.has_target, translated=excluded.translated,
+                        src_fp=excluded.src_fp, translated_fp=excluded.translated_fp,
+                        original_exists=excluded.original_exists, disabled=excluded.disabled,
+                        arr_secondary_of=excluded.arr_secondary_of
+                    """,
+                    batch,
+                )
+                c.commit()
+            count += len(batch)
     except Exception as e:
         logger.warning(f"metadata_index backfill failed: {e}")
     return count

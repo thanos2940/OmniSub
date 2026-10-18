@@ -1,12 +1,11 @@
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 
 class CreateProjectRequest(BaseModel):
     name: str
     target_language: str = "English"
     parent_project: Optional[str] = None
     type: str = "show"
-    ai_provider: Optional[str] = "cloud"
 
 
 class ImportRequest(BaseModel):
@@ -34,6 +33,8 @@ class TranslateRequest(BaseModel):
     enhance_glossary: bool = False
     force: bool = False  # If True, clears existing translation before retranslating
     translation_type: Optional[str] = "saved"  # "original" or "saved"
+    lang: Optional[str] = None
+    target_language_name: Optional[str] = None
 
 
 class BatchTranslateRequest(BaseModel):
@@ -81,23 +82,19 @@ class PipelineRequest(BaseModel):
     context_model: Optional[str] = None
     glossary_model: Optional[str] = None
     translation_model: Optional[str] = None
+    enhance_glossary: bool = True
 
 
 class SettingsRequest(BaseModel):
-    ai_provider: Optional[str] = "cloud"  # "cloud", "local", "hybrid"
+    ai_provider: Optional[str] = "cloud"
+    daily_limit_policy: Optional[str] = "auto_fallback"
+    default_local_model: Optional[str] = "local"
     default_target_language: Optional[str] = "Greek"
     default_scan_model: Optional[str] = "gemini-flash-lite-latest"
     default_translation_model: Optional[str] = "gemini-flash-lite-latest"
     fallback_translation_model: Optional[str] = "gemini-3.1-flash-lite"
     default_context_model: Optional[str] = "gemini-flash-lite-latest"
     default_glossary_model: Optional[str] = "gemini-flash-lite-latest"
-    local_llm_base_url: Optional[str] = "http://localhost:11434"
-    local_scan_model: Optional[str] = None
-    local_translation_model: Optional[str] = None
-    local_context_model: Optional[str] = None
-    local_glossary_model: Optional[str] = None
-    local_review_model: Optional[str] = None
-    local_summary_model: Optional[str] = None
     subtitle_edit_path: Optional[str] = ""
     apply_subtitle_edit_fixes: Optional[bool] = False
     concurrent_scenes: Optional[int] = 3
@@ -122,9 +119,11 @@ class SettingsRequest(BaseModel):
     radarr_api_key: Optional[str] = ""
     radarr_enabled: Optional[bool] = False
     arr_path_mappings: Optional[List[Dict[str, str]]] = []
+    path_mappings: Optional[List[Dict[str, str]]] = None
     arr_sync_interval: Optional[int] = 0  # Minutes. 0 = manual only
     arr_source_language: Optional[str] = "en"
-    arr_auto_translate: Optional[bool] = False  # Auto-translate on webhook
+    arr_auto_translate: Optional[Union[bool, str]] = "smart"  # Auto-translate on webhook (False, True, "smart")
+    arr_non_anime_delay_minutes: Optional[int] = 30  # Delay in minutes before auto-translating non-anime
     # --- Embedded ASS extraction (docs/PLAN_embedded_ass_extraction.md) ---
     embedded_extraction_enabled: Optional[bool] = True
     # Substrings that mark a track as signs/songs/partial. These DEPRIORITIZE a track,
@@ -136,11 +135,15 @@ class SettingsRequest(BaseModel):
     # Extraction streams the whole container, so parallel jobs over one share just
     # slow each other down. Kept separate from concurrent_episodes on purpose.
     embedded_extraction_concurrency: Optional[int] = 1
+    # Most episodes one on-demand request (MorpiceHub) may cover. Each is a full
+    # LLM translation, so this bounds what a single viewer click can spend.
+    on_demand_max_episodes: Optional[int] = 30
     ffmpeg_path: Optional[str] = ""
     discord_webhook_url: Optional[str] = ""
     api_key: Optional[str] = None
     # --- Worker / concurrency ---
     concurrent_episodes: Optional[int] = 2
+    export_retry_concurrency: Optional[int] = 2
     adaptive_concurrency_enabled: Optional[bool] = False   # Plan 10
     concurrency_max: Optional[int] = 6                      # Plan 10
     # --- Batch API (Plan 01) ---
@@ -157,6 +160,16 @@ class SettingsRequest(BaseModel):
     webhook_secret: Optional[str] = ""
     # --- CORS (Plan 06) ---
     cors_allow_origins: Optional[List[str]] = None
+    # --- Translation engine: "model" = the background worker translates with the
+    # configured Gemini/local model; "agent" = queue items wait for an external AI
+    # agent (scripts/agent_task.py). Extraction and export lanes run either way. ---
+    translation_engine: Optional[str] = "model"
+    # An agent claim with no workspace activity for this long goes back to the queue.
+    agent_claim_ttl_hours: Optional[float] = 12
+    # Gemini API content filter for every Gemini request (utils/gemini_safety.py):
+    # "off" (subtitles of films and series: violence, insults, crude language are dialogue),
+    # "only_high" or "default" (Google's own thresholds).
+    gemini_safety_filter: Optional[str] = "off"
     # --- Off-peak scheduling (Plan 09) ---
     worker_schedule_enabled: Optional[bool] = False
     worker_window_start: Optional[str] = "01:00"
@@ -173,12 +186,16 @@ class SettingsRequest(BaseModel):
     condense_enabled: Optional[bool] = False
     # --- Phase 2: Plan 18 & 19 ---
     structured_output_enabled: Optional[bool] = True
-    experimental_local_structured_output: Optional[bool] = False
     scene_lookahead_lines: Optional[int] = 2
     # --- Phase 2 Stage 1 (Plans 21 & 23) ---
     tm_exact_reuse_max_words: Optional[int] = 6
     tm_exact_reuse_require_same_speaker: Optional[bool] = False
     morphology_normalization: Optional[bool] = True
+    # --- Auto-Updates (GitHub Sync) ---
+    auto_update_enabled: Optional[bool] = True
+    auto_update_interval_hours: Optional[int] = 6
+    github_webhook_enabled: Optional[bool] = True
+    github_webhook_secret: Optional[str] = ""
     morphology_stemming: Optional[bool] = True
     # --- Intra-episode consistency reconciliation (Plan 20) ---
     intra_episode_reconcile_enabled: Optional[bool] = True
@@ -187,6 +204,7 @@ class SettingsRequest(BaseModel):
     # Cap on per-line context-aware fallback calls during atomic translation of an episode
     # with partial (sub-20%) API failures; beyond this, remaining gaps are flagged for review.
     missing_fallback_max_lines: Optional[int] = 50
+    atomic_failure_threshold: Optional[float] = 0.20
     # --- Source subtitle cleaning (Plan 25) ---
     source_clean_enabled: Optional[bool] = True
     strip_sdh: Optional[bool] = True
@@ -227,6 +245,25 @@ class SettingsRequest(BaseModel):
     # First-run setup wizard (docs/PLAN_onboarding_wizard.md) — not a secret,
     # safe to expose through the generic settings endpoint.
     setup_completed: Optional[bool] = False
+    # --- Autopilot (docs/PLAN_autopilot.md): unattended Greek subtitles for new arr imports ---
+    autopilot_enabled: Optional[bool] = False
+    autopilot_grace_minutes: Optional[float] = 5          # Bazarr's window before OmbiSub acts
+    autopilot_poll_seconds: Optional[int] = 60            # Sonarr/Radarr history polling
+    autopilot_reconcile_hours: Optional[float] = 6        # library reconcile interval
+    autopilot_backlog_mode: Optional[str] = "off"         # "off" | "newest" | "oldest"
+    autopilot_backlog_daily_limit: Optional[int] = 20
+    autopilot_count_embedded_greek: Optional[bool] = True
+    autopilot_skip_original_greek: Optional[bool] = True
+    autopilot_skip_tags: Optional[str] = "ombisub-skip,no-greek"
+    autopilot_monitored_only: Optional[bool] = True
+    autopilot_protect_foreign_subs: Optional[bool] = True
+    autopilot_repair_foreign_encoding: Optional[bool] = True
+    autopilot_notify_success: Optional[bool] = False
+    autopilot_digest_hour: Optional[int] = 9              # local hour of the daily digest, -1 = off
+    autopilot_enabled_at: Optional[str] = None            # set when switched on; reconcile cut-off
+    plex_refresh_enabled: Optional[bool] = False
+    plex_url: Optional[str] = "http://localhost:32400"
+    plex_token: Optional[str] = ""
 
 
 class ApiKeyRequest(BaseModel):
@@ -238,6 +275,7 @@ class SimplePipelineRequest(BaseModel):
     context_model: Optional[str] = None
     glossary_model: Optional[str] = None
     translation_model: Optional[str] = None
+    enhance_glossary: bool = True
 
 
 class ConfirmContextRequest(BaseModel):
@@ -251,6 +289,10 @@ class ConfirmGlossaryRequest(BaseModel):
 class ArrTestRequest(BaseModel):
     url: Optional[str] = None
     api_key: Optional[str] = None
+    sonarr_url: Optional[str] = None
+    sonarr_api_key: Optional[str] = None
+    radarr_url: Optional[str] = None
+    radarr_api_key: Optional[str] = None
 
 
 class PathTestRequest(BaseModel):
@@ -274,11 +316,16 @@ class AutoPipelineRequest(BaseModel):
     skip_context: bool = False
     skip_glossary: bool = False
     model: Optional[str] = None
+    model_name: Optional[str] = None
     context_model: Optional[str] = None
     glossary_model: Optional[str] = None
     translation_model: Optional[str] = None
     episode_names: Optional[List[str]] = None
-    enhance_glossary: bool = False
+    episodes: Optional[List[str]] = None
+    enhance_glossary: bool = True
+    force: bool = False
+    translation_type: Optional[str] = "saved"
+
 
 
 class SyncImportRequest(BaseModel):
@@ -326,3 +373,25 @@ class HarvestTermsRequest(BaseModel):
     dialogue_text: Optional[str] = None
     model: Optional[str] = None
 
+
+
+class OnDemandSubtitleRequest(BaseModel):
+    """An on-demand subtitle request/lookup from an external front-end (MorpiceHub).
+
+    Identify the title by external id where possible (tmdb for movies, tvdb for
+    series); *arr ids and title/year are fallbacks.
+    """
+    media_type: str  # "movie" | "series" (also accepts "show"/"tv")
+    tmdb_id: Optional[int] = None
+    tvdb_id: Optional[int] = None
+    imdb_id: Optional[str] = None
+    radarr_id: Optional[int] = None
+    sonarr_id: Optional[int] = None
+    title: Optional[str] = None
+    year: Optional[int] = None
+    season: Optional[int] = None
+    episodes: Optional[List[int]] = None
+    language: Optional[str] = None  # ISO code or name; defaults to the global target language
+    requested_by: Optional[str] = None  # display name, for logs and the request record only
+    client: Optional[str] = None
+    client_ref: Optional[str] = None

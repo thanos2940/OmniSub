@@ -1,24 +1,26 @@
 import pytest
 from routers.schemas import SettingsRequest
 
-def test_settings_request_ai_provider_defaults():
-    """Test that ai_provider and local model fields have correct defaults."""
+
+def test_settings_request_cloud_defaults():
+    """Test that SettingsRequest has correct Gemini defaults."""
     req = SettingsRequest()
-    assert req.ai_provider == "cloud"
-    assert req.local_llm_base_url == "http://localhost:11434"
-    assert req.local_translation_model is None
-    assert req.local_scan_model is None
+    assert req.default_translation_model == "gemini-flash-lite-latest"
+    assert req.fallback_translation_model == "gemini-3.1-flash-lite"
+    assert req.default_scan_model == "gemini-flash-lite-latest"
+    assert req.default_context_model == "gemini-flash-lite-latest"
+    assert req.default_glossary_model == "gemini-flash-lite-latest"
+    assert req.default_target_language == "Greek"
+
 
 def test_settings_request_validation():
-    """Test that settings request validates correctly with provided local fields."""
+    """Test that settings request validates correctly with custom model fields."""
     data = {
-        "ai_provider": "local",
-        "local_llm_base_url": "http://localhost:8080/v1",
-        "local_translation_model": "mistral-7b-v0.1",
-        "local_scan_model": "gemma-7b"
+        "default_translation_model": "gemini-2.5-flash",
+        "default_target_language": "English",
+        "temperature": 0.5,
     }
     req = SettingsRequest(**data)
-    assert req.ai_provider == "local"
-    assert req.local_llm_base_url == "http://localhost:8080/v1"
-    assert req.local_translation_model == "mistral-7b-v0.1"
-    assert req.local_scan_model == "gemma-7b"
+    assert req.default_translation_model == "gemini-2.5-flash"
+    assert req.default_target_language == "English"
+    assert req.temperature == 0.5

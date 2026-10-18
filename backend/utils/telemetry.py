@@ -35,8 +35,6 @@ _PRICES = [
 
 def _price_for(model: str):
     m = (model or "").lower()
-    if m.startswith("local/") or m.startswith("openai/"):
-        return (0.0, 0.0)
     for marker, p in _PRICES:
         if marker in m:
             return p
@@ -69,8 +67,7 @@ def _ensure_schema(conn) -> None:
 
 
 def extract_usage(resp: Any) -> Dict[str, int]:
-    """Pull token counts from either a google-genai response (usage_metadata) or a
-    litellm/OpenAI response (usage). Missing fields default to 0."""
+    """Pull token counts from a google-genai response (usage_metadata). Missing fields default to 0."""
     out = {"prompt_tokens": 0, "output_tokens": 0, "thoughts_tokens": 0, "cached_tokens": 0}
     um = getattr(resp, "usage_metadata", None)
     if um is not None:
@@ -86,8 +83,19 @@ def extract_usage(resp: Any) -> Dict[str, int]:
     return out
 
 
-def record_usage(model: str, role: str, usage: Dict[str, int], lane: Optional[str] = None) -> None:
-    """Persist one call's usage. Never raises — telemetry must not break translation."""
+def _conn():
+    conn = sqlite3.connect(DB_FILE, timeout=30.0)
+    try:
+        conn.execute("PRAGMA busy_timeout=30000")
+    except Exception:
+        pass
+    return conn
+
+
+def record_usage(model: str, role: str, usage: Dict[str, int], lane: Optional[str] = None,
+                 cost_usd: Optional[float] = None) -> None:
+    """Persist one call's usage. Never raises — telemetry must not break translation.
+    ``cost_usd`` overrides the estimate (0 for agent CLIs that run on a subscription)."""
     try:
         ctx = usage_ctx.get() or {}
         pin, pout = _price_for(model)
@@ -96,7 +104,9 @@ def record_usage(model: str, role: str, usage: Dict[str, int], lane: Optional[st
         cached = usage.get("cached_tokens", 0)
         uncached_in = max(0, usage.get("prompt_tokens", 0) - cached)
         cost = (uncached_in * pin + cached * pin * 0.25 + billable_out * pout) / 1_000_000.0
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
+        if cost_usd is not None:
+            cost = float(cost_usd)
+        conn = _conn()
         try:
             _ensure_schema(conn)
             conn.execute(
@@ -121,7 +131,7 @@ def record_usage(model: str, role: str, usage: Dict[str, int], lane: Optional[st
 def summary(days: int = 30) -> Dict:
     """Aggregate cost/token stats for the dashboard."""
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
+        conn = _conn()
         conn.row_factory = sqlite3.Row
         try:
             _ensure_schema(conn)
@@ -167,7 +177,7 @@ def summary(days: int = 30) -> Dict:
 def cost_today() -> float:
     """Total recorded cost for the current UTC day (for the daily budget cap)."""
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
+        conn = _conn()
         try:
             _ensure_schema(conn)
             today = datetime.now(timezone.utc).date().isoformat()
@@ -191,7 +201,7 @@ def avg_tokens_per_line(project: Optional[str] = None) -> Dict[str, float]:
 def prune(max_age_days: int = 90) -> int:
     """Drop raw rows older than the window (called from the maintenance loop)."""
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
+        conn = _conn()
         try:
             _ensure_schema(conn)
             cutoff = datetime.fromtimestamp(

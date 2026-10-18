@@ -6,9 +6,14 @@ v2 additions:
   - per-call ``thinking_budget`` (D2): Gemini 2.5 models think by default and bill
     thinking tokens as output — mechanical passes (translation/repair/summary) set 0;
   - usage telemetry (D8): every response's usage_metadata is recorded.
+Every request carries Omnisub's Gemini safety thresholds (utils/gemini_safety.py); an answer a
+filter stopped is logged with the reason and reported to ``on_blocked``.
 """
 
 import asyncio
+import logging
+
+logger = logging.getLogger("omnisub.cached_translator")
 
 
 def _supports_thinking(model: str) -> bool:
@@ -25,9 +30,10 @@ def _supports_thinking_budget_zero(model: str) -> bool:
 async def generate_cached(model: str, user_prompt: str, cache_name=None,
                           system_instruction: str = "", temperature: float = 0.3,
                           response_schema = None, response_mime_type: str = None,
-                          thinking_budget: int = None, role: str = "other") -> str:
+                          thinking_budget: int = None, role: str = "other", on_blocked=None) -> str:
     from google import genai
     from google.genai import types
+    from utils.gemini_safety import describe_block, safety_settings
 
     client = genai.Client()
 
@@ -51,6 +57,10 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
             except Exception:
                 pass  # older SDK — silently keep model default
 
+    settings = safety_settings()
+    if settings:
+        kwargs["safety_settings"] = settings
+
     cfg = types.GenerateContentConfig(**kwargs)
 
     from utils.api_call_wrapper import rate_limited_call
@@ -72,4 +82,11 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
     except Exception:
         pass
 
-    return getattr(resp, "text", "") or ""
+    text = getattr(resp, "text", "") or ""
+    if not text.strip():
+        reason = describe_block(resp)
+        if reason:
+            logger.warning(f"Gemini ({model}, {role}) answered without text: {reason}")
+            if on_blocked:
+                on_blocked(reason)
+    return text

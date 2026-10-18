@@ -253,18 +253,26 @@ class CharacterProfileManager:
     def get_profiles_for_chunk(
         self,
         source_lines: List[str],
-        glossary: Dict,
+        glossary: Optional[Dict] = None,
+        fallback_to_main_cast: bool = True,
+        max_fallback: int = 3,
     ) -> List[CharacterProfile]:
-        """Return profiles for characters that appear in these source lines.
+        """Return profiles for characters that appear in these source lines, or
+        main cast profiles as a baseline fallback when character names are not explicitly mentioned.
 
         Detection strategy:
-        1. Get all glossary terms of type 'person'
+        1. Get all person names from glossary and profile manager
         2. Check if each person's name appears in any source line
-        3. Return matching profiles (only those we have profiles for)
+        3. If matching characters found: return matching profiles
+        4. Fallback: If no characters matched in dialogue cues and fallback_to_main_cast is True,
+           return top primary / main cast profiles so the model has baseline gender,
+           formality (formal πληθυντικός vs familiar ενικός), and voice traits.
         """
         profiles = self.load_all_resolved()
         if not profiles:
             return []
+
+        glossary = glossary or {}
 
         # Build set of person names from glossary
         person_names = set()
@@ -282,9 +290,32 @@ class CharacterProfileManager:
             if name and name in source_text and name in profiles:
                 matching.append(profiles[name])
 
-        return matching
+        if matching:
+            return matching
 
-    def build_profile_context(self, profiles: List[CharacterProfile]) -> str:
+        if fallback_to_main_cast and profiles:
+            # Baseline fallback: select top main cast profiles.
+            candidates = list(profiles.values())
+            def _rank(p: CharacterProfile) -> int:
+                score = 0
+                if p.gender in ("masculine", "feminine"):
+                    score += 2
+                if p.speech_patterns:
+                    score += 2
+                if p.established_phrases:
+                    score += len(p.established_phrases)
+                if p.verbal_tics:
+                    score += len(p.verbal_tics)
+                if p.formality in ("formal", "mixed"):
+                    score += 1
+                return score
+
+            ranked = sorted(candidates, key=_rank, reverse=True)
+            return ranked[:max_fallback]
+
+        return []
+
+    def build_profile_context(self, profiles: List[CharacterProfile], is_fallback: bool = False) -> str:
         """Format relevant profiles as a compact prompt section.
 
         Output format:
@@ -298,7 +329,8 @@ class CharacterProfileManager:
         if not profiles:
             return ""
 
-        lines = ["Characters in this scene:"]
+        header = "Main cast reference for speaker voice/gender alignment:" if is_fallback else "Characters in this scene:"
+        lines = [header]
         for p in profiles:
             gender_tag = {"masculine": "m", "feminine": "f", "neuter": "n"}.get(
                 p.gender, "?"

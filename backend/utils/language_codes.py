@@ -32,7 +32,7 @@ LANG_CODES: Dict[str, str] = {
 
 # ISO-639-1 code -> set of lowercase filename variants used for on-disk
 # matching. Includes the 639-1 code, common 639-2 (B/T) codes, and the
-# English name, mirroring how *arr / Bazarr name subtitle files.
+# English name, mirroring how *arr names subtitle files.
 LANG_VARIANTS: Dict[str, Set[str]] = {
     "en": {"en", "eng", "english"},
     "el": {"el", "ell", "gre", "greek"},

@@ -1,1 +1,1 @@
-# Integrations package — external service connectors (Bazarr, Sonarr, Radarr)
+# Integrations package — external service connectors (Sonarr, Radarr)

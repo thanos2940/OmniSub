@@ -1,18 +1,44 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle, XCircle, Info, X } from 'lucide-react';
 
-const ToastContext = createContext();
+const ToastContext = createContext(null);
 
-export const useToast = () => useContext(ToastContext);
+export const useToast = () => {
+    const context = useContext(ToastContext);
+    if (!context) {
+        throw new Error('useToast must be used within a ToastProvider');
+    }
+    return context;
+};
+
+export const formatErrorMessage = (err) => {
+    if (!err) return '';
+    if (typeof err === 'string') return err;
+    if (Array.isArray(err)) {
+        return err.map(e => (typeof e === 'object' && e?.msg ? `${e.loc ? e.loc.join('.') + ': ' : ''}${e.msg}` : String(e))).join(', ');
+    }
+    if (typeof err === 'object') {
+        if (err.message && typeof err.message === 'string') return err.message;
+        if (err.detail) return formatErrorMessage(err.detail);
+        if (err.error && typeof err.error === 'string') return err.error;
+        try {
+            return JSON.stringify(err);
+        } catch {
+            return String(err);
+        }
+    }
+    return String(err);
+};
 
 let toastId = 0;
 
 export const ToastProvider = ({ children }) => {
     const [toasts, setToasts] = useState([]);
 
-    const addToast = useCallback((message, type = 'info', duration = 4000) => {
+    const addToast = useCallback((rawMessage, type = 'info', duration = 4000) => {
         const id = ++toastId;
+        const message = formatErrorMessage(rawMessage);
         setToasts(prev => [...prev, { id, message, type }]);
         if (duration > 0) {
             setTimeout(() => {
@@ -26,22 +52,25 @@ export const ToastProvider = ({ children }) => {
         setToasts(prev => prev.filter(t => t.id !== id));
     }, []);
 
-    const toast = {
+    const toast = useMemo(() => ({
         success: (msg, duration) => addToast(msg, 'success', duration),
         error: (msg, duration) => addToast(msg, 'error', duration ?? 6000),
         info: (msg, duration) => addToast(msg, 'info', duration),
-    };
+        warning: (msg, duration) => addToast(msg, 'warning', duration ?? 5000),
+    }), [addToast]);
 
     const icons = {
         success: <CheckCircle size={18} className="text-green-400 shrink-0" />,
         error: <XCircle size={18} className="text-red-400 shrink-0" />,
         info: <Info size={18} className="text-blue-400 shrink-0" />,
+        warning: <Info size={18} className="text-amber-400 shrink-0" />,
     };
 
     const bgColors = {
         success: 'bg-green-900/90 border-green-700',
         error: 'bg-red-900/90 border-red-700',
         info: 'bg-gray-800/90 border-gray-600',
+        warning: 'bg-amber-900/90 border-amber-700',
     };
 
     return (

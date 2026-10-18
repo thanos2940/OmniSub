@@ -110,13 +110,14 @@ def test_missing_map_falls_back_to_cleaned_rows(episode):
     assert "kurai soko" not in out
 
 
-def test_gap_lines_still_fall_back_to_source(episode):
-    """A mapped cue whose translation genuinely failed (flagged gap) keeps the
-    existing English-fallback behavior — that's a separate, deliberate policy."""
+def test_gap_lines_do_not_fall_back_to_source(episode):
+    """A mapped cue whose translation is missing must NEVER silently export raw English
+    source text into the target subtitle."""
     data = [dict(CLEANED_DATA[0]), dict(CLEANED_DATA[1])]
     data[1] = {**data[1], "translated": "", "translations": {}}
     meta = storage.load_episode_metadata("TP", "E01") or {}
     meta["clean_to_orig_map"] = {"0": [0, 1], "1": [3]}
     storage.save_episode_metadata("TP", "E01", meta)
     out = reconstruct_cleaned_srt("TP", "E01", data, target_lang_code="el")
-    assert "You are a foreigner." in out
+    assert "You are a foreigner." not in out
+

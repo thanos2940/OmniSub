@@ -5,6 +5,7 @@ Records rejected translations so retries can avoid reproducing them. A line may 
 several blacklisted target renderings.
 """
 
+from contextlib import contextmanager
 import sqlite3
 from datetime import datetime, timezone
 from typing import List, Dict, Optional
@@ -12,14 +13,24 @@ from typing import List, Dict, Optional
 from utils.paths import DB_FILE
 
 
+@contextmanager
 def _conn():
-    c = sqlite3.connect(DB_FILE, timeout=10.0)
+    c = sqlite3.connect(DB_FILE, timeout=30.0)
     c.row_factory = sqlite3.Row
-    return c
+    try:
+        c.execute("PRAGMA busy_timeout=30000")
+        yield c
+    finally:
+        c.close()
 
 
 def _init():
     with _conn() as c:
+        try:
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS translation_blacklist (

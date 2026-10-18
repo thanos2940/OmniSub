@@ -58,16 +58,16 @@ class ConcurrencyManager:
             return c
 
     def current(self, model: str) -> int:
-        if not self.enabled or model.startswith("local/"):
+        if not self.enabled:
             return self.base
         return self._get(model).current()
 
     def on_success(self, model: str) -> None:
-        if self.enabled and not model.startswith("local/"):
+        if self.enabled:
             self._get(model).on_success()
 
     def on_rate_limited(self, model: str) -> None:
-        if self.enabled and not model.startswith("local/"):
+        if self.enabled:
             self._get(model).on_rate_limited()
 
     def stats(self) -> Dict[str, int]:

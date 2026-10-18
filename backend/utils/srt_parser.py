@@ -75,25 +75,41 @@ def extract_text_only(parsed_data: List[Dict]) -> List[str]:
     return [entry.get("original", "") for entry in parsed_data]
 
 
-def reconstruct_srt(parsed_data: List[Dict]) -> str:
+def reconstruct_srt(parsed_data: List[Dict], allow_source_fallback: bool = False) -> str:
     """
     Reconstruct SRT content from parsed data.
     
-    Prioritizes translated text over original when available.
+    Prioritizes translated text over original. Does NOT silently fall back to English
+    source text for untranslated cues when exporting translated subtitles.
     
     Args:
         parsed_data: List of subtitle entries
+        allow_source_fallback: If True, falls back to original text when translated is empty.
     
     Returns:
         Complete SRT file content (with trailing newline for compatibility)
     """
+    has_any_translation = any(bool(entry.get("translated") or (entry.get("translations") and any(entry["translations"].values()))) for entry in parsed_data)
+    has_review_flags = any(bool(entry.get("needs_review") or entry.get("review_issues")) for entry in parsed_data)
+    is_pure_source = not has_any_translation and not has_review_flags and not any("translations" in entry for entry in parsed_data)
+
     output = []
     for entry in parsed_data:
-        text = entry.get("translated") or entry.get("original", "")
+        if allow_source_fallback:
+            text = entry.get("translated") or entry.get("original", "")
+        elif has_any_translation or any("translations" in e for e in parsed_data) or has_review_flags:
+            # Translated subtitle dataset: never silently export English source text for untranslated cues
+            text = entry.get("translated") or ""
+        elif is_pure_source:
+            # Pure source subtitle dataset (e.g. saving reconstructed original srt)
+            text = entry.get("original", "")
+        else:
+            text = entry.get("translated") or ""
         output.append(f"{entry['id']}\n{entry['timecode']}\n{text}")
     
     # SRT files should end with a blank line for compatibility
     return "\n\n".join(output) + "\n"
+
 
 
 def timecode_to_ms(timecode: str) -> int:

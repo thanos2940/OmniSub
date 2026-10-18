@@ -79,12 +79,12 @@ export default function CommandPalette() {
         },
         {
             id: 'action-sync-arr',
-            title: 'Trigger Full Media Library Sync (Sonarr/Radarr/Bazarr)',
+            title: 'Trigger Full Media Library Sync (Sonarr / Radarr)',
             category: 'Action',
             icon: RefreshCw,
             action: async () => {
                 try {
-                    await api.syncMediaLibrary();
+                    await api.syncArrAll();
                     toast.success('Media library sync job started!');
                 } catch (e) {
                     toast.error('Failed to trigger media library sync');

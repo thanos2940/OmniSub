@@ -145,7 +145,8 @@ def save_suggestions(project_name: str, new_suggestions: List[Dict]):
     sug_dict = {s["term"]: s for s in existing}
     for s in new_suggestions:
         sug_dict[s["term"]] = s
-        
+
+    suggestions_file.parent.mkdir(parents=True, exist_ok=True)
     with open(suggestions_file, 'w', encoding='utf-8') as f:
         json.dump(list(sug_dict.values()), f, indent=2, ensure_ascii=False)
 

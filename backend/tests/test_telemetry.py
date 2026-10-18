@@ -30,13 +30,14 @@ def test_record_and_summary():
     assert tel.cost_today() > 0
 
 
-def test_local_model_is_free():
+def test_cached_tokens_discount():
     tel.usage_ctx.set({"project": "P", "episode": "E2", "lane": "live"})
-    tel.record_usage("local/mistral", "translation",
-                     {"prompt_tokens": 9999, "output_tokens": 9999, "thoughts_tokens": 0, "cached_tokens": 0})
+    tel.record_usage("gemini-2.5-flash", "translation",
+                     {"prompt_tokens": 1_000_000, "output_tokens": 0, "thoughts_tokens": 0, "cached_tokens": 1_000_000})
     s = tel.summary(30)
     assert s["calls"] == 1
-    assert s["cost_usd"] == 0.0  # local pricing is zero
+    # 1M cached prompt tokens discounted at 25% of input price ($0.30 * 0.25 = $0.075)
+    assert s["cost_usd"] == pytest.approx(0.075, rel=0.01)
 
 
 def test_thinking_tokens_count_as_output_cost():

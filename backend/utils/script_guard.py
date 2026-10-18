@@ -269,3 +269,34 @@ def flag_rows(rows: List[Dict], target_lang_code: str) -> int:
             row["review_issues"] = f"{existing}; {note}" if existing else note
         flagged += 1
     return flagged
+
+
+def latin_ratio(text: str) -> float:
+    """Compute the ratio of Latin alphabetic characters to total alphabetic characters."""
+    if not text:
+        return 0.0
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return 0.0
+    latin = sum(1 for c in letters if script_of(c) == "LATIN")
+    return latin / len(letters)
+
+
+def detect_latin_leakage(
+    original: str,
+    translated: str,
+    target_lang_code: str,
+    threshold: float = 0.6,
+    min_words: int = 3,
+) -> bool:
+    """Detect if a translation into a non-Latin target has high Latin leakage (e.g. untranslated text)."""
+    target_scripts = _TARGET_SCRIPTS.get((target_lang_code or "").lower(), set())
+    if not target_scripts or "LATIN" in target_scripts:
+        return False
+    words = _WORD_RE.findall(translated or "")
+    if len(words) < min_words:
+        return False
+    if original and translated and original.strip().lower() == translated.strip().lower():
+        return True
+    return latin_ratio(translated) >= threshold
+

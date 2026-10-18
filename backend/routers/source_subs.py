@@ -14,17 +14,16 @@ from fastapi import APIRouter, UploadFile, HTTPException
 
 from utils import storage
 from utils.subtitle_io import parse_subtitle
+from utils.text_repair import decode_subtitle_bytes
 
 router = APIRouter()
 
 
 def _decode(raw: bytes) -> str:
-    for enc in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
-        try:
-            return raw.decode(enc)
-        except (UnicodeDecodeError, UnicodeError):
-            continue
-    raise HTTPException(status_code=400, detail="Could not decode subtitle file (unknown encoding)")
+    try:
+        return decode_subtitle_bytes(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not decode subtitle file (unknown encoding)")
 
 
 @router.post("/projects/{project}/episodes/{episode}/source/upload")

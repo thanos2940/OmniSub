@@ -1,24 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Wifi, WifiOff } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { ChevronDown, Sparkles } from 'lucide-react';
+import { api } from '../api';
+
+const DEFAULT_GEMINI_MODELS = [
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+    { value: 'gemini-flash-latest', label: 'Gemini Flash (latest)' },
+    { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite' },
+    { value: 'gemma-4-31b-it', label: 'Gemma 4 31B IT' },
+    { value: 'gemma-4-26b-a4b-it', label: 'Gemma 4 26B IT' },
+];
 
 const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type model name...", className = '' }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [inputValue, setInputValue] = useState(value || '');
     const [geminiModels, setGeminiModels] = useState([]);
-    const [localModels, setLocalModels] = useState([]);
-    const [localOnline, setLocalOnline] = useState(null); // null = unknown
-    const [loading, setLoading] = useState(false);
+    const [, setLoading] = useState(false);
     const containerRef = useRef(null);
 
     useEffect(() => {
         setInputValue(value || '');
     }, [value]);
-
-    useEffect(() => {
-        if (isOpen && geminiModels.length === 0) {
-            loadModels();
-        }
-    }, [isOpen]);
 
     const dedupeModels = (models) => {
         const seen = new Set();
@@ -29,26 +31,28 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
         });
     };
 
-    const loadModels = async () => {
+    const loadModels = useCallback(async () => {
         try {
             setLoading(true);
-            const { api } = await import('../api');
             const { data } = await api.fetchAllModels();
-            setGeminiModels(dedupeModels(data.gemini || []));
-            setLocalModels(dedupeModels(data.local || []));
-            setLocalOnline(data.local_online ?? false);
+            const models = dedupeModels(data.gemini || data.models || data || []);
+            if (models.length > 0) {
+                setGeminiModels(models);
+            } else {
+                setGeminiModels(DEFAULT_GEMINI_MODELS);
+            }
         } catch {
-            // fall back to minimal hardcoded list
-            setGeminiModels(dedupeModels([
-                { value: 'gemini-flash-latest', label: 'Gemini Flash (latest)' },
-                { value: 'gemini-flash-lite-latest', label: 'Gemini Flash Lite' },
-                { value: "gemma-4-31b-it", label: "Gemma 31B" },
-                { value: "gemma-4-26b-a4b-it", label: "Gemma 26B" }
-            ]));
+            setGeminiModels(DEFAULT_GEMINI_MODELS);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        if (isOpen && geminiModels.length === 0) {
+            loadModels();
+        }
+    }, [isOpen, geminiModels.length, loadModels]);
 
     useEffect(() => {
         const handler = (e) => {
@@ -90,16 +94,13 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
         }
     };
 
-    const query = inputValue.toLowerCase();
-    const filteredGemini = geminiModels.filter(m =>
-        m.value.toLowerCase().includes(query) || m.label.toLowerCase().includes(query)
-    );
-    const filteredLocal = localModels.filter(m =>
-        m.value.toLowerCase().includes(query) || m.label.toLowerCase().includes(query)
+    const query = (inputValue || '').toLowerCase();
+    const modelsList = geminiModels.length > 0 ? geminiModels : DEFAULT_GEMINI_MODELS;
+    const filteredGemini = modelsList.filter(m =>
+        m.value.toLowerCase().includes(query) || (m.label && m.label.toLowerCase().includes(query))
     );
 
-    const allKnown = [...geminiModels, ...localModels];
-    const isCustom = inputValue && !allKnown.some(m => m.value === inputValue);
+    const isCustom = inputValue && !modelsList.some(m => m.value === inputValue);
 
     return (
         <div ref={containerRef} className={`relative ${className}`}>
@@ -128,53 +129,31 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
 
             {isOpen && (
                 <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 shadow-xl max-h-72 overflow-auto">
+                    <div className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50 sticky top-0 flex items-center gap-1.5">
+                        <Sparkles size={12} className="text-indigo-500" />
+                        Google Gemini Models
+                    </div>
 
-                    {/* Gemini section */}
-                    {filteredGemini.length > 0 && (
-                        <>
-                            <div className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50 sticky top-0">
-                                ☁ Gemini (Cloud)
-                            </div>
-                            {filteredGemini.map(model => (
-                                <button
-                                    key={model.value}
-                                    type="button"
-                                    onMouseDown={(e) => { e.preventDefault(); handleSelect(model.value); }}
-                                    className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${model.value === value ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                                >
-                                    <div className="text-sm font-medium text-gray-900 dark:text-white">{model.label}</div>
-                                </button>
-                            ))}
-                        </>
-                    )}
-
-                    {/* Local section */}
-                    <div className={`${filteredGemini.length > 0 ? 'border-t border-gray-200 dark:border-gray-600' : ''}`}>
-                        <div className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50 sticky top-0 flex items-center gap-1.5">
-                            {localOnline === true
-                                ? <Wifi size={11} className="text-green-500" />
-                                : <WifiOff size={11} className="text-gray-400" />}
-                            Local Models
-                            {localOnline === false && <span className="text-gray-400 normal-case font-normal">(server offline)</span>}
-                        </div>
-                        {filteredLocal.length > 0 ? filteredLocal.map(model => (
+                    {filteredGemini.length > 0 ? (
+                        filteredGemini.map(model => (
                             <button
                                 key={model.value}
                                 type="button"
                                 onMouseDown={(e) => { e.preventDefault(); handleSelect(model.value); }}
-                                className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${model.value === value ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
+                                className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${model.value === value ? 'bg-indigo-50 dark:bg-indigo-900/30 font-semibold' : ''}`}
                             >
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">{model.label}</div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">Local</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">{model.label || model.value}</div>
+                                {model.label && model.label !== model.value && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">{model.value}</div>
+                                )}
                             </button>
-                        )) : (
-                            <div className="px-4 py-2.5 text-xs text-gray-400">
-                                {loading ? 'Scanning...' : localOnline === false ? 'Start LM Studio / Ollama to see models' : 'No local models found'}
-                            </div>
-                        )}
-                    </div>
+                        ))
+                    ) : (
+                        <div className="px-4 py-2.5 text-xs text-gray-400">
+                            No matching models
+                        </div>
+                    )}
 
-                    {/* Custom / manual entry */}
                     {inputValue.trim() && isCustom && (
                         <div className="border-t border-gray-200 dark:border-gray-600">
                             <button
@@ -182,18 +161,9 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
                                 onMouseDown={(e) => { e.preventDefault(); handleSelect(inputValue.trim()); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700"
                             >
-                                <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Use "{inputValue.trim()}"</div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">Custom model name</div>
+                                <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Use custom model "{inputValue.trim()}"</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">Custom Gemini Model Identifier</div>
                             </button>
-                            {!inputValue.startsWith('local/') && (
-                                <button
-                                    type="button"
-                                    onMouseDown={(e) => { e.preventDefault(); handleSelect(`local/${inputValue.trim()}`); }}
-                                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 border-t border-gray-100 dark:border-gray-700"
-                                >
-                                    <div className="text-sm font-medium text-purple-600 dark:text-purple-400">Use as Local: "local/{inputValue.trim()}"</div>
-                                </button>
-                            )}
                         </div>
                     )}
                 </div>

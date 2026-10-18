@@ -52,9 +52,16 @@ export const api = {
     getProjectTokenSummary: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/token-summary`),
     testTranslation: (name, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/test-translation`, data),
     updateProject: (name, data, globalSave = false) => axios.put(`${API_URL}/projects/${encodeURIComponent(name)}`, data, { params: { global_save: globalSave } }),
+    updateGlossary: (projectName, glossary, globalSave = false, suppressedTerms = null) => {
+        const payload = { glossary };
+        if (suppressedTerms !== null) {
+            payload.suppressed_glossary_terms = suppressedTerms;
+        }
+        return axios.put(`${API_URL}/projects/${encodeURIComponent(projectName)}`, payload, { params: { global_save: globalSave } });
+    },
     syncProject: (projectName, options = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/sync`, options),
-    importProjectData: (projectName, sourceProject, importGlossary = true, importContext = true) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/import`, { source_project: sourceProject, import_glossary: importGlossary, import_context: importContext }),
-    getSyncCandidates: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/sync-candidates`),
+    syncProjectDisk: (projectName, options = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/sync-disk`, options),
+    renameProjectSubtitles: (projectName, apply = true) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/rename-subtitles`, null, { params: { apply } }),
     promoteTerm: (projectName, termData) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/promote-term`, termData),
     promoteTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/promote-terms-batch`, { terms }),
     suppressTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/suppress-terms-batch`, { terms }),
@@ -63,6 +70,25 @@ export const api = {
     harvestProjectTerms: (projectName, episodeNames = null, model = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/harvest-terms`, { episode_names: episodeNames, model }),
     checkProjectMissing: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/check-missing`),
     translateProjectMissing: (name) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/translate-missing`),
+    checkMissingLines: async (projectName, episodeName = null) => {
+        const res = await axios.get(`${API_URL}/projects/${encodeURIComponent(projectName)}/check-missing`);
+        if (episodeName && res.data?.results) {
+            const epMatch = res.data.results.find(r => r.episode_name === episodeName);
+            if (epMatch) {
+                return {
+                    data: {
+                        ...epMatch,
+                        missing_indices: (epMatch.lines || []).map(l => l.line_index),
+                        total_lines: epMatch.lines ? epMatch.lines.length : 0,
+                    }
+                };
+            }
+            return { data: { missing_count: 0, missing_indices: [], total_lines: 0 } };
+        }
+        return res;
+    },
+    translateMissingLines: (projectName) =>
+        axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/translate-missing`),
 
     // AI Enhancement
     enhanceContext: (name, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/context/enhance`, null, { params: { model } }),
@@ -89,6 +115,11 @@ export const api = {
     deleteEpisode: (projectName, episodeName) => axios.delete(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}`),
     deleteLines: (projectName, episodeName, indexes) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/delete-lines`, { indexes }),
     applyCommonFixes: (projectName, episodeName, track = 'source', lang = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/apply-fixes`, { track, lang }),
+    applyEpisodeFixes: (projectName, episodeName, options = {}) => {
+        const track = (typeof options === 'string' ? options : (options.target_track || options.track)) || 'source';
+        const lang = (typeof options === 'object' ? options.lang : null) || null;
+        return axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/apply-fixes`, { track, lang });
+    },
     batchApplyCommonFixes: (projectName, episodeNames, track = 'source', lang = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-apply-fixes`, { episode_names: episodeNames, track, lang }),
     browseExecutable: () => axios.post(`${API_URL}/settings/browse-executable`),
 
@@ -101,13 +132,53 @@ export const api = {
         });
     },
     scanEpisode: (projectName, episodeName, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/scan`, { model }),
-    translateEpisode: (projectName, episodeName, model, enhanceGlossary = false, force = false, translationType = 'saved') => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translate`, { model, enhance_glossary: enhanceGlossary, force, translation_type: translationType }),
+    translateEpisode: (projectName, episodeName, modelOrOptions, enhanceGlossary = false, force = false, translationType = 'saved') => {
+        let payload;
+        if (modelOrOptions && typeof modelOrOptions === 'object') {
+            payload = {
+                model: modelOrOptions.model || modelOrOptions.model_name,
+                enhance_glossary: modelOrOptions.enhance_glossary ?? modelOrOptions.enhanceGlossary ?? false,
+                force: modelOrOptions.force ?? false,
+                translation_type: modelOrOptions.translation_type ?? modelOrOptions.translationType ?? 'saved',
+                target_language_name: modelOrOptions.target_language_name,
+                lang: modelOrOptions.lang,
+            };
+        } else {
+            payload = {
+                model: modelOrOptions,
+                enhance_glossary: enhanceGlossary,
+                force,
+                translation_type: translationType,
+            };
+        }
+        return axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/translate`, payload);
+    },
     clearTranslation: (projectName, episodeName) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/clear`),
     retranslateEpisode: (projectName, episodeName, model) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/retranslate`, { model }),
     mergeTranslation: (projectName, episodeName, selectedLines) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/merge`, { selected_lines: selectedLines }),
 
     // Batch Operations
-    batchTranslate: (projectName, episodeNames, model, enhanceGlossary = false, force = false, translationType = 'saved') => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-translate`, { episode_names: episodeNames, model, enhance_glossary: enhanceGlossary, force, translation_type: translationType }),
+    batchTranslate: (projectName, episodeNamesOrOptions, model, enhanceGlossary = false, force = false, translationType = 'saved') => {
+        let payload;
+        if (episodeNamesOrOptions && typeof episodeNamesOrOptions === 'object' && !Array.isArray(episodeNamesOrOptions)) {
+            payload = {
+                episode_names: episodeNamesOrOptions.episode_names || episodeNamesOrOptions.episodes || [],
+                model: episodeNamesOrOptions.model || episodeNamesOrOptions.model_name || model,
+                enhance_glossary: episodeNamesOrOptions.enhance_glossary ?? episodeNamesOrOptions.enhanceGlossary ?? enhanceGlossary,
+                force: episodeNamesOrOptions.force ?? force,
+                translation_type: episodeNamesOrOptions.translation_type ?? episodeNamesOrOptions.translationType ?? translationType,
+            };
+        } else {
+            payload = {
+                episode_names: episodeNamesOrOptions,
+                model,
+                enhance_glossary: enhanceGlossary,
+                force,
+                translation_type: translationType,
+            };
+        }
+        return axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/batch-translate`, payload);
+    },
     batchDownload: async (projectName, episodeNames = null) => {
         const response = await axios.post(
             `${API_URL}/projects/${encodeURIComponent(projectName)}/batch-download`,
@@ -178,10 +249,8 @@ export const api = {
     deleteApiKey: () => axios.delete(`${API_URL}/api/config/api-key`),
     testGeminiKey: (apiKey = null) => axios.post(`${API_URL}/api/config/test-gemini-key`, apiKey ? { api_key: apiKey } : {}),
 
-    // Model Registry (unified: Gemini + local discovery)
-    fetchAllModels: (baseUrl = null) => axios.get(`${API_URL}/api/models`, { params: { base_url: baseUrl } }),
-    // Legacy local-only endpoint (kept for compatibility)
-    fetchLocalModels: (baseUrl = null) => axios.get(`${API_URL}/api/config/models/local`, { params: { base_url: baseUrl } }),
+    // Model Registry (Google Gemini)
+    fetchAllModels: () => axios.get(`${API_URL}/api/models`),
 
     // Auto-translate (fire-and-forget, no review gates)
     autoTranslate: (projectName, options = {}) =>
@@ -207,8 +276,11 @@ export const api = {
 
     // Review Queue
     // GET returns { items: [...], count: N }
-    getReviewQueue: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue`),
-    getGlobalReviewQueue: () => axios.get(`${API_URL}/projects/review-queue`),
+    getReviewQueue: (project, episode = null) => {
+        const params = episode ? { episode } : {};
+        return axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/review-queue`, { params });
+    },
+    getGlobalReviewQueue: (params = {}) => axios.get(`${API_URL}/projects/review-queue`, { params }),
     // Lightweight badge count — no flagged-line data, just the number.
     getGlobalReviewCount: () => axios.get(`${API_URL}/projects/review-queue/count`),
     // POST /review-queue/resolve?episode_name=X&line_index=N&translated_text=...
@@ -220,7 +292,13 @@ export const api = {
     // a job — free look-alike fixes first, then the rest in batched requests (~60 lines
     // per call across the whole project, not one call per episode).
     scanScriptGuard: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/scan`),
+    scanScript: (project) => axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/scan`),
     repairScriptGuard: (project, { model = null, useLlm = true, exportFiles = true } = {}) => axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/repair`, { model, use_llm: useLlm, export: exportFiles }),
+    fixScript: (project, episode = null, options = {}) => {
+        const opts = (episode && typeof episode === 'object') ? episode : options;
+        const payload = typeof opts === 'object' && opts !== null ? opts : {};
+        return axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/script-guard/repair`, payload);
+    },
 
     // Episode Summaries
     // GET /summaries returns { episode_name: summary_text, ... }
@@ -239,16 +317,21 @@ export const api = {
     syncSonarr: (options = {}) => axios.post(`${API_URL}/integrations/sonarr/sync`, options),
     syncRadarr: (options = {}) => axios.post(`${API_URL}/integrations/radarr/sync`, options),
     syncArrAll: (options = {}) => axios.post(`${API_URL}/integrations/arr/sync`, options),
+    syncMediaLibrary: (options = {}) => axios.post(`${API_URL}/integrations/arr/sync`, options),
 
     // Arr Library & Sync
     getArrLibrary: () => axios.get(`${API_URL}/integrations/arr/library`),
     disableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/disable`),
     enableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/enable`),
     
-    // Background Queue
-    getQueue: () => axios.get(`${API_URL}/api/queue`),
+    // Background Queue & Sync
+    getQueue: (reconcile = false) => axios.get(`${API_URL}/api/queue`, { params: { reconcile } }),
+    syncDisk: (options = {}) => axios.post(`${API_URL}/api/sync/disk`, null, { params: options }),
+    getEvents: (since = 0) => axios.get(`${API_URL}/api/events/poll`, { params: { since } }),
     retryQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/retry`),
     cancelQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/cancel`),
+    cancelAllQueueItems: (status = 'pending') => axios.post(`${API_URL}/api/queue/cancel-all`, null, { params: { status } }),
+    deleteQueueItem: (itemId) => axios.delete(`${API_URL}/api/queue/${itemId}`),
     prioritizeQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/prioritize`),
     getQueueItemLogs: (itemId) => axios.get(`${API_URL}/api/queue/${itemId}/logs`),
     enqueueMissing: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/enqueue-missing`),
@@ -257,7 +340,8 @@ export const api = {
     resumeQueue: () => axios.post(`${API_URL}/api/queue/resume`),
     checkDailyLimit: () => axios.post(`${API_URL}/api/queue/check-daily-limit`),
     enqueueEpisodes: (project, episodes) => axios.post(`${API_URL}/api/queue/enqueue`, { project, episodes }),
-    clearQueueHistory: () => axios.delete(`${API_URL}/api/queue/clear`),
+    clearQueue: (status = 'history') => axios.delete(`${API_URL}/api/queue/clear`, { params: { status } }),
+    clearQueueHistory: () => axios.delete(`${API_URL}/api/queue/clear`, { params: { status: 'history' } }),
 
     // Dashboard (Plan 08) & Health (Plan 16)
     getDashboard: () => axios.get(`${API_URL}/api/dashboard`),
@@ -288,13 +372,60 @@ export const api = {
     // Embedded ASS Subtitle Lookup & Extraction
     probeEpisodeEmbedded: (project, episode, forceRefresh = false) =>
         axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/probe`, { params: { force_refresh: forceRefresh }, timeout: 120000 }),
+    getEmbeddedTracks: (project, episode, forceRefresh = false) =>
+        axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/probe`, { params: { force_refresh: forceRefresh }, timeout: 120000 }),
     extractEpisodeEmbedded: (project, episode, options = {}) =>
         axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/extract`, options, { timeout: 600000 }),
+    extractEmbeddedTrack: (project, episode, trackIndex, options = {}) => {
+        const payload = typeof trackIndex === 'object' ? trackIndex : { track_index: trackIndex, ...options };
+        return axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/episodes/${encodeURIComponent(episode)}/embedded/extract`, payload, { timeout: 600000 });
+    },
     getProjectEmbeddedStatus: (project) =>
         axios.get(`${API_URL}/projects/${encodeURIComponent(project)}/embedded/status`),
     batchExtractEmbedded: (project, options = {}) =>
         axios.post(`${API_URL}/projects/${encodeURIComponent(project)}/embedded/extract-all`, options, { timeout: 600000 }),
     testMediaProbe: (mediaPath) =>
         axios.post(`${API_URL}/api/settings/test-media-probe`, { media_path: mediaPath }, { timeout: 120000 }),
+
+    // System & Updates
+    getUpdateStatus: () => axios.get(`${API_URL}/api/system/updates/status`),
+    checkForUpdates: () => axios.post(`${API_URL}/api/system/updates/check`),
+    applyUpdate: (force = false) => axios.post(`${API_URL}/api/system/updates/apply`, { force }),
+    restartServer: () => axios.post(`${API_URL}/api/system/restart`),
+
+    // Agent Tasks
+    getPendingAgentTasks: () => axios.get(`${API_URL}/api/agent/tasks/pending`),
+    claimNextAgentTask: () => axios.post(`${API_URL}/api/agent/tasks/next`),
+    prepareAgentTask: (queueId) => axios.post(`${API_URL}/api/agent/tasks/${encodeURIComponent(queueId)}/prepare`),
+    prepareTargetAgentTask: (projectName, episodeName, lang = null) => axios.post(`${API_URL}/api/agent/tasks/target`, { project_name: projectName, episode_name: episodeName, lang }),
+    enqueueForAgent: (projectName, episodeNames = null, priority = 1, options = {}) => axios.post(`${API_URL}/api/agent/enqueue`, { project_name: projectName, episode_names: episodeNames, priority, ...options }),
+    getActiveAgentTasks: () => axios.get(`${API_URL}/api/agent/tasks/active`),
+    checkAgentTask: (taskId) => axios.post(`${API_URL}/api/agent/tasks/${encodeURIComponent(taskId)}/check`, {}),
+    releaseAgentTask: (taskId) => axios.post(`${API_URL}/api/agent/tasks/${encodeURIComponent(taskId)}/release`),
+    // `options` carries the optional audit flags: { repair, misplaced, full }. requeue=true implies repair.
+    auditProjectTranslations: (projectName, requeue = false, options = {}) => axios.post(`${API_URL}/api/agent/audit`, { project_name: projectName, requeue, ...options }),
+    // Library-wide translation check (background job on the server). POST starts it (HTTP 409 + the
+    // current state if one is already running); GET returns { status, progress, result, ... } to poll.
+    startLibraryAudit: (options = {}) => axios.post(`${API_URL}/api/agent/library-audit`, options),
+    getLibraryAudit: () => axios.get(`${API_URL}/api/agent/library-audit`),
+    submitAgentTask: (taskId, payload = {}) => axios.post(`${API_URL}/api/agent/tasks/${encodeURIComponent(taskId)}/submit`, payload),
+    syncAgentTasks: () => axios.post(`${API_URL}/api/agent/tasks/sync`),
+    cancelAgentTask: (taskId) => axios.post(`${API_URL}/api/agent/tasks/${encodeURIComponent(taskId)}/cancel`),
+    cancelAllAgentTasks: (status = 'pending') => axios.post(`${API_URL}/api/agent/tasks/cancel-all`, null, { params: { status } }),
+    clearAgentTasks: (status = 'finished') => axios.post(`${API_URL}/api/agent/tasks/clear`, null, { params: { status } }),
+    // Direct agent runner (translates the queue through an agent CLI)
+    getAgentRunner: (since = 0, quota = false) => axios.get(`${API_URL}/api/agent/runner`, { params: { since, quota } }),
+    startAgentRunner: (config = {}) => axios.post(`${API_URL}/api/agent/runner/start`, config),
+    stopAgentRunner: (now = false) => axios.post(`${API_URL}/api/agent/runner/stop`, null, { params: { now } }),
+    resumeAgentRunnerNow: () => axios.post(`${API_URL}/api/agent/runner/resume-now`),
+    // Autopilot (docs/PLAN_autopilot.md 4.10)
+    getAutopilotStatus: () => axios.get(`${API_URL}/api/autopilot/status`),
+    getAutopilotItems: ({ state, q, limit = 50, offset = 0 } = {}) => axios.get(`${API_URL}/api/autopilot/items`, { params: { state: state || undefined, q: q || undefined, limit, offset } }),
+    getAutopilotItem: (id) => axios.get(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}`),
+    retryAutopilotItem: (id) => axios.post(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}/retry`),
+    skipAutopilotItem: (id) => axios.post(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}/skip`),
+    autopilotItemNow: (id) => axios.post(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}/now`),
+    autopilotPollNow: () => axios.post(`${API_URL}/api/autopilot/poll`),
+    autopilotReconcileNow: () => axios.post(`${API_URL}/api/autopilot/reconcile`),
 };
 

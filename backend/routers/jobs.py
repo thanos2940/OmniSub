@@ -11,6 +11,18 @@ router = APIRouter()
 @router.get("/jobs/{job_id}")
 async def get_job(job_id: str):
     if job_id in jobs:
+        if job_id.startswith("bg_"):
+            try:
+                target_id = job_id[3:]
+                q_item = TranslationQueue().get_item(target_id)
+                if q_item and q_item["status"] in ("completed", "failed", "cancelled"):
+                    if jobs[job_id].status != q_item["status"]:
+                        jobs[job_id].status = q_item["status"]
+                        if q_item["status"] == "completed":
+                            jobs[job_id].progress = 100.0
+                            jobs[job_id].message = "Translation completed."
+            except Exception:
+                pass
         return jobs[job_id]
         
     # Database fallback for older or finished tasks (e.g. after server restart)
@@ -18,23 +30,23 @@ async def get_job(job_id: str):
     row = None
     is_queue_job = False
     try:
-        conn = sqlite3.connect(DB_FILE, timeout=10.0)
-        conn.row_factory = sqlite3.Row
-        with conn:
-            # First, check translation_queue if it starts with bg_
-            if db_id.startswith("bg_"):
-                cursor = conn.execute("SELECT * FROM translation_queue WHERE id = ?", (db_id[3:],))
-                row = cursor.fetchone()
-                is_queue_job = True
-            else:
-                # Try finding in job_history
+        tq = TranslationQueue()
+        target_id = db_id[3:] if db_id.startswith("bg_") else db_id
+        q_item = tq.get_item(target_id)
+        if q_item:
+            row = q_item
+            is_queue_job = True
+        else:
+            with tq._conn() as conn:
                 cursor = conn.execute("SELECT * FROM job_history WHERE id = ?", (db_id,))
-                row = cursor.fetchone()
-                if not row:
-                    # Check translation_queue as direct fallback
-                    cursor = conn.execute("SELECT * FROM translation_queue WHERE id = ?", (db_id,))
-                    row = cursor.fetchone()
-                    if row:
+                hist_row = cursor.fetchone()
+                if hist_row:
+                    row = dict(hist_row)
+                    is_queue_job = False
+                elif not db_id.startswith("bg_"):
+                    direct_item = tq.get_item(db_id)
+                    if direct_item:
+                        row = direct_item
                         is_queue_job = True
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database lookup failed: {e}")
@@ -80,6 +92,16 @@ async def get_job(job_id: str):
         elif status == "cancelled" and not message:
             message = "Job cancelled."
 
+    parent_id = None
+    if is_queue_job:
+        try:
+            raw_opts = row["options"] if "options" in row.keys() else None
+            if raw_opts:
+                parsed_opts = json.loads(raw_opts) if isinstance(raw_opts, str) else raw_opts
+                parent_id = parsed_opts.get("parent_job_id")
+        except Exception:
+            pass
+
     return {
         "id": job_id,
         "status": job_status,
@@ -92,7 +114,8 @@ async def get_job(job_id: str):
         "completed_episodes": [row["episode_name"]] if status == "completed" else [],
         "failed_episodes": [row["episode_name"]] if status == "failed" else [],
         "rate_limit_hits": 0,
-        "daily_limit_reached": status == "paused_daily_limit"
+        "daily_limit_reached": status == "paused_daily_limit",
+        "parent_id": parent_id
     }
 
 
@@ -111,16 +134,52 @@ async def cancel_job(job_id: str):
             job.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Cancelled by user")
             
             if job.id.startswith("bg_"):
-                # Also cancel the queue item
-                queue = TranslationQueue()
-                queue.cancel(db_id)
+                # Also cancel the queue item and cancel in-flight worker task
+                q = None
+                try:
+                    from services.background_worker import worker
+                    q = getattr(worker, "queue", None)
+                    worker.cancel_task(db_id)
+                except Exception:
+                    pass
+                if not q:
+                    q = TranslationQueue()
+                q.cancel(db_id)
             else:
+                if job.sub_jobs:
+                    q = None
+                    try:
+                        from services.background_worker import worker
+                        q = getattr(worker, "queue", None)
+                    except Exception:
+                        pass
+                    if not q:
+                        q = TranslationQueue()
+                    for child_id in job.sub_jobs:
+                        q.cancel(child_id)
+                        try:
+                            from services.background_worker import worker
+                            worker.cancel_task(child_id)
+                        except Exception:
+                            pass
+                        child_job = jobs.get(f"bg_{child_id}")
+                        if child_job:
+                            child_job.cancelled = True
+                            child_job.status = "cancelled"
                 from utils.jobs_manager import _sync_job_to_db
                 _sync_job_to_db(job)
         return {"status": "cancelled"}
 
     # Database/Queue fallback
-    queue = TranslationQueue()
-    queue.cancel(db_id)
+    q = None
+    try:
+        from services.background_worker import worker
+        q = getattr(worker, "queue", None)
+        worker.cancel_task(db_id)
+    except Exception:
+        pass
+    if not q:
+        q = TranslationQueue()
+    q.cancel(db_id)
     return {"status": "cancelled"}
 

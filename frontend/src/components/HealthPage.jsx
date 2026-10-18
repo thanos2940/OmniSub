@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, MinusCircle, Copy } from 'lucide-react';
+import LibraryTranslationCheck from './health/LibraryTranslationCheck';
 
 const StatusIcon = ({ status }) => {
     if (status === 'pass') return <CheckCircle2 className="text-emerald-500" size={18} />;
@@ -99,6 +100,8 @@ const HealthPage = () => {
                     </div>
                 </div>
             )}
+
+            <LibraryTranslationCheck />
         </div>
     );
 };

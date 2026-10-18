@@ -56,7 +56,12 @@ def get_embedder(model_name: str = "all-MiniLM-L6-v2"):
                 logger.debug(f"Device detection fallback to CPU: {e}")
 
             from sentence_transformers import SentenceTransformer
-            _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name, device=device)
+            try:
+                # Cached copy first: otherwise every load makes dozens of Hub requests
+                # just to confirm the files are current (~4 s, and fails offline).
+                _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name, device=device, local_files_only=True)
+            except Exception:
+                _EMBEDDER_CACHE[model_name] = SentenceTransformer(model_name, device=device)
             logger.info(f"Loaded embedding model '{model_name}' on device '{device}' (threads capped at {cpu_threads if device == 'cpu' else 'GPU'}).")
         except ImportError:
             logger.warning(
@@ -201,12 +206,18 @@ class TranslationMemory:
         if embedder is None:
             return 0
 
-        # Filter out empty pairs
-        pairs = [
-            (src.strip(), tgt.strip())
-            for src, tgt in zip(source_lines, target_lines)
-            if src.strip() and tgt.strip()
-        ]
+        from utils.text_normalize import sanitize_translation_text
+        # Filter out empty pairs and sanitize target translations
+        pairs = []
+        for src, tgt in zip(source_lines, target_lines):
+            s_clean = (src or "").strip()
+            t_clean = sanitize_translation_text(
+                (tgt or "").strip(),
+                source_text=s_clean,
+                target_lang_code=self._lang_code
+            )
+            if s_clean and t_clean:
+                pairs.append((s_clean, t_clean))
         if not pairs:
             return 0
 
@@ -581,13 +592,10 @@ def filter_glossary_for_chunk(
     if not glossary or not glossary.get("terms"):
         return {"terms": []}
 
-    source_text = " ".join(source_lines).lower()
-    relevant = []
-
-    for term in glossary["terms"]:
-        term_text = term.get("term", "").lower()
-        if term_text and term_text in source_text:
-            relevant.append(term)
+    # Whole words only ("Ren" is not the inside of "current"), plurals and possessives included.
+    from utils.glossary_judgment import Matcher
+    found = {h["term"].lower() for h in Matcher(glossary["terms"]).find_all(source_lines)}
+    relevant = [t for t in glossary["terms"] if (t.get("term") or "").lower() in found]
 
     return {"terms": relevant}
 
@@ -612,7 +620,8 @@ def build_priority_glossary_block(
         tgt = t.get("translation", src) if not t.get("keep_original", False) else src
         gender = t.get("gender", "")
         gender_tag = f" ({gender[0]})" if gender and gender != "n/a" else ""
-        lines.append(f"  {src} -> {tgt}{gender_tag}")
+        sense = (t.get("sense") or "").strip()
+        lines.append(f"  {src} -> {tgt}{gender_tag}" + (f" — only as {sense}" if sense else ""))
 
     return "\n".join(lines)
 

@@ -72,7 +72,10 @@ async def reindex_review_counts():
     return {"status": "started", "note": "Seeding needs_review counts in the background; counts will fill in gradually."}
 
 
-def _scan_review_queue(project_name: Optional[str] = None) -> List[Dict]:
+def _scan_review_queue(
+    project_name: Optional[str] = None,
+    episode_name: Optional[str] = None
+) -> List[Dict]:
     """Collect needs_review lines. Uses the metadata index to open ONLY episodes that
     actually have flags (needs_review > 0), so cost scales with the number of flagged
     episodes, not the whole library. Run via asyncio.to_thread."""
@@ -82,10 +85,13 @@ def _scan_review_queue(project_name: Optional[str] = None) -> List[Dict]:
     except Exception:
         pairs = []
 
+    if episode_name:
+        pairs = [(proj, ep) for proj, ep in pairs if ep == episode_name]
+
     flagged = []
     for proj, ep_name in pairs:
         data = storage.load_episode(proj, ep_name)
-        if not data:
+        if not data or not data.get("data"):
             continue
         for i, line in enumerate(data["data"]):
             if line.get("needs_review"):
@@ -136,9 +142,17 @@ def _invalidate_global_review_cache():
 
 
 @router.get("/projects/review-queue")
-async def get_global_review_queue(force: bool = False):
-    """Get all lines flagged for user review across all projects (cached, off-loop, single-flight)."""
-    return await _refresh_global_review_cache(force=force)
+async def get_global_review_queue(
+    force: bool = False,
+    project: Optional[str] = None,
+    episode: Optional[str] = None,
+):
+    """Get all lines flagged for user review across all projects (cached, off-loop, single-flight).
+    Supports optional project and episode filters."""
+    if not project and not episode:
+        return await _refresh_global_review_cache(force=force)
+    flagged = await asyncio.to_thread(_scan_review_queue, project, episode)
+    return {"items": flagged, "count": len(flagged)}
 
 
 @router.get("/projects/review-queue/count")
@@ -154,12 +168,13 @@ async def get_global_review_count():
 
 
 @router.get("/projects/{project_name}/review-queue")
-async def get_review_queue(project_name: str):
-    """Get all lines flagged for user review across all episodes of a project (off-loop)."""
+async def get_review_queue(project_name: str, episode: Optional[str] = None):
+    """Get all lines flagged for user review across all episodes of a project (off-loop).
+    Supports optional episode filter."""
     metadata = storage.load_project_metadata(project_name)
     if not metadata:
         raise HTTPException(status_code=404, detail="Project not found")
-    flagged = await asyncio.to_thread(_scan_review_queue, project_name)
+    flagged = await asyncio.to_thread(_scan_review_queue, project_name, episode)
     return {"items": flagged, "count": len(flagged)}
 
 
@@ -211,7 +226,7 @@ async def resolve_review_item(
         storage.save_episode(project_name, episode_name, data["data"], metadata)
         
         # Deliver if arr source
-        media_path = metadata.get("arr_media_path") or metadata.get("bazarr_media_path")
+        media_path = metadata.get("arr_media_path")
         if media_path:
             try:
                 proj_meta = storage.load_project_metadata(project_name)
@@ -273,7 +288,7 @@ async def resolve_all_review_items(project_name: str):
             storage.save_episode(project_name, ep_name, data["data"], metadata)
             
             # Deliver if arr source
-            media_path = metadata.get("arr_media_path") or metadata.get("bazarr_media_path")
+            media_path = metadata.get("arr_media_path")
             if media_path:
                 try:
                     proj_meta = storage.load_project_metadata(project_name)

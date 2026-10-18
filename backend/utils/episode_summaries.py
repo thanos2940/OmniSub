@@ -16,7 +16,7 @@ Storage:
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from utils import storage
 
@@ -77,6 +77,62 @@ class EpisodeSummaryManager:
     # Context injection
     # ------------------------------------------------------------------
 
+    def get_previous_summaries(
+        self,
+        episode_name: str,
+        count: int = 2,
+    ) -> List[Dict[str, str]]:
+        """Get the last N episode summaries before episode_name.
+
+        Assumes episode names sort chronologically (S01E01, S01E02, ...).
+        Returns a list of {"episode": ep_name, "summary": summary_text}.
+        """
+        all_summaries = self.load_all()
+        if not all_summaries:
+            return []
+
+        sorted_episodes = sorted(all_summaries.keys())
+
+        # Find position of current episode in the sorted list
+        try:
+            current_idx = sorted_episodes.index(episode_name)
+        except ValueError:
+            # Not summarised yet: its place in episode order, so going back to fill in
+            # an early episode never gets later episodes' plot as "previously".
+            import bisect
+            current_idx = bisect.bisect_left(sorted_episodes, episode_name)
+
+        start = max(0, current_idx - count)
+        recent = sorted_episodes[start:current_idx]
+        return [{"episode": ep, "summary": all_summaries[ep]} for ep in recent]
+
+    def format_summaries_for_prompt(self, summaries: Any) -> str:
+        """Format a list of summary dicts or a summary mapping into a prompt-ready context block."""
+        if not summaries:
+            return ""
+
+        if isinstance(summaries, str):
+            return summaries
+
+        if isinstance(summaries, dict):
+            summaries = [{"episode": k, "summary": v} for k, v in summaries.items()]
+
+        lines = ["Previously in this show:"]
+        for item in summaries:
+            if isinstance(item, dict):
+                ep = item.get("episode", "")
+                text = item.get("summary", "")
+                if ep and text:
+                    lines.append(f"[{ep}] {text}")
+                elif text:
+                    lines.append(text)
+            elif isinstance(item, (list, tuple)) and len(item) == 2:
+                lines.append(f"[{item[0]}] {item[1]}")
+
+        if len(lines) <= 1:
+            return ""
+        return "\n".join(lines)
+
     def get_recent_summaries(
         self,
         current_episode: str,
@@ -85,41 +141,11 @@ class EpisodeSummaryManager:
         """Get the last N episode summaries before the current episode.
 
         Returns a formatted context string ready for prompt injection.
-        Assumes episode names sort chronologically (S01E01, S01E02, ...).
-
-        Args:
-            current_episode: Name of the episode being translated.
-            window: Maximum number of past summaries to include.
-
-        Returns:
-            Formatted "Previously in this show:" block, or empty string
-            if no past summaries exist.
         """
-        all_summaries = self.load_all()
-        if not all_summaries:
-            return ""
-
-        sorted_episodes = sorted(all_summaries.keys())
-
-        # Find position of current episode in the sorted list
-        try:
-            current_idx = sorted_episodes.index(current_episode)
-        except ValueError:
-            # Current episode not yet summarised — treat as next after last
-            current_idx = len(sorted_episodes)
-
-        start = max(0, current_idx - window)
-        recent = sorted_episodes[start:current_idx]
-
-        if not recent:
-            return ""
-
-        lines = ["Previously in this show:"]
-        for ep in recent:
-            lines.append(f"[{ep}] {all_summaries[ep]}")
-
-        return "\n".join(lines)
+        prev = self.get_previous_summaries(current_episode, count=window)
+        return self.format_summaries_for_prompt(prev)
 
     def has_summary(self, episode_name: str) -> bool:
         """Check whether a summary exists for an episode."""
         return episode_name in self.load_all()
+

@@ -317,12 +317,13 @@ async def enhance_context_guide_adk(
     """Transform research findings into a concise translation style guide."""
 
     prompt = f"""Write a subtitle translation style guide for "{show_name}" translating into {target_language}.
-Max 200 words. Use EXACTLY this structure — no extra sections:
+Max 250 words. Use EXACTLY this structure — no extra sections:
 
 TONE: [one sentence describing overall mood/register tailored for {target_language}]
-FORMALITY: [formal/informal/mixed — one sentence explaining how to handle this in {target_language}]
-REGISTER: [2-3 bullets for character-specific speech patterns, if relevant]
-CULTURAL: [2-3 bullets for adaptation rules — idioms, honorifics, etc. when translating to {target_language}]
+FORMALITY & REGISTER BOUNDARIES: [formal/informal/mixed — specify which character dynamics use casual/street spoken Greek with conversational particles vs who commands respectful/formal address without street slang]
+REGISTER: [2-3 bullets for character-specific speech patterns, verbal tics, and social distance]
+PROFANITY & MATURITY: [guidance on profanity intensity based on show rating — authentic colloquial equivalents or mild/clean]
+CULTURAL: [2-3 bullets for adaptation rules — idioms, honorifics, Japanese conventions when translating to {target_language}]
 SPECIAL: [any unique handling rules for this show's specific terminology in {target_language}]
 
 Do NOT list specific name/term translations — those are in the glossary.
