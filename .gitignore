@@ -56,6 +56,18 @@ backend/agent_runner.pid
 backend/agent_runner.tmp
 backend/library_audit.json
 backend/cache/
+backend/agent_tasks/
+backend/release_version.json
+# Single-instance locks of the server and the tray supervisor (a stale one must not dirty the tree:
+# the in-app updater refuses to update a dirty checkout).
+backend/*.lock
+# Migration import staging and the snapshots it takes of what it replaces.
+backend/.migration_import_*/
+backend/*.pre_import.bak
+backend/translation_memory.pre_import.bak/
+# The UI build is swapped in next to backend/static by install.ps1 and the updater.
+backend/static.new/
+backend/static.old/
 test_greek.json
 config.json
 !backend/config.example.json

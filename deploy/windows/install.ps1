@@ -15,7 +15,7 @@
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Mode Service -Port 2945 -OpenFirewall -KeepAwake
 
   -Mode Service  runs like Sonarr: starts at boot with nobody logged on, as your account (so the agent
-                 CLIs keep their sign-in), restarts after a crash; console output goes to
+                 CLIs keep their sign-in), a supervisor (tray_app.py --headless) restarts the server after a crash or an update; console output goes to
                  logs\service_console.log. Needs an elevated PowerShell and your Windows password.
   -Mode Tray     starts at logon with a tray icon. -Mode Headless starts at logon without one.
   -OpenFirewall  allows inbound TCP <Port> on Private networks (MorpiceHub and other LAN devices).
@@ -178,9 +178,10 @@ New-Item -ItemType Directory -Force -Path $logDirForTask | Out-Null
 $restartCount = 3
 if ($Mode -eq 'Service') {
     if (-not $isAdmin) { Fail 'Service mode registers a boot-time task: run this from an elevated PowerShell (Run as administrator).' }
+    # The headless supervisor runs run_server.py and starts it again after a crash (5/15/60 s back-off) or an update/restart (exit 42, at once).
     # cmd /c keeps the console output (tracebacks before logging starts) in a file.
     $consoleLog = Join-Path $logDirForTask 'service_console.log'
-    $cmdLine = "/c `"`"$VenvPy`" backend\run_server.py $serverArgs >> `"$consoleLog`" 2>&1`""
+    $cmdLine = "/c `"`"$VenvPy`" backend\tray_app.py --headless $serverArgs >> `"$consoleLog`" 2>&1`""
     $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument $cmdLine -WorkingDirectory $InstallDir
     $boot = New-ScheduledTaskTrigger -AtStartup
     $boot.Delay = 'PT1M'  # let the network and the drive shares come up
@@ -305,5 +306,5 @@ Next steps
      powercfg /change standby-timeout-ac 0  (and hibernate-timeout-ac 0).
   6. Windows Firewall: only if other devices (MorpiceHub) must reach the UI, re-run with -OpenFirewall.
 Logs: $logDir\ombisub.log   (rotating, 10 MB x 5)
-Update later: Stop-ScheduledTask $TaskName ; git pull ; deploy\windows\install.ps1
+Update later: deploy\windows\update.cmd (or Settings > System > Updates in the app)
 "@
