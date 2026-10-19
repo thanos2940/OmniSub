@@ -13,14 +13,18 @@ const ChecklistRow = ({ done, label }) => (
 const StepFinish = ({ onBack, onFinish }) => {
     const navigate = useNavigate();
     const [status, setStatus] = useState(null);
+    const [agentCli, setAgentCli] = useState(false);
 
     useEffect(() => {
         api.getSetupStatus().then(res => setStatus(res.data)).catch(() => setStatus({}));
+        api.getAgentRunner()
+            .then(res => setAgentCli(Object.values(res.data?.engines || {}).some(Boolean)))
+            .catch(() => setAgentCli(false));
     }, []);
 
     const handlePrimaryAction = () => {
         onFinish();
-        navigate(status?.arr_configured ? '/library' : '/');
+        navigate('/');
     };
 
     return (
@@ -35,7 +39,8 @@ const StepFinish = ({ onBack, onFinish }) => {
 
             {status && (
                 <div className="text-left inline-block space-y-1.5 bg-gray-50 dark:bg-gray-900/40 rounded-lg p-4">
-                    <ChecklistRow done={status.has_gemini_key} label="Gemini API key" />
+                    <ChecklistRow done={agentCli} label="Agent CLI found (agy, Claude Code or Gemini CLI)" />
+                    <ChecklistRow done={status.has_gemini_key} label="Gemini API key, for lines the CLI refuses (optional)" />
                     <ChecklistRow done={status.auth_configured} label="Server secured" />
                     <ChecklistRow done={status.arr_configured} label="Sonarr/Radarr connected" />
                 </div>
@@ -44,7 +49,7 @@ const StepFinish = ({ onBack, onFinish }) => {
             <div className="flex items-center justify-between pt-2">
                 <button onClick={onBack} disabled={!onBack} className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-0">Back</button>
                 <button onClick={handlePrimaryAction} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium">
-                    {status?.arr_configured ? 'Open Media Library' : 'Create your first project'}
+                    {status?.arr_configured ? 'Open the library' : 'Create your first project'}
                 </button>
             </div>
         </div>

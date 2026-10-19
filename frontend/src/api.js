@@ -467,5 +467,9 @@ export const api = {
     setAutoUpdateConfig: ({ enabled, channel, intervalHours }) =>
         axios.post(`${API_URL}/api/system/auto-update`, { enabled, channel, interval_hours: intervalHours }),
     getHealth: () => axios.get(`${API_URL}/api/health`),
+
+    // --- F2b: settings ---
+    saveAgentRunnerConfig: (config) => axios.put(`${API_URL}/api/agent/runner/config`, config),
+    testPlexConnection: (payload = {}) => axios.post(`${API_URL}/integrations/plex/test`, payload),
 };
 

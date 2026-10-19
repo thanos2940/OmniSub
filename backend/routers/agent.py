@@ -82,6 +82,22 @@ class RunnerStartRequest(BaseModel):
     rescue_model: Optional[str] = None
 
 
+class RunnerConfigRequest(BaseModel):
+    """Runner settings to save; a key left out keeps its value."""
+    engine: Optional[str] = None
+    model: Optional[str] = None
+    fallback_models: Optional[Any] = None
+    lanes: Optional[int] = None
+    per_show: Optional[int] = None
+    chunk_lines: Optional[int] = None
+    fix_rounds: Optional[int] = None
+    max_episodes: Optional[int] = None
+    watch: Optional[bool] = None
+    api_rescue: Optional[bool] = None
+    rescue_model: Optional[str] = None
+    bootstrap: Optional[bool] = None
+
+
 def _result(result: Dict[str, Any], not_found_statuses=("not_found",)) -> Any:
     """Return the service result; failures keep their full body (the CLI shows the
     report) with a status code that matches the failure."""
@@ -249,6 +265,28 @@ async def runner_start(payload: Optional[RunnerStartRequest] = None):
         return await asyncio.to_thread(get_runner().start, config)
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/runner/config")
+async def runner_save_config(payload: RunnerConfigRequest):
+    """Save the runner's settings without starting it. A running runner applies the live keys at once
+    (the rest at its next start); a stopped one only stores them."""
+    from services.agent_runner import RunnerConfig, clean_config, get_runner
+    runner = get_runner()
+    try:
+        clean = clean_config({k: v for k, v in payload.model_dump().items() if v is not None})
+        if runner.running():
+            return await asyncio.to_thread(runner.start, clean)
+    except (ValueError, FileNotFoundError, RuntimeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    def store() -> Dict[str, Any]:
+        with runner.lock:
+            runner.config = RunnerConfig({**runner.config, **clean})
+        runner._save()
+        return runner.info()
+
+    return await asyncio.to_thread(store)
 
 
 @router.post("/runner/stop")
