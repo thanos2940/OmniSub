@@ -160,6 +160,12 @@ async def _maintenance_loop():
                 per_model_rate_limiter.flush()
             except Exception:
                 pass
+            # A runner that stopped on an error is started again after a while (agent_runner.recover).
+            try:
+                from services import agent_runner
+                await asyncio.to_thread(agent_runner.recover)
+            except Exception:
+                pass
         except asyncio.CancelledError:
             break
         except Exception as e:

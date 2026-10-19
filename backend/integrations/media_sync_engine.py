@@ -104,6 +104,22 @@ def prefer_ass_for_project(project_meta: Optional[Dict]) -> bool:
     return False
 
 
+def work_facts(item: Dict) -> Dict:
+    """What Sonarr/Radarr know of a series or movie that helps translate it: the year, genres and overview
+    (stored as ``arr_year``, ``arr_genres``, ``arr_overview``; a new show's context guide and glossary are
+    built from them, services/project_bootstrap.py)."""
+    facts: Dict[str, Any] = {}
+    if isinstance(item.get("year"), int) and item["year"] > 0:
+        facts["arr_year"] = item["year"]
+    genres = [g for g in item.get("genres") or [] if isinstance(g, str) and g.strip()]
+    if genres:
+        facts["arr_genres"] = genres[:8]
+    overview = " ".join(str(item.get("overview") or "").split())
+    if overview:
+        facts["arr_overview"] = overview[:1500]
+    return facts
+
+
 def _movie_disambiguator(movie_data: Dict) -> str:
     """Suffix (year, or Radarr id as fallback) for movies that share a title —
     e.g. two different releases both titled "The Power". Extracted once so every
@@ -691,6 +707,7 @@ class MediaSyncEngine:
                 "series_type": series_type,
                 "glossary": inherited_glossary,
                 "context_guide": inherited_context,
+                **work_facts(series_data),
             })
             result.new_projects += 1
             logger.info(f"Created project from Sonarr: {project_name}")
@@ -709,6 +726,7 @@ class MediaSyncEngine:
                 # so a project created before this field existed (or one Sonarr has since
                 # retyped as anime) would otherwise never pick up the anime behaviour.
                 meta["series_type"] = series_type
+                meta.update(work_facts(series_data))
                 await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
 
         # Resolved once per series: gates embedded probing for .srt-only episodes and
@@ -1359,6 +1377,7 @@ class MediaSyncEngine:
                 "arr_radarr_id": radarr_id,
                 "arr_disabled": False,
                 "arr_last_sync": datetime.now().isoformat(),
+                **work_facts(movie_data),
             })
             result.new_projects += 1
         else:
@@ -1372,6 +1391,7 @@ class MediaSyncEngine:
                 meta["arr_radarr_id"] = radarr_id
                 meta["arr_media_type"] = "movie"
                 meta["type"] = "movie"
+                meta.update(work_facts(movie_data))
                 await loop.run_in_executor(None, storage.save_project_metadata, project_name, meta)
 
         if not raw_media_path:

@@ -314,7 +314,7 @@ class AutopilotService:
         runner = self._runner_info()
         worker_paused = bool(cfg.get("queue_worker_paused", False))
         runner_active = runner["status"] in RUNNER_ACTIVE_STATUSES
-        agent_mode = cfg.get("translation_engine", "model") == "agent"
+        agent_mode = cfg.get("translation_engine", "agent") == "agent"
         worker_translates = not worker_paused and not agent_mode
         missing = 0
         if worker_paused:

@@ -865,16 +865,56 @@ async def check_missing_translations(project_name: str):
     return {"project": project_name, "results": results, "total_missing": sum(r["missing_count"] for r in results)}
 
 
+def _queue_episodes_with_gaps(job_id: str, project_name: str) -> None:
+    """Agent engine: the translated episodes that still lack lines go to the runner, whose gap mode
+    translates only those lines (with the translated dialogue around each)."""
+    from utils.jobs_manager import update_job
+    from utils.language_codes import to_code
+    from utils.translation_queue import PRIORITY_MANUAL
+    from services import agent_workspace as aw
+    from services.agent_task_service import agent_task_service
+    try:
+        meta = storage.load_project_metadata(project_name) or {}
+        code = to_code(meta.get("target_language") or "Greek")
+        names = storage.list_episodes(project_name)
+        update_job(job_id, status="running", progress=5.0, message="Looking for lines without a translation...")
+        gaps = []
+        for i, ep in enumerate(names, 1):
+            cues = storage.load_episode_data(project_name, ep) or []
+            if cues:
+                units, stats = aw.build_units(cues, code, True, full=False)
+                if units and stats.get("already_translated_units", 0) > 0:
+                    gaps.append(ep)
+            update_job(job_id, progress=5.0 + 90.0 * i / max(1, len(names)))
+        queued = 0
+        if gaps:
+            res = agent_task_service.enqueue_target_project(project_name, gaps, PRIORITY_MANUAL, full=False,
+                                                            include_translated=True)
+            queued = int(res.get("enqueued_count") or 0)
+        message = (f"Queued {queued} episode(s) with missing lines; the runner translates only those lines."
+                   if queued else "No translated episode has missing lines.")
+        update_job(job_id, status="completed", progress=100.0, message=message,
+                   result={"episodes": gaps, "queued": queued})
+    except Exception as e:
+        update_job(job_id, status="failed", message=f"Could not queue the missing lines: {e}")
+
+
 @router.post("/projects/{project_name}/translate-missing")
 async def translate_project_missing_endpoint(project_name: str, background_tasks: BackgroundTasks):
-    """Trigger a background job to translate missing lines with context."""
+    """Translate the lines a project's translated episodes still lack (a background job, ``job_id``).
+    Agent engine: those episodes are queued for the runner's gap mode. Model engine: the lines are
+    translated one by one through the model."""
     metadata = storage.load_project_metadata(project_name)
     if not metadata:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    from services.translation_service import translate_project_missing_lines
+    from services.agy_llm import agent_mode
     job_id = create_job("translate_missing", project_name=project_name)
-    background_tasks.add_task(translate_project_missing_lines, job_id, project_name)
+    if agent_mode():
+        background_tasks.add_task(_queue_episodes_with_gaps, job_id, project_name)
+    else:
+        from services.translation_service import translate_project_missing_lines
+        background_tasks.add_task(translate_project_missing_lines, job_id, project_name)
     return {"job_id": job_id}
 
 

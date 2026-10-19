@@ -298,7 +298,7 @@ class BatchTranslator:
         if not config.get("batch_api_enabled", False):
             return 0
         # Paused queue, or translations handed to external agents: no model calls.
-        if config.get("queue_worker_paused", False) or config.get("translation_engine", "model") == "agent":
+        if config.get("queue_worker_paused", False) or config.get("translation_engine", "agent") == "agent":
             return 0
         if self._over_budget(config):
             logger.info("Batch: daily budget cap reached; deferring backlog drain.")

@@ -1725,6 +1725,39 @@ def nudge() -> None:
         runner.nudge()
 
 
+RECOVER_AFTER_SECONDS = 30 * 60
+_error_seen_at: Optional[float] = None
+
+
+def recover() -> bool:
+    """Start the runner again when it stopped on an error (a CLI that lost its sign-in, eight failures in a
+    row) and RECOVER_AFTER_SECONDS have passed since this was first seen — what the next boot would do —
+    provided the engine is agent and starting on boot is on. A runner stopped by hand, or one that
+    finished its work, stays as it is. Called by the maintenance loop."""
+    global _error_seen_at
+    r = get_runner()
+    if r.running() or r.status != "error":
+        _error_seen_at = None
+        return False
+    now = time.time()
+    if _error_seen_at is None:
+        _error_seen_at = now
+        return False
+    if now - _error_seen_at < RECOVER_AFTER_SECONDS:
+        return False
+    cfg = storage.load_global_config() or {}
+    if cfg.get("translation_engine", "agent") != "agent" or cfg.get("agent_runner_autostart", True) is not True:
+        return False
+    _error_seen_at = None
+    try:
+        r.log("Starting again after the error above.", "warn")
+        r.start({**r.config, "watch": True}, resumed=True)
+        return True
+    except Exception as exc:
+        r.log(f"Could not start again: {exc}", "error")
+        return False
+
+
 def autostart() -> bool:
     """Resume the runner if it was on when Omnisub last stopped, or start it (watching the queue) when the
     translation engine is 'agent' — the default — and ``agent_runner_autostart`` has not been turned off."""

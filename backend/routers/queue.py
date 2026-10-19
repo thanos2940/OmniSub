@@ -89,7 +89,7 @@ async def get_queue_status(reconcile: bool = False):
         "summary": queue.get_summary(),
         "rate_limits": per_model_rate_limiter.get_all_stats(),
         "paused": global_config.get("queue_worker_paused", False),
-        "translation_engine": global_config.get("translation_engine", "model"),
+        "translation_engine": global_config.get("translation_engine", "agent"),
         "concurrency": concurrency_manager.stats(),
         # Embedded-subtitle extractions run on their own lane and are listed
         # separately so the translation queue keeps its existing shape.
