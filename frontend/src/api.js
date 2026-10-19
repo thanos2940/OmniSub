@@ -452,5 +452,9 @@ export const api = {
     autopilotItemNow: (id) => axios.post(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}/now`),
     autopilotPollNow: () => axios.post(`${API_URL}/api/autopilot/poll`),
     autopilotReconcileNow: () => axios.post(`${API_URL}/api/autopilot/reconcile`),
+    // --- F2b: settings ---
+    saveAgentRunnerConfig: (config) => axios.put(`${API_URL}/api/agent/runner/config`, config),
+    testPlexConnection: (payload = {}) => axios.post(`${API_URL}/integrations/plex/test`, payload),
+    getSettingsServerStatus: () => axios.get(`${API_URL}/api/system/status`),
 };
 

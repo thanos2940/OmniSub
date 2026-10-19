@@ -1,137 +1,114 @@
-import React, { useState } from 'react';
-import { Sparkles, CheckCircle2, XCircle, Loader2, Key } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bot } from 'lucide-react';
 import { api } from '../../api';
+import { Button, StatusChip } from '../ui';
+import { cx, errorText, Notice } from '../settings/parts';
+import GeminiKeyField from '../settings/GeminiKeyField';
+
+const CLIS = [
+    { id: 'antigravity', name: 'Antigravity', command: 'agy', note: 'The default. Sign in with a Google account.' },
+    { id: 'claude', name: 'Claude Code', command: 'claude', note: 'Uses a Claude subscription.' },
+    { id: 'gemini', name: 'Gemini CLI', command: 'gemini', note: 'Uses the Gemini CLI sign-in.' },
+];
 
 const StepProvider = ({ onNext, onBack, onSkip }) => {
-    const [geminiKey, setGeminiKey] = useState('');
-    const [geminiStatus, setGeminiStatus] = useState(null); // null | 'testing' | 'ok' | 'error'
-    const [statusMessage, setStatusMessage] = useState('');
+    const [engines, setEngines] = useState(null); // { antigravity: path | null, ... }
+    const [loadError, setLoadError] = useState(null);
+    const [engine, setEngine] = useState('antigravity');
     const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState(null);
 
-    const testGemini = async () => {
-        if (!geminiKey.trim()) return;
-        setGeminiStatus('testing');
-        setStatusMessage('');
-        try {
-            await api.setApiKey(geminiKey.trim());
-            const res = await api.testGeminiKey(geminiKey.trim());
-            if (res.data?.valid) {
-                setGeminiStatus('ok');
-                setStatusMessage('Google Gemini API Key verified!');
-            } else {
-                setGeminiStatus('error');
-                setStatusMessage(res.data?.error || 'Invalid API Key');
-            }
-        } catch (err) {
-            setGeminiStatus('error');
-            setStatusMessage(err.response?.data?.detail || err.message || 'Verification failed');
-        }
-    };
+    useEffect(() => {
+        api.getAgentRunner()
+            .then(res => {
+                const found = res.data?.engines || {};
+                setEngines(found);
+                const current = res.data?.config?.engine;
+                setEngine(found[current] ? current : (CLIS.find(c => found[c.id])?.id || current || 'antigravity'));
+            })
+            .catch(err => setLoadError(errorText(err, 'Could not look for the agent CLIs')));
+    }, []);
+
+    const anyFound = !!engines && CLIS.some(c => engines[c.id]);
 
     const handleNext = async () => {
         setSaving(true);
+        setSaveError(null);
         try {
-            if (geminiKey.trim()) {
-                await api.setApiKey(geminiKey.trim());
-            }
-            await api.updateSettings({ ai_provider: 'cloud' });
-        } catch (e) {
-            console.error('Failed to save provider settings', e);
+            await api.saveAgentRunnerConfig({ engine });
+            onNext();
+        } catch (err) {
+            setSaveError(errorText(err, 'Could not save the choice'));
         } finally {
             setSaving(false);
-            onNext();
         }
-    };
-
-    const StatusIcon = ({ status }) => {
-        if (status === 'testing') return <Loader2 size={16} className="animate-spin text-indigo-500" />;
-        if (status === 'ok') return <CheckCircle2 size={16} className="text-emerald-500" />;
-        if (status === 'error') return <XCircle size={16} className="text-red-500" />;
-        return null;
     };
 
     return (
         <div className="space-y-6">
             <div>
-                <div className="flex items-center gap-2 mb-1">
-                    <Sparkles className="text-indigo-600 dark:text-indigo-400" size={22} />
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">AI Engine Configuration</h2>
+                <div className="mb-1 flex items-center gap-2">
+                    <Bot className="text-indigo-600 dark:text-indigo-400" size={22} />
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">How translation runs</h2>
                 </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    OmbiSub is powered directly by Google Gemini 2.5 for state-of-the-art multi-lingual translation, character tracking, and quality control.
+                    OmbiSub hands your queue to an agent CLI that runs on this machine. Antigravity (<code className="font-mono">agy</code>) is
+                    tried first. Pick the one you use.
                 </p>
             </div>
 
-            <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center gap-2 text-indigo-900 dark:text-indigo-300 font-semibold text-sm">
-                    <Key size={16} className="text-indigo-600" />
-                    <span>Google Gemini API Key</span>
-                </div>
+            <div role="radiogroup" aria-label="Agent CLI" className="space-y-2">
+                {CLIS.map(c => {
+                    const found = engines ? !!engines[c.id] : null;
+                    const selected = engine === c.id;
+                    return (
+                        <button
+                            key={c.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => setEngine(c.id)}
+                            className={cx(
+                                'flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+                                selected
+                                    ? 'border-indigo-500 bg-indigo-50/60 dark:border-indigo-400 dark:bg-indigo-950/30'
+                                    : 'border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800',
+                            )}
+                        >
+                            <span className="min-w-0">
+                                <span className="block text-sm font-semibold text-gray-900 dark:text-white">{c.name} <code className="font-mono text-xs font-normal text-gray-500 dark:text-gray-400">{c.command}</code></span>
+                                <span className="block text-xs text-gray-500 dark:text-gray-400">{c.note}</span>
+                            </span>
+                            {found !== null && <StatusChip tone={found ? 'success' : 'neutral'}>{found ? 'Found' : 'Not found'}</StatusChip>}
+                        </button>
+                    );
+                })}
+            </div>
+            {loadError && <Notice tone="warning">{loadError}. You can set the CLI later in Settings.</Notice>}
 
-                <div className="flex gap-2">
-                    <input
-                        type="password"
-                        value={geminiKey}
-                        onChange={(e) => { setGeminiKey(e.target.value); setGeminiStatus(null); }}
-                        placeholder="AIzaSy..."
-                        className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white outline-none text-sm font-mono focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <button
-                        onClick={testGemini}
-                        disabled={!geminiKey.trim() || geminiStatus === 'testing'}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-2 disabled:opacity-50 transition-colors shadow-sm"
-                    >
-                        <StatusIcon status={geminiStatus} />
-                        {geminiStatus === 'testing' ? 'Testing...' : 'Test & Save'}
-                    </button>
-                </div>
+            <Notice tone={anyFound ? 'info' : 'warning'}>
+                <p className="font-medium">{anyFound ? 'Sign in once' : 'No agent CLI was found on this machine'}</p>
+                <p>
+                    {anyFound
+                        ? <>Open a terminal as the account OmbiSub runs as, run <code className="font-mono">agy</code> (or <code className="font-mono">claude</code>) once and sign in. OmbiSub cannot do this step for you.</>
+                        : <>Install Antigravity, then run <code className="font-mono">agy</code> once in a terminal as the account OmbiSub runs as and sign in. The runner starts by itself once the CLI is there; you can finish this wizard now.</>}
+                </p>
+            </Notice>
 
-                {geminiStatus === 'error' && (
-                    <p className="text-xs text-red-500 flex items-center gap-1 font-medium">
-                        <XCircle size={14} /> {statusMessage || "Couldn't verify that API key."}
-                    </p>
-                )}
-                {geminiStatus === 'ok' && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                        <CheckCircle2 size={14} /> {statusMessage || "Key saved and ready."}
-                    </p>
-                )}
-
-                <div className="pt-2 text-xs text-gray-500 dark:text-gray-400">
-                    Don't have a key?{' '}
-                    <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold"
-                    >
-                        Get a free Google Gemini API key from Google AI Studio &rarr;
-                    </a>
+            <div className="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+                <div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Gemini API key <span className="font-normal text-gray-500 dark:text-gray-400">(optional)</span></h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Only used for lines the CLI refuses, such as violent or crude dialogue. Without a key those lines stay untranslated and are reported.</p>
                 </div>
+                <GeminiKeyField compact />
             </div>
 
-            <div className="flex items-center justify-between pt-2">
-                <button
-                    onClick={onBack}
-                    disabled={!onBack}
-                    className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-0"
-                >
-                    Back
-                </button>
-                <div className="flex gap-3">
-                    <button
-                        onClick={onSkip}
-                        className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                    >
-                        Configure Later
-                    </button>
-                    <button
-                        onClick={handleNext}
-                        disabled={saving}
-                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold disabled:opacity-50 shadow-md transition-all"
-                    >
-                        {saving ? 'Saving...' : 'Continue'}
-                    </button>
+            {saveError && <Notice tone="danger">{saveError}</Notice>}
+            <div className="flex items-center justify-between pt-1">
+                <button type="button" onClick={onBack} disabled={!onBack} className="text-sm text-gray-400 hover:text-gray-600 disabled:opacity-0 dark:hover:text-gray-300">Back</button>
+                <div className="flex items-center gap-3">
+                    <button type="button" onClick={onSkip} className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">Configure later</button>
+                    <Button variant="primary" onClick={handleNext} loading={saving}>Continue</Button>
                 </div>
             </div>
         </div>

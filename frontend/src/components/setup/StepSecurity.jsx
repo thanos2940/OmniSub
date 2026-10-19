@@ -25,7 +25,7 @@ const StepSecurity = ({ onNext, onBack, onSkip }) => {
                 const health = await api.getFullHealth();
                 setWebhookSecret(health.data?.webhooks?.sonarr_url?.split('token=')[1] || '');
             } catch {
-                // non-critical — the Health page shows this later regardless
+                // non-critical: Settings > Connections has the webhook URLs
             }
             setDone(true);
         } catch (err) {
@@ -52,7 +52,7 @@ const StepSecurity = ({ onNext, onBack, onSkip }) => {
                             <code className="flex-1 text-xs font-mono break-all">{webhookSecret}</code>
                             <button onClick={() => navigator.clipboard.writeText(webhookSecret)} className="text-gray-400 hover:text-gray-600"><Copy size={14} /></button>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-1">Included automatically in the webhook URLs on the Health page.</p>
+                        <p className="text-[11px] text-gray-500 mt-1">The webhook URLs for Sonarr and Radarr are in Settings > Connections.</p>
                     </div>
                 )}
                 <button onClick={onNext} className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Continue</button>

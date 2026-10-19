@@ -1,277 +1,215 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
-import {
-    Save, Settings as SettingsIcon, Sparkles, Tv, Film, Lock, Sliders, Play, Loader2, RefreshCw, Plane
-} from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
+import { Captions, Languages, Loader2, Lock, Plane, Plug, SlidersHorizontal } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
-import GeneralSettings from './settings/GeneralSettings';
-import TranslationEngineSettings from './settings/TranslationEngineSettings';
-import GeminiSettings from './settings/GeminiSettings';
-import MediaServerSettings from './settings/MediaServerSettings';
-import SubtitleSettings from './settings/SubtitleSettings';
-import SecuritySettings from './settings/SecuritySettings';
-import PresetsSettings from './settings/PresetsSettings';
-import TestTranslators from './settings/TestTranslators';
-import SystemUpdatesSettings from './settings/SystemUpdatesSettings';
+import { Button, Page, PageHeader } from './ui';
+import { cx, errorText } from './settings/parts';
+import TranslationSection from './settings/TranslationSection';
+import ConnectionsSection from './settings/ConnectionsSection';
+import SubtitlesSection from './settings/SubtitlesSection';
 import AutopilotSettings from './settings/AutopilotSettings';
+import SecuritySettings from './settings/SecuritySettings';
+import GeneralSection, { validateGeneral } from './settings/GeneralSection';
 
-const SECRET_SENTINEL = '__SECRET_UNCHANGED__';
-
-const TABS = [
-    { id: 'gemini', label: 'Gemini AI', icon: Sparkles },
-    { id: 'presets', label: 'Quality Presets', icon: Sliders },
-    { id: 'general', label: 'Hyperparameters', icon: SettingsIcon },
-    { id: 'media', label: 'Media Servers', icon: Tv },
-    { id: 'subtitles', label: 'Subtitles & ASS', icon: Film },
-    { id: 'autopilot', label: 'Autopilot', icon: Plane },
-    { id: 'security', label: 'Security & Auth', icon: Lock },
-    { id: 'updates', label: 'Updates & System', icon: RefreshCw },
-    { id: 'tester', label: 'Sandbox Tester', icon: Play },
+const SECTIONS = [
+    { id: 'translation', label: 'Translation', icon: Languages, blurb: 'The runner, the Gemini API for refused lines, and the model engine.' },
+    { id: 'connections', label: 'Connections', icon: Plug, blurb: 'Sonarr, Radarr, Plex, path mappings and webhooks.' },
+    { id: 'subtitles', label: 'Subtitles', icon: Captions, blurb: 'Source formats, extraction, formatting and SubtitleEdit.' },
+    { id: 'automation', label: 'Automation', icon: Plane, blurb: 'The Autopilot and its notifications.' },
+    { id: 'security', label: 'Security', icon: Lock, blurb: 'Login and the API key for other tools.' },
+    { id: 'general', label: 'General', icon: SlidersHorizontal, blurb: 'Languages and network.' },
 ];
 
-const SettingsPage = () => {
-    const toast = useToast();
-    const location = useLocation();
-    const [activeTab, setActiveTab] = useState(location.state?.tab || 'gemini');
+// Tab ids from before the redesign, still passed in router state by older links.
+const LEGACY_TABS = { gemini: 'translation', presets: 'translation', media: 'connections', autopilot: 'automation' };
 
-    useEffect(() => {
-        if (location.state?.tab) {
-            setActiveTab(location.state.tab);
-        }
-    }, [location.state?.tab]);
-    const [settings, setSettings] = useState({
-        default_target_language: 'English',
-        default_scan_model: 'gemini-2.5-flash',
-        default_translation_model: 'gemini-2.5-flash',
-        default_context_model: 'gemini-2.5-flash',
-        default_glossary_model: 'gemini-2.5-flash',
-        default_review_model: 'gemini-2.5-pro',
-        fallback_translation_model: '',
-        temperature: 0.3,
-        top_k: 64,
-        top_p: 0.95,
-        chunk_size: 150,
-        max_output_tokens: 8192,
-        episode_request_mode: 'auto',
-        ai_provider: 'cloud',
-        prefer_ass_format: 'auto',
-        translate_all_source_formats: false,
-        embedded_deprioritize_keywords: '',
-        apply_subtitle_edit_fixes: true,
-        split_long_lines: false,
-        subtitle_edit_path: '',
-        sequential_scenes: false,
-        prompt_caching_enabled: false,
-        sonarr_enabled: false,
-        sonarr_url: 'http://localhost:8989',
-        sonarr_api_key: '',
-        radarr_enabled: false,
-        radarr_url: 'http://localhost:7878',
-        radarr_api_key: '',
-        arr_path_mappings: [],
-        path_mappings: [],
-        tm_enabled: true,
-        glossary_enforce_enabled: true,
-        repair_pass_enabled: false,
-        intra_episode_reconcile_enabled: false,
-        character_profiles_enabled: false,
-        episode_summaries_enabled: false,
-        conformance_enabled: false,
-        enable_reviewer: false,
-        new_terms_suggest_enabled: true,
-        auto_update_enabled: true,
-        auto_update_interval_hours: 6,
-        github_webhook_enabled: true,
-        github_webhook_secret: '',
-    });
+const NOT_SAVED_WITH_SETTINGS = ['secrets_set', 'autopilot_enabled_at'];
+
+const runnerToForm = (cfg = {}) => ({
+    engine: cfg.engine || 'antigravity',
+    model: cfg.model || '',
+    fallback_models: (cfg.fallback_models || []).join(', '),
+    lanes: cfg.lanes ?? 3,
+    per_show: cfg.per_show ?? 2,
+    chunk_lines: cfg.chunk_lines ?? 250,
+    fix_rounds: cfg.fix_rounds ?? 2,
+    bootstrap: cfg.bootstrap ?? true,
+    api_rescue: cfg.api_rescue ?? true,
+    rescue_model: cfg.rescue_model || '',
+});
+
+const runnerToPayload = (form) => ({
+    ...form,
+    model: form.model.trim(),
+    rescue_model: form.rescue_model.trim(),
+    fallback_models: form.fallback_models.split(',').map(m => m.trim()).filter(Boolean),
+});
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+const normalizeLoaded = (data) => ({
+    ...data,
+    arr_path_mappings: data.arr_path_mappings || data.path_mappings || [],
+});
+
+export default function SettingsPage() {
+    const toast = useToast();
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
+    const location = useLocation();
+    const [params, setParams] = useSearchParams();
+
+    const requested = params.get('section') || LEGACY_TABS[location.state?.tab] || location.state?.tab;
+    const section = SECTIONS.some(s => s.id === requested) ? requested : 'translation';
+    const goTo = (id) => setParams({ section: id }, { replace: true });
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [settings, setSettings] = useState({});
+    const [saved, setSaved] = useState({});
+    const [runnerInfo, setRunnerInfo] = useState(null);
+    const [runnerForm, setRunnerForm] = useState(runnerToForm());
+    const [savedRunnerForm, setSavedRunnerForm] = useState(runnerToForm());
+    const [status, setStatus] = useState(null);
 
-    const loadSettings = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await api.getSettings();
-            if (res.data) {
-                const mappings = res.data.arr_path_mappings || res.data.path_mappings || [];
-                setSettings(prev => ({
-                    ...prev,
-                    ...res.data,
-                    arr_path_mappings: mappings,
-                    path_mappings: mappings,
-                    // Force ai_provider to cloud
-                    ai_provider: 'cloud'
-                }));
-            }
-        } catch (e) {
-            console.error("Failed to load settings:", e);
-            if (toast?.error) toast.error("Failed to load application settings.");
-        } finally {
-            setLoading(false);
+    const load = useCallback(async () => {
+        const [s, r, st] = await Promise.allSettled([api.getSettings(), api.getAgentRunner(), api.getSettingsServerStatus()]);
+        if (s.status === 'fulfilled') {
+            const data = normalizeLoaded(s.value.data || {});
+            setSettings(data);
+            setSaved(data);
+        } else {
+            toastRef.current.error(`Could not load the settings: ${errorText(s.reason)}`);
         }
-    }, [toast]);
+        if (r.status === 'fulfilled') {
+            const info = r.value.data;
+            setRunnerInfo(info);
+            const form = runnerToForm(info?.config);
+            setRunnerForm(form);
+            setSavedRunnerForm(form);
+        } else {
+            setRunnerInfo(null);
+        }
+        setStatus(st.status === 'fulfilled' ? st.value.data : null);
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const onChange = useCallback((key, value) => setSettings(prev => ({ ...prev, [key]: value })), []);
+    const runner = useMemo(() => ({
+        info: runnerInfo,
+        form: runnerForm,
+        set: (key, value) => setRunnerForm(prev => ({ ...prev, [key]: value })),
+    }), [runnerInfo, runnerForm]);
+
+    const changedKeys = useMemo(
+        () => Object.keys(settings).filter(k => !NOT_SAVED_WITH_SETTINGS.includes(k) && !same(settings[k], saved[k])),
+        [settings, saved],
+    );
+    const runnerDirty = !!runnerInfo && !same(runnerForm, savedRunnerForm);
+    const dirty = changedKeys.length > 0 || runnerDirty;
+    const problem = validateGeneral(settings);
 
     useEffect(() => {
-        loadSettings();
-    }, [loadSettings]);
+        if (!dirty) return undefined;
+        const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+        window.addEventListener('beforeunload', warn);
+        return () => window.removeEventListener('beforeunload', warn);
+    }, [dirty]);
 
-    const handleChange = (key, value) => {
-        setSettings(prev => ({ ...prev, [key]: value }));
+    const discard = () => {
+        setSettings(saved);
+        setRunnerForm(savedRunnerForm);
     };
 
-    const handleApplyPreset = (presetValues) => {
-        setSettings(prev => ({ ...prev, ...presetValues }));
-        if (toast?.success) toast.success("Quality preset flags updated.");
-    };
-
-    const handleSave = async () => {
+    const save = async () => {
         setSaving(true);
         try {
-            // Strip secret sentinels before saving
-            const payload = { ...settings, ai_provider: 'cloud' };
-            if (payload.sonarr_api_key === SECRET_SENTINEL) delete payload.sonarr_api_key;
-            if (payload.radarr_api_key === SECRET_SENTINEL) delete payload.radarr_api_key;
-            if (payload.github_webhook_secret === SECRET_SENTINEL) delete payload.github_webhook_secret;
-            if (payload.plex_token === SECRET_SENTINEL) delete payload.plex_token;
-            delete payload.autopilot_enabled_at; // read-only: set by the server when Autopilot is switched on
-
-            await api.updateSettings(payload);
-            if (toast?.success) toast.success("Global settings saved successfully!");
-            loadSettings();
-        } catch (e) {
-            console.error("Failed to save settings:", e);
-            if (toast?.error) toast.error(`Failed to save settings: ${e.response?.data?.detail || e.message}`);
+            if (changedKeys.length) {
+                const payload = Object.fromEntries(changedKeys.map(k => [k, settings[k]]));
+                await api.updateSettings(payload);
+            }
+            if (runnerDirty) await api.saveAgentRunnerConfig(runnerToPayload(runnerForm));
+            toast.success('Settings saved');
+            await load();
+        } catch (err) {
+            toast.error(`Could not save: ${errorText(err)}`);
         } finally {
             setSaving(false);
         }
     };
 
-    if (loading) {
-        return (
-            <div className="max-w-6xl mx-auto p-8 flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-                <p className="text-gray-500">Loading settings...</p>
-            </div>
-        );
-    }
+    const current = SECTIONS.find(s => s.id === section);
 
     return (
-        <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-6">
-            {/* Top Coordinator Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Global Settings</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Configure Google Gemini AI models, translation presets, media servers, and security.
-                    </p>
+        <Page>
+            <PageHeader title="Settings" subtitle="Changes apply when you press Save." />
+
+            {loading ? (
+                <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                    <Loader2 className="animate-spin text-indigo-600" size={28} />
+                    Loading settings
                 </div>
-                <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-md disabled:opacity-50"
-                >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    <span>{saving ? 'Saving...' : 'Save Settings'}</span>
-                </button>
-            </div>
-
-            {/* Tab Navigation Navigation Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-gray-200 dark:border-gray-800">
-                {TABS.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
-                                isActive
-                                    ? 'bg-indigo-600 text-white shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                            }`}
-                        >
-                            <Icon size={16} />
-                            <span>{tab.label}</span>
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Tab View Content */}
-            <div className="pt-2">
-                {activeTab === 'gemini' && (
-                    <div className="space-y-6">
-                        <TranslationEngineSettings settings={settings} onChange={handleChange} />
-                        <GeminiSettings
-                            settings={settings}
-                            onChange={handleChange}
-                            toast={toast}
-                        />
+            ) : (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-[13rem_minmax(0,1fr)]">
+                    <div>
+                        <label htmlFor="settings-section" className="sr-only">Section</label>
+                        <select id="settings-section" className="block w-full rounded-lg border border-gray-250 bg-white px-3 py-2 text-sm text-gray-900 md:hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white" value={section} onChange={(e) => goTo(e.target.value)}>
+                            {SECTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                        <nav aria-label="Settings sections" className="sticky top-20 hidden flex-col gap-0.5 md:flex">
+                            {SECTIONS.map(s => {
+                                const Icon = s.icon;
+                                const active = s.id === section;
+                                return (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => goTo(s.id)}
+                                        aria-current={active ? 'page' : undefined}
+                                        className={cx(
+                                            'flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+                                            active
+                                                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
+                                                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
+                                        )}
+                                    >
+                                        <Icon size={16} />
+                                        {s.label}
+                                    </button>
+                                );
+                            })}
+                        </nav>
                     </div>
-                )}
 
-                {activeTab === 'presets' && (
-                    <PresetsSettings
-                        settings={settings}
-                        onChange={handleChange}
-                        onApplyPreset={handleApplyPreset}
-                    />
-                )}
+                    <div className="min-w-0 max-w-4xl">
+                        <div className="mb-4">
+                            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{current.label}</h2>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{current.blurb}</p>
+                        </div>
+                        {section === 'translation' && <TranslationSection settings={settings} onChange={onChange} runner={runner} />}
+                        {section === 'connections' && <ConnectionsSection settings={settings} onChange={onChange} />}
+                        {section === 'subtitles' && <SubtitlesSection settings={settings} onChange={onChange} />}
+                        {section === 'automation' && <AutopilotSettings settings={settings} onChange={onChange} />}
+                        {section === 'security' && <SecuritySettings />}
+                        {section === 'general' && <GeneralSection settings={settings} onChange={onChange} status={status} />}
 
-                {activeTab === 'general' && (
-                    <GeneralSettings
-                        settings={settings}
-                        onChange={handleChange}
-                    />
-                )}
-
-                {activeTab === 'media' && (
-                    <MediaServerSettings
-                        settings={settings}
-                        onChange={handleChange}
-                        toast={toast}
-                    />
-                )}
-
-                {activeTab === 'subtitles' && (
-                    <SubtitleSettings
-                        settings={settings}
-                        onChange={handleChange}
-                        toast={toast}
-                    />
-                )}
-
-                {activeTab === 'autopilot' && (
-                    <AutopilotSettings
-                        settings={settings}
-                        onChange={handleChange}
-                    />
-                )}
-
-                {activeTab === 'security' && (
-                    <SecuritySettings
-                        toast={toast}
-                    />
-                )}
-
-                {activeTab === 'updates' && (
-                    <SystemUpdatesSettings
-                        settings={settings}
-                        updateSetting={handleChange}
-                    />
-                )}
-
-                {activeTab === 'tester' && (
-                    <TestTranslators
-                        settings={settings}
-                        toast={toast}
-                    />
-                )}
-            </div>
-        </div>
+                        {dirty && (
+                            <div role="region" aria-label="Unsaved changes" className="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-lg dark:border-gray-700 dark:bg-gray-850">
+                                <p className="text-sm text-gray-700 dark:text-gray-200">
+                                    {problem || 'You have unsaved changes.'}
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button variant="ghost" onClick={discard} disabled={saving}>Discard</Button>
+                                    <Button variant="primary" onClick={save} loading={saving} disabled={!!problem}>Save</Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </Page>
     );
-};
-
-export default SettingsPage;
+}

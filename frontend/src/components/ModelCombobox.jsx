@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronDown, Sparkles } from 'lucide-react';
 import { api } from '../api';
+import { INPUT } from './ui';
 
 const DEFAULT_GEMINI_MODELS = [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
@@ -116,7 +117,7 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
                     onBlur={handleInputBlur}
                     onKeyDown={handleKeyDown}
                     placeholder={placeholder}
-                    className="w-full px-4 py-2.5 pr-10 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+                    className={`${INPUT} pr-10`}
                 />
                 <button
                     type="button"
@@ -128,7 +129,7 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
             </div>
 
             {isOpen && (
-                <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 shadow-xl max-h-72 overflow-auto">
+                <div className="absolute z-50 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-850">
                     <div className="px-4 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 dark:bg-gray-700/50 sticky top-0 flex items-center gap-1.5">
                         <Sparkles size={12} className="text-indigo-500" />
                         Google Gemini Models

@@ -7,7 +7,6 @@ import StepProvider from './StepProvider';
 import StepSecurity from './StepSecurity';
 import StepArr from './StepArr';
 import StepPathCheck from './StepPathCheck';
-import StepQuality from './StepQuality';
 import StepFinish from './StepFinish';
 
 // First-run setup wizard (docs/PLAN_onboarding_wizard.md). Every step writes
@@ -43,7 +42,6 @@ const SetupWizard = ({ onFinished }) => {
         { key: 'security', Component: StepSecurity },
         { key: 'arr', Component: StepArr },
         { key: 'path', Component: StepPathCheck },
-        { key: 'quality', Component: StepQuality },
         { key: 'finish', Component: StepFinish },
     ].filter(s => s.key !== 'path' || arrConfiguredThisRun); // path check only makes sense if arr was touched
 
