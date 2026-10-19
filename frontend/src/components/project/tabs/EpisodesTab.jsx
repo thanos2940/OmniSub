@@ -19,7 +19,7 @@ const FILTERS = [
     { id: 'nosub', label: 'No subtitle' },
 ];
 
-const GRID = 'grid items-center gap-x-3 gap-y-1.5 grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,1fr)_11rem_9rem_6.5rem_auto]';
+const GRID = 'grid items-center gap-x-3 gap-y-1.5 grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[1rem_minmax(0,1fr)_10rem_9rem_8rem_13rem]';
 
 // What the translation itself looks like (independent of anything running right now).
 function StatusCell({ ep, projectName }) {
@@ -250,7 +250,7 @@ const EpisodesTab = ({
                 ) : (
                     <div role="table" aria-label="Episodes">
                         <div role="row" className={`${GRID} hidden border-b border-gray-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-gray-750 dark:text-gray-400 md:grid`}>
-                            <span className="w-4" /><span>Episode</span><span>Status</span><span>Lines</span><span>Translated</span><span className="text-right">Actions</span>
+                            <span className="w-4" /><span>Episode</span><span>Status</span><span>Lines</span><span>Last translated</span><span className="text-right">Actions</span>
                         </div>
                         {seasons.map(([n, eps]) => {
                             const names = eps.map(e => e.name);
