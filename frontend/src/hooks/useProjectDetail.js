@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api';
+import { errorText } from './useTranslate';
 
 export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => {
     const [project, setProject] = useState(null);
@@ -11,10 +12,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
     const isMounted = useRef(true);
     const completedJobsRef = useRef(new Set());
     const aiActionInFlightRef = useRef({});
-    const isAutoTranslatingRef = useRef(false);
     const isBatchExtractingRef = useRef(false);
-    const isBatchTranslatingRef = useRef(false);
-    const translatingEpisodesRef = useRef({});
     const isBatchDownloadingRef = useRef(false);
     const isBatchExportingRef = useRef(false);
     const isBatchDeletingRef = useRef(false);
@@ -141,16 +139,16 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         if (typeof deleteDiskFile === 'boolean') {
             shouldDeleteDisk = deleteDiskFile;
         } else {
-            if (!window.confirm(`Delete episode "${epName}"? This will remove all subtitles for this episode.`)) return;
+            if (!window.confirm(`Delete the translation of "${epName}"?`)) return;
             shouldDeleteDisk = window.confirm("Also delete the detected .el.srt / .el.ass file from disk?");
         }
         try {
             await api.deleteEpisode(projectName, epName, shouldDeleteDisk);
-            if (toast?.success) toast.success(`Deleted episode "${epName}".`);
+            if (toast?.success) toast.success(`Deleted the translation of "${epName}".`);
             loadData();
         } catch (err) {
             console.error("Failed to delete episode", err);
-            if (toast?.error) toast.error("Failed to delete episode.");
+            if (toast?.error) toast.error(errorText(err, "Could not delete the translation."));
         }
     }, [projectName, loadData, toast]);
 
@@ -191,35 +189,6 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         }
     }, [projectName, toast]);
 
-    const handleAutoTranslate = useCallback(async (options = {}) => {
-        if (isAutoTranslatingRef.current) {
-            if (toast?.warning) toast.warning("Auto-translation is already in progress.");
-            return null;
-        }
-        isAutoTranslatingRef.current = true;
-
-        try {
-            const res = await api.autoTranslate(projectName, options);
-            const jobId = res.data?.job_id;
-            if (jobId && addJob) {
-                const singleEp = options.episode_names?.length === 1 ? options.episode_names[0] : null;
-                addJob(jobId, 'auto_translate', `Auto-translating ${projectName}`, {
-                    projectId: projectName,
-                    episodeName: singleEp,
-                    link: `/project/${encodeURIComponent(projectName)}`
-                });
-            }
-            if (toast?.success) toast.success("Auto-translate batch enqueued!");
-            return res.data;
-        } catch (e) {
-            console.error("Auto translate failed", e);
-            if (toast?.error) toast.error("Failed to start auto-translate.");
-            return null;
-        } finally {
-            isAutoTranslatingRef.current = false;
-        }
-    }, [projectName, addJob, toast]);
-
     const handleBatchExtractEmbedded = useCallback(async (episodeNames = null, force = false) => {
         if (isBatchExtractingRef.current) {
             if (toast?.warning) toast.warning("Batch subtitle extraction is already in progress.");
@@ -235,118 +204,19 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
             });
             const jid = res.data?.job_id;
             if (jid && addJob) {
-                addJob(jid, 'batch_extract_embedded', `Batch Extract Embedded Subs: ${projectName}`, {
+                addJob(jid, 'batch_extract_embedded', `Extracting subtitles: ${projectName}`, {
                     projectId: projectName,
                     link: `/project/${encodeURIComponent(projectName)}`
                 });
             }
-            if (toast?.success) toast.success("Batch extraction job queued.");
+            if (toast?.success) toast.success(episodeNames?.length === 1 ? `Extracting the subtitle of ${episodeNames[0]}…` : "Extraction started.");
             return res.data;
         } catch (err) {
             console.error("Failed to start batch extraction", err);
-            const errMsg = err.response?.data?.detail || "Failed to start batch extraction.";
-            if (toast?.error) toast.error(errMsg);
+            if (toast?.error) toast.error(errorText(err, "Could not start the extraction."));
             return null;
         } finally {
             isBatchExtractingRef.current = false;
-        }
-    }, [projectName, addJob, toast]);
-
-    const handleBatchTranslate = useCallback(async (episodesListOrOptions, maybeOptions = {}) => {
-        if (isBatchTranslatingRef.current) {
-            if (toast?.warning) toast.warning("Batch translation is already in progress.");
-            return null;
-        }
-        isBatchTranslatingRef.current = true;
-
-        try {
-            let epList = [];
-            let options = {};
-            if (Array.isArray(episodesListOrOptions)) {
-                epList = episodesListOrOptions;
-                options = maybeOptions || {};
-            } else if (episodesListOrOptions && typeof episodesListOrOptions === 'object') {
-                options = episodesListOrOptions;
-                epList = options.episode_names || options.episodes || [];
-            }
-
-            const model = options.model || options.model_name || undefined;
-            const enhanceGlossary = !!(options.enhance_glossary ?? options.enhanceGlossary);
-            const force = !!options.force;
-            const translationType = options.translation_type || options.translationType || 'saved';
-
-            const res = await api.batchTranslate(projectName, {
-                episode_names: epList,
-                model,
-                enhance_glossary: enhanceGlossary,
-                force,
-                translation_type: translationType,
-            });
-            const jobId = res.data?.job_id;
-            const subJobIds = res.data?.sub_jobs || res.data?.item_ids || [];
-            if (jobId && addJob) {
-                addJob(jobId, 'batch_translate', `Batch Translating ${projectName} (${epList.length} episodes)`, {
-                    projectId: projectName,
-                    episodeNames: epList,
-                    sub_job_ids: subJobIds,
-                    link: `/project/${encodeURIComponent(projectName)}`
-                });
-            }
-            if (toast?.success) toast.success(`Batch translation enqueued for ${epList.length} episodes.`);
-            return res.data;
-        } catch (e) {
-            console.error("Batch translate failed", e);
-            const errMsg = e.response?.data?.detail || "Failed to start batch translation.";
-            if (toast?.error) toast.error(errMsg);
-            return null;
-        } finally {
-            isBatchTranslatingRef.current = false;
-        }
-    }, [projectName, addJob, toast]);
-
-    const handleTranslateEpisode = useCallback(async (epName, optionsOrModel = {}) => {
-        if (translatingEpisodesRef.current[epName]) {
-            if (toast?.warning) toast.warning(`Translation for "${epName}" is already in progress.`);
-            return null;
-        }
-        translatingEpisodesRef.current[epName] = true;
-
-        try {
-            let options = {};
-            if (optionsOrModel && typeof optionsOrModel === 'object') {
-                options = optionsOrModel;
-            } else if (typeof optionsOrModel === 'string') {
-                options = { model: optionsOrModel };
-            }
-
-            const model = options.model || options.model_name || undefined;
-            const enhanceGlossary = !!(options.enhance_glossary ?? options.enhanceGlossary);
-            const force = !!options.force;
-            const translationType = options.translation_type || options.translationType || 'saved';
-
-            const res = await api.translateEpisode(projectName, epName, {
-                model,
-                enhance_glossary: enhanceGlossary,
-                force,
-                translation_type: translationType,
-            });
-            const jobId = res.data?.job_id;
-            if (jobId && addJob) {
-                addJob(jobId, 'translation', `Translating ${projectName} - ${epName}`, {
-                    projectId: projectName,
-                    episodeName: epName,
-                    link: `/project/${encodeURIComponent(projectName)}`
-                });
-            }
-            if (toast?.success) toast.success(`Translation enqueued for ${epName}`);
-            return res.data;
-        } catch (e) {
-            console.error(`Translation for "${epName}" failed`, e);
-            const errMsg = e.response?.data?.detail || `Failed to start translation for "${epName}".`;
-            if (toast?.error) toast.error(errMsg);
-            return null;
-        } finally {
-            delete translatingEpisodesRef.current[epName];
         }
     }, [projectName, addJob, toast]);
 
@@ -387,7 +257,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
             );
 
             if (successCount > 0) {
-                if (toast?.success) toast.success(`Deleted subtitles for ${successCount} episode(s).`);
+                if (toast?.success) toast.success(`Deleted the translation of ${successCount} episode(s).`);
             }
             if (failCount > 0) {
                 if (toast?.error) toast.error(`Failed to delete ${failCount} episode(s).`);
@@ -406,7 +276,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
 
     const handleAiAction = useCallback(async (actionType, model = null, extraParams = {}) => {
         if (aiActionInFlightRef.current[actionType]) {
-            if (toast?.warning) toast.warning(`AI task '${actionType}' is already in progress.`);
+            if (toast?.warning) toast.warning('That is already running.');
             return null;
         }
         aiActionInFlightRef.current[actionType] = true;
@@ -447,11 +317,11 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
                     });
                 }
             }
-            if (toast?.success) toast.success("AI Task queued.");
+            if (toast?.success) toast.success("Started. It runs in the background.");
             return res?.data;
         } catch (e) {
             console.error(`AI Action ${actionType} failed`, e);
-            if (toast?.error) toast.error(`Failed to trigger AI ${actionType}.`);
+            if (toast?.error) toast.error(errorText(e, 'Could not start this.'));
             return null;
         } finally {
             aiActionInFlightRef.current[actionType] = false;
@@ -473,10 +343,7 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         handleDeleteEpisode,
         handleBatchDownload,
         handleBatchExportToPath,
-        handleAutoTranslate,
         handleBatchExtractEmbedded,
-        handleBatchTranslate,
-        handleTranslateEpisode,
         handleBatchDelete,
         handleAiAction,
     };

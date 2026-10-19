@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Film, Sparkles, Edit2, Trash2, Check, RefreshCw } from 'lucide-react';
+import { Film, Sparkles, Edit2, Trash2, Check, RefreshCw, Loader2 } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import { useJobs } from '../context/JobContext';
+import { Button, Card, EmptyState, INPUT } from './ui';
+import { errorText } from '../hooks/useTranslate';
 
-const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
+// Episode summaries of one project. `embedded` renders the body only (the caller provides the card).
+const EpisodeSummariesPanel = ({ projectName, projectSettings, embedded = false }) => {
     const [summaries, setSummaries] = useState({});
     const [loading, setLoading] = useState(true);
     const [generatingEp, setGeneratingEp] = useState(null);
     const [generatingJobId, setGeneratingJobId] = useState(null);
     const [editingEp, setEditingEp] = useState(null);
     const [editContent, setEditContent] = useState('');
-    
+    const [adding, setAdding] = useState(false);
+    const [newEpisode, setNewEpisode] = useState('');
+    const [episodeNames, setEpisodeNames] = useState([]);
+
     const toast = useToast();
     const { activeJobs, addJob } = useJobs();
     const isMounted = useRef(true);
@@ -66,16 +72,29 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
         }
     }, [activeJobs, generatingJobId, generatingEp, loadSummaries, toast]);
 
+    const openAdding = async () => {
+        setAdding(true);
+        if (episodeNames.length) return;
+        try {
+            const res = await api.getEpisodes(projectName);
+            if (isMounted.current) setEpisodeNames((res.data || []).map(e => e.name));
+        } catch {
+            // The field still accepts a typed name.
+        }
+    };
+
     const handleGenerate = async (episodeName) => {
-        const epToGenerate = episodeName || prompt("Enter episode name to generate a summary for (e.g. S01E01):");
+        const epToGenerate = (episodeName || '').trim();
         if (!epToGenerate) return;
-        
+
         setGeneratingEp(epToGenerate);
         try {
             const model = projectSettings?.context_model || null;
             const res = await api.generateSummary(projectName, epToGenerate, model);
             const jobId = res.data?.job_id;
-            toast.success(`Summary generation started for ${epToGenerate}...`);
+            toast.success(`Writing the summary for ${epToGenerate}…`);
+            setAdding(false);
+            setNewEpisode('');
             if (jobId) {
                 addJob(jobId, 'episode_summary', `Generating summary for ${epToGenerate} (${projectName})`, {
                     projectId: projectName,
@@ -94,7 +113,7 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
         } catch (err) {
             console.error("Failed to generate summary", err);
             if (isMounted.current) {
-                toast.error("Failed to generate summary.");
+                toast.error(errorText(err, 'Could not generate the summary.'));
                 setGeneratingEp(null);
             }
         }
@@ -109,7 +128,7 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
             loadSummaries();
         } catch (err) {
             console.error("Failed to save summary", err);
-            toast.error("Failed to save summary.");
+            toast.error(errorText(err, 'Could not save the summary.'));
         }
     };
 
@@ -121,7 +140,7 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
             loadSummaries();
         } catch (err) {
             console.error("Failed to delete summary", err);
-            toast.error("Failed to delete summary.");
+            toast.error(errorText(err, 'Could not delete the summary.'));
         }
     };
 
@@ -130,101 +149,80 @@ const EpisodeSummariesPanel = ({ projectName, projectSettings }) => {
         setEditContent(content || '');
     };
 
-    if (loading) {
+    const epsList = Object.keys(summaries).sort();
+
+    const addForm = adding && (
+        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); handleGenerate(newEpisode); }}>
+            <input list={`summary-episodes-${projectName}`} value={newEpisode} onChange={(e) => setNewEpisode(e.target.value)}
+                placeholder="Episode, e.g. S01E01" aria-label="Episode to summarise" className={`${INPUT} w-56`} autoFocus />
+            <datalist id={`summary-episodes-${projectName}`}>
+                {episodeNames.map(n => <option key={n} value={n} />)}
+            </datalist>
+            <Button type="submit" size="sm" variant="primary" icon={Sparkles} disabled={!newEpisode.trim() || !!generatingEp}>Write summary</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+        </form>
+    );
+
+    const toolbar = (
+        <div className="flex flex-wrap items-center gap-2">
+            {!adding && <Button size="sm" icon={Sparkles} onClick={openAdding} disabled={!!generatingEp}>New summary</Button>}
+            <Button size="sm" variant="ghost" icon={RefreshCw} onClick={loadSummaries} aria-label="Refresh summaries" title="Refresh summaries" />
+        </div>
+    );
+
+    const body = loading ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500"><Loader2 size={16} className="animate-spin" /> Loading summaries…</div>
+    ) : (
+        <div className="space-y-3">
+            {addForm}
+            {epsList.length === 0 ? (
+                <EmptyState icon={Film} title="No summaries yet"
+                    description="They are written automatically after each translated episode, so the next one knows what happened." />
+            ) : (
+                <div className="max-h-[600px] divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-100 dark:divide-gray-750 dark:border-gray-750">
+                    {epsList.map(epName => (
+                        <div key={epName} className="p-4">
+                            <div className="mb-1 flex items-start justify-between gap-2">
+                                <span className="rounded bg-indigo-50 px-2 py-0.5 text-xs font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">{epName}</span>
+                                <div className="flex items-center gap-1">
+                                    {editingEp !== epName && (
+                                        <Button size="sm" variant="ghost" icon={Edit2} onClick={() => openEdit(epName, summaries[epName])} aria-label={`Edit summary of ${epName}`} title="Edit" />
+                                    )}
+                                    <Button size="sm" variant="ghost" icon={Sparkles} loading={generatingEp === epName} onClick={() => handleGenerate(epName)} aria-label={`Rewrite summary of ${epName}`} title="Write it again" />
+                                    <Button size="sm" variant="ghost" icon={Trash2} onClick={() => handleDelete(epName)} aria-label={`Delete summary of ${epName}`} title="Delete" />
+                                </div>
+                            </div>
+                            {editingEp === epName ? (
+                                <div className="mt-2 space-y-2">
+                                    <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} placeholder="Write the summary here…"
+                                        className={`${INPUT} min-h-[120px] resize-y leading-relaxed`} />
+                                    <div className="flex justify-end gap-2">
+                                        <Button size="sm" onClick={() => setEditingEp(null)}>Cancel</Button>
+                                        <Button size="sm" variant="primary" icon={Check} onClick={() => handleSave(epName)}>Save</Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-600 dark:text-gray-400">{summaries[epName]}</p>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+
+    if (embedded) {
         return (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <RefreshCw className="w-8 h-8 mx-auto text-blue-400 animate-spin mb-4" />
-                <p className="text-gray-500">Loading Episode Summaries...</p>
+            <div className="space-y-3">
+                <div className="flex justify-end">{toolbar}</div>
+                {body}
             </div>
         );
     }
-
-    const epsList = Object.keys(summaries).sort();
-
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Film size={20} className="text-blue-500" /> Episode Summaries
-                    <span className="text-sm font-normal text-gray-500 ml-2">({epsList.length} items)</span>
-                </h3>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => handleGenerate(null)}
-                        className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium"
-                    >
-                        <Sparkles size={14} /> AI Generate
-                    </button>
-                    <button
-                        onClick={loadSummaries}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                        title="Refresh Summaries"
-                    >
-                        <RefreshCw size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <div className="p-0">
-                {epsList.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Film size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                        <p className="text-gray-500">No episode summaries found.</p>
-                        <p className="text-sm text-gray-400 mt-1">Generate summaries to help the AI maintain context across episodes.</p>
-                    </div>
-                ) : (
-                    <div className="divide-y divide-gray-100 dark:divide-gray-700 max-h-[600px] overflow-y-auto">
-                        {epsList.map(epName => (
-                            <div key={epName} className="p-6 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                                <div className="flex justify-between items-start mb-2">
-                                    <h4 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded text-sm uppercase">
-                                            {epName}
-                                        </span>
-                                    </h4>
-                                    <div className="flex items-center gap-1">
-                                        {editingEp !== epName && (
-                                            <button onClick={() => openEdit(epName, summaries[epName])} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors" title="Edit">
-                                                <Edit2 size={14} />
-                                            </button>
-                                        )}
-                                        <button onClick={() => handleGenerate(epName)} disabled={generatingEp === epName} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors disabled:opacity-50" title="Regenerate">
-                                            {generatingEp === epName ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                                        </button>
-                                        <button onClick={() => handleDelete(epName)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Delete">
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                {editingEp === epName ? (
-                                    <div className="mt-3 bg-white dark:bg-gray-900 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                                        <textarea
-                                            value={editContent}
-                                            onChange={(e) => setEditContent(e.target.value)}
-                                            className="w-full min-h-[120px] p-2 bg-transparent border-none focus:ring-0 resize-y text-gray-700 dark:text-gray-300 outline-none text-sm leading-relaxed"
-                                            placeholder="Write summary here..."
-                                        />
-                                        <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                            <button onClick={() => setEditingEp(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors">
-                                                Cancel
-                                            </button>
-                                            <button onClick={() => handleSave(epName)} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 transition-colors">
-                                                <Check size={12} /> Save
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
-                                        {summaries[epName]}
-                                    </p>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
+        <Card title="Episode summaries" subtitle={`${epsList.length} written`} actions={toolbar}>
+            {body}
+        </Card>
     );
 };
 

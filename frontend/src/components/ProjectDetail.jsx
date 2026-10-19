@@ -1,115 +1,73 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import {
-    ArrowLeft, Settings as SettingsIcon, RefreshCw, Sparkles,
-    Film, Book, Users, FileText, ShieldCheck, History, BarChart3,
-    AlertCircle, Loader2, Play, Compass, Wrench, Layers, Bot,
-    Flame, ArrowDown, Clock, EyeOff
-} from 'lucide-react';
-import { useToast, formatErrorMessage } from '../context/ToastContext';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { AlertCircle, EyeOff, Languages, Loader2, PauseCircle, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 import { useJobs } from '../context/JobContext';
 import { useProjectDetail } from '../hooks/useProjectDetail';
 import { useEpisodeSelection } from '../hooks/useEpisodeSelection';
-import { api, apiClient } from '../api';
+import { errorText, useEpisodeQueue, useTranslate, useTranslationEngine } from '../hooks/useTranslate';
+import { api } from '../api';
+import { Button, EmptyState, IconButton, Notice, Page, PageHeader, Tabs } from './ui';
 
-// Modals
 import ProjectSettingsModal from './ProjectSettingsModal';
-import TranslationModal from './project/modals/TranslationModal';
 import ApplyFixesModal from './project/modals/ApplyFixesModal';
 import CheckMissingModal from './project/modals/CheckMissingModal';
 import ScriptFixModal from './project/modals/ScriptFixModal';
 import EmbeddedTracksModal from './project/modals/EmbeddedTracksModal';
 import SyncOptionsModal from './project/modals/SyncOptionsModal';
-import SimplePipelineWizard from './SimplePipelineWizard';
-import AgentTaskModal from './modals/AgentTaskModal';
+import ConfirmDialog from './project/ConfirmDialog';
+import PriorityControl from './project/PriorityControl';
 
-// Tabs
 import EpisodesTab from './project/tabs/EpisodesTab';
 import ContextTab from './project/tabs/ContextTab';
 import GlossaryTab from './project/tabs/GlossaryTab';
-import ProfilesTab from './project/tabs/ProfilesTab';
-import SummariesTab from './project/tabs/SummariesTab';
-import VisualGuardTab from './project/tabs/VisualGuardTab';
 import HistoryTab from './project/tabs/HistoryTab';
-import StatsTab from './project/tabs/StatsTab';
 
-const TABS = [
-    { id: 'episodes', label: 'Episodes', icon: Film },
-    { id: 'context', label: 'Context Guide', icon: Compass },
-    { id: 'glossary', label: 'Glossary', icon: Book },
-    { id: 'profiles', label: 'Character Profiles', icon: Users },
-    { id: 'summaries', label: 'Episode Summaries', icon: FileText },
-    { id: 'visual_guard', label: 'VisualGuard & Formatting', icon: ShieldCheck },
-    { id: 'history', label: 'Translation Memory & QC', icon: History },
-    { id: 'stats', label: 'Token Stats', icon: BarChart3 },
-];
+const TAB_IDS = ['episodes', 'glossary', 'context', 'history'];
+
+const typeLabel = (project) => {
+    if (project.type === 'parent') return 'Universe';
+    if (project.arr_media_type === 'movie') return 'Movie';
+    if (project.arr_media_type === 'series') return 'Series';
+    return 'Project';
+};
 
 const ProjectDetail = () => {
     const { projectName, name } = useParams();
     const effectiveProjectName = projectName || name;
     const toast = useToast();
     const { addJob, activeJobs } = useJobs();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const requestedTab = searchParams.get('tab');
+    const activeTab = TAB_IDS.includes(requestedTab) ? requestedTab : 'episodes';
 
-    const [activeTab, setActiveTab] = useState('episodes');
-
-
-    // Modal Visibility States
-    const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-    const [syncModalOpen, setSyncModalOpen] = useState(false);
-    const [pipelineWizardOpen, setPipelineWizardOpen] = useState(false);
-
-    const [translationModal, setTranslationModal] = useState({ open: false, episodeName: null, isBatch: false });
-    const [fixesModal, setFixesModal] = useState({ open: false, episodeName: null, isBatch: false });
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [syncOpen, setSyncOpen] = useState(false);
+    const [fixesModal, setFixesModal] = useState({ open: false, episodeName: null });
     const [checkMissingModal, setCheckMissingModal] = useState({ open: false, episodeName: null });
     const [scriptFixModal, setScriptFixModal] = useState({ open: false, episodeName: null });
-    const [embeddedTracksModal, setEmbeddedTracksModal] = useState({ open: false, episodeName: null });
-    const [agentModalData, setAgentModalData] = useState(null);
-    const [preparingAgent, setPreparingAgent] = useState(false);
-    const [startingRunner, setStartingRunner] = useState(false);
+    const [tracksModal, setTracksModal] = useState({ open: false, episodeName: null });
+    const [deleteTarget, setDeleteTarget] = useState(null); // episode names
+    const [deleting, setDeleting] = useState(false);
+    const [changingPriority, setChangingPriority] = useState(false);
+    const [runner, setRunner] = useState(null);
 
-    // Project Data Hook
     const {
-        project,
-        episodes,
-        subprojects,
-        tokenSummary,
-        loading,
-        error,
-        loadData,
-        handleSaveSettings,
-        handleUpload,
-        handleDeleteEpisode,
-        handleBatchDownload,
-        handleBatchExportToPath,
-        handleAutoTranslate,
-        handleBatchExtractEmbedded,
-        handleBatchTranslate,
-        handleTranslateEpisode,
-        handleBatchDelete,
-        handleAiAction,
+        project, episodes, subprojects, tokenSummary, loading, error, loadData,
+        handleSaveSettings, handleUpload, handleDeleteEpisode, handleBatchExtractEmbedded, handleBatchDelete, handleAiAction,
     } = useProjectDetail({ projectName: effectiveProjectName, addJob, activeJobs, toast });
 
+    const engine = useTranslationEngine();
+    const selection = useEpisodeSelection(episodes);
+    const { translate, translateMissing, busy, notice, clearNotice } = useTranslate({ projectName: effectiveProjectName, engine, toast, addJob });
+    const reload = useCallback(() => loadData(true), [loadData]);
+    const { active: queue, refresh: refreshQueue } = useEpisodeQueue(effectiveProjectName, reload);
 
-    // Selection Hook
-    const {
-        selectedEpisodes,
-        toggleEpisode,
-        toggleMultiple,
-        selectAll,
-        clearSelection,
-        invertSelection,
-    } = useEpisodeSelection(episodes);
-
-    // In-flight guard for translation dispatch
-    const translationInFlightRef = useRef(false);
-
-    // Auto-refresh when agent submits translation or disk sync completes
+    // Refresh when an agent submits a translation or a disk sync finishes.
     useEffect(() => {
         const handleRefresh = (e) => {
             const detail = e?.detail || {};
-            if (!detail.project_name || detail.project_name.toLowerCase() === effectiveProjectName.toLowerCase()) {
-                loadData(true);
-            }
+            if (!detail.project_name || detail.project_name.toLowerCase() === effectiveProjectName.toLowerCase()) loadData(true);
         };
         window.addEventListener('omnisub:agent-submitted', handleRefresh);
         window.addEventListener('omnisub:sync-completed', handleRefresh);
@@ -119,661 +77,217 @@ const ProjectDetail = () => {
         };
     }, [effectiveProjectName, loadData]);
 
-    // Translation Launch Handler
-    const handleConfirmTranslation = async ({ translationType, force, enhanceGlossary, model, episodeName, isBatch }) => {
-        if (translationInFlightRef.current) {
-            if (toast?.warning) toast.warning("Translation dispatch is already in progress.");
-            return;
-        }
-        translationInFlightRef.current = true;
+    // A paused runner leaves queued episodes waiting; say so next to the queue.
+    const queuedCount = queue.size;
+    useEffect(() => {
+        if (engine !== 'agent' || queuedCount === 0) { setRunner(null); return; }
+        api.getAgentRunner().then(res => setRunner(res.data)).catch(() => setRunner(null));
+    }, [engine, queuedCount]);
 
-        try {
-            // --- Flow A: Single Episode ---
-            if (episodeName) {
-                const res = await api.translateEpisode(
-                    effectiveProjectName,
-                    episodeName,
-                    model || undefined,
-                    enhanceGlossary,
-                    force,
-                    translationType
-                );
-                const jobId = res.data?.job_id;
-                if (jobId && addJob) {
-                    addJob(jobId, 'translation', `Translating ${effectiveProjectName} - ${episodeName}`, {
-                        projectId: effectiveProjectName,
-                        episodeName: episodeName,
-                        link: `/project/${encodeURIComponent(effectiveProjectName)}`
-                    });
-                }
-                if (toast?.success) toast.success(`Translation enqueued for ${episodeName}`);
-                return;
-            }
-
-            // --- Flow B: Batch / Multi-Episode ---
-            let epList = [];
-            if (isBatch && selectedEpisodes.size > 0) {
-                epList = Array.from(selectedEpisodes);
-            } else if (isBatch) {
-                // "Translate All Pending" -> include untranslated episodes with subtitles OR media files (auto-extracted)
-                epList = (episodes || [])
-                    .filter(e => !e.translated && (e.has_source !== false || e.has_media || !!e.metadata?.arr_media_path || (e.line_count > 0 || e.metadata?.arr_sub_path)))
-                    .map(e => e.name);
-            }
-
-            epList = epList.filter(name => name && String(name).trim().length > 0);
-
-            if (epList.length === 0) {
-                if (toast?.error) toast.error("No pending episodes found for translation.");
-                return;
-            }
-
-            // If the batch resolves to exactly 1 episode, route as direct single-episode translation
-            if (epList.length === 1) {
-                const singleEp = epList[0];
-                const res = await api.translateEpisode(
-                    effectiveProjectName,
-                    singleEp,
-                    model || undefined,
-                    enhanceGlossary,
-                    force,
-                    translationType
-                );
-                const jobId = res.data?.job_id;
-                if (jobId && addJob) {
-                    addJob(jobId, 'translation', `Translating ${effectiveProjectName} - ${singleEp}`, {
-                        projectId: effectiveProjectName,
-                        episodeName: singleEp,
-                        link: `/project/${encodeURIComponent(effectiveProjectName)}`
-                    });
-                }
-                if (toast?.success) toast.success(`Translation enqueued for ${singleEp}`);
-                return;
-            }
-
-            // Dispatch to batchTranslate endpoint
-            const res = await api.batchTranslate(effectiveProjectName, {
-                episode_names: epList,
-                model: model || undefined,
-                enhance_glossary: enhanceGlossary,
-                force,
-                translation_type: translationType,
-            });
-
-            const jobId = res.data?.job_id;
-            const subJobIds = res.data?.sub_jobs || res.data?.item_ids || [];
-            if (jobId && addJob) {
-                addJob(jobId, 'batch_translate', `Batch Translating ${effectiveProjectName} (${epList.length} episodes)`, {
-                    projectId: effectiveProjectName,
-                    episodeNames: epList,
-                    sub_job_ids: subJobIds,
-                    link: `/project/${encodeURIComponent(effectiveProjectName)}`
-                });
-            }
-            if (toast?.success) toast.success(`Batch translation enqueued for ${epList.length} episodes.`);
-        } catch (err) {
-            console.error("Translation dispatch failed", err);
-            const errMsg = err.response?.data?.detail || "Failed to start translation.";
-            if (toast?.error) toast.error(errMsg);
-        } finally {
-            translationInFlightRef.current = false;
-        }
+    const setTab = (id) => {
+        const next = new URLSearchParams(searchParams);
+        if (id === 'episodes') next.delete('tab'); else next.set('tab', id);
+        setSearchParams(next, { replace: true });
     };
 
-    // Agent Translation Handlers
-    const handleAgentTranslateEpisode = async (epName) => {
-        setPreparingAgent(true);
-        try {
-            const res = await api.prepareTargetAgentTask(effectiveProjectName, epName);
-            if (res.data && res.data.success) {
-                setAgentModalData(res.data);
-                if (toast?.success) {
-                    const d = res.data;
-                    toast.success(
-                        d.status === 'nothing_to_translate' ? `${epName} is already fully translated (re-exported).`
-                            : d.status === 'already_claimed' ? `${epName} is already claimed by an agent.`
-                                : `${epName} claimed for an agent: ${d.units} line(s) to translate.`
-                    );
-                }
-            } else {
-                if (toast?.error) toast.error(res.data?.message || "Failed to prepare agent workspace");
-            }
-        } catch (err) {
-            if (toast?.error) toast.error(err.response?.data?.message || err.response?.data?.detail || err.message || "Failed to prepare agent workspace");
-        } finally {
-            setPreparingAgent(false);
-        }
-    };
+    const stats = useMemo(() => {
+        const total = episodes.length;
+        const translated = episodes.filter(e => e.translated).length;
+        return { total, translated, percent: total ? Math.round((translated / total) * 100) : 0 };
+    }, [episodes]);
 
-    const handleBatchAgentTranslate = async (targetEpisodes = null) => {
-        const epList = targetEpisodes || (selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null);
-        if (epList && epList.length === 1) {
-            return await handleAgentTranslateEpisode(epList[0]);
-        }
-        setPreparingAgent(true);
-        try {
-            const res = await api.enqueueForAgent(effectiveProjectName, epList, 1);
-            if (res.data && res.data.success) {
-                setAgentModalData(res.data);
-                if (toast?.success) toast.success(`Enqueued ${res.data.enqueued_count} episode(s) for Agent Translation`);
-            } else {
-                if (toast?.error) toast.error(res.data?.message || "Failed to enqueue episodes for agent");
-            }
-        } catch (err) {
-            if (toast?.error) toast.error(err.response?.data?.detail || err.message || "Failed to enqueue episodes for agent");
-        } finally {
-            setPreparingAgent(false);
-        }
-    };
+    const currentPriority = project?.translation_priority || (project?.arr_disabled ? 'ignored' : 'normal');
 
-    // Queue the episodes exactly like "Agent Translate" does, then let the direct agent runner translate
-    // them (starting a runner that is already going just keeps it going).
-    const handleTranslateWithRunner = async () => {
-        const epList = selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null;
-        setStartingRunner(true);
-        try {
-            const res = await api.enqueueForAgent(effectiveProjectName, epList, 1);
-            if (!res.data?.success) {
-                if (toast?.error) toast.error(res.data?.message || "Failed to enqueue episodes for the agent runner");
-                return;
-            }
-            const queued = res.data.enqueued_count ?? 0;
-            try {
-                await api.startAgentRunner({});
-            } catch (err) {
-                const detail = formatErrorMessage(err.response?.data?.detail ?? err.response?.data?.message ?? err.message);
-                if (toast?.error) toast.error(`Queued ${queued} episode(s), but the agent runner could not start: ${detail}. Start it from the Queue page.`);
-                return;
-            }
-            if (toast?.success) {
-                toast.success(queued > 0
-                    ? `Queued ${queued} episode(s); the agent runner is translating them — follow it on the Queue page`
-                    : 'Nothing new to queue; the agent runner is working through the queue — follow it on the Queue page');
-            }
-        } catch (err) {
-            if (toast?.error) toast.error(err.response?.data?.detail || err.message || "Failed to enqueue episodes for the agent runner");
-        } finally {
-            setStartingRunner(false);
-        }
-    };
-
-    const [changingPriority, setChangingPriority] = useState(false);
-
-    const handlePriorityChange = async (newPriority) => {
-        const currentPrio = project?.translation_priority || (project?.arr_disabled ? 'ignored' : 'normal');
-        if (!project || currentPrio === newPriority || changingPriority) return;
+    const handlePriorityChange = async (priority) => {
+        if (!project || priority === currentPriority || changingPriority) return;
         setChangingPriority(true);
         try {
-            await apiClient.put(`/projects/${encodeURIComponent(effectiveProjectName)}/priority`, { priority: newPriority });
-            toast?.success?.(`Priority updated to ${newPriority}`);
+            await api.updateProjectPriority(effectiveProjectName, priority);
+            toast.success(`Priority set to ${priority}.`);
             await loadData(true);
         } catch (err) {
-            console.error("Failed to update priority", err);
-            toast?.error?.(err.response?.data?.detail || "Failed to update project priority");
+            toast.error(errorText(err, 'Could not change the priority.'));
         } finally {
             setChangingPriority(false);
         }
     };
 
+    const afterQueue = async (result) => {
+        if (result) {
+            await refreshQueue();
+            loadData(true);
+        }
+    };
+    const handleTranslate = async (names, options) => afterQueue(await translate(names, options));
+    const handleTranslateMissing = async () => afterQueue(await translateMissing());
+
+    const handleAction = (kind, ep) => {
+        if (kind === 'extract') handleBatchExtractEmbedded([ep.name]);
+        else if (kind === 'tracks') setTracksModal({ open: true, episodeName: ep.name });
+        else if (kind === 'fixes') setFixesModal({ open: true, episodeName: ep.name });
+        else if (kind === 'missing') setCheckMissingModal({ open: true, episodeName: ep.name });
+        else if (kind === 'script') setScriptFixModal({ open: true, episodeName: ep.name });
+        else if (kind === 'delete') setDeleteTarget([ep.name]);
+    };
+
+    const handleBulk = async (kind) => {
+        const names = [...selection.selectedEpisodes];
+        if (!names.length) return;
+        if (kind === 'translate') {
+            await handleTranslate(names);
+            selection.clearSelection();
+        } else if (kind === 'extract') {
+            await handleBatchExtractEmbedded(names);
+        } else if (kind === 'delete') {
+            setDeleteTarget(names);
+        }
+    };
+
+    const confirmDelete = async (alsoDisk) => {
+        setDeleting(true);
+        try {
+            if (deleteTarget.length === 1) await handleDeleteEpisode(deleteTarget[0], alsoDisk);
+            else if (await handleBatchDelete(deleteTarget, alsoDisk)) selection.clearSelection();
+        } finally {
+            setDeleting(false);
+            setDeleteTarget(null);
+        }
+    };
+
     if (loading) {
         return (
-            <div className="max-w-6xl mx-auto p-8 flex flex-col items-center justify-center min-h-[400px]">
-                <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mb-3" />
-                <p className="text-gray-500">Loading project details...</p>
-            </div>
+            <Page>
+                <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                    <Loader2 className="animate-spin text-indigo-600" size={28} /> Loading {effectiveProjectName}…
+                </div>
+            </Page>
         );
     }
 
     if (error || !project) {
         return (
-            <div className="max-w-4xl mx-auto p-8 text-center space-y-4">
-                <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Project Not Found</h2>
-                <p className="text-sm text-gray-500">{error || "Could not retrieve project data."}</p>
-                <Link
-                    to="/"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
-                >
-                    <ArrowLeft size={16} /> Back to Projects
-                </Link>
-            </div>
+            <Page width="narrow">
+                <EmptyState icon={AlertCircle} title="Title not found" description={error || 'It may have been removed, or the server could not be reached.'}
+                    action={<Link to="/" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">Back to the library</Link>} />
+            </Page>
         );
     }
 
+    const isParent = project.type === 'parent';
+    const ignored = currentPriority === 'ignored';
+    const runnerPaused = engine === 'agent' && queuedCount > 0 && (runner?.paused || runner?.status === 'paused');
+    const subtitle = [
+        typeLabel(project),
+        project.target_language || 'Default language',
+        isParent ? `${subprojects.length} shows` : `${stats.total} ${stats.total === 1 ? 'episode' : 'episodes'}`,
+        !isParent && stats.total > 0 ? `${stats.percent}% translated` : null,
+    ].filter(Boolean).join(' · ');
+
+    const tabs = [
+        { id: 'episodes', label: isParent ? 'Shows' : 'Episodes', count: isParent ? subprojects.length : stats.total },
+        { id: 'glossary', label: 'Glossary', count: project.glossary?.terms?.length || undefined },
+        { id: 'context', label: 'Context' },
+        { id: 'history', label: 'History' },
+    ];
+
     return (
-        <div className="max-w-6xl mx-auto p-6 md:p-8 space-y-6">
-            {/* Top Navigation & Breadcrumbs */}
-            <div className="flex items-center justify-between">
-                <Link
-                    to="/"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                >
-                    <ArrowLeft size={14} /> Back to Dashboard
-                </Link>
-
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setPipelineWizardOpen(true)}
-                        className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-                    >
-                        <Sparkles size={14} /> Guided Pipeline Wizard
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setSyncModalOpen(true)}
-                        className="px-3 py-1.5 text-xs font-bold text-gray-700 dark:text-gray-200 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-750 border border-gray-200 dark:border-gray-700 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
-                        title="Sync with Disk & Media Server"
-                    >
-                        <RefreshCw size={13} />
-                        <span>Sync Disk & Server</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setSettingsModalOpen(true)}
-                        className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-                        title="Project Settings"
-                    >
-                        <SettingsIcon size={16} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Project Header Card */}
-            {(() => {
-                const currentPriority = project.translation_priority || (project.arr_disabled ? 'ignored' : 'normal');
-                return (
-                    <div className="space-y-3">
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-                            <div>
-                                <div className="flex items-center gap-3 flex-wrap">
-                                    <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">
-                                        {project.name || effectiveProjectName}
-                                    </h1>
-                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                                        project.type === 'parent'
-                                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
-                                            : 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300'
-                                    }`}>
-                                        {project.type === 'parent' ? 'Universe Hub' : 'Series Project'}
-                                    </span>
-                                    {currentPriority === 'ignored' && (
-                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 flex items-center gap-1">
-                                            <EyeOff size={11} /> Ignored
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                                    <span>Target Language: <strong className="text-gray-800 dark:text-gray-200">{project.target_language || 'Default'}</strong></span>
-                                    <span>&middot;</span>
-                                    <span>{episodes.length} Episodes</span>
-                                    {project.parent_project && (
-                                        <>
-                                            <span>&middot;</span>
-                                            <span>Parent: <strong className="text-purple-600 dark:text-purple-400">{project.parent_project}</strong></span>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-3">
-                                {/* 4-Tier Priority Segmented Control */}
-                                <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-gray-700/60 rounded-2xl border border-gray-200 dark:border-gray-700 text-xs">
-                                    <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-400 px-2 select-none">
-                                        Priority:
-                                    </span>
-                                    {[
-                                        { id: 'high', label: 'High', title: 'High — Translate First', icon: Flame, activeClass: 'bg-amber-500 text-white shadow-sm' },
-                                        { id: 'normal', label: 'Normal', title: 'Normal', icon: Clock, activeClass: 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm' },
-                                        { id: 'low', label: 'Low', title: 'Low — Translate Last', icon: ArrowDown, activeClass: 'bg-blue-500 text-white shadow-sm' },
-                                        { id: 'ignored', label: 'Ignored', title: 'Ignored — Do Not Translate', icon: EyeOff, activeClass: 'bg-rose-500 text-white shadow-sm' },
-                                    ].map(tier => {
-                                        const Icon = tier.icon;
-                                        const isActive = currentPriority === tier.id;
-                                        return (
-                                            <button
-                                                key={tier.id}
-                                                type="button"
-                                                onClick={() => handlePriorityChange(tier.id)}
-                                                disabled={changingPriority}
-                                                title={tier.title}
-                                                className={`px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all text-xs ${
-                                                    isActive
-                                                        ? tier.activeClass
-                                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                                }`}
-                                            >
-                                                <Icon size={12} />
-                                                <span>{tier.label}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <button
-                                    type="button"
-                                    onClick={() => setTranslationModal({ open: true, episodeName: null, isBatch: true })}
-                                    disabled={episodes.length === 0 || currentPriority === 'ignored'}
-                                    className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all disabled:opacity-50"
-                                    title={currentPriority === 'ignored' ? 'Project is ignored — change priority to translate' : 'Translate all pending episodes'}
-                                >
-                                    <Play size={14} /> Translate All Pending
-                                </button>
-                            </div>
-                        </div>
-
-                        {currentPriority === 'ignored' && (
-                            <div className="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 flex items-center justify-between gap-3 text-rose-800 dark:text-rose-300 text-xs">
-                                <div className="flex items-center gap-2 font-medium">
-                                    <EyeOff size={16} className="text-rose-500 shrink-0" />
-                                    <span>This project is marked as <strong>Ignored</strong>. Automatic queueing, autopilot, and translation processing are skipped.</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePriorityChange('normal')}
-                                    className="px-3 py-1 bg-white dark:bg-gray-800 text-rose-700 dark:text-rose-300 hover:bg-rose-100 font-bold rounded-lg border border-rose-200 dark:border-rose-800 transition-colors shrink-0"
-                                >
-                                    Un-ignore
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                );
-            })()}
-
-            {/* Guided Pipeline Wizard Banner / Modal */}
-            {pipelineWizardOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-                    <div className="w-full max-w-3xl">
-                        <SimplePipelineWizard
-                            projectName={effectiveProjectName}
-                            onComplete={() => {
-                                setPipelineWizardOpen(false);
-                                loadData();
-                            }}
-                            onCancel={() => setPipelineWizardOpen(false)}
-                        />
-                    </div>
-                </div>
-            )}
-
-            {/* Tab Navigation Navigation Bar */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-gray-200 dark:border-gray-800">
-                {TABS.map(tab => {
-                    const Icon = tab.icon;
-                    const isActive = activeTab === tab.id;
-                    return (
-                        <button
-                            key={tab.id}
-                            type="button"
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all whitespace-nowrap ${
-                                isActive
-                                    ? 'bg-indigo-600 text-white shadow-sm'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                            }`}
-                        >
-                            <Icon size={16} />
-                            <span>{tab.label}</span>
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Active Tab Views */}
-            <div className="pt-2">
-                {activeTab === 'episodes' && (
+        <Page>
+            <PageHeader
+                breadcrumb={[{ label: 'Library', to: '/' }, { label: project.name || effectiveProjectName }]}
+                title={project.name || effectiveProjectName}
+                subtitle={subtitle}
+                actions={(
                     <>
-                        {/* Quick-Access Tools Bar */}
-                        <div className="bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-gray-800 dark:to-gray-800/80 rounded-2xl p-3.5 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-wrap items-center justify-between gap-3 mb-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className="p-2 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                                    <Wrench size={16} />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-wider">
-                                            Quick Tools
-                                        </span>
-                                        {selectedEpisodes.size > 0 && (
-                                            <span className="px-2 py-0.5 bg-indigo-600 text-white rounded-full text-[10px] font-bold">
-                                                {selectedEpisodes.size} selected
-                                            </span>
-                                        )}
-                                    </div>
-                                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-                                        Batch subtitle extraction, automated SubtitleEdit polish &amp; library re-sync
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap">
-                                {/* 0. AI Agent Translate */}
-                                <button
-                                    type="button"
-                                    onClick={() => handleBatchAgentTranslate()}
-                                    disabled={preparingAgent || startingRunner}
-                                    className="px-3.5 py-2 bg-purple-500/10 dark:bg-purple-500/20 hover:bg-purple-500/25 text-purple-700 dark:text-purple-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-purple-500/30 transition-all cursor-pointer shadow-sm disabled:opacity-50"
-                                    title={selectedEpisodes.size > 0 ? `Prepare AI Agent translation workspace for ${selectedEpisodes.size} selected episode(s)` : "Enqueue entire series/movie for AI Agent translation"}
-                                >
-                                    <Bot size={14} className={preparingAgent ? "animate-spin" : ""} />
-                                    <span>{selectedEpisodes.size > 0 ? `Agent Translate (${selectedEpisodes.size})` : 'Agent Translate'}</span>
-                                </button>
-
-                                {/* 0b. Queue the episodes and start the direct agent runner */}
-                                <button
-                                    type="button"
-                                    onClick={handleTranslateWithRunner}
-                                    disabled={preparingAgent || startingRunner}
-                                    className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 border border-purple-400/30 transition-all cursor-pointer shadow-sm disabled:opacity-50"
-                                    title={selectedEpisodes.size > 0 ? `Queue ${selectedEpisodes.size} selected episode(s) and let the agent runner translate them` : "Queue the entire series/movie and let the agent runner translate it"}
-                                >
-                                    {startingRunner ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                                    <span>{selectedEpisodes.size > 0 ? `Translate with runner (${selectedEpisodes.size})` : 'Translate with runner'}</span>
-                                </button>
-
-                                {/* 1. Batch Extract Subs */}
-                                <button
-                                    type="button"
-                                    onClick={() => handleBatchExtractEmbedded(selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null)}
-                                    className="px-3.5 py-2 bg-amber-500/10 dark:bg-amber-500/20 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-amber-500/30 transition-all cursor-pointer shadow-sm"
-                                    title={selectedEpisodes.size > 0 ? `Batch extract embedded subtitles for ${selectedEpisodes.size} selected episode(s)` : "Batch extract embedded ASS/SRT tracks from all video files"}
-                                >
-                                    <Layers size={14} />
-                                    <span>{selectedEpisodes.size > 0 ? `Batch Extract Subs (${selectedEpisodes.size})` : 'Batch Extract Subs'}</span>
-                                </button>
-
-                                {/* 2. SubtitleEdit Polish */}
-                                <button
-                                    type="button"
-                                    onClick={() => setFixesModal({ open: true, episodeName: null, isBatch: true })}
-                                    className="px-3.5 py-2 bg-indigo-500/10 dark:bg-indigo-500/20 hover:bg-indigo-500/25 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-500/30 transition-all cursor-pointer shadow-sm"
-                                    title={selectedEpisodes.size > 0 ? `Apply SubtitleEdit fixes to ${selectedEpisodes.size} selected episode(s)` : "Apply SubtitleEdit fixes across all translated episodes"}
-                                >
-                                    <Sparkles size={14} />
-                                    <span>{selectedEpisodes.size > 0 ? `SubtitleEdit Polish (${selectedEpisodes.size})` : 'SubtitleEdit Polish'}</span>
-                                </button>
-
-                                {/* 3. Format Conversion / Re-sync */}
-                                <button
-                                    type="button"
-                                    onClick={() => setSyncModalOpen(true)}
-                                    className="px-3.5 py-2 bg-emerald-500/10 dark:bg-emerald-500/20 hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-emerald-500/30 transition-all cursor-pointer shadow-sm"
-                                    title="Scan disk and media server for format changes (ASS/SRT) and re-sync subtitle paths"
-                                >
-                                    <RefreshCw size={14} />
-                                    <span>Format Conversion / Re-sync</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <EpisodesTab
-                            project={project}
-                            episodes={episodes}
-                            subprojects={subprojects}
-                            selectedEpisodes={selectedEpisodes}
-                            toggleEpisode={toggleEpisode}
-                            toggleMultiple={toggleMultiple}
-                            selectAll={selectAll}
-                            clearSelection={clearSelection}
-                            invertSelection={invertSelection}
-                            onTranslateEpisode={(epName) => setTranslationModal({ open: true, episodeName: epName, isBatch: false })}
-                            onBatchTranslate={() => setTranslationModal({ open: true, episodeName: null, isBatch: true })}
-                            onAgentTranslate={handleAgentTranslateEpisode}
-                            onBatchAgentTranslate={handleBatchAgentTranslate}
-                            preparingAgent={preparingAgent}
-                            onApplyFixes={(epName, isBatch = false) => setFixesModal({ open: true, episodeName: epName, isBatch })}
-                            onCheckMissing={(epName) => setCheckMissingModal({ open: true, episodeName: epName })}
-                            onScriptFix={(epName) => setScriptFixModal({ open: true, episodeName: epName })}
-                            onEmbeddedTracks={(epName) => setEmbeddedTracksModal({ open: true, episodeName: epName })}
-                            onBatchExtractEmbedded={handleBatchExtractEmbedded}
-                            onDeleteEpisode={handleDeleteEpisode}
-                            onBatchDownload={() => handleBatchDownload(Array.from(selectedEpisodes))}
-                            onBatchExportToPath={() => handleBatchExportToPath(Array.from(selectedEpisodes))}
-                            onBatchDelete={async (deleteDiskFile) => {
-                                const success = await handleBatchDelete(Array.from(selectedEpisodes), deleteDiskFile);
-                                if (success) {
-                                    clearSelection();
-                                }
-                            }}
-                            onUpload={handleUpload}
-                            projectName={effectiveProjectName}
-                        />
+                        <Button variant="primary" icon={Languages} loading={busy} disabled={isParent || stats.total === 0} onClick={handleTranslateMissing}
+                            title="Queue every episode that has no translation yet">
+                            Translate missing
+                        </Button>
+                        <Button icon={RefreshCw} onClick={() => setSyncOpen(true)} title="Check the disk and the media server for changes">Sync</Button>
+                        <IconButton icon={SettingsIcon} label="Project settings" onClick={() => setSettingsOpen(true)} />
                     </>
                 )}
+            >
+                <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                    <span>Priority</span>
+                    <PriorityControl value={currentPriority} onChange={handlePriorityChange} disabled={changingPriority} />
+                </div>
+            </PageHeader>
 
-                {activeTab === 'context' && (
-                    <ContextTab
-                        project={project}
-                        projectName={effectiveProjectName}
-                        onAiAction={handleAiAction}
-                        onReload={loadData}
-                        toast={toast}
-                    />
+            <div className="mb-5 space-y-3 empty:hidden">
+                {ignored && (
+                    <Notice tone="danger" icon={EyeOff} title="This title is ignored"
+                        actions={<Button size="sm" onClick={() => handlePriorityChange('normal')}>Stop ignoring</Button>}>
+                        Nothing is translated automatically. Translating an episode yourself still works.
+                    </Notice>
                 )}
-
-                {activeTab === 'glossary' && (
-
-                    <GlossaryTab
-                        project={project}
-                        projectName={effectiveProjectName}
-                        onAiAction={handleAiAction}
-                        onReload={loadData}
-                        toast={toast}
-                    />
+                {runnerPaused && (
+                    <Notice tone="warning" icon={PauseCircle} title="The runner is paused"
+                        actions={<Link to="/activity" className="text-sm font-medium underline">Open Activity</Link>}>
+                        Queued episodes wait until you resume it.
+                    </Notice>
                 )}
-
-                {activeTab === 'profiles' && (
-                    <ProfilesTab
-                        projectName={effectiveProjectName}
-                        projectSettings={project.settings}
-                    />
-                )}
-
-                {activeTab === 'summaries' && (
-                    <SummariesTab
-                        projectName={effectiveProjectName}
-                        projectSettings={project.settings}
-                    />
-                )}
-
-                {activeTab === 'visual_guard' && (
-                    <VisualGuardTab
-                        projectName={effectiveProjectName}
-                        episodes={episodes}
-                        onReload={loadData}
-                        toast={toast}
-                    />
-                )}
-
-                {activeTab === 'history' && (
-                    <HistoryTab
-                        projectName={effectiveProjectName}
-                    />
-                )}
-
-                {activeTab === 'stats' && (
-                    <StatsTab
-                        tokenSummary={tokenSummary}
-                        episodes={episodes}
-                    />
+                {notice && (
+                    <Notice tone={notice.tone} title={notice.text}
+                        actions={(
+                            <>
+                                {notice.activity && <Link to="/activity" className="text-sm font-medium underline">Open Activity</Link>}
+                                <button type="button" onClick={clearNotice} className="text-sm underline opacity-80 hover:opacity-100">Dismiss</button>
+                            </>
+                        )} />
                 )}
             </div>
 
-            {/* Modals Container */}
+            <Tabs tabs={tabs} value={activeTab} onChange={setTab} />
+
+            {activeTab === 'episodes' && (
+                <EpisodesTab
+                    project={project} projectName={effectiveProjectName} episodes={episodes} subprojects={subprojects}
+                    selection={{ ...selection, selected: selection.selectedEpisodes, toggleEpisode: selection.toggleEpisode }}
+                    queue={queue} busy={busy}
+                    onTranslate={handleTranslate} onAction={handleAction} onBulk={handleBulk} onUpload={handleUpload}
+                />
+            )}
+            {activeTab === 'glossary' && (
+                <GlossaryTab project={project} projectName={effectiveProjectName} engine={engine} onAiAction={handleAiAction} onReload={loadData} toast={toast} />
+            )}
+            {activeTab === 'context' && (
+                <ContextTab project={project} projectName={effectiveProjectName} engine={engine} onAiAction={handleAiAction} onReload={loadData} toast={toast} />
+            )}
+            {activeTab === 'history' && <HistoryTab projectName={effectiveProjectName} />}
+
             <ProjectSettingsModal
-                isOpen={settingsModalOpen}
-                onClose={() => setSettingsModalOpen(false)}
-                project={project}
-                settings={project.settings}
-                onSave={handleSaveSettings}
-                tokenSummary={tokenSummary}
+                isOpen={settingsOpen} onClose={() => setSettingsOpen(false)}
+                project={project} settings={project.settings} onSave={handleSaveSettings} tokenSummary={tokenSummary}
+                episodes={episodes} onReload={reload} toast={toast}
             />
-
-            <SyncOptionsModal
-                isOpen={syncModalOpen}
-                onClose={() => setSyncModalOpen(false)}
-                projectName={effectiveProjectName}
-                onSuccess={loadData}
-                toast={toast}
-            />
-
-            <TranslationModal
-                isOpen={translationModal.open}
-                onClose={() => setTranslationModal({ open: false, episodeName: null, isBatch: false })}
-                onConfirm={handleConfirmTranslation}
-                episodeName={translationModal.episodeName}
-                isBatch={translationModal.isBatch}
-                batchCount={translationModal.isBatch ? (selectedEpisodes.size || (episodes || []).filter(e => !e.translated && e.has_source !== false && (e.line_count > 0 || e.metadata?.arr_sub_path)).length) : 1}
-                defaultModel={project.settings?.translation_model}
-            />
-
-
+            <SyncOptionsModal isOpen={syncOpen} onClose={() => setSyncOpen(false)} projectName={effectiveProjectName} onSuccess={loadData} toast={toast} />
             <ApplyFixesModal
-                isOpen={fixesModal.open}
-                onClose={() => setFixesModal({ open: false, episodeName: null, isBatch: false })}
-                projectName={effectiveProjectName}
-                episodeName={fixesModal.episodeName}
-                isBatch={fixesModal.isBatch}
-                selectedEpisodes={Array.from(selectedEpisodes)}
-                onSuccess={loadData}
-                toast={toast}
+                isOpen={fixesModal.open} onClose={() => setFixesModal({ open: false, episodeName: null })}
+                projectName={effectiveProjectName} episodeName={fixesModal.episodeName} isBatch={false}
+                selectedEpisodes={[]} onSuccess={loadData} toast={toast}
             />
-
             <CheckMissingModal
-                isOpen={checkMissingModal.open}
-                onClose={() => setCheckMissingModal({ open: false, episodeName: null })}
-                projectName={effectiveProjectName}
-                episodeName={checkMissingModal.episodeName}
-                onSuccess={loadData}
-                toast={toast}
+                isOpen={checkMissingModal.open} onClose={() => setCheckMissingModal({ open: false, episodeName: null })}
+                projectName={effectiveProjectName} episodeName={checkMissingModal.episodeName} onSuccess={loadData} toast={toast}
             />
-
             <ScriptFixModal
-                isOpen={scriptFixModal.open}
-                onClose={() => setScriptFixModal({ open: false, episodeName: null })}
-                projectName={effectiveProjectName}
-                episodeName={scriptFixModal.episodeName}
-                onSuccess={loadData}
-                toast={toast}
+                isOpen={scriptFixModal.open} onClose={() => setScriptFixModal({ open: false, episodeName: null })}
+                projectName={effectiveProjectName} episodeName={scriptFixModal.episodeName} onSuccess={loadData} toast={toast}
             />
-
             <EmbeddedTracksModal
-                isOpen={embeddedTracksModal.open}
-                onClose={() => setEmbeddedTracksModal({ open: false, episodeName: null })}
-                projectName={effectiveProjectName}
-                episodeName={embeddedTracksModal.episodeName}
-                onSuccess={loadData}
-                toast={toast}
+                isOpen={tracksModal.open} onClose={() => setTracksModal({ open: false, episodeName: null })}
+                projectName={effectiveProjectName} episodeName={tracksModal.episodeName} onSuccess={loadData} toast={toast}
             />
 
-
-            <AgentTaskModal
-                agentModalData={agentModalData}
-                onClose={() => setAgentModalData(null)}
-            />
-        </div>
+            <ConfirmDialog
+                open={!!deleteTarget} busy={deleting} danger confirmLabel="Delete translation"
+                title={deleteTarget?.length === 1 ? `Delete the translation of ${deleteTarget[0]}?` : `Delete the translation of ${deleteTarget?.length} episodes?`}
+                checkbox={{ label: 'Also delete the translated subtitle file next to the video' }}
+                onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete}
+            >
+                <p>The translation stored in OmbiSub is removed. The source subtitle stays, so the episode can be translated again.</p>
+            </ConfirmDialog>
+        </Page>
     );
 };
 

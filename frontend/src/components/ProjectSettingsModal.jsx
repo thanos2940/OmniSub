@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, Settings, Check, Film } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
+import QualityTools from './project/QualityTools';
+import { Button } from './ui';
 
-const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave, tokenSummary }) => {
+const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave, tokenSummary, episodes = [], onReload, toast }) => {
     const [settings, setSettings] = useState({
         translation_model: '',
         context_model: '',
@@ -24,6 +26,8 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
     const [allProjects, setAllProjects] = useState([]);
     const [globalSettings, setGlobalSettings] = useState(null);
     const [extraLangs, setExtraLangs] = useState('');  // Plan 15: additional target languages
+    // Model pickers and sampling only matter when the Gemini engine translates (the agent runner ignores them).
+    const modelEngine = globalSettings?.translation_engine === 'model';
 
     useEffect(() => {
         if (isOpen) {
@@ -95,7 +99,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
                 >
                     <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
                         <div className="flex items-center gap-2">
@@ -108,6 +112,8 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                     </div>
 
                     <div className="p-6 space-y-5 flex-1 overflow-y-auto custom-scrollbar">
+                        {modelEngine && (
+                            <div className="space-y-5">
                         <ModelCombobox
                             label="Translation Model"
                             value={settings.translation_model}
@@ -132,6 +138,8 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             onChange={(v) => handleChange('glossary_model', v)}
                             placeholder={globalSettings ? `Global: ${globalSettings.default_glossary_model}` : "Select model..."}
                         />
+                            </div>
+                        )}
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Project Organization</h3>
@@ -184,6 +192,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             </div>
                         </div>
 
+                        {modelEngine && (
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Sampling Parameters</h3>
                             <div className="space-y-4">
@@ -207,9 +216,10 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                         />
                                     </div>
                                 ))}
-                                <p className="text-[10px] text-gray-400 italic">These settings also apply in the Translation Sandbox tab.</p>
+                                
                             </div>
                         </div>
+                        )}
 
                         <div className="pt-4 border-t border-gray-100 dark:border-gray-700">
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Context Budget Analysis</h3>
@@ -385,6 +395,11 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                 Translates readable song lyrics into target language and caches recurring OP/ED lyrics across episodes (syllable-timed karaoke FX remain untouched).
                             </p>
                         </div>
+
+                        <div className="pt-4 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">VisualGuard &amp; formatting</h3>
+                            <QualityTools projectName={project?.name} episodes={episodes} onReload={onReload} toast={toast} />
+                        </div>
                     </div>
 
                     <div className="px-6 pb-4">
@@ -404,19 +419,8 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                     </div>
 
                     <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSave}
-                            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors"
-                        >
-                            <Save size={18} />
-                            Save Settings
-                        </button>
+                        <Button onClick={onClose}>Cancel</Button>
+                        <Button variant="primary" icon={Save} onClick={handleSave}>Save settings</Button>
                     </div>
                 </motion.div>
             </div>

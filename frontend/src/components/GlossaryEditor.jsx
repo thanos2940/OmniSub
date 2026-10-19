@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Save, Sparkles, EyeOff, Globe, RotateCcw, Trash2
 } from 'lucide-react';
+import { Button } from './ui';
 import { useToast } from '../context/ToastContext';
 import TermHarvestModal from './TermHarvestModal';
 import { useGlossaryState, stripUids } from './glossary/useGlossaryState';
@@ -19,7 +20,8 @@ const GlossaryEditor = ({
     hideSaveButton = false,
     projectName = null,
     parentProject = null,
-    suppressedTerms: initialSuppressed = []
+    suppressedTerms: initialSuppressed = [],
+    embedded = false,
 }) => {
     const toast = useToast();
     const [showSuppressed, setShowSuppressed] = useState(false);
@@ -84,20 +86,14 @@ const GlossaryEditor = ({
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col">
+        <div className={embedded ? 'flex flex-col' : 'flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-750 dark:bg-gray-850'}>
             {/* Top Toolbar with Actions */}
-            <div className="p-4 border-b border-gray-100 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3 bg-gray-50/50 dark:bg-gray-850">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-3 dark:border-gray-750 sm:px-4">
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* Harvest Dialogue Terms */}
-                    <button
-                        type="button"
-                        onClick={() => setHarvestModalOpen(true)}
-                        className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-                        title="Scan translated dialogue for new named entities"
-                    >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Harvest from Dialogue</span>
-                    </button>
+                    <Button size="sm" icon={Sparkles} onClick={() => setHarvestModalOpen(true)} title="Scan translated dialogue for new names and terms">
+                        Find terms in dialogue
+                    </Button>
 
                     <GlossaryImportExport
                         glossary={glossary}
@@ -111,15 +107,9 @@ const GlossaryEditor = ({
                 </div>
 
                 {!hideSaveButton && !readOnly && (
-                    <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-                    >
-                        <Save className="w-3.5 h-3.5" />
-                        {isSaving ? 'Saving...' : 'Save Glossary'}
-                    </button>
+                    <Button variant="primary" size="sm" icon={Save} onClick={handleSave} loading={isSaving}>
+                        {isSaving ? 'Saving…' : 'Save glossary'}
+                    </Button>
                 )}
             </div>
 
