@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Book, X, AlertTriangle, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw } from 'lucide-react';
+import { Download, Book, X, AlertTriangle, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw, Loader2, RefreshCw } from 'lucide-react';
 import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';
@@ -27,8 +27,8 @@ function getDurationSeconds(timecode) {
 // stable callbacks below, editing one line no longer re-renders the whole episode — big win
 // for long episodes where the old inline data.map() rebuilt every row on each keystroke.
 const SubtitleRow = React.memo(function SubtitleRow({
-    item, idx, isLoading, projectName, episodeName, selected,
-    onChangeTranslation, onResolved, onUpdateTm, onToggleSelect, onDeleteLine, onSave
+    item, idx, isLoading, projectName, episodeName, selected, retranslating, retranslateBlocked,
+    onChangeTranslation, onResolved, onUpdateTm, onToggleSelect, onDeleteLine, onSave, onRetranslate
 }) {
     const selectCell = (
         <div className="hidden sm:flex p-2 pt-4 border-r border-gray-100 dark:border-gray-700 flex-col items-center gap-1.5">
@@ -135,11 +135,17 @@ const SubtitleRow = React.memo(function SubtitleRow({
                                 }
                             }}
                             placeholder={isPassthrough ? "Effect / karaoke — not translated" : (isLoading ? "Translating..." : "Not translated")}
-                            disabled={isLoading || isPassthrough}
+                            disabled={isLoading || isPassthrough || retranslating}
                             readOnly={isPassthrough}
                             title={isPassthrough ? "This ASS event (karaoke/vector effect) is passed through unchanged." : undefined}
                             className={`w-full h-full min-h-[85px] p-4 pb-7 bg-transparent border-none outline-none resize-y text-gray-900 dark:text-gray-100 font-medium leading-relaxed focus:bg-white/50 dark:focus:bg-gray-800/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 focus:ring-indigo-500/20 ${isPassthrough ? 'text-gray-400 dark:text-gray-500 italic' : ''}`}
                         />
+                        {retranslating && (
+                            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white/80 text-center dark:bg-gray-900/80" role="status">
+                                <span className="flex items-center gap-2 text-sm font-medium text-indigo-600 dark:text-indigo-300"><Loader2 size={16} className="animate-spin" /> Translating this line again…</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">This can take up to 30 seconds.</span>
+                            </div>
+                        )}
                         {isLoading && !item.translated && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                 <span className="text-indigo-400 italic animate-pulse">Translating...</span>
@@ -188,6 +194,18 @@ const SubtitleRow = React.memo(function SubtitleRow({
                         )}
 
                         <div className="absolute top-2 right-2 pointer-events-none flex items-center gap-1 flex-wrap justify-end">
+                            {!isPassthrough && onRetranslate && (
+                                <button
+                                    type="button"
+                                    onClick={() => onRetranslate(idx)}
+                                    disabled={retranslateBlocked || isLoading}
+                                    className="pointer-events-auto flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold text-indigo-700 transition-opacity hover:bg-indigo-100 disabled:opacity-40 dark:text-indigo-300 dark:hover:bg-indigo-900/40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                    title="Translate this line again with the context of its neighbours"
+                                >
+                                    <RefreshCw size={10} />
+                                    <span>Retranslate line</span>
+                                </button>
+                            )}
                             {isPassthrough && (
                                 <span className="pointer-events-auto px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 uppercase tracking-wider shadow-sm" title="Karaoke/effect line — passed through untranslated">
                                     {passthroughKind}
@@ -219,11 +237,12 @@ const SubtitleRow = React.memo(function SubtitleRow({
     );
 });
 
-const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpdate, onSave, isLoading, project, projectName, episodeName, activeLanguage, originalFilename, onDeleteLines, onExportToPath, hasMediaPath, dirty, onUpdateTermsInScenes }) => {
+const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDataUpdate, onSave, isLoading, project, projectName, episodeName, activeLanguage, originalFilename, onDeleteLines, onExportToPath, hasMediaPath, dirty, onUpdateTermsInScenes }) => {
     const [showGlossary, setShowGlossary] = useState(false);
     const [selected, setSelected] = useState(new Set());
     const [filterStatus, setFilterStatus] = useState('all'); // all, untranslated, review, edited
     const [searchQuery, setSearchQuery] = useState('');
+    const [retranslatingIdx, setRetranslatingIdx] = useState(null);
     const selectAllRef = useRef(null);
 
     // Always-fresh ref to data so the callbacks below can stay stable (no `data` dep),
@@ -248,6 +267,16 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
             ));
         }
     }, [onDataUpdate]);
+
+    // One line at a time: the server rewrites the episode file on each, so they must not overlap.
+    const handleRetranslate = useCallback(async (idx) => {
+        setRetranslatingIdx(idx);
+        try {
+            await onRetranslateLine(idx);
+        } finally {
+            setRetranslatingIdx(null);
+        }
+    }, [onRetranslateLine]);
 
     const handleUpdateTm = useCallback((id, checked) => {
         if (onDataUpdate) {
@@ -667,6 +696,9 @@ const EditorView = ({ data, glossary, onRetranslate, onUpdateGlossary, onDataUpd
                                     onToggleSelect={handleToggleSelect}
                                     onDeleteLine={handleDeleteLine}
                                     onSave={onSave}
+                                    retranslating={retranslatingIdx === idx}
+                                    retranslateBlocked={retranslatingIdx !== null}
+                                    onRetranslate={onRetranslateLine ? handleRetranslate : undefined}
                                 />
                             ))
                         )}

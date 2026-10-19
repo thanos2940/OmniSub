@@ -2,11 +2,22 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import EditorView from './EditorView';
-import { ArrowLeft, Sparkles, Languages, RefreshCw, RotateCcw, Trash2, X, Wand2, BookOpen } from 'lucide-react';
+import { Languages, Loader2, RotateCcw, Sparkles, Trash2, Wand2, Clock } from 'lucide-react';
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
-import { motion, AnimatePresence } from 'framer-motion';
 import TermHarvestModal from './TermHarvestModal';
+import ConfirmDialog from './project/ConfirmDialog';
+import { Button, Notice, OverflowMenu, PageHeader, ProgressBar, StatusChip } from './ui';
+import { errorText, useEpisodeQueue, useTranslate, useTranslationEngine } from '../hooks/useTranslate';
+
+const LANG_MAP = {
+    "Greek": "el", "English": "en", "Spanish": "es", "French": "fr",
+    "German": "de", "Italian": "it", "Portuguese": "pt", "Russian": "ru",
+    "Japanese": "ja", "Korean": "ko", "Chinese": "zh"
+};
+const getLangCode = (langName) => LANG_MAP[langName] || "en";
+
+const isTranslatableLine = (item) => item.translatable !== false && item._ass?.translatable !== false;
 
 const EpisodeView = () => {
     const { projectName, episodeName } = useParams();
@@ -16,14 +27,13 @@ const EpisodeView = () => {
     const [data, setData] = useState([]);
     const [project, setProject] = useState(null);
     const [glossary, setGlossary] = useState({ terms: [] });
-    const [translationModalOpen, setTranslationModalOpen] = useState(false);
-    const [selectedTranslationType, setSelectedTranslationType] = useState('saved');
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
     const [originalFilename, setOriginalFilename] = useState(null);
     const [episodeMetadata, setEpisodeMetadata] = useState(null);
     const [dirty, setDirty] = useState(false);
     const [harvestModalOpen, setHarvestModalOpen] = useState(false);
+    const [confirm, setConfirm] = useState(null); // 'retranslate' | 'clear'
     const dirtyRef = React.useRef(false);
     useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
     const handledJobsRef = React.useRef(new Set());
@@ -44,13 +54,6 @@ const EpisodeView = () => {
             setSelectedLang(primaryLang);
         }
     }, [primaryLang]);
-
-    const LANG_MAP = {
-        "Greek": "el", "English": "en", "Spanish": "es", "French": "fr",
-        "German": "de", "Italian": "it", "Portuguese": "pt", "Russian": "ru",
-        "Japanese": "ja", "Korean": "ko", "Chinese": "zh"
-    };
-    const getLangCode = (langName) => LANG_MAP[langName] || "en";
 
     const activeLangCode = getLangCode(selectedLang || primaryLang);
     const primaryLangCode = getLangCode(primaryLang);
@@ -119,7 +122,7 @@ const EpisodeView = () => {
         loadData();
     }, [projectName, episodeName]);
 
-    // Watch for completed translation jobs
+    // Watch for completed translation jobs (model engine)
     const completedJob = useMemo(() => {
         const jobs = Object.values(activeJobs);
         return jobs.find(job =>
@@ -134,11 +137,8 @@ const EpisodeView = () => {
             if (!dirtyRef.current) {
                 etagRef.current = null;
                 loadData();
-                if (completedJob.type === 'retranslate_compare') {
-                    toast.success("Retranslation applied! Use 'Revert' on any row to restore previous text.");
-                }
             } else {
-                toast.info("Translation job finished. Save changes to load the updated translation.");
+                toast.info("Translation finished. Save your changes to load the new translation.");
             }
             handledJobsRef.current.add(completedJob.id);
         }
@@ -161,7 +161,6 @@ const EpisodeView = () => {
     useEffect(() => {
         let interval;
         if (isTranslating) {
-            console.log("Translation job active in project, starting live-view polling...");
             // Load once immediately to catch any scenes finished before effect triggered
             // (skipped while the user has unsaved edits so polling can't clobber them)
             if (!dirtyRef.current) loadData(true);
@@ -230,25 +229,16 @@ const EpisodeView = () => {
         }
     };
 
-    const handleEnhanceGlossary = async () => {
-        setProcessing(true);
-        try {
-            const res = await api.enhanceGlossary(projectName, { episode_names: [episodeName] });
-            if (res.data?.job_id) {
-                addJob(res.data.job_id, 'enhance_glossary', `AI: Enhance Glossary (${episodeName})`, {
-                    projectId: projectName,
-                    episodeName: episodeName,
-                    link: `/project/${encodeURIComponent(projectName)}`
-                });
-                toast.info('Enhancing glossary in the background... Review results on the project glossary tab.');
-            }
-        } catch (err) {
-            console.error('Failed to enhance glossary', err);
-            toast.error('Failed to enhance glossary');
-        } finally {
-            setProcessing(false);
+    // The runner / worker state of this episode, and the one translate action shared with the project page.
+    const engine = useTranslationEngine();
+    const { translate, busy: queueing, notice, clearNotice } = useTranslate({ projectName, engine, toast, addJob });
+    const { active: queue, refresh: refreshQueue } = useEpisodeQueue(projectName, () => {
+        if (!dirtyRef.current) {
+            etagRef.current = null;
+            loadData(true);
         }
-    };
+    });
+    const queueEntry = queue.get(episodeName);
 
     const handleUpdateTermsInScenes = async (selectedTermsArray) => {
         try {
@@ -263,37 +253,13 @@ const EpisodeView = () => {
             }
         } catch (err) {
             console.error('Failed to update scenes', err);
-            toast.error('Failed to update scenes');
+            toast.error(errorText(err, 'Could not update the scenes.'));
         }
     };
 
-    const handleTranslateClick = () => {
-        setTranslationModalOpen(true);
-        setSelectedTranslationType('saved');
-    };
-
-    const handleTranslate = async (type = 'saved') => {
-        try {
-            const settings = project?.settings || {};
-            const translationModel = settings.translation_model || null;
-            const res = await api.translateEpisode(projectName, episodeName, translationModel, false, false, type);
-            if (res.data.job_id) {
-                addJob(res.data.job_id, 'translate_episode', `Translating ${episodeName}`, {
-                    projectId: projectName,
-                    episodeName: episodeName,
-                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
-                });
-                toast.info(`Translation enqueued (${type === 'saved' ? 'Saved' : 'Original'})`);
-            }
-        } catch (err) {
-            console.error('Failed to start translation', err);
-            toast.error('Failed to start translation');
-        }
-    };
-
-    const handleConfirmTranslation = () => {
-        setTranslationModalOpen(false);
-        handleTranslate(selectedTranslationType);
+    const startTranslate = async (retranslate) => {
+        const result = await translate([episodeName], { retranslate });
+        if (result) refreshQueue();
     };
 
     const handleApplyFixes = async (track) => {
@@ -327,63 +293,44 @@ const EpisodeView = () => {
             await loadData();
         } catch (err) {
             console.error('Failed to apply SubtitleEdit fixes', err);
-            toast.error(err.response?.data?.detail || 'Failed to apply SubtitleEdit fixes');
+            toast.error(errorText(err, 'Could not apply the SubtitleEdit fixes.'));
         } finally {
             setProcessing(false);
         }
     };
 
-    const handleClear = async () => {
-        if (!window.confirm(`Clear translation for ${episodeName}?`)) return;
-        const deleteDiskFile = window.confirm(`Also delete the detected .el.srt / .el.ass file from disk?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
+    const handleClear = async (deleteDiskFile) => {
+        setConfirm(null);
         try {
             await api.deleteEpisodeTranslation(projectName, episodeName, deleteDiskFile);
-            toast.success(`Translation cleared`);
+            toast.success('Translation deleted.');
             loadData();
         } catch (err) {
             console.error('Failed to clear translation', err);
-            toast.error('Failed to clear translation');
+            toast.error(errorText(err, 'Could not delete the translation.'));
         }
     };
 
-    const handleRetranslateFromScratch = async () => {
-        if (!window.confirm(
-            `Retranslate "${episodeName}" from scratch?\n\nThis will erase the existing translation and redo it fully with the current model and settings.`
-        )) return;
+    // One line again through the runner's agent (10-30 s). The server stores the line and re-exports the
+    // file; only that line is merged into what is on screen, so unsaved edits elsewhere stay untouched.
+    const handleRetranslateLine = async (idx) => {
         try {
-            const settings = project?.settings || {};
-            const translationModel = settings.translation_model || null;
-            const res = await api.translateEpisode(projectName, episodeName, translationModel, false, true);
-            if (res.data.job_id) {
-                addJob(res.data.job_id, 'translate_episode', `Retranslating ${episodeName} from scratch`, {
-                    projectId: projectName,
-                    episodeName: episodeName,
-                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
-                });
-                toast.info(`Retranslation from scratch started`);
-            }
+            const res = await api.retranslateLine(projectName, episodeName, idx, selectedLang && selectedLang !== primaryLang ? selectedLang : null);
+            const text = res.data?.translated ?? '';
+            if (res.data?.etag) etagRef.current = res.data.etag;
+            setData(prev => prev.map((item, i) => {
+                if (i !== idx) return item;
+                const next = { ...item, translations: { ...(item.translations || {}), [activeLangCode]: text } };
+                if (activeLangCode === primaryLangCode) {
+                    next.translated = text;
+                    next.previous_translated = res.data?.previous_translated ?? item.previous_translated;
+                }
+                return next;
+            }));
+            toast.success(`Line ${idx + 1} translated again. Revert brings the old text back.`);
         } catch (err) {
-            console.error('Failed to start force retranslation', err);
-            toast.error('Failed to start retranslation');
-        }
-    };
-
-    const handleRetranslate = async () => {
-        try {
-            const settings = project?.settings || {};
-            const translationModel = settings.translation_model || null;
-            const res = await api.retranslateEpisode(projectName, episodeName, translationModel);
-            if (res.data.job_id) {
-                addJob(res.data.job_id, 'retranslate_compare', `Retranslating ${episodeName} (Review Mode)`, {
-                    projectId: projectName,
-                    episodeName: episodeName,
-                    link: `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
-                });
-                toast.info(`Retranslation started. You'll be notified when it's ready for review.`);
-            }
-        } catch (err) {
-            console.error('Failed to start retranslation', err);
-            toast.error('Failed to start retranslation');
+            console.error('Failed to retranslate line', err);
+            toast.error(errorText(err, 'The line could not be translated again.'));
         }
     };
 
@@ -406,7 +353,7 @@ const EpisodeView = () => {
             loadData(true);
         } catch (err) {
             console.error('Failed to save episode data', err);
-            toast.error('Failed to save subtitle changes');
+            toast.error(errorText(err, 'Could not save the subtitle changes.'));
         } finally {
             setProcessing(false);
         }
@@ -422,7 +369,7 @@ const EpisodeView = () => {
             toast.success('Glossary saved successfully!');
         } catch (err) {
             console.error('Failed to save glossary', err);
-            toast.error('Failed to save glossary');
+            toast.error(errorText(err, 'Could not save the glossary.'));
         }
     };
 
@@ -439,7 +386,7 @@ const EpisodeView = () => {
             await loadData(true);
         } catch (err) {
             console.error('Failed to delete lines', err);
-            toast.error('Failed to delete lines');
+            toast.error(errorText(err, 'Could not delete the lines.'));
         } finally {
             setProcessing(false);
         }
@@ -453,7 +400,7 @@ const EpisodeView = () => {
             toast.success(filename ? `Exported ${filename} next to media file` : 'Exported next to media file');
         } catch (err) {
             console.error('Failed to export to media path', err);
-            toast.error(err.response?.data?.detail || 'Failed to export to media path');
+            toast.error(errorText(err, 'Could not export next to the video.'));
         } finally {
             setProcessing(false);
         }
@@ -464,160 +411,113 @@ const EpisodeView = () => {
         job.type === 'translate_episode' &&
         job.metadata?.episodeName === episodeName
     );
+    const running = !!activeJob || queueEntry?.phase === 'running';
+    const runProgress = activeJob ? activeJob.progress : queueEntry?.progress;
 
-    if (loading) return <div className="h-screen flex items-center justify-center text-gray-500">Loading...</div>;
+    if (loading) return <div className="flex h-[60vh] items-center justify-center gap-2 text-sm text-gray-500"><Loader2 size={18} className="animate-spin text-indigo-600" /> Loading {episodeName}…</div>;
 
     // SubtitleEdit fixes are SRT-only; disable them for ASS/SSA episodes (the backend
     // also refuses them, but hide the affordance so the intent is clear).
     const isAssFormat = ['ass', 'ssa'].includes((episodeMetadata?.original_format || episodeMetadata?.original_extension || '').toLowerCase());
+    const hasTranslation = editorData.some(d => d.translated);
+    const missingLines = editorData.filter(d => isTranslatableLine(d) && !d.translated).length;
+    const complete = hasTranslation && missingLines === 0;
+    const busy = processing || running || queueing;
+    const subtitle = [
+        `${data.length} lines`,
+        hasTranslation ? (missingLines === 0 ? 'fully translated' : `${missingLines} not translated yet`) : 'not translated',
+    ].join(' · ');
+    const fixesTitle = isAssFormat ? "SubtitleEdit fixes aren't available for ASS/SSA subtitles (they would corrupt styling and karaoke)." : undefined;
 
     return (
-        <div className="h-screen flex flex-col bg-slate-50 dark:bg-gray-900">
-            {/* Header (Already updated in previous step) */}
-            {/* ... */}
-            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex flex-col gap-2 shrink-0">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <Link
-                            to={`/project/${encodeURIComponent(projectName)}`}
-                            onClick={(e) => {
-                                if (dirty && !window.confirm("You have unsaved changes in this episode. Discard changes and leave?")) {
-                                    e.preventDefault();
-                                }
-                            }}
-                            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                        >
-                            <ArrowLeft size={20} />
-                        </Link>
-                        <div>
-                            {project?.episodes && project.episodes.length > 1 ? (
-                                <select
-                                    value={episodeName}
-                                    onChange={(e) => handleSwitchEpisode(e.target.value)}
-                                    className="text-lg font-bold text-gray-900 dark:text-white bg-transparent border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                >
-                                    {project.episodes.map(ep => {
-                                        const epN = typeof ep === 'string' ? ep : ep.name;
-                                        return <option key={epN} value={epN} className="dark:bg-gray-800 text-sm font-normal">{epN}</option>;
-                                    })}
-                                </select>
+        <div className="flex h-[calc(100vh-3.75rem)] min-h-[32rem] flex-col bg-slate-50 dark:bg-gray-900">
+            <div className="shrink-0 border-b border-gray-200 bg-white px-4 pb-1 pt-4 dark:border-gray-750 dark:bg-gray-850 sm:px-6 [&>header]:mb-3">
+                <PageHeader
+                    breadcrumb={[
+                        { label: 'Library', to: '/' },
+                        { label: project?.name || projectName, to: `/project/${encodeURIComponent(projectName)}` },
+                        { label: episodeName },
+                    ]}
+                    title={episodeName}
+                    subtitle={subtitle}
+                    actions={(
+                        <>
+                            {queueEntry && !activeJob ? (
+                                <StatusChip tone={queueEntry.phase === 'queued' ? 'info' : 'accent'} icon={queueEntry.phase === 'queued' ? Clock : Loader2}
+                                    className={`px-3 py-1.5 text-sm ${queueEntry.phase === 'queued' ? '' : '[&>svg]:animate-spin'}`}>
+                                    {queueEntry.phase === 'running' ? 'Translating…' : queueEntry.phase === 'extracting' ? 'Extracting the subtitle…' : 'Queued'}
+                                </StatusChip>
+                            ) : complete ? (
+                                <Button icon={RotateCcw} disabled={busy} onClick={() => setConfirm('retranslate')}>Retranslate</Button>
                             ) : (
-                                <h1 className="text-lg font-bold text-gray-900 dark:text-white">{episodeName}</h1>
+                                <Button variant="primary" icon={Languages} disabled={busy} loading={queueing} onClick={() => startTranslate(false)}
+                                    title={hasTranslation ? 'Translate the lines that are still missing' : undefined}>
+                                    Translate
+                                </Button>
                             )}
-                            <p className="text-sm text-gray-500 dark:text-gray-400">{project?.show_name}</p>
+                            <OverflowMenu items={[
+                                { label: 'Fix source with SubtitleEdit', icon: Wand2, disabled: busy || isAssFormat, onClick: () => handleApplyFixes('source') },
+                                { label: 'Fix translation with SubtitleEdit', icon: Wand2, hidden: !hasTranslation, disabled: busy || isAssFormat, onClick: () => handleApplyFixes('target') },
+                                { label: 'Find terms in this episode', icon: Sparkles, disabled: busy, onClick: () => setHarvestModalOpen(true) },
+                                { label: 'Delete translation', icon: Trash2, danger: true, hidden: !hasTranslation, disabled: busy, onClick: () => setConfirm('clear') },
+                            ]} />
+                        </>
+                    )}
+                >
+                    {(project?.episodes?.length > 1 || targetLanguages.length > 1 || fixesTitle) && (
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 dark:text-gray-300">
+                            {project?.episodes?.length > 1 && (
+                                <label className="flex items-center gap-2">
+                                    Episode
+                                    <select value={episodeName} onChange={(e) => handleSwitchEpisode(e.target.value)}
+                                        className="rounded-lg border border-gray-250 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900">
+                                        {project.episodes.map(ep => {
+                                            const epN = typeof ep === 'string' ? ep : ep.name;
+                                            return <option key={epN} value={epN}>{epN}</option>;
+                                        })}
+                                    </select>
+                                </label>
+                            )}
+                            {targetLanguages.length > 1 && (
+                                <label className="flex items-center gap-2">
+                                    Language
+                                    <select value={selectedLang} onChange={(e) => setSelectedLang(e.target.value)}
+                                        className="rounded-lg border border-gray-250 bg-white px-2 py-1 text-sm dark:border-gray-700 dark:bg-gray-900">
+                                        {targetLanguages.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                                    </select>
+                                </label>
+                            )}
+                            {fixesTitle && <span className="text-xs text-gray-500">ASS/SSA subtitle: SubtitleEdit fixes are off.</span>}
                         </div>
-                        {targetLanguages.length > 1 && (
-                            <div className="ml-4 flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                <span className="text-xs text-gray-400 dark:text-gray-550 font-bold px-2 uppercase tracking-wide">Language:</span>
-                                <select
-                                    value={selectedLang}
-                                    onChange={(e) => setSelectedLang(e.target.value)}
-                                    className="bg-transparent border-none outline-none text-xs font-bold text-slate-700 dark:text-slate-200 pr-8 cursor-pointer"
-                                >
-                                    {targetLanguages.map(lang => (
-                                        <option key={lang} value={lang} className="dark:bg-slate-800">{lang}</option>
-                                    ))}
-                                </select>
+                    )}
+                </PageHeader>
+
+                {(running || notice) && (
+                    <div className="mb-3 space-y-2">
+                        {running && (
+                            <div className="space-y-1" role="status">
+                                <div className="flex justify-between text-xs text-gray-600 dark:text-gray-300">
+                                    <span>{activeJob?.message || 'Translating this episode…'}</span>
+                                    {runProgress != null && <span className="tabular-nums">{Math.round(runProgress)}%</span>}
+                                </div>
+                                <ProgressBar value={runProgress ?? 0} />
                             </div>
                         )}
-                    </div>
-                    <div className="flex gap-3">
-                        {editorData.some(d => d.translated) && (
-                            <>
-                                <button
-                                    onClick={handleClear}
-                                    disabled={processing || !!activeJob}
-                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                                    title="Clear all translations"
-                                >
-                                    <Trash2 size={18} />
-                                    Clear
-                                </button>
-                                <button
-                                    onClick={handleRetranslateFromScratch}
-                                    disabled={processing || !!activeJob}
-                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                                    title="Retranslate from scratch (clears and redoes the translation)"
-                                >
-                                    <RotateCcw size={18} />
-                                    From Scratch
-                                </button>
-                                <button
-                                    onClick={handleRetranslate}
-                                    disabled={processing || !!activeJob}
-                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                                    title="Retranslate and compare"
-                                >
-                                    <RefreshCw size={18} />
-                                    Retranslate
-                                </button>
-                                <button
-                                    onClick={() => handleApplyFixes('target')}
-                                    disabled={processing || !!activeJob || isAssFormat}
-                                    className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                                    title={isAssFormat ? "SubtitleEdit fixes aren't available for ASS/SSA subtitles (they would corrupt styling/karaoke)." : "Run SubtitleEdit 'Fix common errors' + 'Split long lines' on the current translation (re-reads the result and re-exports; line count may change). Best as a final polish."}
-                                >
-                                    <Wand2 size={18} />
-                                    Fix Translation
-                                </button>
-                            </>
+                        {notice && (
+                            <Notice tone={notice.tone} title={notice.text}
+                                actions={(
+                                    <>
+                                        {notice.activity && <Link to="/activity" className="text-sm font-medium underline">Open Activity</Link>}
+                                        <button type="button" onClick={clearNotice} className="text-sm underline opacity-80 hover:opacity-100">Dismiss</button>
+                                    </>
+                                )} />
                         )}
-                        <button
-                            onClick={() => handleApplyFixes('source')}
-                            disabled={processing || !!activeJob || isAssFormat}
-                            className="flex items-center gap-2 px-4 py-2 text-gray-500 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-900/20 rounded-lg transition-colors text-sm font-medium disabled:opacity-50"
-                            title={isAssFormat ? "SubtitleEdit fixes aren't available for ASS/SSA subtitles (they would corrupt styling/karaoke)." : "Run SubtitleEdit 'Fix common errors' + 'Split long lines' on the source subtitles (re-reads the result; line count may change). Best before translating."}
-                        >
-                            <Wand2 size={18} />
-                            Fix Source
-                        </button>
-                        <button
-                            onClick={() => setHarvestModalOpen(true)}
-                            disabled={processing || !!activeJob}
-                            className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 shadow-sm"
-                            title="Harvest named entities and key terms from this episode"
-                        >
-                            <Sparkles size={16} />
-                            Harvest Terms
-                        </button>
-                        <button
-                            onClick={handleEnhanceGlossary}
-                            disabled={processing || !!activeJob}
-                            className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm font-medium disabled:opacity-50"
-                        >
-                            <Sparkles size={18} />
-                            Enhance Glossary
-                        </button>
-                        <button
-                            onClick={handleTranslateClick}
-                            disabled={processing || !!activeJob}
-                            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium disabled:opacity-50 shadow-lg shadow-indigo-500/20"
-                        >
-                            <Languages size={18} />
-                            Translate
-                        </button>
-                    </div>
-                </div>
-
-                {/* Inline Progress Bar */}
-                {activeJob && (
-                    <div className="mt-2 space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold uppercase tracking-tight text-indigo-500">
-                            <span>{activeJob.message}</span>
-                            <span>{Math.round(activeJob.progress)}%</span>
-                        </div>
-                        <div className="w-full bg-indigo-100 dark:bg-indigo-900/30 rounded-full h-1.5 overflow-hidden">
-                            <div
-                                className="bg-indigo-600 h-full transition-all duration-700 ease-out shadow-[0_0_10px_rgba(79,70,229,0.5)]"
-                                style={{ width: `${activeJob.progress}%` }}
-                            />
-                        </div>
                     </div>
                 )}
-            </header>
+            </div>
 
             {/* Editor */}
-            <div className="flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-hidden">
                 <EditorView
                     data={editorData}
                     glossary={glossary}
@@ -631,126 +531,30 @@ const EpisodeView = () => {
                     onUpdateGlossary={handleUpdateGlossary}
                     onDeleteLines={handleDeleteLines}
                     onExportToPath={handleExportToPath}
+                    onRetranslateLine={handleRetranslateLine}
                     hasMediaPath={!!(episodeMetadata?.arr_media_path || episodeMetadata?.bazarr_media_path)}
                     dirty={dirty}
-                    isLoading={!!activeJob || processing}
+                    isLoading={running || processing}
                     onUpdateTermsInScenes={handleUpdateTermsInScenes}
                 />
             </div>
 
-            {/* Translation Options Modal */}
-            <AnimatePresence>
-                {translationModalOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        {/* Backdrop */}
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setTranslationModalOpen(false)}
-                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                        />
-
-                        {/* Modal Box */}
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                            transition={{ type: 'spring', duration: 0.3 }}
-                            className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-lg w-full overflow-hidden z-10"
-                        >
-                            {/* Header */}
-                            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-855/50">
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    <Languages className="text-indigo-600 dark:text-indigo-400" />
-                                    Translate "{episodeName}"
-                                </h3>
-                                <button
-                                    onClick={() => setTranslationModalOpen(false)}
-                                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-750 transition-colors"
-                                >
-                                    <X size={18} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div className="p-6 space-y-4">
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Choose how you would like to translate this subtitle:
-                                </p>
-
-                                <div className="space-y-3">
-                                    {/* Option 1: Saved Translation */}
-                                    <label
-                                        className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedTranslationType === 'saved'
-                                                ? 'border-indigo-600 bg-indigo-50/30 dark:border-indigo-500 dark:bg-indigo-950/10'
-                                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                                            }`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="translationType"
-                                            value="saved"
-                                            checked={selectedTranslationType === 'saved'}
-                                            onChange={() => setSelectedTranslationType('saved')}
-                                            className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                        />
-                                        <div>
-                                            <span className="block font-bold text-gray-950 dark:text-white text-sm">
-                                                Saved Translation (Recommended)
-                                            </span>
-                                            <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                Reuses existing translations saved in Omnisub's database. If subtitle files on disk were deleted or missing, this quickly re-exports them in seconds without API costs.
-                                            </span>
-                                        </div>
-                                    </label>
-
-                                    {/* Option 2: Original Translation */}
-                                    <label
-                                        className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${selectedTranslationType === 'original'
-                                                ? 'border-indigo-600 bg-indigo-50/30 dark:border-indigo-500 dark:bg-indigo-950/10'
-                                                : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
-                                            }`}
-                                    >
-                                        <input
-                                            type="radio"
-                                            name="translationType"
-                                            value="original"
-                                            checked={selectedTranslationType === 'original'}
-                                            onChange={() => setSelectedTranslationType('original')}
-                                            className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                                        />
-                                        <div>
-                                            <span className="block font-bold text-gray-950 dark:text-white text-sm">
-                                                Original Translation (From Scratch)
-                                            </span>
-                                            <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                Translates the subtitles anew using the LLM. This ignores any cached translations, clears existing text and checkpoints, and runs the full API translation pipeline.
-                                            </span>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="px-6 py-4 bg-gray-50/50 dark:bg-gray-805/50 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setTranslationModalOpen(false)}
-                                    className="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleConfirmTranslation}
-                                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/30 transition-all"
-                                >
-                                    Start Translation
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            <ConfirmDialog
+                open={confirm === 'retranslate'} title={`Retranslate ${episodeName}?`} confirmLabel="Retranslate"
+                onCancel={() => setConfirm(null)}
+                onConfirm={() => { setConfirm(null); startTranslate(true); }}
+            >
+                <p>The whole episode is translated again and replaces the current translation, including lines you edited by hand.</p>
+                {dirty && <p className="text-amber-700 dark:text-amber-300">You have unsaved edits; they will be replaced too.</p>}
+            </ConfirmDialog>
+            <ConfirmDialog
+                open={confirm === 'clear'} danger title={`Delete the translation of ${episodeName}?`} confirmLabel="Delete translation"
+                checkbox={{ label: 'Also delete the translated subtitle file next to the video' }}
+                onCancel={() => setConfirm(null)}
+                onConfirm={handleClear}
+            >
+                <p>The source subtitle stays, so the episode can be translated again.</p>
+            </ConfirmDialog>
 
             <TermHarvestModal
                 isOpen={harvestModalOpen}

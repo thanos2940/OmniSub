@@ -1,856 +1,313 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Film, Search, Play, Download, Trash2, CheckCircle2,
-    Clock, RefreshCw, Wrench, ShieldAlert, FolderDown,
-    ChevronDown, ChevronRight, Layers, LayoutGrid, List,
-    FileText, ExternalLink, AlertCircle, Sparkles, AlertTriangle, Activity, Bot
-} from 'lucide-react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useJobs } from '../../../context/JobContext';
-import { formatEta } from '../../../utils/formatters';
-import { api } from '../../../api';
+import {
+    AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Film, FileText, Languages, Layers, Loader2,
+    RotateCcw, Search, ShieldAlert, Trash2, Upload, Wrench, Clock, ListChecks,
+} from 'lucide-react';
+import { Button, Card, EmptyState, INPUT, OverflowMenu, ProgressBar, StatusChip } from '../../ui';
+import ConfirmDialog from '../ConfirmDialog';
+import {
+    canTranslate, episodeCode, episodeTitle, formatDate, gapInfo, hasSourceSubtitle, lastTranslated,
+    lineProgress, matchesFilter, seasonLabel, seasonNumber,
+} from '../episodeUtils';
+
+const FILTERS = [
+    { id: 'all', label: 'All' },
+    { id: 'translated', label: 'Translated' },
+    { id: 'missing', label: 'Missing' },
+    { id: 'progress', label: 'In progress' },
+    { id: 'nosub', label: 'No subtitle' },
+];
+
+const GRID = 'grid items-center gap-x-3 gap-y-1.5 grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,1fr)_11rem_9rem_6.5rem_auto]';
+
+// What the translation itself looks like (independent of anything running right now).
+function StatusCell({ ep, projectName }) {
+    if (!hasSourceSubtitle(ep)) {
+        return ep.has_media || ep.metadata?.arr_media_path
+            ? <StatusChip tone="neutral" icon={Film} title="No subtitle file yet; it is taken from the video when you translate">In the video</StatusChip>
+            : <StatusChip tone="warning" icon={AlertTriangle} title="No subtitle file and no video linked">No subtitle</StatusChip>;
+    }
+    if (!ep.translated) return <StatusChip tone="neutral">Not translated</StatusChip>;
+    const gaps = gapInfo(ep);
+    if (gaps.missing > 0) {
+        return <StatusChip tone="warning" icon={AlertTriangle} title={`${gaps.missing} line(s) are still in the source language`}>Incomplete · {gaps.missing}</StatusChip>;
+    }
+    if (gaps.misplaced > 0) {
+        return <StatusChip tone="danger" icon={AlertTriangle} title="Some lines carry the translation of a neighbouring line">Misaligned · {gaps.misplaced}</StatusChip>;
+    }
+    if (gaps.broken > 0) {
+        return <StatusChip tone="danger" icon={AlertTriangle} title="Garbled text, leftover prompt text or mixed alphabets. Repair them from Sync.">Garbled · {gaps.broken}</StatusChip>;
+    }
+    const review = ep.needs_review_count ?? ep.metadata?.needs_review_count ?? 0;
+    if (review > 0) {
+        return (
+            <Link to={`/review?project=${encodeURIComponent(projectName)}&episode=${encodeURIComponent(ep.name)}`} title="Open the flagged lines in Review">
+                <StatusChip tone="warning" icon={AlertTriangle} className="hover:brightness-95">Review · {review}</StatusChip>
+            </Link>
+        );
+    }
+    return <StatusChip tone="success">Translated</StatusChip>;
+}
+
+function ProgressCell({ ep, entry }) {
+    if (entry?.phase === 'running' && entry.progress != null) {
+        return (
+            <div className="min-w-[6rem] space-y-1">
+                <ProgressBar value={entry.progress} />
+                <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{Math.round(entry.progress)}%</div>
+            </div>
+        );
+    }
+    const p = lineProgress(ep);
+    if (p) {
+        return (
+            <div className="min-w-[6rem] space-y-1">
+                <ProgressBar value={p.done} max={p.total} tone={p.done === p.total ? 'success' : 'warning'} />
+                <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{p.done} / {p.total} lines</div>
+            </div>
+        );
+    }
+    return <div className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{ep.line_count > 0 ? `${ep.line_count} lines` : '—'}</div>;
+}
+
+function ActionCell({ ep, entry, busy, onTranslate, onRetranslate }) {
+    if (entry) {
+        const label = entry.phase === 'running' ? 'Translating…' : entry.phase === 'extracting' ? 'Extracting…' : 'Queued';
+        return (
+            <StatusChip tone={entry.phase === 'queued' ? 'info' : 'accent'} icon={entry.phase === 'queued' ? Clock : Loader2} className={entry.phase === 'queued' ? '' : '[&>svg]:animate-spin'}>
+                {label}
+            </StatusChip>
+        );
+    }
+    const gaps = gapInfo(ep);
+    const complete = ep.translated && gaps.missing === 0;
+    const allowed = canTranslate(ep);
+    if (complete) {
+        return <Button size="sm" icon={RotateCcw} onClick={onRetranslate} disabled={busy}>Retranslate</Button>;
+    }
+    return (
+        <Button size="sm" variant="primary" icon={Languages} onClick={onTranslate} disabled={busy || !allowed}
+            title={allowed ? (ep.translated ? 'Translate the lines that are still missing' : undefined) : 'No subtitle and no video file linked to this episode'}>
+            Translate
+        </Button>
+    );
+}
+
+function Row({ ep, projectName, selected, entry, busy, onToggle, onTranslate, onRetranslate, onAction }) {
+    const hasSource = hasSourceSubtitle(ep);
+    const hasMedia = !!(ep.has_media || ep.metadata?.arr_media_path);
+    const title = episodeTitle(ep);
+    const date = lastTranslated(ep);
+    return (
+        <div className={`${GRID} px-4 py-2.5 ${selected ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}>
+            <input type="checkbox" checked={selected} onChange={(e) => onToggle(ep.name, e.nativeEvent.shiftKey)}
+                aria-label={`Select ${ep.name}`} className="h-4 w-4 rounded border-gray-300 text-indigo-600" />
+            <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium text-gray-900 dark:text-white" title={ep.name}>{episodeCode(ep)}</span>
+                    {ep.has_ass && <span className="rounded bg-purple-100 px-1.5 text-[10px] font-semibold uppercase text-purple-700 dark:bg-purple-950 dark:text-purple-300">ASS</span>}
+                </div>
+                {title && <div className="truncate text-xs text-gray-500 dark:text-gray-400" title={title}>{title}</div>}
+            </div>
+            <div className="col-span-2 col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 md:contents">
+                <div><StatusCell ep={ep} projectName={projectName} /></div>
+                <ProgressCell ep={ep} entry={entry} />
+                <div className="text-xs text-gray-500 dark:text-gray-400">{date ? formatDate(date) : ''}</div>
+            </div>
+            <div className="col-start-3 row-start-1 flex items-center justify-end gap-1 md:col-start-auto md:row-start-auto">
+                <ActionCell ep={ep} entry={entry} busy={busy} onTranslate={onTranslate} onRetranslate={onRetranslate} />
+                {hasSource && (
+                    <Link to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`} aria-label={`Open ${ep.name} in the editor`} title="Open in editor"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white">
+                        <FileText size={16} />
+                    </Link>
+                )}
+                <OverflowMenu items={[
+                    { label: 'Extract subtitle from video', icon: Film, hidden: !hasMedia, onClick: () => onAction('extract', ep) },
+                    { label: 'Inspect embedded tracks', icon: Layers, hidden: !hasMedia, onClick: () => onAction('tracks', ep) },
+                    { label: 'Apply SubtitleEdit fixes', icon: Wrench, hidden: !hasSource, onClick: () => onAction('fixes', ep) },
+                    { label: 'Check missing lines', icon: Search, hidden: !hasSource || !ep.translated, onClick: () => onAction('missing', ep) },
+                    { label: 'ScriptGuard check', icon: ShieldAlert, hidden: !ep.translated, onClick: () => onAction('script', ep) },
+                    { label: 'Delete translation', icon: Trash2, danger: true, hidden: !ep.translated, onClick: () => onAction('delete', ep) },
+                ]} />
+            </div>
+        </div>
+    );
+}
+
+function SeasonCheckbox({ names, selected, onToggle }) {
+    const ref = useRef(null);
+    const count = names.filter(n => selected.has(n)).length;
+    useEffect(() => {
+        if (ref.current) ref.current.indeterminate = count > 0 && count < names.length;
+    }, [count, names.length]);
+    return <input ref={ref} type="checkbox" checked={names.length > 0 && count === names.length} onChange={onToggle}
+        aria-label="Select the whole season" className="h-4 w-4 rounded border-gray-300 text-indigo-600" />;
+}
 
 const EpisodesTab = ({
-    project,
-    episodes = [],
-    subprojects = [],
-    selectedEpisodes,
-    toggleEpisode,
-    toggleMultiple,
-    selectAll,
-    clearSelection,
-    invertSelection,
-    onTranslateEpisode,
-    onBatchTranslate,
-    onAgentTranslate,
-    onBatchAgentTranslate,
-    preparingAgent,
-    onApplyFixes,
-    onCheckMissing,
-    onScriptFix,
-    onEmbeddedTracks,
-    onDeleteEpisode,
-    onDeleteTranslation,
-    onBatchDownload,
-    onBatchExportToPath,
-    onBatchDelete,
-    onBatchExtractEmbedded,
-    onUpload,
-    projectName,
+    project, projectName, episodes, subprojects, selection, queue, busy,
+    onTranslate, onAction, onUpload, onBulk,
 }) => {
-    const { activeJobs } = useJobs();
+    const [search, setSearch] = useState('');
+    const [filter, setFilter] = useState('all');
+    const [collapsed, setCollapsed] = useState({});
+    const [confirmRetranslate, setConfirmRetranslate] = useState(null);
+    const { selected, toggleEpisode, toggleMultiple, clearSelection } = selection;
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all'); // all | running | translated | untranslated | nosub
-    const [viewMode, setViewMode] = useState('grid'); // grid | table
-    const [collapsedSeasons, setCollapsedSeasons] = useState({});
+    const counts = useMemo(() => {
+        const c = {};
+        FILTERS.forEach(f => { c[f.id] = episodes.filter(ep => matchesFilter(ep, f.id, queue.get(ep.name))).length; });
+        return c;
+    }, [episodes, queue]);
 
-    const handleDeleteTranslationClick = async (epName) => {
-        if (!window.confirm(`Delete translation for episode "${epName}"?`)) return;
-        const deleteDiskFile = window.confirm(`Also delete the detected .el.srt / .el.ass file from disk?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
-        if (onDeleteTranslation) {
-            await onDeleteTranslation(epName, deleteDiskFile);
-        } else if (onDeleteEpisode) {
-            await onDeleteEpisode(epName, deleteDiskFile);
-        } else {
-            try {
-                await api.deleteEpisodeTranslation(projectName, epName, deleteDiskFile);
-            } catch (err) {
-                console.error('Failed to delete translation', err);
-            }
-        }
-    };
+    const visible = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return episodes.filter(ep => matchesFilter(ep, filter, queue.get(ep.name))
+            && (!q || ep.name.toLowerCase().includes(q) || episodeTitle(ep).toLowerCase().includes(q)));
+    }, [episodes, search, filter, queue]);
 
-    const handleBatchDeleteClick = async () => {
-        if (!onBatchDelete) return;
-        const deleteDiskFile = window.confirm(`Also delete detected .el.srt / .el.ass files from disk for selected episodes?\n\nClick OK to delete disk sidecars, or Cancel to keep them on disk.`);
-        await onBatchDelete(deleteDiskFile);
-    };
+    const seasons = useMemo(() => {
+        const bySeason = new Map();
+        visible.forEach(ep => {
+            const n = seasonNumber(ep);
+            if (!bySeason.has(n)) bySeason.set(n, []);
+            bySeason.get(n).push(ep);
+        });
+        return [...bySeason.entries()].sort((a, b) => a[0] - b[0]);
+    }, [visible]);
 
-    const isEpHasSource = (ep) => {
-        if (ep.has_source === true) return true;
-        if (ep.has_source === false && ep.line_count === 0 && !ep.metadata?.arr_sub_path && !ep.has_ass) return false;
-        return (ep.line_count > 0 || !!ep.metadata?.arr_sub_path || !!ep.has_ass || ep.has_source !== false);
-    };
+    const totalsBySeason = useMemo(() => {
+        const t = new Map();
+        episodes.forEach(ep => {
+            const n = seasonNumber(ep);
+            const cur = t.get(n) || { done: 0, total: 0 };
+            cur.total += 1;
+            if (ep.translated) cur.done += 1;
+            t.set(n, cur);
+        });
+        return t;
+    }, [episodes]);
 
-    // Normalizer for episode names (strips extensions like .en.srt, .ass, trims, lowercases)
-    const normalizeEpName = (name) => {
-        if (!name) return '';
-        return name.trim().toLowerCase().replace(/\.(srt|ass|ssa|vtt)$/i, '');
-    };
+    const toggleSeason = (n) => setCollapsed(prev => ({ ...prev, [n]: !prev[n] }));
+    const showSeasonHeaders = seasons.length > 1 || (seasons.length === 1 && seasons[0][0] > 0);
 
-    // Build fast lookup map keyed by exact and normalized episode names
-    const activeJobsByEpisode = useMemo(() => {
-        const map = new Map();
-        if (!activeJobs) return map;
-
-        const currentProj = (projectName || project?.name || '').trim().toLowerCase();
-
-        for (const job of Object.values(activeJobs)) {
-            if (!job || ['completed', 'failed', 'cancelled'].includes(job.status)) continue;
-
-            const jProj = (job.project_name || job.metadata?.projectId || job.metadata?.projectName || '').trim().toLowerCase();
-
-            // Scope job to current project
-            if (!currentProj || !jProj || jProj === currentProj) {
-                const jEp = job.episode_name || job.metadata?.episodeName;
-                if (jEp) {
-                    map.set(jEp, job);
-                    map.set(normalizeEpName(jEp), job);
-                }
-            }
-        }
-        return map;
-    }, [activeJobs, projectName, project?.name]);
-
-    const getActiveJob = (epName) => {
-        return activeJobsByEpisode.get(epName) || activeJobsByEpisode.get(normalizeEpName(epName));
-    };
-
-    const renderQualityBadge = (ep, pName) => {
-        const activeJob = getActiveJob(ep.name);
-        if (activeJob) {
-            if (activeJob.status === 'running') {
-                return (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50 animate-pulse">
-                        <RefreshCw size={10} className="animate-spin text-indigo-600 dark:text-indigo-400" />
-                        <span>Translating</span>
-                    </span>
-                );
-            }
-            if (activeJob.status === 'pending') {
-                return (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/50">
-                        <Clock size={10} className="animate-pulse" />
-                        <span>Queued</span>
-                    </span>
-                );
-            }
-        }
-
-        const hasSource = isEpHasSource(ep);
-        if (!hasSource) {
-            return (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40">
-                    <AlertCircle size={10} /> No Subtitle
-                </span>
-            );
-        }
-        if (!ep.translated) {
-            return (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                    <Clock size={10} /> Pending
-                </span>
-            );
-        }
-
-        const needsReview = ep.needs_review_count ?? ep.metadata?.needs_review_count ?? 0;
-        const autoRepaired = ep.auto_repaired_count ?? ep.metadata?.auto_repaired_count ?? 0;
-        // Set by the translation audit / agent submissions: lines still in the source language.
-        const gaps = ep.metadata?.translation_gaps;
-        const gapCount = gaps ? (gaps.dialogue || 0) + (gaps.signs || 0) : 0;
-
-        if (gapCount > 0) {
-            return (
-                <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 border border-orange-300 dark:border-orange-700/60"
-                    title={`${gaps.dialogue || 0} dialogue line(s) and ${gaps.signs || 0} on-screen text line(s) are still untranslated`}
-                >
-                    <AlertTriangle size={10} className="text-orange-600 dark:text-orange-400" />
-                    Incomplete ({gapCount} line{gapCount > 1 ? 's' : ''})
-                </span>
-            );
-        }
-
-        // Set by the translation audit: lines whose translation belongs to another line.
-        const misplacedCount = gaps?.misplaced || 0;
-        if (misplacedCount > 0) {
-            return (
-                <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700/60"
-                    title={`${misplacedCount} line(s) carry the translation of another line (found by the translation check)`}
-                >
-                    <AlertTriangle size={10} className="text-rose-600 dark:text-rose-400" />
-                    Misaligned ({misplacedCount} line{misplacedCount > 1 ? 's' : ''})
-                </span>
-            );
-        }
-
-        // Set by the translation audit: garbled encoding, leftover prompt text or mixed alphabets in the translation.
-        const brokenCount = Number(gaps?.broken) || 0;
-        if (brokenCount > 0) {
-            return (
-                <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700/60"
-                    title={`${brokenCount} line(s) contain garbled text, leftover prompt text or mixed alphabets (found by the translation check). Open Sync Disk & Server to repair or queue them.`}
-                >
-                    <AlertTriangle size={10} className="text-rose-600 dark:text-rose-400" />
-                    Garbled ({brokenCount})
-                </span>
-            );
-        }
-
-        if (needsReview > 0) {
-            const targetProject = pName || projectName || project?.name;
-            return (
-                <Link
-                    to={`/review?project=${encodeURIComponent(targetProject)}&episode=${encodeURIComponent(ep.name)}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors shadow-sm"
-                    title={`Click to review ${needsReview} flagged line(s) in Review Queue`}
-                >
-                    <AlertTriangle size={10} className="text-amber-600 dark:text-amber-400" />
-                    Needs Review ({needsReview} line{needsReview > 1 ? 's' : ''})
-                </Link>
-            );
-        }
-
-        if (autoRepaired > 0) {
-            return (
-                <span
-                    className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40"
-                    title={`${autoRepaired} cue(s) automatically recovered by QC repair`}
-                >
-                    <Sparkles size={10} className="text-purple-600 dark:text-purple-400" />
-                    Auto-Repaired ({autoRepaired})
-                </span>
-            );
-        }
-
+    if (project?.type === 'parent') {
         return (
-            <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40"
-                title="All cues translated and verified with 0 warnings"
-            >
-                <CheckCircle2 size={10} className="text-emerald-600 dark:text-emerald-400" />
-                Clean
-            </span>
+            <Card title={`Shows in this universe (${subprojects.length})`} subtitle="A universe shares its glossary, context and character profiles with the shows linked to it.">
+                {subprojects.length === 0 ? (
+                    <EmptyState icon={Layers} title="No shows linked yet" description="Link a show to this universe from the show's project settings." />
+                ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {subprojects.map(sp => (
+                            <Link key={sp.name} to={`/project/${encodeURIComponent(sp.name)}`}
+                                className="flex items-center justify-between rounded-lg border border-gray-200 p-3 hover:border-indigo-400 dark:border-gray-700">
+                                <div className="min-w-0">
+                                    <div className="truncate text-sm font-medium text-gray-900 dark:text-white">{sp.name}</div>
+                                    <div className="text-xs text-gray-500">{sp.target_language || 'Default language'} · {sp.episodes_count || 0} episodes</div>
+                                </div>
+                                <ExternalLink size={16} className="shrink-0 text-gray-400" />
+                            </Link>
+                        ))}
+                    </div>
+                )}
+            </Card>
         );
-    };
-
-    // Filter computation
-    const filteredEpisodes = useMemo(() => {
-        return episodes.filter(ep => {
-            const matchesSearch = !searchQuery || ep.name.toLowerCase().includes(searchQuery.toLowerCase());
-            let matchesStatus = true;
-            const hasSource = isEpHasSource(ep);
-
-            if (statusFilter === 'translated') matchesStatus = !!ep.translated;
-            else if (statusFilter === 'untranslated') matchesStatus = !ep.translated && hasSource;
-            else if (statusFilter === 'nosub') matchesStatus = !hasSource;
-            else if (statusFilter === 'running') {
-                const activeJob = getActiveJob(ep.name);
-                matchesStatus = !!activeJob && ['running', 'in_progress', 'pending'].includes(activeJob.status);
-            }
-            return matchesSearch && matchesStatus;
-        });
-    }, [episodes, searchQuery, statusFilter, activeJobsByEpisode]);
-
-
-    // Grouping by season (e.g. S01E01 -> Season 1)
-    const groupedBySeason = useMemo(() => {
-        const groups = {};
-        filteredEpisodes.forEach(ep => {
-            const match = ep.name.match(/S(\d+)E(\d+)/i) || ep.name.match(/Season\s*(\d+)/i);
-            const seasonNum = match ? parseInt(match[1], 10) : 0;
-            const seasonKey = seasonNum > 0 ? `Season ${seasonNum}` : 'General / Standalone';
-            if (!groups[seasonKey]) groups[seasonKey] = [];
-            groups[seasonKey].push(ep);
-        });
-        return groups;
-    }, [filteredEpisodes]);
-
-    const toggleSeasonCollapse = (seasonKey) => {
-        setCollapsedSeasons(prev => ({ ...prev, [seasonKey]: !prev[seasonKey] }));
-    };
-
-    const isParent = project?.type === 'parent';
+    }
 
     return (
-        <div className="space-y-6">
-            {/* If Parent Universe Project, show subprojects list first */}
-            {isParent && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-700 pb-3">
-                        <div className="flex items-center gap-2">
-                            <Layers className="text-indigo-600 dark:text-indigo-400" size={20} />
-                            <h3 className="text-base font-bold text-gray-900 dark:text-white">Universe Shows ({subprojects.length})</h3>
-                        </div>
+        <div className="space-y-4">
+            <Card padded={false}>
+                <div className="flex flex-wrap items-center gap-3 p-3 sm:px-4">
+                    <div className="relative w-full sm:w-64">
+                        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search episodes" aria-label="Search episodes" className={`${INPUT} pl-9`} />
                     </div>
-
-                    {subprojects.length === 0 ? (
-                        <p className="text-sm text-gray-400 italic py-4 text-center">No linked shows in this universe yet.</p>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {subprojects.map(sp => (
-                                <Link
-                                    key={sp.name}
-                                    to={`/project/${encodeURIComponent(sp.name)}`}
-                                    className="p-4 rounded-xl border border-gray-100 dark:border-gray-700 hover:border-indigo-400 bg-gray-50/50 dark:bg-gray-750/50 flex items-center justify-between transition-all group"
-                                >
-                                    <div>
-                                        <div className="font-bold text-sm text-gray-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                            {sp.name}
-                                        </div>
-                                        <div className="text-xs text-gray-500 mt-0.5">
-                                            {sp.target_language || 'Default language'} &middot; {sp.episodes_count || 0} eps
-                                        </div>
-                                    </div>
-                                    <ExternalLink size={16} className="text-gray-400 group-hover:text-indigo-500" />
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Episode Controls Toolbar */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-200 dark:border-gray-700 shadow-sm flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-                    <div className="relative flex-1 max-w-sm">
-                        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                        <input
-                            type="text"
-                            placeholder="Filter episodes by name..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 focus:ring-1 focus:ring-indigo-500 outline-none text-gray-800 dark:text-gray-200"
-                        />
-                    </div>
-
-                    {/* Status Pill Filters */}
-                    <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl gap-0.5 text-xs font-semibold">
-                        {[
-                            { id: 'all', label: 'All', count: episodes.length },
-                            { id: 'running', label: 'In Progress', count: episodes.filter(e => !!getActiveJob(e.name)).length },
-                            { id: 'translated', label: 'Translated', count: episodes.filter(e => e.translated).length },
-                            { id: 'untranslated', label: 'Pending', count: episodes.filter(e => !e.translated && isEpHasSource(e)).length },
-                            { id: 'nosub', label: 'No Subtitle', count: episodes.filter(e => !isEpHasSource(e)).length },
-                        ].map(({ id, label, count }) => (
-                            <button
-                                key={id}
-                                type="button"
-                                onClick={() => setStatusFilter(id)}
-                                className={`px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 ${
-                                    statusFilter === id
-                                        ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
-                                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                                }`}
-                            >
-                                <span>{label}</span>
-                                <span className="text-[10px] px-1 bg-black/10 dark:bg-white/10 rounded-full">{count}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                        {FILTERS.map(f => (
+                            <button key={f.id} type="button" onClick={() => setFilter(f.id)} aria-pressed={filter === f.id}
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${filter === f.id
+                                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                                    : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'}`}>
+                                {f.label}
+                                <span className={`tabular-nums ${filter === f.id ? 'text-indigo-100' : 'text-gray-400'}`}>{counts[f.id]}</span>
                             </button>
                         ))}
                     </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {/* View mode toggle */}
-                    <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl gap-0.5">
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('grid')}
-                            className={`p-1.5 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-gray-800 text-indigo-600' : 'text-gray-400'}`}
-                            title="Grid Card View"
-                        >
-                            <LayoutGrid size={16} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setViewMode('table')}
-                            className={`p-1.5 rounded-lg transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-gray-800 text-indigo-600' : 'text-gray-400'}`}
-                            title="Table List View"
-                        >
-                            <List size={16} />
-                        </button>
-                    </div>
-
-                    {/* Batch Extract Embedded Subtitles */}
-                    {onBatchExtractEmbedded && (
-                        <button
-                            type="button"
-                            onClick={() => onBatchExtractEmbedded(selectedEpisodes.size > 0 ? Array.from(selectedEpisodes) : null)}
-                            className="px-3.5 py-2 bg-amber-500/10 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-amber-500/30 transition-all cursor-pointer"
-                            title={selectedEpisodes.size > 0 ? `Batch extract embedded tracks for ${selectedEpisodes.size} selected episode(s)` : "Batch extract embedded ASS/SRT tracks from all video files"}
-                        >
-                            <Layers size={14} /> {selectedEpisodes.size > 0 ? `Extract Embedded (${selectedEpisodes.size})` : 'Extract All Embedded'}
-                        </button>
-                    )}
-
-                    {/* Upload button */}
-                    <label className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer">
-                        <input type="file" multiple onChange={onUpload} accept=".srt,.ass,.ssa,.vtt" className="hidden" />
-                        <FolderDown size={14} /> Upload Subtitles
+                    <label className="ml-auto inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-gray-250 bg-white px-2.5 text-xs font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-750">
+                        <input type="file" multiple accept=".srt,.ass,.ssa,.vtt" onChange={onUpload} className="hidden" />
+                        <Upload size={14} /> Upload subtitles
                     </label>
                 </div>
-            </div>
+            </Card>
 
-
-            {/* Episodes List / Grouped by Season */}
-            <div className="space-y-6">
-                {filteredEpisodes.length === 0 ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 text-center border border-gray-200 dark:border-gray-700 text-gray-400 space-y-2">
-                        <Film size={40} className="mx-auto opacity-40" />
-                        <p className="font-semibold text-gray-500">No episodes found matching criteria.</p>
-                    </div>
+            <Card padded={false}>
+                {visible.length === 0 ? (
+                    <EmptyState icon={Film}
+                        title={episodes.length === 0 ? 'No episodes yet' : 'No episodes match'}
+                        description={episodes.length === 0 ? 'Sync the title with Sonarr/Radarr, or upload subtitle files.' : 'Try another filter or clear the search.'} />
                 ) : (
-                    Object.entries(groupedBySeason).map(([seasonKey, eps]) => {
-                        const isCollapsed = collapsedSeasons[seasonKey];
-                        const seasonSelected = eps.every(e => selectedEpisodes.has(e.name));
-
-                        return (
-                            <div key={seasonKey} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-                                {/* Season Accordion Header */}
-                                <div className="p-4 bg-gray-50/70 dark:bg-gray-850/80 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleSeasonCollapse(seasonKey)}
-                                            className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-lg"
-                                        >
-                                            {isCollapsed ? <ChevronRight size={18} /> : <ChevronDown size={18} />}
-                                        </button>
-                                        <input
-                                            type="checkbox"
-                                            checked={seasonSelected}
-                                            onChange={() => {
-                                                if (toggleMultiple) {
-                                                    toggleMultiple(eps.map(e => e.name));
-                                                }
-                                            }}
-                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300"
-                                        />
-                                        <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                                            <span>{seasonKey}</span>
-                                            <span className="text-xs font-normal text-gray-400">({eps.length} items)</span>
-                                        </h4>
-                                    </div>
-
-                                    <div className="text-xs text-gray-400">
-                                        {eps.filter(e => e.translated).length} / {eps.length} translated
-                                    </div>
+                    <div role="table" aria-label="Episodes">
+                        <div role="row" className={`${GRID} hidden border-b border-gray-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-gray-750 dark:text-gray-400 md:grid`}>
+                            <span className="w-4" /><span>Episode</span><span>Status</span><span>Lines</span><span>Translated</span><span className="text-right">Actions</span>
+                        </div>
+                        {seasons.map(([n, eps]) => {
+                            const names = eps.map(e => e.name);
+                            const total = totalsBySeason.get(n) || { done: 0, total: eps.length };
+                            const isCollapsed = !!collapsed[n] && showSeasonHeaders;
+                            return (
+                                <div key={n}>
+                                    {showSeasonHeaders && (
+                                        <div className="flex items-center gap-3 border-y border-gray-100 bg-gray-50 px-4 py-2 first:border-t-0 dark:border-gray-750 dark:bg-gray-900/40">
+                                            <SeasonCheckbox names={names} selected={selected} onToggle={() => toggleMultiple(names)} />
+                                            <button type="button" onClick={() => toggleSeason(n)} aria-expanded={!isCollapsed}
+                                                className="flex flex-1 items-center gap-2 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                                                {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                                                {seasonLabel(n)}
+                                            </button>
+                                            <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">{total.done} / {total.total} translated</span>
+                                        </div>
+                                    )}
+                                    {!isCollapsed && (
+                                        <div className="divide-y divide-gray-100 dark:divide-gray-750">
+                                            {eps.map(ep => (
+                                                <Row key={ep.name} ep={ep} projectName={projectName} busy={busy}
+                                                    selected={selected.has(ep.name)} entry={queue.get(ep.name)}
+                                                    onToggle={(name, shift) => toggleEpisode(name, shift, visible)}
+                                                    onTranslate={() => onTranslate([ep.name])}
+                                                    onRetranslate={() => setConfirmRetranslate(ep)}
+                                                    onAction={onAction} />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Season Episodes Content */}
-                                {!isCollapsed && (
-                                    <div className="p-4">
-                                        {viewMode === 'grid' ? (
-                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {eps.map(ep => {
-                                                    const isSelected = selectedEpisodes.has(ep.name);
-                                                    const hasSource = isEpHasSource(ep);
-                                                    return (
-                                                        <div
-                                                            key={ep.name}
-                                                            className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
-                                                                isSelected
-                                                                    ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-sm'
-                                                                    : 'border-gray-200 dark:border-gray-700 bg-gray-50/40 dark:bg-gray-900/30 hover:border-gray-300'
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="flex items-start gap-2.5">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={isSelected}
-                                                                        onChange={(e) => toggleEpisode(ep.name, e.nativeEvent.shiftKey, episodes)}
-                                                                        className="mt-1 w-4 h-4 text-indigo-600 rounded border-gray-300"
-                                                                    />
-                                                                    <div>
-                                                                        <div className="font-bold text-sm text-gray-900 dark:text-white line-clamp-1">
-                                                                            {ep.name}
-                                                                        </div>
-                                                                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                                            {renderQualityBadge(ep, projectName)}
-                                                                            {ep.has_ass && (
-                                                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 uppercase">
-                                                                                    ASS
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-1">
-                                                                    {(() => {
-                                                                        const activeJob = getActiveJob(ep.name);
-                                                                        if (activeJob && activeJob.status === 'running') {
-                                                                            return (
-                                                                                <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-500 rounded-lg cursor-not-allowed" title="Translation actively running">
-                                                                                    <RefreshCw size={14} className="animate-spin" />
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                        if (hasSource) {
-                                                                            return (
-                                                                                <div className="flex items-center gap-1">
-                                                                                    {onAgentTranslate && (
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => onAgentTranslate(ep.name)}
-                                                                                            disabled={preparingAgent}
-                                                                                            className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900 text-purple-600 dark:text-purple-400 rounded-lg transition-colors border border-purple-200/50 dark:border-purple-800/50"
-                                                                                            title="Agent Translate Episode (AI Agent Context)"
-                                                                                        >
-                                                                                            <Bot size={14} />
-                                                                                        </button>
-                                                                                    )}
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => onTranslateEpisode(ep.name)}
-                                                                                        className="p-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-lg transition-colors"
-                                                                                        title="Translate Episode"
-                                                                                    >
-                                                                                        <Play size={14} />
-                                                                                    </button>
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                        return (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => onEmbeddedTracks(ep.name)}
-                                                                                className="px-2.5 py-1 bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/60 dark:hover:bg-purple-850 text-purple-700 dark:text-purple-200 rounded-lg transition-all flex items-center gap-1.5 text-xs font-bold shadow-sm"
-                                                                                title="Extract Subtitle Track from Video File"
-                                                                            >
-                                                                                <Film size={13} /> Extract
-                                                                            </button>
-                                                                        );
-                                                                    })()}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Inline Progress Bar for Active Translation */}
-                                                            {(() => {
-                                                                const activeJob = getActiveJob(ep.name);
-                                                                if (!activeJob || activeJob.status !== 'running') return null;
-                                                                return (
-                                                                    <div className="mt-2.5 p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/40 space-y-1.5">
-                                                                        <div className="flex items-center justify-between text-[11px] font-semibold">
-                                                                            <span className="text-indigo-900 dark:text-indigo-200 flex items-center gap-1">
-                                                                                <Activity size={12} className="text-indigo-500 animate-pulse" />
-                                                                                {activeJob.scenes_total > 0
-                                                                                    ? `Scene ${activeJob.scenes_done || 0}/${activeJob.scenes_total}`
-                                                                                    : 'Translating...'}
-                                                                            </span>
-                                                                            <span className="text-indigo-600 dark:text-indigo-400 font-bold tabular-nums">
-                                                                                {Math.round(activeJob.progress || 0)}%
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="w-full h-1.5 bg-indigo-200/60 dark:bg-indigo-900/60 rounded-full overflow-hidden relative">
-                                                                            <div
-                                                                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-500 relative"
-                                                                                style={{ width: `${Math.max(3, Math.min(100, activeJob.progress || 0))}%` }}
-                                                                            >
-                                                                                <div className="absolute inset-0 bg-white/30 animate-pulse" />
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-gray-400 font-medium">
-                                                                            <span>
-                                                                                {activeJob.cues_total > 0
-                                                                                    ? `Cues: ${activeJob.cues_translated || 0}/${activeJob.cues_total}`
-                                                                                    : activeJob.cues_translated > 0
-                                                                                        ? `${activeJob.cues_translated} cues`
-                                                                                        : 'Processing...'}
-                                                                            </span>
-                                                                            {activeJob.eta_seconds != null && (
-                                                                                <span className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-0.5">
-                                                                                    <Clock size={10} />
-                                                                                    ETA: {formatEta(activeJob.eta_seconds)}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })()}
-
-                                                            {/* Secondary Action Buttons */}
-                                                            <div className="flex items-center justify-between pt-2 border-t border-gray-200/50 dark:border-gray-700/50 text-xs">
-                                                                <div className="flex items-center gap-1">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => onApplyFixes(ep.name)}
-                                                                        disabled={!hasSource}
-                                                                        className={`p-1 rounded ${hasSource ? 'text-gray-400 hover:text-indigo-600' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
-                                                                        title="Apply SubtitleEdit Fixes"
-                                                                    >
-                                                                        <Wrench size={13} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => onCheckMissing(ep.name)}
-                                                                        disabled={!hasSource}
-                                                                        className={`p-1 rounded ${hasSource ? 'text-gray-400 hover:text-amber-500' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
-                                                                        title="Check Missing Lines"
-                                                                    >
-                                                                        <Search size={13} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => onScriptFix(ep.name)}
-                                                                        disabled={!hasSource}
-                                                                        className={`p-1 rounded ${hasSource ? 'text-gray-400 hover:text-purple-500' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}`}
-                                                                        title="ScriptGuard Homoglyph Check"
-                                                                    >
-                                                                        <ShieldAlert size={13} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => onEmbeddedTracks(ep.name)}
-                                                                        className={`p-1 rounded transition-colors ${!hasSource ? 'text-purple-600 bg-purple-50 dark:bg-purple-950 font-bold' : 'text-gray-400 hover:text-purple-600'}`}
-                                                                        title="Inspect / Extract Embedded Video Tracks"
-                                                                    >
-                                                                        <Film size={13} />
-                                                                    </button>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-1">
-                                                                    {ep.translated && hasSource && (
-                                                                        <Link
-                                                                            to={`/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(ep.name)}`}
-                                                                            className="px-2 py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-                                                                        >
-                                                                            <FileText size={12} /> Lines
-                                                                        </Link>
-                                                                    )}
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleDeleteTranslationClick(ep.name)}
-                                                                        className="p-1 text-gray-400 hover:text-rose-600 rounded"
-                                                                        title="Delete Translation"
-                                                                    >
-                                                                        <Trash2 size={13} />
-                                                                    </button>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-left text-xs">
-                                                    <thead>
-                                                        <tr className="border-b border-gray-100 dark:border-gray-700 text-gray-400 font-bold uppercase">
-                                                            <th className="p-2 w-8"></th>
-                                                            <th className="p-2">Episode</th>
-                                                            <th className="p-2">Status</th>
-                                                            <th className="p-2 text-right">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                                        {eps.map(ep => {
-                                                            const hasSource = isEpHasSource(ep);
-                                                            return (
-                                                                <tr key={ep.name} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
-                                                                    <td className="p-2">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={selectedEpisodes.has(ep.name)}
-                                                                            onChange={(e) => toggleEpisode(ep.name, e.nativeEvent.shiftKey, episodes)}
-                                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300"
-                                                                        />
-                                                                    </td>
-                                                                    <td className="p-2 font-semibold text-gray-900 dark:text-white">
-                                                                        {ep.name}
-                                                                    </td>
-                                                                    <td className="p-2">
-                                                                        {(() => {
-                                                                            const activeJob = getActiveJob(ep.name);
-                                                                            if (activeJob && activeJob.status === 'running') {
-                                                                                return (
-                                                                                    <div className="space-y-1 min-w-[150px] max-w-[200px]">
-                                                                                        <div className="flex items-center justify-between text-[10px] font-bold">
-                                                                                            <span className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                                                                                                <RefreshCw size={9} className="animate-spin" />
-                                                                                                {activeJob.scenes_total > 0 ? `S${activeJob.scenes_done || 0}/${activeJob.scenes_total}` : 'Translating'}
-                                                                                            </span>
-                                                                                            <span className="tabular-nums text-gray-700 dark:text-gray-300">
-                                                                                                {Math.round(activeJob.progress || 0)}%
-                                                                                            </span>
-                                                                                        </div>
-                                                                                        <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                                                            <div
-                                                                                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all duration-500"
-                                                                                                style={{ width: `${Math.max(3, Math.min(100, activeJob.progress || 0))}%` }}
-                                                                                            />
-                                                                                        </div>
-                                                                                        <div className="flex items-center justify-between text-[9px] text-gray-400">
-                                                                                            <span>
-                                                                                                {activeJob.cues_total > 0 ? `${activeJob.cues_translated || 0}/${activeJob.cues_total} cues` : ''}
-                                                                                            </span>
-                                                                                            {activeJob.eta_seconds != null && (
-                                                                                                <span className="text-indigo-500 font-semibold">ETA: {formatEta(activeJob.eta_seconds)}</span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                );
-                                                                            }
-                                                                            return renderQualityBadge(ep, projectName);
-                                                                        })()}
-                                                                    </td>
-                                                                    <td className="p-2 text-right">
-                                                                        <div className="flex items-center justify-end gap-1">
-                                                                            {(() => {
-                                                                                const activeJob = getActiveJob(ep.name);
-                                                                                if (activeJob && activeJob.status === 'running') {
-                                                                                    return (
-                                                                                        <div className="p-1 text-indigo-500 cursor-not-allowed" title="Translation running">
-                                                                                            <RefreshCw size={14} className="animate-spin" />
-                                                                                        </div>
-                                                                                    );
-                                                                                }
-                                                                                if (hasSource) {
-                                                                                    return (
-                                                                                        <>
-                                                                                            {onAgentTranslate && (
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => onAgentTranslate(ep.name)}
-                                                                                                    disabled={preparingAgent}
-                                                                                                    className="p-1 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50 rounded transition-colors"
-                                                                                                    title="Agent Translate Episode"
-                                                                                                >
-                                                                                                    <Bot size={14} />
-                                                                                                </button>
-                                                                                            )}
-                                                                                            <button onClick={() => onTranslateEpisode(ep.name)} className="p-1 text-indigo-600 hover:bg-indigo-50 rounded" title="Translate Episode">
-                                                                                                <Play size={14} />
-                                                                                            </button>
-                                                                                        </>
-                                                                                    );
-                                                                                }
-                                                                                return (
-                                                                                    <button onClick={() => onEmbeddedTracks(ep.name)} className="p-1 text-purple-600 hover:bg-purple-50 rounded" title="Extract Subtitle from Video">
-                                                                                        <Film size={14} />
-                                                                                    </button>
-                                                                                );
-                                                                            })()}
-                                                                            <button onClick={() => handleDeleteTranslationClick(ep.name)} className="p-1 text-gray-400 hover:text-rose-600 rounded" title="Delete Translation">
-                                                                                <Trash2 size={14} />
-                                                                            </button>
-                                                                        </div>
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-
-                                                </table>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })
+                            );
+                        })}
+                    </div>
                 )}
-            </div>
+            </Card>
 
-            {/* Bottom Floating Batch Action Bar */}
-            <AnimatePresence>
-                {selectedEpisodes.size > 0 && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 20 }}
-                        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-gray-900/95 text-white px-6 py-3.5 rounded-2xl shadow-2xl backdrop-blur-md border border-gray-700 flex items-center gap-4 flex-wrap max-w-2xl"
-                    >
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs bg-indigo-600 px-2.5 py-1 rounded-lg">
-                                {selectedEpisodes.size} selected
-                            </span>
-                            <button
-                                type="button"
-                                onClick={clearSelection}
-                                className="text-xs text-gray-400 hover:text-white underline"
-                            >
-                                Clear
-                            </button>
-                        </div>
+            {selected.size > 0 && (
+                <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-850">
+                    <div className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+                        <ListChecks size={16} className="text-indigo-600" />
+                        <span className="font-medium">{selected.size} selected</span>
+                        <button type="button" onClick={clearSelection} className="text-xs text-gray-500 underline hover:text-gray-900 dark:hover:text-white">Clear</button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="primary" icon={Languages} disabled={busy} onClick={() => onBulk('translate')}>Translate</Button>
+                        <Button size="sm" icon={Film} onClick={() => onBulk('extract')}>Extract</Button>
+                        <Button size="sm" variant="danger" icon={Trash2} onClick={() => onBulk('delete')}>Delete translation</Button>
+                    </div>
+                </div>
+            )}
 
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                                type="button"
-                                onClick={onBatchTranslate}
-                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
-                            >
-                                <Play size={12} /> Translate
-                            </button>
-
-                            {onBatchAgentTranslate && (
-                                <button
-                                    type="button"
-                                    onClick={() => onBatchAgentTranslate(Array.from(selectedEpisodes))}
-                                    disabled={preparingAgent}
-                                    className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all border border-purple-400/30 disabled:opacity-50"
-                                    title="Translate selected episode(s) using AI Agent context"
-                                >
-                                    <Bot size={13} className={preparingAgent ? "animate-spin" : ""} />
-                                    Agent Translate ({selectedEpisodes.size})
-                                </button>
-                            )}
-
-                            {selectedEpisodes.size === 1 && onEmbeddedTracks && (
-                                <button
-                                    type="button"
-                                    onClick={() => onEmbeddedTracks(Array.from(selectedEpisodes)[0])}
-                                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
-                                    title="Inspect & extract embedded subtitle tracks for this selected episode"
-                                >
-                                    <Film size={12} /> Inspect / Extract Subs
-                                </button>
-                            )}
-
-                            {onBatchExtractEmbedded && (
-                                <button
-                                    type="button"
-                                    onClick={() => onBatchExtractEmbedded(Array.from(selectedEpisodes))}
-                                    className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-amber-500/30"
-                                    title="Extract embedded subtitle tracks from selected video files"
-                                >
-                                    <Layers size={12} /> Extract Subs ({selectedEpisodes.size})
-                                </button>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={onBatchExportToPath}
-                                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-gray-700"
-                            >
-                                <FolderDown size={12} /> Export to Disk
-                            </button>
-
-
-                            <button
-                                type="button"
-                                onClick={() => onApplyFixes(null, true)}
-                                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-gray-700"
-                            >
-                                <Wrench size={12} /> Fixes
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={onBatchDownload}
-                                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors border border-gray-700"
-                            >
-                                <Download size={12} /> Zip
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={handleBatchDeleteClick}
-                                className="p-1.5 text-rose-400 hover:bg-rose-950/50 rounded-lg transition-colors"
-                                title="Delete Selected Episodes Translation"
-                            >
-                                <Trash2 size={16} />
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            <ConfirmDialog open={!!confirmRetranslate} title={`Retranslate ${confirmRetranslate?.name || ''}?`} confirmLabel="Retranslate"
+                onCancel={() => setConfirmRetranslate(null)}
+                onConfirm={() => { const name = confirmRetranslate.name; setConfirmRetranslate(null); onTranslate([name], { retranslate: true }); }}>
+                <p>The existing translation is replaced by a new one. Lines you edited by hand are translated again too.</p>
+            </ConfirmDialog>
         </div>
     );
 };

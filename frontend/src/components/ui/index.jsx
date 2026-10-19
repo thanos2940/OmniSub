@@ -310,3 +310,29 @@ export function Toggle({ checked, onChange, label, description, disabled }) {
         </div>
     );
 }
+
+// ------------------------------------------------------------------ notices
+
+const NOTICE_TONES = {
+    info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200',
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200',
+    warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200',
+    danger: 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200',
+    accent: 'border-indigo-200 bg-indigo-50 text-indigo-900 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200',
+};
+
+// An inline message strip: what happened, what is going on, or what needs attention.
+export function Notice({ tone = 'info', icon: Icon, title, children, actions, className }) {
+    return (
+        <div className={cx('flex flex-wrap items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm', NOTICE_TONES[tone], className)} role={tone === 'danger' ? 'alert' : 'status'}>
+            <div className="flex min-w-0 items-start gap-3">
+                {Icon && <Icon size={18} className="mt-0.5 shrink-0" />}
+                <div className="min-w-0">
+                    {title && <div className="font-medium">{title}</div>}
+                    {children && <div className={cx(title && 'mt-0.5 text-[13px] opacity-90')}>{children}</div>}
+                </div>
+            </div>
+            {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+        </div>
+    );
+}

@@ -452,5 +452,11 @@ export const api = {
     autopilotItemNow: (id) => axios.post(`${API_URL}/api/autopilot/items/${encodeURIComponent(id)}/now`),
     autopilotPollNow: () => axios.post(`${API_URL}/api/autopilot/poll`),
     autopilotReconcileNow: () => axios.post(`${API_URL}/api/autopilot/reconcile`),
+
+    // --- F2a: project & episode ---
+    // One line through the runner's agent (10-30 s). `lang` only for a non-primary target language.
+    retranslateLine: (projectName, episodeName, lineIndex, lang = null) =>
+        axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/retranslate-line`,
+            { line_index: lineIndex, ...(lang ? { lang } : {}) }, { timeout: 180000 }),
 };
 

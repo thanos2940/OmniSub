@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FileText, Sparkles, Plus, Edit2, Trash2, X, Check, RefreshCw } from 'lucide-react';
+import { Button, Card } from './ui';
+import { errorText } from '../hooks/useTranslate';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import { useJobs } from '../context/JobContext';
@@ -82,7 +84,7 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
             setGeneratingJobId(jobId);
         } catch (err) {
             console.error("Failed to generate characters", err);
-            toast.error("Failed to generate characters.");
+            toast.error(errorText(err, "Could not find the characters."));
         }
     };
 
@@ -136,55 +138,24 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
-                <RefreshCw className="w-8 h-8 mx-auto text-emerald-400 animate-spin mb-4" />
-                <p className="text-gray-500">Loading Character Profiles...</p>
-            </div>
-        );
-    }
-
     const charsList = Object.keys(characters);
     const isGenerating = !!generatingJobId;
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <FileText size={20} className="text-emerald-500" /> Character Profiles
-                    <span className="text-sm font-normal text-gray-500 ml-2">({charsList.length} profiles)</span>
-                </h3>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleGenerate}
-                        disabled={isGenerating}
-                        className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors text-sm font-medium disabled:opacity-50"
-                    >
-                        <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} /> {isGenerating ? 'Generating...' : 'AI Generate'}
-                    </button>
-                    <button
-                        onClick={() => openEditModal()}
-                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                    >
-                        <Plus size={14} /> Add Character
-                    </button>
-                    <button
-                        onClick={loadCharacters}
-                        className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
-                        title="Refresh Profiles"
-                    >
-                        <RefreshCw size={16} />
-                    </button>
-                </div>
-            </div>
-
-            <div className="p-6">
+        <Card title="Character profiles" subtitle={loading ? 'Loading…' : `${charsList.length} ${charsList.length === 1 ? 'profile' : 'profiles'}. Gender and speech style keep the translation consistent.`}
+            actions={(
+                <>
+                    <Button size="sm" icon={Sparkles} loading={isGenerating} onClick={handleGenerate}>{isGenerating ? 'Working…' : 'Find characters'}</Button>
+                    <Button size="sm" variant="primary" icon={Plus} onClick={() => openEditModal()}>Add character</Button>
+                    <Button size="sm" variant="ghost" icon={RefreshCw} onClick={loadCharacters} aria-label="Refresh profiles" title="Refresh profiles" />
+                </>
+            )}>
+            <div>
                 {charsList.length === 0 ? (
                     <div className="text-center py-8">
                         <FileText size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                         <p className="text-gray-500">No character profiles found.</p>
-                        <p className="text-sm text-gray-400 mt-1">Use AI Generate to extract profiles from the first episode.</p>
+                        <p className="text-sm text-gray-400 mt-1">Use Find characters to pick them out of the first episode, or add them yourself.</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -356,7 +327,7 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
                     </div>
                 </div>
             )}
-        </div>
+        </Card>
     );
 };
 
