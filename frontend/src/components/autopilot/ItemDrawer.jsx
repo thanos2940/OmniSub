@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { X, Loader2, Play, RotateCcw, SkipForward } from 'lucide-react';
+import { X, Play, RotateCcw, SkipForward } from 'lucide-react';
 import { api } from '../../api';
+import { Button, IconButton, Spinner } from '../ui';
 import {
     SOURCE_KIND_LABEL, asList, canCheckNow, canRetry, canSkip, errorText, fmtCountdown, fmtDateTime,
     isMissingEndpoint, itemTitle, reasonText,
@@ -58,10 +59,9 @@ const ItemDrawer = ({ itemId, toast, onClose, onChanged }) => {
 
     const events = asList(item?.events).slice().reverse();
     const outputs = asList(item?.outputs);
-    const actBtn = 'inline-flex items-center gap-1.5 text-xs font-semibold border px-3 py-1.5 rounded-lg bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50';
 
     return (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+        <div className="fixed inset-0 z-[70] flex justify-end bg-black/40" onClick={onClose}>
             <aside
                 role="dialog" aria-label="Autopilot item"
                 className="w-full max-w-lg h-full overflow-y-auto bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-800 shadow-2xl p-5 space-y-4"
@@ -72,23 +72,23 @@ const ItemDrawer = ({ itemId, toast, onClose, onChanged }) => {
                         <h3 className="text-base font-bold text-gray-900 dark:text-white break-words">{item ? itemTitle(item) : 'Loading...'}</h3>
                         {item && <div className="mt-1"><StateChip state={item.state} /></div>}
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"><X size={18} /></button>
+                    <IconButton icon={X} label="Close" onClick={onClose} />
                 </div>
 
                 {error && <div className="text-sm text-rose-600 dark:text-rose-400">{error}</div>}
-                {!item && !error && <div className="flex justify-center py-10 text-gray-400"><Loader2 className="animate-spin" size={22} /></div>}
+                {!item && !error && <Spinner />}
 
                 {item && (
                     <>
                         <div className="flex flex-wrap gap-2">
                             {canCheckNow(item.state) && (
-                                <button type="button" disabled={busy} className={actBtn} onClick={() => act(api.autopilotItemNow, 'Checking now.')}><Play size={12} /> Check now</button>
+                                <Button size="sm" icon={Play} disabled={busy} onClick={() => act(api.autopilotItemNow, 'Checking now.')}>Check now</Button>
                             )}
                             {canRetry(item.state) && (
-                                <button type="button" disabled={busy} className={actBtn} onClick={() => act(api.retryAutopilotItem, 'Queued for another try.')}><RotateCcw size={12} /> Retry</button>
+                                <Button size="sm" icon={RotateCcw} disabled={busy} onClick={() => act(api.retryAutopilotItem, 'Queued for another try.')}>Retry</Button>
                             )}
                             {canSkip(item.state) && (
-                                <button type="button" disabled={busy} className={actBtn} onClick={() => act(api.skipAutopilotItem, 'Skipped.')}><SkipForward size={12} /> Skip</button>
+                                <Button size="sm" variant="ghost" icon={SkipForward} disabled={busy} onClick={() => act(api.skipAutopilotItem, 'Skipped.')}>Skip</Button>
                             )}
                         </div>
 

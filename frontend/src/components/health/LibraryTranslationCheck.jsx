@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    Languages, Search, Loader2, ChevronDown, ChevronRight, Wrench, Bot,
+    Search, Loader2, ChevronDown, ChevronRight, Wrench, Bot,
     AlertTriangle, CheckCircle2, ArrowRight,
 } from 'lucide-react';
 import { api } from '../../api';
+import { Button, Card } from '../ui';
 import { useToast, formatErrorMessage } from '../../context/ToastContext';
 import { BROKEN_LABELS, BROKEN_HINTS, brokenGroups, joinParts, repairParts, toCount } from '../../utils/translationAudit';
 
@@ -28,7 +29,6 @@ const VALUE_TONES = {
     gray: 'text-gray-500 dark:text-gray-400',
 };
 
-const BUTTON = 'flex items-center gap-1.5 text-sm font-semibold border px-3 py-1.5 rounded-lg shadow-sm disabled:opacity-50';
 
 const isState = (data) => !!data && typeof data === 'object' && typeof data.status === 'string';
 
@@ -354,30 +354,22 @@ const LibraryTranslationCheck = () => {
     const allOpen = projects.length > 0 && projects.every((p) => isOpen(p.name));
 
     return (
-        <div className="bg-white dark:bg-gray-850 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-sm p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                <div className="flex items-start gap-3">
-                    <Languages className="text-purple-500 mt-0.5 shrink-0" size={22} />
-                    <div>
-                        <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Library translation check</h2>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Looks through every translated episode of every project for untranslated lines, lines that carry the translation of
-                            another line, and garbled or leftover prompt text. Nothing changes unless you repair.
-                        </p>
-                    </div>
-                </div>
-                <button
-                    type="button"
+        <Card
+            title="Library translation check"
+            subtitle="Looks through every translated episode for untranslated lines, lines that carry another line's translation, and garbled or leftover prompt text. Nothing changes unless you repair."
+            actions={(
+                <Button
+                    size="sm"
+                    icon={Search}
+                    loading={busy}
                     onClick={() => startRun({ repair: false, requeue: false, misplaced: true })}
-                    disabled={busy}
-                    className={`${BUTTON} shrink-0 bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20`}
                     title="Scan the whole library (read-only)"
                 >
-                    {busy ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                    {running ? `${activityLabel(job.options)}…` : 'Check library'}
-                </button>
-            </div>
-
+                    {running ? `${activityLabel(job.options)}...` : 'Check library'}
+                </Button>
+            )}
+        >
+            <div className="space-y-4">
             {running && (
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3 text-xs font-semibold text-gray-600 dark:text-gray-300">
@@ -488,30 +480,31 @@ const LibraryTranslationCheck = () => {
                     {(canRepair || canQueue || showQueueLink) && (
                         <div className="flex flex-wrap items-center gap-2 pt-1">
                             {canRepair && (
-                                <button
-                                    type="button"
-                                    onClick={() => startRun({ repair: true, requeue: false, misplaced: true })}
+                                <Button
+                                    size="sm"
+                                    icon={Wrench}
                                     disabled={busy}
-                                    className={`${BUTTON} bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20`}
+                                    onClick={() => startRun({ repair: true, requeue: false, misplaced: true })}
                                     title="Fixes garbled encoding and clears leftover prompt text across the library. Lines with mixed alphabets are left in place. Nothing is queued."
                                 >
-                                    <Wrench size={14} /> Repair garbled text
-                                </button>
+                                    Repair garbled text
+                                </Button>
                             )}
                             {canQueue && (
-                                <button
-                                    type="button"
-                                    onClick={() => setConfirming(true)}
+                                <Button
+                                    size="sm"
+                                    variant="primary"
+                                    icon={Bot}
                                     disabled={busy || confirming}
-                                    className={`${BUTTON} bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20`}
+                                    onClick={() => setConfirming(true)}
                                     title="Repair, clear what needs retranslating (with backups) and queue it for the agent runner"
                                 >
-                                    <Bot size={14} /> Repair &amp; queue fixes
-                                </button>
+                                    Repair &amp; queue fixes
+                                </Button>
                             )}
                             {showQueueLink && (
-                                <Link to="/queue" className="flex items-center gap-1 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                                    Open Queue to run the agent <ArrowRight size={14} />
+                                <Link to="/activity" className="flex items-center gap-1 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                    Open Activity to see the runner <ArrowRight size={14} />
                                 </Link>
                             )}
                         </div>
@@ -528,7 +521,7 @@ const LibraryTranslationCheck = () => {
                                     Leftover prompt text, lines on the wrong line and lines with mixed alphabets are cleared so the agent can
                                     retranslate them. The old text is saved in a backup next to each episode.
                                 </li>
-                                <li>Those lines, plus anything still untranslated, are queued for the agent. Start the agent from the Queue page.</li>
+                                <li>Those lines, plus anything still untranslated, are queued for the agent. The runner picks them up from Activity.</li>
                                 <li>Imported subtitles are only repaired for encoding. They are never cleared or queued.</li>
                             </ul>
                             <div className="flex items-center justify-end gap-2">
@@ -545,7 +538,8 @@ const LibraryTranslationCheck = () => {
                     )}
                 </>
             )}
-        </div>
+            </div>
+        </Card>
     );
 };
 

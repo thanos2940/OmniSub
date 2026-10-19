@@ -1,23 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, X, Zap, Layers, FileText, Film, Tv, HardDrive } from 'lucide-react';
-
-const STORAGE_KEY = 'omnisub_sync_options';
-
-const getSavedOptions = () => {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) return JSON.parse(saved);
-    } catch (e) {
-        // ignore
-    }
-    return {
-        scan_ass: true,
-        extract_embedded_ass: false,
-        source: 'both',
-    };
-};
+import { getSavedSyncOptions, saveSyncOptions } from './library/syncOptions';
 
 const LibrarySyncModal = ({
     isOpen,
@@ -28,12 +13,12 @@ const LibrarySyncModal = ({
     isProjectSpecific = false,
     projectName = null,
 }) => {
-    const [options, setOptions] = useState(getSavedOptions);
+    const [options, setOptions] = useState(getSavedSyncOptions);
     const [saveDefault, setSaveDefault] = useState(true);
 
     useEffect(() => {
         if (isOpen) {
-            setOptions(getSavedOptions());
+            setOptions(getSavedSyncOptions());
         }
     }, [isOpen]);
 
@@ -54,13 +39,7 @@ const LibrarySyncModal = ({
     const isDeep = options.scan_ass && options.extract_embedded_ass;
 
     const handleStart = () => {
-        if (saveDefault) {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
-            } catch (e) {
-                // ignore
-            }
-        }
+        if (saveDefault) saveSyncOptions(options);
         onConfirm(options);
         onClose();
     };

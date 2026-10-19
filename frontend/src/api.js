@@ -458,5 +458,14 @@ export const api = {
     retranslateLine: (projectName, episodeName, lineIndex, lang = null) =>
         axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/retranslate-line`,
             { line_index: lineIndex, ...(lang ? { lang } : {}) }, { timeout: 180000 }),
+
+    // --- F1: system & activity ---
+    getSystemStatus: () => axios.get(`${API_URL}/api/system/status`),
+    getSystemLogList: () => axios.get(`${API_URL}/api/system/logs/list`),
+    getSystemLog: (name, lines = 500) => axios.get(`${API_URL}/api/system/logs`, { params: { name, lines } }),
+    getAutoUpdateConfig: () => axios.get(`${API_URL}/api/system/auto-update`),
+    setAutoUpdateConfig: ({ enabled, channel, intervalHours }) =>
+        axios.post(`${API_URL}/api/system/auto-update`, { enabled, channel, interval_hours: intervalHours }),
+    getHealth: () => axios.get(`${API_URL}/api/health`),
 };
 

@@ -5,7 +5,6 @@ export const useQueueData = ({ toast, activeJobs }) => {
     const [queueData, setQueueData] = useState({ items: [], summary: {}, rate_limits: {}, paused: false });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState('active'); // active | history
     const [selectedJobLogs, setSelectedJobLogs] = useState(null);
     const [checkingLimit, setCheckingLimit] = useState(false);
     const isMounted = useRef(true);
@@ -88,10 +87,10 @@ export const useQueueData = ({ toast, activeJobs }) => {
         try {
             if (queueData.paused) {
                 await api.resumeQueue();
-                if (toast?.success) toast.success('Translation worker resumed');
+                if (toast?.success) toast.success('Translations resumed.');
             } else {
                 await api.pauseQueue();
-                if (toast?.success) toast.success('Translation worker paused');
+                if (toast?.success) toast.success('Translations paused.');
             }
             fetchQueue();
         } catch (e) {
@@ -265,8 +264,6 @@ export const useQueueData = ({ toast, activeJobs }) => {
         queueData,
         loading,
         error,
-        activeTab,
-        setActiveTab,
         selectedJobLogs,
         setSelectedJobLogs,
         checkingLimit,
