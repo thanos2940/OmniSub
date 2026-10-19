@@ -258,7 +258,11 @@ async def _write_job_snapshot_off_loop(snapshot: tuple) -> None:
 
 
 def create_job(job_type: str, project_name: Optional[str] = None, episode_name: Optional[str] = None) -> str:
-    job_id = f"{job_type}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    base = f"{job_type}_{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+    job_id, n = base, 1
+    while job_id in jobs:  # two jobs created within one clock tick must not share (and overwrite) an id
+        n += 1
+        job_id = f"{base}_{n}"
     jobs[job_id] = JobStatus(
         id=job_id, status="pending", progress=0.0, 
         message="Initializing...", logs=[],

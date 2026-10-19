@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import asyncio
+
+from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -112,11 +114,19 @@ async def enqueue_episodes(request: EnqueueRequest):
 
 
 @router.post("/api/queue/enqueue-missing")
-async def enqueue_all_missing():
+async def enqueue_all_missing(background_tasks: BackgroundTasks):
+    """Queue everything the library still lacks. Episodes whose subtitle is imported are queued now
+    (``enqueued_count``); finding the never-imported ones of every Sonarr/Radarr title (their subtitle is
+    inside the video) takes longer and runs as job ``job_id`` (one at a time)."""
+    from services import on_demand
     from services.queue_service import enqueue_missing_for_library, PRIORITY_BACKLOG
-    enqueued = enqueue_missing_for_library(PRIORITY_BACKLOG)
+    enqueued = await asyncio.to_thread(enqueue_missing_for_library, PRIORITY_BACKLOG)
     total_enqueued = sum(len(ids) for ids in enqueued.values())
-    return {"status": "success", "enqueued_count": total_enqueued, "enqueued": enqueued}
+    already = on_demand.library_job_running()
+    job_id = on_demand.start_library_job()
+    if not already:
+        background_tasks.add_task(on_demand.translate_missing_library, job_id)
+    return {"status": "success", "enqueued_count": total_enqueued, "enqueued": enqueued, "job_id": job_id}
 
 
 class CancelAllRequest(BaseModel):

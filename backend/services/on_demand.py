@@ -673,7 +673,8 @@ async def _route_unit(engine, config: Dict, project_name: str, unit: _Unit, lang
 _MAX_REPORTED_UNAVAILABLE = 50
 
 
-async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG) -> Dict:
+async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG,
+                            include_imported: bool = True) -> Dict:
     """Queue every episode of a library title that has no translation yet.
 
     Episodes whose source subtitle is already imported go straight to the queue
@@ -698,7 +699,8 @@ async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG)
     if not meta:
         raise OnDemandError(404, "project_not_found", f"Project '{project_name}' not found.")
 
-    queued = await loop.run_in_executor(None, enqueue_missing_for_project, project_name, priority)
+    queued = (await loop.run_in_executor(None, enqueue_missing_for_project, project_name, priority)
+              if include_imported else [])
     report: Dict = {
         "status": "success", "project": project_name,
         "queued_for_translation": len([q for q in queued if q]), "queued_for_extraction": 0,
@@ -768,6 +770,69 @@ async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG)
                     report["unavailable"].append({"episode": entry["episode_name"], "reason": entry.get("detail")})
     report["enqueued_count"] = report["queued_for_translation"] + report["queued_for_extraction"]
     return report
+
+
+# ---------------------------------------------------------------------------
+# "Translate all missing" for the whole library
+# ---------------------------------------------------------------------------
+
+_library_job_id: Optional[str] = None
+
+
+def library_job_running() -> Optional[str]:
+    """The id of the library-wide "translate missing" job while it runs, else None."""
+    from utils.jobs_manager import jobs
+    job = jobs.get(_library_job_id) if _library_job_id else None
+    return _library_job_id if job is not None and job.status in ("pending", "running") else None
+
+
+def start_library_job() -> str:
+    """Create the job the library-wide "translate missing" reports to (single flight: the running one
+    is returned while it lasts). Run it with ``translate_missing_library(job_id)``."""
+    global _library_job_id
+    from utils.jobs_manager import create_job
+    running = library_job_running()
+    if running:
+        return running
+    _library_job_id = create_job("translate_missing_library")
+    return _library_job_id
+
+
+async def translate_missing_library(job_id: str, priority: int = PRIORITY_BACKLOG) -> Dict:
+    """The part of "Translate all missing" that is slow: every Sonarr/Radarr title is asked for the
+    episodes OmbiSub has never imported (their subtitle only exists inside the video), one title at a
+    time, and those are routed to extraction and translation like ``translate_missing`` does. The
+    episodes with an imported source were queued already by the caller."""
+    from utils.jobs_manager import update_job
+    loop = asyncio.get_running_loop()
+    names = await loop.run_in_executor(None, storage.list_projects)
+    titles = []
+    for name in names:
+        meta = await loop.run_in_executor(None, storage.load_project_metadata, name) or {}
+        if meta.get("arr_source") and not meta.get("arr_disabled"):
+            titles.append(name)
+    totals = {"titles": len(titles), "queued_for_translation": 0, "queued_for_extraction": 0,
+              "no_usable_source": 0, "errors": 0}
+    update_job(job_id, status="running", progress=0.0,
+               message=f"Looking for episodes with their subtitle inside the video in {len(titles)} titles")
+    for i, name in enumerate(titles, 1):
+        try:
+            report = await translate_missing(name, priority=priority, include_imported=False)
+        except Exception as e:  # one title must never stop the rest
+            report = {"error": str(e)}
+        for key in ("queued_for_translation", "queued_for_extraction", "no_usable_source"):
+            totals[key] += int(report.get(key) or 0)
+        if report.get("error"):
+            totals["errors"] += 1
+            update_job(job_id, log=f"{name}: {report['error']}")
+        update_job(job_id, progress=round(100.0 * i / max(1, len(titles)), 1),
+                   message=f"{i}/{len(titles)} titles checked; {totals['queued_for_extraction']} episodes "
+                           f"sent to extraction, {totals['queued_for_translation']} to translation")
+    update_job(job_id, status="completed", progress=100.0, result=totals,
+               message=f"Checked {len(titles)} titles: {totals['queued_for_extraction']} episodes sent to "
+                       f"extraction, {totals['queued_for_translation']} to translation, "
+                       f"{totals['no_usable_source']} without a usable subtitle")
+    return totals
 
 
 def capabilities() -> Dict:
