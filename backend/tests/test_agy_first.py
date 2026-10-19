@@ -618,6 +618,7 @@ class TestEngineDefaults:
         storage.save_global_config({"translation_engine": "model"})
         assert agy_llm.agent_mode() is False
 
+    @pytest.mark.real_autostart
     def test_the_runner_starts_on_boot_with_the_default_engine(self, tmp_path, monkeypatch):
         runner = _runner(tmp_path)
         monkeypatch.setattr(agent_runner, "_runner", runner)
@@ -626,6 +627,7 @@ class TestEngineDefaults:
         assert agent_runner.autostart() is True
         assert started[0][0]["watch"] is True and started[0][1] is False
 
+    @pytest.mark.real_autostart
     def test_boot_autostart_can_be_turned_off(self, tmp_path, monkeypatch):
         runner = _runner(tmp_path)
         monkeypatch.setattr(agent_runner, "_runner", runner)

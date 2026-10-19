@@ -170,6 +170,7 @@ def test_path_resolver_validate_mappings():
 # 3. Autonomous Agent Runner Boot
 # ===========================================================================
 
+@pytest.mark.real_autostart
 def test_autostart_when_translation_engine_is_agent(monkeypatch):
     """autostart() starts runner and enables keep_watching when translation_engine == 'agent'."""
     runner = agent_runner.get_runner()
@@ -200,6 +201,7 @@ def test_autostart_when_translation_engine_is_agent(monkeypatch):
     assert resumed is False  # a fresh start on boot, not a resume
 
 
+@pytest.mark.real_autostart
 def test_autostart_when_runner_already_enabled(monkeypatch):
     """autostart() starts runner and sets keep_watching if r.enabled was saved as True."""
     runner = agent_runner.get_runner()
@@ -221,6 +223,7 @@ def test_autostart_when_runner_already_enabled(monkeypatch):
     assert resumed is True
 
 
+@pytest.mark.real_autostart
 def test_autostart_noops_when_not_enabled_and_not_agent(monkeypatch):
     """autostart() does nothing when translation_engine is not agent and runner is not enabled."""
     runner = agent_runner.get_runner()

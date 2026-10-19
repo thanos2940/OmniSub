@@ -64,3 +64,14 @@ def no_real_plex_refresh():
     plex_refresh.set_refresher(plex_refresh.PlexRefresher(delay=0, client_factory=lambda cfg: None))
     yield
     plex_refresh.set_refresher(None)
+
+
+@pytest.fixture(autouse=True)
+def no_real_runner_autostart(request, monkeypatch):
+    """Booting the app (a TestClient lifespan) must never start the real agent runner: with the agent
+    engine as the default it would drive the installed agy CLI against the test queue. Tests of
+    autostart itself carry the ``real_autostart`` marker (they stub the runner's start)."""
+    if request.node.get_closest_marker("real_autostart"):
+        return
+    from services import agent_runner
+    monkeypatch.setattr(agent_runner, "autostart", lambda: False)
