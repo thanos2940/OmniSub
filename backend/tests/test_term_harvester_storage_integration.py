@@ -11,6 +11,12 @@ from utils.storage_modules import atomic_io, project_store, episode_store
 from services import term_harvester
 
 
+@pytest.fixture(autouse=True)
+def model_engine():
+    """These tests drive the Gemini model path (the default engine is the agent CLI: test_agy_first.py)."""
+    storage.save_global_config({"translation_engine": "model"})
+
+
 class TestLoadEpisodeData:
     """Test storage.load_episode_data normalization and edge cases."""
 

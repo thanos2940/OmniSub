@@ -12,6 +12,12 @@ from utils.jobs_manager import jobs
 from services import script_repair_service as srs
 
 
+@pytest.fixture(autouse=True)
+def model_engine():
+    """These tests drive the Gemini model path (the default engine is the agent CLI: test_agy_first.py)."""
+    storage.save_global_config({"translation_engine": "model"})
+
+
 @pytest.fixture
 def project(tmp_path, monkeypatch):
     projects_dir = tmp_path / "projects"

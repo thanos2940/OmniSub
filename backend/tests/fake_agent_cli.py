@@ -16,6 +16,14 @@ quota report. Behaviour switches (environment variables):
                           request containing FAKE_AGY_BLOCK_WORD
   FAKE_AGY_CUT            with the above: an output filter, which streams the answers before the
                           first line with the word and then stops the reply
+  FAKE_AGY_NO_CONTEXT     the brief prompt (context guide / glossary) is answered with chatter only
+  FAKE_AGY_FAIL_MODELS    comma-separated model prefixes that fail with a plain error
+  FAKE_AGY_SLEEP          seconds every request takes before it is answered
+
+Besides translation requests it answers the one-line prompt ("## Line to translate (1)") like a
+translation, the show-brief prompt ("You are preparing the translation brief") with `G|` lines and
+`+ term | …` lines for what the prompt asks, the guide-additions request with two `G|` facts, the
+term-harvest prompt with two terms and the wrong-alphabet repair prompt with a corrected line per item.
 """
 
 import json
@@ -55,13 +63,38 @@ def lines_to_answer(prompt):
     out, inside = [], False
     for line in prompt.splitlines():
         if line.startswith("## "):
-            inside = line.startswith("## Lines to translate") or line.startswith("## Lines to fix")
+            inside = (line.startswith("## Lines to translate") or line.startswith("## Lines to fix")
+                      or line.startswith("## Line to translate"))
             continue
         if inside:
             m = LINE.match(line)
             if m:
                 out.append((int(m.group(1)), m.group(2)))
     return out
+
+
+def answer_brief(prompt):
+    """The show brief: what the prompt asks for, in the format it asks for."""
+    answer = []
+    if os.environ.get("FAKE_AGY_NO_CONTEXT"):
+        answer.append("Sorry, I cannot help with that.")
+    else:
+        if "### Context guide" in prompt:
+            answer += ["G| A quiet drama about two friends in a harbour town.", "G| Tone: understated, warm.",
+                       "G| Johnny and Mira are siblings and speak informally to each other."]
+        if "### Glossary" in prompt:
+            answer += ["+ Johnny | Τζόνι | character | male | | Mira's older brother",
+                       "+ Mira | Μίρα | character | f | | Johnny's sister, the station clerk",
+                       "+ Harbor Street | Οδός Λιμανιού | location | n/a",
+                       "+ Wait | Περίμενε | other"]
+    reply(prompt, "\n".join(answer))
+
+
+def reply(prompt, text):
+    print(json.dumps({"event": "step_update", "step_update": {"step_type": "agent_response", "text_delta": text}}))
+    print(json.dumps({"event": "result", "result": {"status": "SUCCESS", "response": text,
+                                                    "usage": {"input_tokens": len(prompt) // 4,
+                                                              "output_tokens": len(text) // 4}}}))
 
 
 def fail(message):
@@ -87,6 +120,20 @@ def main():
 
     if matches(model, "FAKE_AGY_QUOTA_MODELS"):
         fail("RESOURCE_EXHAUSTED: You have exhausted your quota on this model. Your quota will reset after 1h0m0s.")
+    if matches(model, "FAKE_AGY_FAIL_MODELS"):
+        fail("Something went wrong inside the model.")
+    if os.environ.get("FAKE_AGY_SLEEP"):
+        time.sleep(float(os.environ["FAKE_AGY_SLEEP"]))
+    if "You are preparing the translation brief" in prompt:
+        answer_brief(prompt)
+        return
+    if "terminology analyst" in prompt:
+        reply(prompt, "+ Johnny | Τζόνι | character | male | | Mira's brother\n+ Station Road | Οδός Σταθμού | location")
+        return
+    if "Fix the following" in prompt:   # the wrong-alphabet repair: every numbered item comes back corrected
+        reply(prompt, "\n".join(f"{m.group(1)}| Διορθωμένο {m.group(1)}"
+                                for m in re.finditer(r"^(\d+)\| EN:", prompt, re.M)))
+        return
     pairs = lines_to_answer(prompt)
     word = os.environ.get("FAKE_AGY_BLOCK_WORD", "")
     if word and matches(model, "FAKE_AGY_BLOCK_MODELS") and any(word in text for _, text in pairs):
@@ -110,7 +157,10 @@ def main():
     answer = [f"{n}| Ελ: {t}" for n, t in zip(ids, texts)]
     if "starting with `S| `" in prompt:
         answer += ["S| Ο Τζόνι περιμένει κάποιον στο σταθμό.", "S| Στο τέλος φεύγουν μαζί."]
-    if "starting with `G| `" in prompt:
+    if "add at most" in prompt and "short lines, one fact each" in prompt:
+        answer += ["G| Mira, the station clerk, is Johnny's sister.", "G| The story moves to the harbour town.",
+                   "G| Mira, the station clerk, is Johnny's sister."]
+    elif "starting with `G| `" in prompt:
         answer += ["G| Μια ήσυχη δραματική σειρά για δύο φίλους."]
     if "+ term | translation" in prompt:
         answer += ["+ Johnny | Τζόνι | character | masculine"]

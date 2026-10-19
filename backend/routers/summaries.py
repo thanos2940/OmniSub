@@ -80,6 +80,20 @@ async def generate_summary_for_episode(
     return {"job_id": job_id}
 
 
+async def _summarize_with_agy(project_name: str, episode_name: str, show_name: str, cues) -> str:
+    """The summary from the agent CLI: a spread of the translated lines (the original where a line has no
+    translation yet), as the ADK summary uses."""
+    from services import agent_prompts as ap, agy_llm
+    from services.project_bootstrap import spread
+    lines = [(c.get("translated") or c.get("original") or "").strip() for c in cues]
+    lines = spread([" ".join(t.split()) for t in lines if t], 60)
+    if not lines:
+        return ""
+    reply = await agy_llm.acomplete(ap.summary_prompt(show_name, episode_name, lines),
+                                    purpose="episode_summary", project=project_name)
+    return ap.parse_reply(reply, allowed=set())["summary"]
+
+
 async def _process_summary_generation(
     job_id: str,
     project_name: str,
@@ -98,13 +112,17 @@ async def _process_summary_generation(
         proj_meta = storage.load_project_metadata(project_name)
         show_name = proj_meta.get("show_name", project_name) if proj_meta else project_name
 
-        from adk_agents.operations import generate_episode_summary_adk
-        summary = await generate_episode_summary_adk(
-            data["data"],
-            episode_name,
-            show_name=show_name,
-            model_name=model,
-        )
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            summary = await _summarize_with_agy(project_name, episode_name, show_name, data["data"])
+        else:
+            from adk_agents.operations import generate_episode_summary_adk
+            summary = await generate_episode_summary_adk(
+                data["data"],
+                episode_name,
+                show_name=show_name,
+                model_name=model,
+            )
 
         if not summary:
             update_job(job_id, status="failed", message="LLM returned empty summary")

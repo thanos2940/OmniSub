@@ -716,6 +716,17 @@ async def retranslate_single_line(
     primary_code = _lang_code(proj_meta.get("target_language", "Greek"))
     lang_code = _lang_code(request.get("lang")) if request.get("lang") else primary_code
 
+    from services import agy_llm
+    if new_text is None and agy_llm.agent_mode():
+        # Agent mode: the agent CLI translates the line with its surroundings; the Gemini API only
+        # answers when the CLI's safety filter refuses it (see services/agy_llm.py).
+        try:
+            new_text = await agy_llm.aretranslate_line(project_name, episode_name, data, line_index, lang_code,
+                                                       is_primary=lang_code == primary_code)
+        except agy_llm.AgyError as e:
+            status = {"unavailable": 503, "busy": 503, "timeout": 504}.get(e.kind, 502)
+            raise HTTPException(status_code=status, detail=str(e))
+
     if new_text is None:
         from utils.model_resolver import resolve_model
         effective_model = model or resolve_model("translation", proj_meta)

@@ -20,6 +20,13 @@ conversation. This runner drives the same workspaces directly:
   episode is done its lines go on their own to the Gemini API (``api_rescue``; Omnisub's Gemini
   safety setting applies, see utils/gemini_safety.py) or, without one, to a model of another
   family. What still does not come back is narrowed down (split, another family) as before.
+* A show without a context guide or without glossary terms gets both from one request before its
+  first episode (``bootstrap``; services/project_bootstrap.py): the show's facts, a spread of its
+  dialogue and the model's own knowledge. A failure never holds the translation up. Every few
+  translated episodes the last part of an episode may add a few short facts to the guide.
+* "Pause translations" (``queue_worker_paused``) makes the lanes take no new episode; the ones in
+  hand are finished. Requests outside the lanes (retranslate a line, guide and glossary buttons,
+  summaries, term harvest, wrong-alphabet repair) go through services/agy_llm.py.
 * A finished episode is submitted through the normal agent submit — validation, Script Guard,
   glossary merge, Translation Memory, summary, export — exactly as if an agent had typed
   ``agent_task.py submit``.
@@ -86,10 +93,11 @@ DEFAULT_CONFIG = {
     "keep_watching": False,      # alias for watch / daemon mode
     "api_rescue": True,          # lines the CLI model's safety filter refuses go to the Gemini API at the end
     "rescue_model": "",          # ... with this model ("": the project's translation model)
+    "bootstrap": True,           # a show without a context guide or glossary gets both before its first episode
     "api_url": DEFAULT_API_URL,
 }
 LIVE_KEYS = ("model", "fallback_models", "per_show", "chunk_lines", "fix_rounds", "max_episodes", "watch",
-             "api_rescue", "rescue_model", "api_url")
+             "api_rescue", "rescue_model", "bootstrap", "api_url")
 API_PREFIX = "api:"              # a model name with this prefix is called through the Gemini API, not the CLI
 WATCH_SECONDS = 60
 QUOTA_MARGIN = 30
@@ -103,6 +111,11 @@ KEEPALIVE_SECONDS = 1800         # a waiting runner touches its claimed workspac
 ENGINE_CACHE_SECONDS = 60
 HOUSEKEEPING_SECONDS = 60        # abandoned claims are released at most this often while the runner looks for work
 PENDING_CACHE_SECONDS = 5        # the queue length shown in the panel is read at most this often
+PAUSE_CACHE_SECONDS = 3          # the "Pause translations" switch is read at most this often
+PAUSED_MESSAGE = "Translations are paused (Pause translations is on); episodes in hand are finished first."
+GUIDE_GROWTH_EVERY = 6           # translated episodes between two rounds of additions to the context guide
+GUIDE_ADDITIONS_FILE = "guide_additions.txt"   # in an episode's workspace: the additions its reply asked for (empty: asked, none came)
+BOOTSTRAP_TIMEOUT = 600          # seconds the bootstrap request may take
 CONTEXT_CACHE_SECONDS = 300      # a show's glossary matcher and prompt prefix are reused this long
 PID_STALE_SECONDS = 45 * 60      # a lock file not touched for this long belongs to a runner that died
 TERMINAL = ("completed", "cancelled", "expired", "released")
@@ -164,7 +177,7 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
             out[key] = str(out[key] or "").strip()
     if "api_url" in out:
         out["api_url"] = normalize_api_url(str(out["api_url"] or "").strip())
-    for key in ("watch", "keep_watching", "api_rescue"):
+    for key in ("watch", "keep_watching", "api_rescue", "bootstrap"):
         if key in out:
             out[key] = out[key] in (True, 1, "1", "true", "True", "yes", "on")
     # keep_watching is an input alias of watch; only watch is stored.
@@ -260,6 +273,7 @@ class AgentRunner:
         self._swept = 0.0                        # when the service last released abandoned claims for us
         self._engines: Tuple[float, Dict] = (0.0, {})
         self._pending: Tuple[float, int] = (0.0, 0)   # (read at, pending translation items)
+        self._pause_read: Tuple[float, bool] = (0.0, False)   # (read at, "Pause translations" is on)
         self._shared: Dict[Tuple[str, str], Dict] = {}   # (project, target language) -> see _project_context
         self._busy = 0                           # lanes working on an episode right now
         self._busy_since = 0.0                   # ... since (while at least one is)
@@ -393,11 +407,19 @@ class AgentRunner:
             try:
                 telemetry.record_usage(f"{self.config['engine']}:{model or 'default'}", "agent_runner",
                                        {"prompt_tokens": reply.tokens_in, "output_tokens": reply.tokens_out},
-                                       lane=f"runner-{lane + 1}", cost_usd=0.0)
+                                       lane=f"runner-{lane + 1}" if lane >= 0 else "one-off", cost_usd=0.0)
             finally:
                 telemetry.usage_ctx.reset(token)
         except Exception:
             pass
+
+    def note_call(self, model: str, reply: agent_cli.Reply, project: str, purpose: str) -> None:
+        """A request made outside the lanes (``agy_llm``) counts in the session and the usage table."""
+        with self.lock:
+            self.session["calls"] += 1
+            self.session["tokens_in"] += reply.tokens_in
+            self.session["tokens_out"] += reply.tokens_out
+        self._usage(model, -1, project, purpose, reply)
 
     def _lane_set(self, lane: int, **changes) -> None:
         with self.lock:
@@ -547,6 +569,18 @@ class AgentRunner:
         if limit and self.started >= limit:
             return "limit"
         return None
+
+    def _paused(self) -> bool:
+        """"Pause translations" (the queue's pause switch) is on: the lanes take no new episode, they finish the
+        ones in hand. Extraction and export belong to the worker's lanes and go on."""
+        at, value = self._pause_read
+        if time.time() - at >= PAUSE_CACHE_SECONDS:
+            try:
+                value = bool((storage.load_global_config() or {}).get("queue_worker_paused", False))
+            except Exception:
+                pass  # keep the last reading
+            self._pause_read = (time.time(), value)
+        return value
 
     def _sleep(self, seconds: float) -> None:
         end = time.time() + seconds
@@ -860,6 +894,12 @@ class AgentRunner:
                 self._touch_pid()
                 if self._no_new_work():
                     break
+                if self._paused():
+                    self._set_status("waiting", PAUSED_MESSAGE)
+                    self._lane_set(lane, state="paused", **NO_WORK)
+                    self._keep_claims()
+                    self._idle_sleep(5)
+                    continue
                 model, wait = self._pick()
                 if model is None:
                     resume = datetime.now() + timedelta(seconds=wait)
@@ -935,7 +975,12 @@ class AgentRunner:
         code = manifest.get("target_code") or "el"
         work = folder / aw.WORK_FILE
         whole = not (plan.get("stats") or {}).get("already_translated_units")
+        self._bootstrap(lane, task, model, project, episode)
+        if self.stop_event.is_set():
+            return
         ctx = self._context(project, episode, target_name, units, whole, code, manifest.get("is_primary", True))
+        if ctx["grow"]:
+            (folder / GUIDE_ADDITIONS_FILE).touch()
         self._lane_set(lane, state="working", task=task["task_id"], project=project, episode=episode, model=model,
                        progress=None, units_done=0, units_total=0, since=_now_iso())
 
@@ -981,7 +1026,77 @@ class AgentRunner:
             progress(current())
             if self.stop_event.is_set():
                 return
-        self._submit(lane, task, folder, units, current, needs, started, tokens)
+        self._submit(lane, task, folder, units, current, needs, started, tokens, whole=whole)
+
+    # ------------------------------------------------------------------ the show's context
+
+    def _context_requested(self, task: Dict) -> bool:
+        """The queue item asks for the show's context to be built first (``options.ensure_context``)."""
+        try:
+            from services.agent_task_service import _options
+            item = TranslationQueue().get_item(task.get("queue_id") or "")
+            return bool(item) and bool(_options(item).get("ensure_context"))
+        except Exception:
+            return False
+
+    def _bootstrap(self, lane: int, task: Dict, model: str, project: str, episode: str) -> None:
+        """A show without a context guide or without glossary terms gets both, from one request, before its first
+        episode is translated (``bootstrap`` setting; an item with ``ensure_context`` forces the check, even
+        right after a failure). It never stops the translation: when it fails the episode goes on without."""
+        from services import agy_llm, project_bootstrap as pb
+        forced = self._context_requested(task)
+        if not (self.config["bootstrap"] or forced):
+            return
+        try:
+            if not pb.needs_bootstrap(storage.load_resolved_project_metadata(project) or {}, forced):
+                return
+        except Exception:
+            return
+        self._lane_set(lane, state="building the show's context", task=task["task_id"], project=project,
+                       episode=episode, model=model, progress=None, units_done=0, units_total=0, since=_now_iso())
+
+        def ask(prompt: str) -> str:
+            return agy_llm.ask(prompt, purpose="bootstrap", project=project, timeout=BOOTSTRAP_TIMEOUT,
+                               stop=self.stop_event, on_proc=lambda p: self.procs.__setitem__(lane, p), runner=self)
+
+        started = time.time()
+        try:
+            res = pb.bootstrap_project(project, ask, service=self.service, force=forced, write_lock=self.submit_lock)
+        except Exception as exc:
+            res = {"status": "failed", "message": f"{type(exc).__name__}: {exc}", "terms": 0, "guide": False}
+        finally:
+            self.procs.pop(lane, None)
+        if res["status"] == "skipped":
+            return
+        built = ", ".join(x for x in ("a context guide" if res["guide"] else "", f"{res['terms']} glossary term(s)"
+                                      if res["terms"] else "") if x)
+        took = f"in {_human(time.time() - started)}"
+        if res["status"] == "done":
+            self.log(f"Lane {lane + 1}: built the context for {project}: {built} {took}.", "ok")
+        else:
+            self.log(f"Lane {lane + 1}: context for {project} {res['status']} — {res['message'][:300] or 'no reason given'}"
+                     f"{f'; saved {built}' if built else ''}; translating {'with what there is' if built else 'without it'}.",
+                     "warn")
+
+    def _grow_guide(self, folder: Path, project: str, whole: bool) -> None:
+        """After a submitted episode: count it, and when this one asked for additions to the context guide
+        (its workspace has the file) add them and start counting again."""
+        if not whole:
+            return  # gaps filled into a translated episode bring no new story
+        path = folder / GUIDE_ADDITIONS_FILE
+        asked = path.is_file()
+        try:
+            additions = [l for l in path.read_text(encoding="utf-8").splitlines() if l.strip()] if asked else []
+            with self.submit_lock:
+                added = self.service.append_guide_additions(project, additions) if additions else 0
+                meta = storage.load_project_metadata(project) or {}
+                meta["guide_growth_episodes"] = 0 if asked else int(meta.get("guide_growth_episodes") or 0) + 1
+                storage.save_project_metadata(project, meta)
+            if asked:
+                path.unlink()
+                self.log(f"{project}: {added} addition(s) to the context guide after {GUIDE_GROWTH_EVERY} episodes.")
+        except Exception as exc:  # housekeeping; the episode is already submitted
+            logger.warning(f"Could not update the context guide counter of {project}: {exc}")
 
     # ------------------------------------------------------------------ refused lines
 
@@ -1007,7 +1122,7 @@ class AgentRunner:
         if not model:
             try:
                 from utils.model_resolver import resolve_model
-                model = resolve_model("translation", storage.load_resolved_project_metadata(project) or {})
+                model = resolve_model("translation", (storage.load_resolved_project_metadata(project) if project else None) or {})
             except Exception:
                 model = ""
         if not model or model.lower().startswith("local"):
@@ -1124,7 +1239,13 @@ class AgentRunner:
             story = "\n".join(f"- {p['episode']}: {p['summary']}" for p in prev if p.get("summary"))
         except Exception:
             pass
-        return {**self._project_context(project, target_name), "story": story, "whole": whole,
+        shared = self._project_context(project, target_name)
+        try:  # enough episodes since the guide last grew: this one's last part may ask for additions
+            grow = whole and shared["has_guide"] and (
+                int((storage.load_project_metadata(project) or {}).get("guide_growth_episodes") or 0) >= GUIDE_GROWTH_EVERY)
+        except (TypeError, ValueError):
+            grow = False
+        return {**shared, "story": story, "whole": whole, "grow": bool(grow),
                 "around": {} if whole else self._neighbours(project, episode, units, code, is_primary)}
 
     @staticmethod
@@ -1237,6 +1358,7 @@ class AgentRunner:
                 characters = self._characters(project, ctx["glossary"], [u.text for u in todo])
                 want_summary = ctx["whole"] and extras
                 want_guide = ctx["whole"] and last and not ctx["has_guide"] and extras
+                want_additions = ctx["grow"] and last and extras
 
                 def build(sub: List[aw.Unit], first: bool = True) -> str:
                     ids = {u.id for u in sub}
@@ -1244,7 +1366,8 @@ class AgentRunner:
                         ctx["static"], title=title, story=ctx["story"], characters=characters,
                         glossary_lines=glossary_lines, glossary_note=GLOSSARY_INSTRUCTION, earlier=earlier, units=sub,
                         want_summary=want_summary and first, want_guide=want_guide and first, part=part,
-                        around={i: v for i, v in around.items() if i in ids}, episode_so_far=so_far)
+                        around={i: v for i, v in around.items() if i in ids}, episode_so_far=so_far,
+                        want_additions=want_additions and first)
             else:
                 snapshot, asked = dict(cur), dict(problems)
 
@@ -1325,6 +1448,9 @@ class AgentRunner:
             project = self.service._read_manifest(folder).get("project_name", "")
             (folder / aw.GUIDE_FILE).write_text(f"# Context Guide: {project}\n\n{result['guide'].strip()}\n",
                                                 encoding="utf-8")
+        elif result.get("guide") and ctx["grow"]:   # additions to the guide that exists; applied once the episode is submitted
+            lines = [g for g in result["guide"].splitlines() if g.strip()][:ap.GUIDE_MAX_ADDITIONS]
+            (folder / GUIDE_ADDITIONS_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
         if result.get("terms"):
             path = folder / aw.TERMS_FILE
             try:
@@ -1479,7 +1605,7 @@ class AgentRunner:
         return []
 
     def _submit(self, lane: int, task: Dict, folder: Path, units: List[aw.Unit], current, needs, started: float,
-                tokens: List[int]) -> None:
+                tokens: List[int], whole: bool = True) -> None:
         """Submit through the normal agent path. Lines that never came back stay untranslated (they
         export as authored and the audit re-queues them); an episode that is mostly untranslated goes
         back to the queue instead."""
@@ -1512,6 +1638,7 @@ class AgentRunner:
         with self.lock:
             self.session["episodes"] += 1
             self.session["lines"] += done
+        self._grow_guide(folder, task["project_name"], whole)
         notes = []
         if left:
             notes.append(f"{len(left)} left for later")
@@ -1563,6 +1690,7 @@ class AgentRunner:
             throughput, eta = self._rates(now, pending)
             return {
                 "enabled": self.enabled, "running": self.running(), "status": self.status, "message": self.message,
+                "paused": self._paused(),
                 "config": dict(self.config), "defaults": dict(DEFAULT_CONFIG), "models": self._models(),
                 "lanes": [{"lane": i + 1, **v} for i, v in sorted(self.lanes.items())],
                 "pauses": pauses, "session": dict(self.session), "started": self.started,
@@ -1598,11 +1726,12 @@ def nudge() -> None:
 
 
 def autostart() -> bool:
-    """Resume the runner if it was on when Omnisub last stopped, or autostart if translation_engine == 'agent'."""
+    """Resume the runner if it was on when Omnisub last stopped, or start it (watching the queue) when the
+    translation engine is 'agent' — the default — and ``agent_runner_autostart`` has not been turned off."""
     r = get_runner()
     global_cfg = storage.load_global_config() or {}
     agent_auto = (
-        global_cfg.get("translation_engine") == "agent"
+        global_cfg.get("translation_engine", "agent") == "agent"
         and global_cfg.get("agent_runner_autostart", True) is True
     )
     if (r.enabled or agent_auto) and not r.running():

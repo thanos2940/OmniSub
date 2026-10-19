@@ -156,7 +156,7 @@ class BackgroundTranslationWorker:
 
                 # 2. Get next pending item and claim it atomically. In agent mode the
                 # translations wait for external agents; only the lanes above run.
-                agent_mode = global_config.get("translation_engine", "model") == "agent"
+                agent_mode = global_config.get("translation_engine", "agent") == "agent"
                 item = None if agent_mode else self.queue.claim_next(max_priority=max_priority, exclude_agent=True)
                 if not item:
                     timeout_val = 15.0

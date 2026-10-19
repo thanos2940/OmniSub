@@ -105,24 +105,35 @@ Translated Subtitle Dialogue:
 Analyze the dialogue above and extract all new named entities and key terms. Return JSON with the "discovered_terms" array."""
 
     try:
-        from adk_agents.llm_factory import generate
-        from utils.model_resolver import resolve_model
+        from services import agy_llm
+        if agy_llm.agent_mode():
+            # Agent mode: the agent CLI answers (the Gemini API only for a prompt its filter refuses).
+            from services import agent_prompts as ap
+            from services.project_bootstrap import clean_terms
+            pairs = [(s.strip(), t.strip()) for s, t in zip(source_lines, target_lines) if s.strip() and t.strip()]
+            reply = await agy_llm.acomplete(
+                ap.harvest_prompt(target_language, pairs[:max_lines], sorted(existing_terms_set)), purpose="harvest_terms")
+            candidates = [{**c, "description": c.get("notes", "")}
+                          for c in clean_terms(ap.parse_reply(reply, allowed=set())["terms"])]
+        else:
+            from adk_agents.llm_factory import generate
+            from utils.model_resolver import resolve_model
 
-        dummy_meta = {"settings": {}}
-        chosen_model = model_name or resolve_model("glossary", dummy_meta)
+            dummy_meta = {"settings": {}}
+            chosen_model = model_name or resolve_model("glossary", dummy_meta)
 
-        # Call via LLM seam (handles Gemini, LiteLLM local models, etc.)
-        response_text = await generate(
-            model_name=chosen_model,
-            prompt=prompt,
-            system_instruction=HARVEST_SYSTEM_INSTRUCTION,
-            temperature=0.2,
-            role="glossary",
-        )
+            # Call via LLM seam (handles Gemini, LiteLLM local models, etc.)
+            response_text = await generate(
+                model_name=chosen_model,
+                prompt=prompt,
+                system_instruction=HARVEST_SYSTEM_INSTRUCTION,
+                temperature=0.2,
+                role="glossary",
+            )
 
-        clean_text = strip_reasoning_blocks(response_text or "")
-        data = loads_tolerant(clean_text) or {}
-        candidates = data.get("discovered_terms", []) if isinstance(data, dict) else []
+            clean_text = strip_reasoning_blocks(response_text or "")
+            data = loads_tolerant(clean_text) or {}
+            candidates = data.get("discovered_terms", []) if isinstance(data, dict) else []
 
         is_greek = (target_language or "").strip().lower() in ("greek", "el", "ελληνικά")
 
