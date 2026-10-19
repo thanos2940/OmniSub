@@ -7,7 +7,7 @@ const UpdateNotice = ({ compact = false }) => (
         <div>
             <div className="font-bold">Autopilot is not available on this server yet</div>
             <p className="mt-0.5 opacity-90">
-                The OmbiSub backend is older than this page. Update OmbiSub (Settings, Updates &amp; System) and restart it to use Autopilot.
+                The OmbiSub backend is older than this page. Update OmbiSub (System, Updates) and restart it to use Autopilot.
             </p>
         </div>
     </div>

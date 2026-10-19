@@ -1,4 +1,4 @@
-// Shared names, colours and helpers for the Autopilot views (docs/PLAN_autopilot.md 4.2 / 4.10).
+// Shared names, tones and helpers for the Autopilot views (docs/PLAN_autopilot.md 4.2 / 4.10).
 
 export const STATE_ORDER = [
     'waiting', 'checking', 'extracting', 'translating',
@@ -8,7 +8,7 @@ export const STATE_ORDER = [
 export const ACTIVE_STATES = ['waiting', 'checking', 'extracting', 'translating'];
 
 export const STATE_LABEL = {
-    waiting: 'Waiting for Bazarr',
+    waiting: 'Waiting',
     checking: 'Checking',
     extracting: 'Extracting',
     translating: 'Translating',
@@ -21,19 +21,19 @@ export const STATE_LABEL = {
     gone: 'File deleted',
 };
 
-// Literal class names (Tailwind scans the source), so no dynamic construction here.
-export const STATE_STYLE = {
-    waiting: 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400',
-    checking: 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400',
-    extracting: 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400',
-    translating: 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400',
-    done: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
-    has_greek: 'bg-teal-500/10 border-teal-500/30 text-teal-600 dark:text-teal-400',
-    skipped: 'bg-gray-500/10 border-gray-500/30 text-gray-600 dark:text-gray-400',
-    no_source: 'bg-orange-500/10 border-orange-500/30 text-orange-600 dark:text-orange-400',
-    failed: 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400',
-    superseded: 'bg-gray-500/10 border-gray-500/30 text-gray-500 dark:text-gray-400',
-    gone: 'bg-gray-500/10 border-gray-500/30 text-gray-500 dark:text-gray-400',
+// Tone of each state's chip (see StatusChip in components/ui).
+export const STATE_TONE = {
+    waiting: 'warning',
+    checking: 'info',
+    extracting: 'info',
+    translating: 'accent',
+    done: 'success',
+    has_greek: 'success',
+    skipped: 'neutral',
+    no_source: 'warning',
+    failed: 'danger',
+    superseded: 'neutral',
+    gone: 'neutral',
 };
 
 export const SOURCE_KIND_LABEL = {

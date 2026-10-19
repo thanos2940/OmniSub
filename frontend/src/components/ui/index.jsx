@@ -1,6 +1,7 @@
 // Shared building blocks for every page, so the app reads as one thing: page header, cards, tabs,
 // buttons, status chips, empty states, overflow menus and form fields. Light and dark (system setting).
 import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Loader2, MoreHorizontal } from 'lucide-react';
 
@@ -308,5 +309,60 @@ export function Toggle({ checked, onChange, label, description, disabled }) {
                 <span className={cx('inline-block h-5 w-5 translate-y-0.5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} />
             </button>
         </div>
+    );
+}
+
+// ------------------------------------------------------------------ feedback
+
+export function Spinner({ label, className }) {
+    return (
+        <div className={cx('flex items-center justify-center gap-2 py-10 text-sm text-gray-500 dark:text-gray-400', className)} role="status">
+            <Loader2 className="animate-spin" size={18} />
+            {label && <span>{label}</span>}
+        </div>
+    );
+}
+
+// A centred dialog. Closes on Escape and on a click outside it.
+export function Modal({ open, title, onClose, children, footer, width = 'md' }) {
+    useEffect(() => {
+        if (!open) return undefined;
+        const onKey = e => { if (e.key === 'Escape') onClose?.(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [open, onClose]);
+
+    if (!open) return null;
+    const max = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-lg', xl: 'max-w-2xl' }[width] || 'max-w-md';
+    return createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onMouseDown={e => { if (e.target === e.currentTarget) onClose?.(); }}>
+            <div role="dialog" aria-modal="true" aria-label={title} className={cx('max-h-[90vh] w-full overflow-y-auto rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-850', max)}>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
+                <div className="mt-3">{children}</div>
+                {footer && <div className="mt-5 flex justify-end gap-2">{footer}</div>}
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+// Confirmation before something that is hard to undo. `children` carries extra detail under the message.
+export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, busy = false, onConfirm, onCancel, children }) {
+    return (
+        <Modal
+            open={open}
+            title={title}
+            onClose={onCancel}
+            width="sm"
+            footer={(
+                <>
+                    <Button variant="ghost" onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
+                    <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={onConfirm}>{confirmLabel}</Button>
+                </>
+            )}
+        >
+            {message && <p className="text-sm text-gray-600 dark:text-gray-300">{message}</p>}
+            {children}
+        </Modal>
     );
 }

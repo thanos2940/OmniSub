@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, Film, Tv, Settings, Home, Library, ShieldAlert,
-    ListTodo, HeartPulse, RefreshCw, Moon, CornerDownLeft, X, Key
+    Search, Film, Tv, Settings, Library, ShieldAlert,
+    Activity, Server, Plane, ScrollText, RefreshCw, Moon, CornerDownLeft, X
 } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
@@ -13,7 +13,6 @@ export default function CommandPalette() {
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [projects, setProjects] = useState([]);
-    const [loadingProjects, setLoadingProjects] = useState(false);
     const inputRef = useRef(null);
     const navigate = useNavigate();
     const toast = useToast();
@@ -47,53 +46,45 @@ export default function CommandPalette() {
             setSelectedIndex(0);
             setTimeout(() => inputRef.current?.focus(), 50);
 
-            setLoadingProjects(true);
             api.getProjects()
                 .then((res) => {
                     setProjects(res.data || []);
                 })
                 .catch((err) => {
                     console.error('Failed to load projects for command palette', err);
-                })
-                .finally(() => setLoadingProjects(false));
+                });
         }
     }, [isOpen]);
 
     // Build Searchable Items
     const defaultPages = useMemo(() => [
-        { id: 'page-home', title: 'Dashboard & Projects', category: 'Navigation', icon: Home, action: () => navigate('/') },
-        { id: 'page-library', title: 'Media Library & Arr Sync', category: 'Navigation', icon: Library, action: () => navigate('/library') },
-        { id: 'page-queue', title: 'Translation Worker Queue', category: 'Navigation', icon: ListTodo, action: () => navigate('/queue') },
-        { id: 'page-review', title: 'Global Review Queue', category: 'Navigation', icon: ShieldAlert, action: () => navigate('/review') },
-        { id: 'page-health', title: 'System Health & Diagnostics', category: 'Navigation', icon: HeartPulse, action: () => navigate('/health') },
-        { id: 'page-settings', title: 'Global Application Settings', category: 'Navigation', icon: Settings, action: () => navigate('/settings') },
+        { id: 'page-library', title: 'Library', category: 'Navigation', icon: Library, action: () => navigate('/') },
+        { id: 'page-activity', title: 'Activity: queue and translation runner', category: 'Navigation', icon: Activity, action: () => navigate('/activity') },
+        { id: 'page-autopilot', title: 'Activity: Autopilot items', category: 'Navigation', icon: Plane, action: () => navigate('/activity?tab=autopilot') },
+        { id: 'page-review', title: 'Review: flagged lines', category: 'Navigation', icon: ShieldAlert, action: () => navigate('/review') },
+        { id: 'page-settings', title: 'Settings', category: 'Navigation', icon: Settings, action: () => navigate('/settings') },
+        { id: 'page-system', title: 'System: status and health', category: 'Navigation', icon: Server, action: () => navigate('/system') },
+        { id: 'page-logs', title: 'System: logs', category: 'Navigation', icon: ScrollText, action: () => navigate('/system?tab=logs') },
     ], [navigate]);
 
     const quickActions = useMemo(() => [
         {
-            id: 'action-manage-api-key',
-            title: 'Manage Google Gemini API Key & AI Credentials',
-            category: 'Action',
-            icon: Key,
-            action: () => window.dispatchEvent(new CustomEvent('omnisub:open-api-key-modal'))
-        },
-        {
             id: 'action-sync-arr',
-            title: 'Trigger Full Media Library Sync (Sonarr / Radarr)',
+            title: 'Sync library with Sonarr and Radarr',
             category: 'Action',
             icon: RefreshCw,
             action: async () => {
                 try {
                     await api.syncArrAll();
-                    toast.success('Media library sync job started!');
+                    toast.success('Library sync started.');
                 } catch (e) {
-                    toast.error('Failed to trigger media library sync');
+                    toast.error('Could not start the library sync.');
                 }
             }
         },
         {
             id: 'action-theme-toggle',
-            title: 'Toggle Dark / Light Theme',
+            title: 'Toggle dark / light theme',
             category: 'Action',
             icon: Moon,
             action: () => {
@@ -105,7 +96,7 @@ export default function CommandPalette() {
                     document.documentElement.classList.add('dark');
                     localStorage.setItem('theme', 'dark');
                 }
-                toast.info(`Switched to ${isDark ? 'Light' : 'Dark'} mode`);
+                toast.info(`Switched to ${isDark ? 'light' : 'dark'} mode`);
             }
         }
     ], [toast]);
@@ -197,7 +188,7 @@ export default function CommandPalette() {
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 onKeyDown={handleInputKeyDown}
-                                placeholder="Type a show name, route, or quick command..."
+                                placeholder="Search titles, pages and actions..."
                                 className="w-full text-base bg-transparent border-none outline-none text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
                             />
                             <button
@@ -274,7 +265,7 @@ export default function CommandPalette() {
                                 <span><kbd className="font-mono bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600">↵</kbd> to select</span>
                                 <span><kbd className="font-mono bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600">esc</kbd> to close</span>
                             </div>
-                            <span className="font-medium text-indigo-500 dark:text-indigo-400">Omnisub Command Hub</span>
+                            <span className="font-medium text-indigo-500 dark:text-indigo-400">OmbiSub</span>
                         </div>
                     </motion.div>
                 </div>

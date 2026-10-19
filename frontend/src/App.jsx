@@ -1,13 +1,13 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 // Eagerly loaded: always on screen (chrome + always-mounted widgets).
 import JobProgressWidget from './components/JobProgressWidget';
 import CommandPalette from './components/CommandPalette';
 import TopBar from './components/TopBar';
-import ApiKeyModal from './components/ApiKeyModal';
 import LoginPage from './components/LoginPage';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingFallback from './components/common/LoadingFallback';
+import { Page, PageHeader } from './components/ui';
 
 // Route components are code-split with automatic reload retry on stale Vite/HMR chunks
 const lazyWithRetry = (componentImport) =>
@@ -28,16 +28,13 @@ const lazyWithRetry = (componentImport) =>
     });
 
 const SetupWizard = lazyWithRetry(() => import('./components/setup/SetupWizard'));
-const ProjectList = lazyWithRetry(() => import('./components/ProjectList'));
+const LibraryPage = lazyWithRetry(() => import('./components/library/LibraryPage'));
 const ProjectDetail = lazyWithRetry(() => import('./components/ProjectDetail'));
 const SettingsPage = lazyWithRetry(() => import('./components/SettingsPage'));
 const EpisodeView = lazyWithRetry(() => import('./components/EpisodeView'));
-const MediaLibrary = lazyWithRetry(() => import('./components/MediaLibrary'));
 const ReviewQueuePanel = lazyWithRetry(() => import('./components/ReviewQueuePanel'));
-const TranslationQueuePanel = lazyWithRetry(() => import('./components/TranslationQueuePanel'));
-const Dashboard = lazyWithRetry(() => import('./components/Dashboard'));
-const HealthPage = lazyWithRetry(() => import('./components/HealthPage'));
-const AutopilotPage = lazyWithRetry(() => import('./components/autopilot/AutopilotPage'));
+const ActivityPage = lazyWithRetry(() => import('./components/activity/ActivityPage'));
+const SystemPage = lazyWithRetry(() => import('./components/system/SystemPage'));
 import { JobProvider } from './context/JobContext';
 import { ToastProvider } from './context/ToastContext';
 import { api, AUTH_STORAGE_KEY } from './api';
@@ -50,9 +47,6 @@ function App() {
     const [authChecked, setAuthChecked] = useState(false);
     const [needsLogin, setNeedsLogin] = useState(false);
 
-    const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-    const [hasApiKey, setHasApiKey] = useState(null); // null = loading, true/false = checked
-
     // First-run setup wizard (docs/PLAN_onboarding_wizard.md) — checked once
     // auth is resolved (it's a protected /api/ endpoint once auth is enabled).
     const [setupChecked, setSetupChecked] = useState(false);
@@ -64,14 +58,9 @@ function App() {
             localStorage.removeItem(AUTH_STORAGE_KEY);
             setNeedsLogin(true);
         };
-        const handleOpenApiKey = () => {
-            setShowApiKeyModal(true);
-        };
         window.addEventListener('omnisub:unauthorized', handleUnauthorized);
-        window.addEventListener('omnisub:open-api-key-modal', handleOpenApiKey);
         return () => {
             window.removeEventListener('omnisub:unauthorized', handleUnauthorized);
-            window.removeEventListener('omnisub:open-api-key-modal', handleOpenApiKey);
         };
     }, []);
 
@@ -89,12 +78,11 @@ function App() {
         }
     };
 
-    // Only probe the Gemini key / setup status (protected endpoints) once we
-    // know the caller is actually authenticated — otherwise these fire doomed
-    // requests before the user has even seen the login form.
+    // Only probe the setup status (a protected endpoint) once we know the caller is actually
+    // authenticated, otherwise it fires a doomed request before the user has seen the login form.
+    // A Gemini key is optional now (only lines the agent refuses use it), so nothing asks for one here.
     useEffect(() => {
         if (authChecked && !needsLogin) {
-            checkApiKey();
             checkSetupStatus();
         }
     }, [authChecked, needsLogin]);
@@ -109,26 +97,6 @@ function App() {
         } finally {
             setSetupChecked(true);
         }
-    };
-
-    const checkApiKey = async () => {
-        try {
-            const response = await api.getApiKeyStatus();
-            setHasApiKey(response.data.has_key);
-            if (!response.data.has_key) {
-                setShowApiKeyModal(true);
-            }
-        } catch (error) {
-            console.error('Failed to check API key status:', error);
-            // If check fails, assume no key
-            setHasApiKey(false);
-            setShowApiKeyModal(true);
-        }
-    };
-
-    const handleApiKeySaved = () => {
-        setHasApiKey(true);
-        setShowApiKeyModal(false);
     };
 
     if (!authChecked || (!needsLogin && !setupChecked)) {
@@ -159,29 +127,25 @@ function App() {
                                 <ErrorBoundary title="Page Load Error">
                                     <Suspense fallback={<LoadingFallback message="Loading view..." />}>
                                         <Routes>
-                                            <Route path="/" element={<ProjectList />} />
+                                            <Route path="/" element={<LibraryPage />} />
+                                            <Route path="/activity" element={<ActivityPage />} />
+                                            <Route path="/review" element={
+                                                <Page width="narrow">
+                                                    <PageHeader title="Review" subtitle="Translated lines the quality check flagged, across all projects." />
+                                                    <ReviewQueuePanel />
+                                                </Page>
+                                            } />
+                                            <Route path="/settings" element={<SettingsPage />} />
+                                            <Route path="/system" element={<SystemPage />} />
                                             <Route path="/project/:projectName/*" element={<ProjectDetail />} />
                                             <Route path="/project/:projectName/episode/:episodeName" element={<EpisodeView />} />
 
-                                            <Route path="/settings" element={<SettingsPage />} />
-                                            <Route path="/library" element={<MediaLibrary />} />
-                                            <Route path="/dashboard" element={<Dashboard />} />
-                                            <Route path="/health" element={<HealthPage />} />
-                                            <Route path="/autopilot" element={<AutopilotPage />} />
-                                            <Route path="/review" element={
-                                                <div className="max-w-4xl mx-auto p-8 space-y-6">
-                                                    <header className="mb-6">
-                                                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Global Review Queue</h1>
-                                                        <p className="text-gray-500 dark:text-gray-400">Resolve translations flagged by the AI quality control across all projects.</p>
-                                                    </header>
-                                                    <ReviewQueuePanel />
-                                                </div>
-                                            } />
-                                            <Route path="/queue" element={
-                                                <div className="max-w-6xl mx-auto p-8 space-y-6">
-                                                    <TranslationQueuePanel />
-                                                </div>
-                                            } />
+                                            {/* Old addresses */}
+                                            <Route path="/library" element={<Navigate to="/" replace />} />
+                                            <Route path="/queue" element={<Navigate to="/activity" replace />} />
+                                            <Route path="/autopilot" element={<Navigate to="/activity?tab=autopilot" replace />} />
+                                            <Route path="/health" element={<Navigate to="/system" replace />} />
+                                            <Route path="/dashboard" element={<Navigate to="/system" replace />} />
                                         </Routes>
                                     </Suspense>
                                 </ErrorBoundary>
@@ -190,13 +154,6 @@ function App() {
                                 </ErrorBoundary>
                             </div>
                         </div>
-
-                        <ApiKeyModal
-                            isOpen={showApiKeyModal}
-                            onClose={() => setShowApiKeyModal(false)}
-                            onSave={handleApiKeySaved}
-                            allowSkip={true}
-                        />
 
                         <CommandPalette />
                     </ToastProvider>

@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutGrid, Settings, ChevronRight, Home, Library, ShieldAlert, ListTodo, Plane, Gauge, HeartPulse, Lock, Search, Key, ArrowDownCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { LayoutGrid, Lock, Unlock, Menu, Search, X } from 'lucide-react';
 import { api } from '../api';
+import RunnerPill from './activity/RunnerPill';
+
+const linkClass = ({ isActive }) => [
+    'relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+    isActive
+        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300'
+        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white',
+].join(' ');
 
 const TopBar = () => {
     const location = useLocation();
-    const pathSegments = location.pathname.split('/').filter(Boolean);
-
-    // Simple parsing logic based on route structure: /project/:projectName/episode/:episodeName
-    const projectName = pathSegments[0] === 'project' ? decodeURIComponent(pathSegments[1]) : null;
-    const episodeName = pathSegments[2] === 'episode' ? decodeURIComponent(pathSegments[3]) : null;
-    const isLibrary = location.pathname === '/library';
-    const isReview = location.pathname === '/review';
-    const isQueue = location.pathname === '/queue';
-
+    const [menuOpen, setMenuOpen] = useState(false);
     const [reviewCount, setReviewCount] = useState(0);
     const [authEnabled, setAuthEnabled] = useState(true); // assume secured until checked, to avoid a flash
     const [updateAvailable, setUpdateAvailable] = useState(false);
+
+    useEffect(() => { setMenuOpen(false); }, [location.pathname, location.search]);
 
     useEffect(() => {
         const fetchCount = async () => {
@@ -25,12 +27,10 @@ const TopBar = () => {
                 const res = await api.getGlobalReviewCount();
                 setReviewCount(res.data?.count || 0);
             } catch (e) {
-                console.error("Failed to fetch review count", e);
+                console.error('Failed to fetch review count', e);
             }
         };
-        const handleVisibility = () => {
-            if (!document.hidden) fetchCount();
-        };
+        const handleVisibility = () => { if (!document.hidden) fetchCount(); };
         fetchCount();
         const interval = setInterval(fetchCount, 15000);
         document.addEventListener('visibilitychange', handleVisibility);
@@ -58,204 +58,88 @@ const TopBar = () => {
             .catch(() => {});
     }, []);
 
-    return (
-        <div className="sticky top-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-3 sm:px-6 py-2 sm:py-3 flex items-center justify-between shadow-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden gap-2">
-            <div className="flex items-center gap-2 sm:gap-4 shrink-0 min-w-0">
-                {/* Logo / Home */}
-                <Link to="/" className="flex items-center gap-2 text-gray-900 dark:text-white hover:opacity-80 transition-opacity group shrink-0">
-                    <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-indigo-200 dark:shadow-none shadow-md group-hover:scale-105 transition-transform">
-                        <LayoutGrid className="text-white" size={18} />
-                    </div>
-                    <span className="text-lg font-bold tracking-tight hidden md:block">Omnisub</span>
-                </Link>
+    const onProjectRoute = location.pathname.startsWith('/project/');
+    // Library also owns the project pages that open from it.
+    const libraryClass = ({ isActive }) => linkClass({ isActive: isActive || onProjectRoute });
 
-                {/* Divider */}
-                <div className="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1 hidden md:block"></div>
-
-                {/* Breadcrumbs */}
-                <nav className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 min-w-0">
-                    <Link to="/" className="p-1 sm:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shrink-0">
-                        <Home size={15} />
-                    </Link>
-
-                    {isLibrary && (
-                        <>
-                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
-                                Library
-                            </span>
-                        </>
-                    )}
-
-                    {isReview && (
-                        <>
-                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
-                                Review Queue
-                            </span>
-                        </>
-                    )}
-
-                    {isQueue && (
-                        <>
-                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700 truncate">
-                                Queue
-                            </span>
-                        </>
-                    )}
-
-                    {projectName && (
-                        <>
-                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
-                            <Link
-                                to={`/project/${encodeURIComponent(projectName)}`}
-                                className="px-1.5 sm:px-2 py-0.5 sm:py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md hover:text-indigo-600 dark:hover:text-indigo-400 transition-all truncate max-w-[80px] sm:max-w-[150px] md:max-w-xs"
-                            >
-                                {projectName}
-                            </Link>
-                        </>
-                    )}
-
-                    {episodeName && (
-                        <>
-                            <ChevronRight size={13} className="text-gray-300 dark:text-gray-600 shrink-0" />
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-800 rounded-md truncate max-w-[80px] sm:max-w-[150px] md:max-w-xs border border-gray-200 dark:border-gray-700">
-                                {episodeName}
-                            </span>
-                        </>
-                    )}
-                </nav>
-            </div>
-
-            {/* Right Actions */}
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                {/* Command Palette Trigger */}
-                <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
-                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200/80 dark:hover:bg-gray-700/80 border border-gray-200 dark:border-gray-700 rounded-xl transition-all mr-1 shadow-sm"
-                    title="Open Command Palette (Ctrl+K or ⌘K)"
-                >
-                    <Search size={14} className="text-gray-400" />
-                    <span>Search or jump to...</span>
-                    <kbd className="font-mono text-[10px] bg-white dark:bg-gray-900 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 font-bold">
-                        ⌘K
-                    </kbd>
-                </button>
-                <button
-                    onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-api-key-modal'))}
-                    className="p-1.5 sm:p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all flex items-center gap-1.5 text-sm font-medium shrink-0"
-                    title="Configure Google Gemini API Key"
-                >
-                    <Key size={17} />
-                    <span className="hidden lg:inline">API Key</span>
-                </button>
-                {!authEnabled && (
-                    <Link
-                        to="/settings"
-                        className="p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 shrink-0"
-                        title="This server is unsecured — click to set a username and password"
-                    >
-                        <Lock size={17} />
-                        <span className="hidden md:inline">Unsecured</span>
-                    </Link>
+    const links = (
+        <>
+            <NavLink to="/" end className={libraryClass}>Library</NavLink>
+            <NavLink to="/activity" className={linkClass}>Activity</NavLink>
+            <NavLink to="/review" className={linkClass}>
+                Review
+                {reviewCount > 0 && (
+                    <span className="rounded-full bg-rose-500 px-1.5 text-xs font-semibold tabular-nums text-white">{reviewCount}</span>
                 )}
-                <Link
-                    to="/dashboard"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/dashboard'
-                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
-                            : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-                        }`}
-                    title="Dashboard"
-                >
-                    <Gauge size={17} />
-                    <span className="hidden md:inline">Dashboard</span>
-                </Link>
-                <Link
-                    to="/review"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isReview
-                            ? 'text-rose-600 bg-rose-50 dark:bg-rose-900/20 dark:text-rose-450'
-                            : 'text-gray-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20'
-                        }`}
-                    title="Review Queue"
-                >
-                    <div className="relative">
-                        <ShieldAlert size={17} />
-                        {reviewCount > 0 && (
-                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white dark:border-gray-900 animate-pulse"></span>
-                        )}
-                    </div>
-                    <span className="hidden md:inline">Review</span>
-                    {reviewCount > 0 && (
-                        <span className="px-1.5 py-0.5 text-xs font-bold bg-rose-500 text-white rounded-full">
-                            {reviewCount}
-                        </span>
-                    )}
-                </Link>
-                <Link
-                    to="/queue"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isQueue
-                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
-                            : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-                        }`}
-                    title="Translation Queue"
-                >
-                    <ListTodo size={17} />
-                    <span className="hidden md:inline">Queue</span>
-                </Link>
-                <Link
-                    to="/autopilot"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/autopilot'
-                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
-                            : 'text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
-                        }`}
-                    title="Autopilot"
-                >
-                    <Plane size={17} />
-                    <span className="hidden md:inline">Autopilot</span>
-                </Link>
-                <Link
-                    to="/library"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${isLibrary
-                            ? 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 dark:text-indigo-400'
-                            : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                        }`}
-                    title="Media Library"
-                >
-                    <Library size={17} />
-                    <span className="hidden md:inline">Library</span>
-                </Link>
-                <Link
-                    to="/health"
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm font-medium shrink-0 ${location.pathname === '/health'
-                            ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400'
-                            : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                        }`}
-                    title="System Health"
-                >
-                    <HeartPulse size={17} />
-                    <span className="hidden md:inline">Health</span>
-                </Link>
+            </NavLink>
+            <NavLink to="/settings" className={linkClass}>Settings</NavLink>
+            <NavLink to="/system" className={linkClass}>
+                System
                 {updateAvailable && (
-                    <Link
-                        to="/settings"
-                        state={{ tab: 'updates' }}
-                        className="px-2 sm:px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 hover:bg-amber-500/30 transition-all animate-pulse shrink-0"
-                        title="New OmbiSub update available! Click to view and install."
-                    >
-                        <ArrowDownCircle size={14} />
-                        <span className="hidden sm:inline">Update</span>
-                    </Link>
+                    <span className="h-2 w-2 rounded-full bg-amber-500" title="An update is available" aria-label="An update is available" />
                 )}
-                <Link
-                    to="/settings"
-                    className="p-1.5 sm:p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all shrink-0"
-                    title="Settings"
-                >
-                    <Settings size={18} />
+            </NavLink>
+        </>
+    );
+
+    return (
+        <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/90 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90">
+            <div className="mx-auto flex h-14 w-full max-w-7xl items-center gap-2 px-4 sm:px-6 lg:px-8">
+                <Link to="/" className="mr-2 flex shrink-0 items-center gap-2 text-gray-900 hover:opacity-80 dark:text-white" title="Library">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 shadow-sm">
+                        <LayoutGrid className="text-white" size={18} />
+                    </span>
+                    <span className="hidden text-lg font-bold tracking-tight sm:block">OmbiSub</span>
                 </Link>
+
+                <nav aria-label="Main" className="hidden items-center gap-1 md:flex">{links}</nav>
+
+                <div className="ml-auto flex items-center gap-2">
+                    <RunnerPill />
+                    <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
+                        className="hidden items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-750 lg:flex"
+                        title="Search or jump to (Ctrl+K)"
+                    >
+                        <Search size={14} />
+                        <span>Search</span>
+                        <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[10px] dark:border-gray-700 dark:bg-gray-900">Ctrl K</kbd>
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 lg:hidden"
+                        aria-label="Search"
+                    >
+                        <Search size={17} />
+                    </button>
+                    <Link
+                        to="/settings?section=security"
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${authEnabled ? 'text-gray-500 dark:text-gray-400' : 'text-amber-600 dark:text-amber-400'}`}
+                        title={authEnabled ? 'Login is on — security settings' : 'No login set — anyone who can reach this server can use it. Open security settings.'}
+                        aria-label={authEnabled ? 'Login is on' : 'No login set'}
+                    >
+                        {authEnabled ? <Lock size={17} /> : <Unlock size={17} />}
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={() => setMenuOpen(o => !o)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 md:hidden"
+                        aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                        aria-expanded={menuOpen}
+                    >
+                        {menuOpen ? <X size={18} /> : <Menu size={18} />}
+                    </button>
+                </div>
             </div>
-        </div>
+
+            {menuOpen && (
+                <nav aria-label="Main" className="flex flex-col gap-1 border-t border-gray-200 px-4 py-3 dark:border-gray-800 md:hidden [&>a]:justify-between [&>a]:py-2.5">
+                    {links}
+                </nav>
+            )}
+        </header>
     );
 };
 
