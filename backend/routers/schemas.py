@@ -197,10 +197,8 @@ class SettingsRequest(BaseModel):
     update_channel: Optional[str] = "auto"
     github_webhook_enabled: Optional[bool] = True
     github_webhook_secret: Optional[str] = ""
-    # --- Agent Runner Rescue & Boot ---
+    # --- Agent runner boot (its API-rescue settings live in the runner config, PUT /api/agent/runner/config) ---
     agent_runner_autostart: Optional[bool] = True
-    api_rescue: Optional[bool] = True
-    rescue_model: Optional[str] = None
     gemini_api_key: Optional[str] = None
     morphology_stemming: Optional[bool] = True
     # --- Intra-episode consistency reconciliation (Plan 20) ---

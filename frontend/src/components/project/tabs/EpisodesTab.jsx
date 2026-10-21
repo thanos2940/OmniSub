@@ -1,8 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Film, FileText, Languages, Layers, Loader2, RotateCcw, Search, ShieldAlert, Trash2, Upload, Wrench, Clock, ListChecks } from 'lucide-react';
-import { Button, Card, EmptyState, INPUT, OverflowMenu, ProgressBar, StatusChip } from '../../ui';
-import ConfirmDialog from '../ConfirmDialog';
+import { Button, ConfirmDialog, Card, EmptyState, INPUT, OverflowMenu, ProgressBar, StatusChip } from '../../ui';
 import { canTranslate, episodeCode, episodeTitle, formatDate, gapInfo, hasSourceSubtitle, lastTranslated, lineProgress, matchesFilter, seasonLabel, seasonNumber } from '../episodeUtils';
 
 const FILTERS = [

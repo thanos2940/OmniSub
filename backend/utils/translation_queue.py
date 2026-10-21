@@ -633,8 +633,9 @@ class TranslationQueue:
         limit: int = 100,
         work_types: Optional[Union[tuple, list, str]] = None,
         include_all_kinds: bool = False,
+        project: Optional[str] = None,
     ) -> List[Dict]:
-        """Retrieve items from queue ordered by status, priority, and created time."""
+        """Retrieve items from queue ordered by status, priority, and created time (optionally one project's)."""
         if isinstance(work_types, str):
             types_list = [work_types]
         elif work_types is not None:
@@ -651,6 +652,9 @@ class TranslationQueue:
             params.extend(types_list)
         elif not include_all_kinds:
             where_clauses.append("kind = 'translation'")
+        if project:
+            where_clauses.append("project_name = ? COLLATE NOCASE")
+            params.append(project)
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         params.append(limit)
@@ -693,7 +697,7 @@ class TranslationQueue:
     ) -> List[Dict]:
         return self.get_all(limit=limit, work_types=work_types, include_all_kinds=include_all_kinds)
 
-    def get_extractions(self, limit: int = 50) -> List[Dict]:
+    def get_extractions(self, limit: int = 50, project: Optional[str] = None) -> List[Dict]:
         """Pending/running/failed embedded-subtitle extractions, newest first.
 
         Kept out of ``get_all`` so the translation queue UI keeps its existing shape
@@ -704,7 +708,7 @@ class TranslationQueue:
             cursor = conn.execute(
                 """
                 SELECT * FROM translation_queue
-                WHERE kind = ?
+                WHERE kind = ? AND (? IS NULL OR project_name = ? COLLATE NOCASE)
                 ORDER BY
                     CASE status
                         WHEN 'running' THEN 1
@@ -717,7 +721,7 @@ class TranslationQueue:
                     created_at DESC
                 LIMIT ?
                 """,
-                (KIND_EXTRACTION, limit)
+                (KIND_EXTRACTION, project or None, project or None, limit)
             )
             return [dict(row) for row in cursor.fetchall()]
 

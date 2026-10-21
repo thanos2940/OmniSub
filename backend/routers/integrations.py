@@ -82,6 +82,23 @@ async def arr_status():
     }
 
 
+@router.get("/integrations/webhooks")
+async def webhook_urls():
+    """The Sonarr/Radarr webhook paths with the stored token, for Settings to show and copy.
+
+    Settings masks ``webhook_secret``, so the page cannot build these itself. This route sits under
+    ``/integrations`` and so behind the API key whenever login is on. Paths are relative; the page adds
+    its own origin and URL base (only the browser knows how the server is reached)."""
+    from urllib.parse import quote
+    secret = (storage.load_global_config().get("webhook_secret") or "").strip()
+    query = f"?token={quote(secret, safe='')}" if secret else ""
+    return {
+        "configured": bool(secret),
+        "sonarr": f"/api/webhook/sonarr{query}",
+        "radarr": f"/api/webhook/radarr{query}",
+    }
+
+
 @router.post("/integrations/sonarr/test")
 async def sonarr_test(request: Optional[ArrTestRequest] = None):
     """Test Sonarr connection with saved or provided settings."""

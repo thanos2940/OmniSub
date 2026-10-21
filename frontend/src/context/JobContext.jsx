@@ -427,7 +427,7 @@ export const JobProvider = ({ children }) => {
 
                     const link = projectName && episodeName
                         ? `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
-                        : (projectName ? `/project/${encodeURIComponent(projectName)}` : '/queue');
+                        : (projectName ? `/project/${encodeURIComponent(projectName)}` : '/activity');
 
                     addJob(
                         bgJobId,

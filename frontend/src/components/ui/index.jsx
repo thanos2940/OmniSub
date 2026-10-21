@@ -372,8 +372,14 @@ export function Modal({ open, title, onClose, children, footer, width = 'md' }) 
     );
 }
 
-// Confirmation before something that is hard to undo. `children` carries extra detail under the message.
-export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, busy = false, onConfirm, onCancel, children }) {
+// Confirmation before something that is hard to undo. `children` carries extra detail under the message;
+// `checkbox` ({label, defaultChecked}) adds one option whose value is passed to onConfirm(checked).
+export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, busy = false, checkbox, onConfirm, onCancel, children }) {
+    const [checked, setChecked] = useState(false);
+    useEffect(() => {
+        if (open) setChecked(!!checkbox?.defaultChecked);
+    }, [open, checkbox?.defaultChecked]);
+
     return (
         <Modal
             open={open}
@@ -383,12 +389,20 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirm', 
             footer={(
                 <>
                     <Button variant="ghost" onClick={onCancel} disabled={busy}>{cancelLabel}</Button>
-                    <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={onConfirm}>{confirmLabel}</Button>
+                    <Button variant={danger ? 'danger' : 'primary'} loading={busy} onClick={() => onConfirm?.(checked)}>{confirmLabel}</Button>
                 </>
             )}
         >
-            {message && <p className="text-sm text-gray-600 dark:text-gray-300">{message}</p>}
-            {children}
+            <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                {message && <p>{message}</p>}
+                {children}
+            </div>
+            {checkbox && (
+                <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+                    <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600" />
+                    <span>{checkbox.label}</span>
+                </label>
+            )}
         </Modal>
     );
 }

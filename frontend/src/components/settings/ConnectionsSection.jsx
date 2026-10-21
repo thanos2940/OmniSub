@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Film, Plus, Tv, Trash2, Play, RefreshCw, Webhook as WebhookIcon, PlayCircle } from 'lucide-react';
 import { api } from '../../api';
 import { useToast } from '../../context/ToastContext';
@@ -266,11 +266,25 @@ function WebhooksCard({ settings, onChange }) {
     const secret = settings.webhook_secret;
     const known = secret && secret !== SECRET_SENTINEL;
     const stored = !!settings.secrets_set?.webhook_secret;
-    const token = known ? secret : 'YOUR_TOKEN';
+    // Settings mask the stored token, so the full URLs come from their own endpoint; re-read after a save.
+    const [served, setServed] = useState(null);
+    useEffect(() => {
+        let alive = true;
+        api.getWebhookUrls()
+            .then(res => { if (alive) setServed(res.data); })
+            .catch(() => { if (alive) setServed(null); });
+        return () => { alive = false; };
+    }, [stored, known]);
+    // A token generated or typed here wins until it is saved; then the server's copy is the same one.
+    const fromServer = !known && served?.configured;
     const hooks = [
-        { name: 'Sonarr', path: '/api/webhook/sonarr' },
-        { name: 'Radarr', path: '/api/webhook/radarr' },
-    ];
+        { name: 'Sonarr', key: 'sonarr', path: '/api/webhook/sonarr' },
+        { name: 'Radarr', key: 'radarr', path: '/api/webhook/radarr' },
+    ].map(h => ({
+        ...h,
+        url: `${webhookOrigin()}${fromServer ? served[h.key] : `${h.path}?token=${known ? encodeURIComponent(secret) : 'YOUR_TOKEN'}`}`,
+    }));
+    const placeholder = !known && !fromServer;
     return (
         <Card title="Webhooks" subtitle="Lets Sonarr and Radarr tell OmbiSub about an import at once, instead of waiting for the next check.">
             <div className="space-y-4">
@@ -280,16 +294,13 @@ function WebhooksCard({ settings, onChange }) {
                     <li>Use the Test button there. A reply of success means the token matches.</li>
                 </ol>
                 <div className="space-y-2">
-                    {hooks.map(h => {
-                        const url = `${webhookOrigin()}${h.path}?token=${token}`;
-                        return (
-                            <div key={h.name} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-750 dark:bg-gray-900">
-                                <span className="w-14 shrink-0 text-xs font-semibold text-gray-600 dark:text-gray-300">{h.name}</span>
-                                <code className="min-w-0 flex-1 break-all font-mono text-xs text-gray-800 dark:text-gray-200">{url}</code>
-                                <CopyButton text={url} onCopied={() => !known && toast.info('Replace YOUR_TOKEN with the webhook token before you paste it.')} />
-                            </div>
-                        );
-                    })}
+                    {hooks.map(h => (
+                        <div key={h.name} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-750 dark:bg-gray-900">
+                            <span className="w-14 shrink-0 text-xs font-semibold text-gray-600 dark:text-gray-300">{h.name}</span>
+                            <code className="min-w-0 flex-1 break-all font-mono text-xs text-gray-800 dark:text-gray-200">{h.url}</code>
+                            <CopyButton text={h.url} onCopied={() => placeholder && toast.info('Generate a token and save before you paste this URL.')} />
+                        </div>
+                    ))}
                 </div>
                 <Field
                     label="Webhook token"
@@ -297,7 +308,7 @@ function WebhooksCard({ settings, onChange }) {
                     hint={known
                         ? 'New token, not saved yet. Save, then update the URL in Sonarr and Radarr.'
                         : stored
-                            ? 'A token is stored on the server and is not shown here. Put it in place of YOUR_TOKEN, or generate a new one and update Sonarr and Radarr.'
+                            ? 'A token is stored on the server; the URLs above include it. Generating a new one means updating Sonarr and Radarr.'
                             : 'No token is set, so webhooks are refused. Generate one.'}
                 >
                     <div className="flex flex-col gap-2 sm:flex-row">

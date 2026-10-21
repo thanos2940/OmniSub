@@ -164,7 +164,7 @@ export function useEpisodeQueue(projectName, onSettled) {
 
     const poll = useCallback(async () => {
         if (!projectName) return '';
-        const res = await api.getQueue();
+        const res = await api.getQueue(false, projectName);
         const mine = String(projectName).toLowerCase();
         const next = new Map();
         const consider = (item, kind) => {

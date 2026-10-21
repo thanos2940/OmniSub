@@ -7,7 +7,7 @@ import { useProjectDetail } from '../hooks/useProjectDetail';
 import { useEpisodeSelection } from '../hooks/useEpisodeSelection';
 import { errorText, useEpisodeQueue, useTranslate, useTranslationEngine } from '../hooks/useTranslate';
 import { api } from '../api';
-import { Button, EmptyState, IconButton, Notice, Page, PageHeader, Tabs } from './ui';
+import { Button, ConfirmDialog, EmptyState, IconButton, Notice, Page, PageHeader, Tabs } from './ui';
 
 import ProjectSettingsModal from './ProjectSettingsModal';
 import ApplyFixesModal from './project/modals/ApplyFixesModal';
@@ -15,7 +15,6 @@ import CheckMissingModal from './project/modals/CheckMissingModal';
 import ScriptFixModal from './project/modals/ScriptFixModal';
 import EmbeddedTracksModal from './project/modals/EmbeddedTracksModal';
 import SyncOptionsModal from './project/modals/SyncOptionsModal';
-import ConfirmDialog from './project/ConfirmDialog';
 import PriorityControl from './project/PriorityControl';
 
 import EpisodesTab from './project/tabs/EpisodesTab';

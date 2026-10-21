@@ -22,7 +22,9 @@ _last_queue_reconcile_at = 0.0
 
 @router.get("/api/queue")
 @router.get("/queue")
-async def get_queue_status(reconcile: bool = False):
+async def get_queue_status(reconcile: bool = False, project: Optional[str] = None):
+    """Queue items (100 at most) and summary. ``project`` narrows items and extractions to that project
+    (case-insensitive) with a much higher cap, so a page about one show sees all its queued work."""
     global _last_queue_reconcile_at
     import time, asyncio
     from services.agent_task_service import agent_task_service
@@ -42,7 +44,12 @@ async def get_queue_status(reconcile: bool = False):
     from utils.jobs_manager import jobs
     global_config = storage.load_global_config()
 
-    items = queue.get_all(limit=100, include_all_kinds=True)
+    # One project's rows sort active work first, so a wide cap still leaves nothing queued out.
+    limit = 1000 if project else 100
+    items = queue.get_all(limit=limit, include_all_kinds=True, project=project)
+    # Embedded-subtitle extractions run on their own lane and are listed
+    # separately so the translation queue keeps its existing shape.
+    extractions = queue.get_extractions(limit=limit if project else 50, project=project)
     # Agent-routed items: tag them, and give claimed ones the agent's live progress
     # (measured from its work file, since no in-process job tracks an external agent).
     try:
@@ -91,9 +98,7 @@ async def get_queue_status(reconcile: bool = False):
         "paused": global_config.get("queue_worker_paused", False),
         "translation_engine": global_config.get("translation_engine", "agent"),
         "concurrency": concurrency_manager.stats(),
-        # Embedded-subtitle extractions run on their own lane and are listed
-        # separately so the translation queue keeps its existing shape.
-        "extractions": queue.get_extractions(limit=50),
+        "extractions": extractions,
     }
 
 

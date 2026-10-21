@@ -325,6 +325,8 @@ export const api = {
 
     // Arr Integration (Sonarr & Radarr)
     getArrStatus: () => axios.get(`${API_URL}/integrations/arr/status`),
+    // Webhook paths with the stored token (settings mask it): { configured, sonarr, radarr }.
+    getWebhookUrls: () => axios.get(`${API_URL}/integrations/webhooks`),
     testSonarr: (settings) => axios.post(`${API_URL}/integrations/sonarr/test`, settings),
     testRadarr: (settings) => axios.post(`${API_URL}/integrations/radarr/test`, settings),
     testPath: (remotePath, pathMappings) => axios.post(`${API_URL}/integrations/arr/test-path`, { remote_path: remotePath, path_mappings: pathMappings }),
@@ -339,7 +341,8 @@ export const api = {
     enableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/enable`),
     
     // Background Queue & Sync
-    getQueue: (reconcile = false) => axios.get(`${API_URL}/api/queue`, { params: { reconcile } }),
+    // `project` narrows the list to one project's items, past the 100-row cap of the full list.
+    getQueue: (reconcile = false, project = undefined) => axios.get(`${API_URL}/api/queue`, { params: { reconcile, project } }),
     syncDisk: (options = {}) => axios.post(`${API_URL}/api/sync/disk`, null, { params: options }),
     getEvents: (since = 0) => axios.get(`${API_URL}/api/events/poll`, { params: { since } }),
     retryQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/retry`),

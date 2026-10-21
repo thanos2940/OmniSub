@@ -6,8 +6,7 @@ import { Languages, Loader2, RotateCcw, Sparkles, Trash2, Wand2, Clock } from 'l
 import { useJobs } from '../context/JobContext';
 import { useToast } from '../context/ToastContext';
 import TermHarvestModal from './TermHarvestModal';
-import ConfirmDialog from './project/ConfirmDialog';
-import { Button, Notice, OverflowMenu, PageHeader, ProgressBar, StatusChip } from './ui';
+import { Button, ConfirmDialog, Notice, OverflowMenu, PageHeader, ProgressBar, StatusChip } from './ui';
 import { errorText, useEpisodeQueue, useTranslate, useTranslationEngine } from '../hooks/useTranslate';
 
 const LANG_MAP = {
@@ -429,8 +428,9 @@ const EpisodeView = () => {
     ].join(' · ');
     const fixesTitle = isAssFormat ? "SubtitleEdit fixes aren't available for ASS/SSA subtitles (they would corrupt styling and karaoke)." : undefined;
 
+    // Fills the viewport under the TopBar (h-14 plus its 1px border); dvh keeps mobile browser bars out.
     return (
-        <div className="flex h-[calc(100vh-3.75rem)] min-h-[32rem] flex-col bg-slate-50 dark:bg-gray-900">
+        <div className="flex h-[calc(100dvh-3.5rem-1px)] min-h-[32rem] flex-col bg-slate-50 dark:bg-gray-900">
             <div className="shrink-0 border-b border-gray-200 bg-white px-4 pb-1 pt-4 dark:border-gray-750 dark:bg-gray-850 sm:px-6 [&>header]:mb-3">
                 <PageHeader
                     breadcrumb={[
