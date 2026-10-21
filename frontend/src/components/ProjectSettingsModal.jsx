@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Save, Settings, Check, Film } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
@@ -311,7 +311,7 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                                 <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Auto-Apply SubtitleEdit Fixes & Splits</span>
                             </label>
                             <p className="text-[10px] text-gray-400 mt-1 pl-8 italic">
-                                Runs "Fix Common Errors" and "Split Long Lines" via SubtitleEdit CLI after translation.
+                                Runs “Fix Common Errors” and “Split Long Lines” via SubtitleEdit CLI after translation.
                             </p>
                         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Lock, ShieldAlert, Copy } from 'lucide-react';
 import { api, AUTH_STORAGE_KEY } from '../../api';
 
@@ -52,7 +52,7 @@ const StepSecurity = ({ onNext, onBack, onSkip }) => {
                             <code className="flex-1 text-xs font-mono break-all">{webhookSecret}</code>
                             <button onClick={() => navigator.clipboard.writeText(webhookSecret)} className="text-gray-400 hover:text-gray-600"><Copy size={14} /></button>
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-1">The webhook URLs for Sonarr and Radarr are in Settings > Connections.</p>
+                        <p className="text-[11px] text-gray-500 mt-1">The webhook URLs for Sonarr and Radarr are in Settings › Connections.</p>
                     </div>
                 )}
                 <button onClick={onNext} className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">Continue</button>

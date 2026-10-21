@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Database, Trash2, AlertTriangle, RefreshCw, BarChart } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';

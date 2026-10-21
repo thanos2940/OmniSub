@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert, Check, CheckCircle, RefreshCw, AlertTriangle, ChevronRight, BookOpen, Plus, Filter, X } from 'lucide-react';
+import { ShieldAlert, Check, CheckCircle, RefreshCw, BookOpen, Plus, Filter, X } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 import ReviewLineResolver from './ReviewLineResolver';
@@ -285,7 +285,7 @@ const ReviewQueuePanel = ({ projectName }) => {
                             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-900/20 mb-4">
                                 <CheckCircle size={32} className="text-emerald-500" />
                             </div>
-                            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">You're all caught up!</h4>
+                            <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-1">You’re all caught up!</h4>
                             <p className="text-gray-500 text-sm">
                                 {activeEpisodeFilter ? `No items in episode "${activeEpisodeFilter}" need manual review.` : 'No items currently need manual review.'}
                             </p>

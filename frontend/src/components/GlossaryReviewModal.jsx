@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Plus, AlertCircle, Trash2, ChevronDown, ChevronUp, Merge } from 'lucide-react';
 
@@ -295,7 +295,7 @@ const GlossaryReviewModal = ({ isOpen, onClose, onConfirm, newTerms, existingTer
                         {editableTerms.length === 0 ? (
                             <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                                 <p className="text-lg font-medium mb-2">No new terms found</p>
-                                <p className="text-sm">The AI didn't discover any new terminology in the selected episodes.</p>
+                                <p className="text-sm">The AI didn’t discover any new terminology in the selected episodes.</p>
                             </div>
                         ) : (
                             editableTerms.map((term, idx) => {
@@ -376,7 +376,7 @@ const GlossaryReviewModal = ({ isOpen, onClose, onConfirm, newTerms, existingTer
                                                 />
                                                 {term.context_quote && (
                                                     <div className="text-xs text-gray-500 dark:text-gray-400 italic mb-3 border-l-2 border-gray-300 dark:border-gray-600 pl-2 py-1 bg-gray-50 dark:bg-gray-800/50 rounded-r">
-                                                        "{term.context_quote}"
+                                                        “{term.context_quote}”
                                                     </div>
                                                 )}
                                                 <div className="flex items-center gap-2 text-sm">

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X, Check, Globe, Folder, Plus, Trash2, Shield, Search, RefreshCw, Layers, ArrowUpRight, BookOpen } from 'lucide-react';
+import { Sparkles, X, Globe, Plus, Search, RefreshCw, BookOpen } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 
@@ -296,7 +296,7 @@ const TermHarvestModal = ({
 
                                                 {item.context_snippet && (
                                                     <div className="mt-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800/80 border border-gray-150 dark:border-gray-750 text-[11px] text-gray-500 dark:text-gray-400 italic">
-                                                        "{item.context_snippet}"
+                                                        “{item.context_snippet}”
                                                     </div>
                                                 )}
                                             </div>

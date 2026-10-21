@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Film, Sparkles, Edit2, Trash2, Check, RefreshCw, Loader2 } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';

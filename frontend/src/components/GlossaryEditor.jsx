@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-    Save, Sparkles, EyeOff, Globe, RotateCcw, Trash2
-} from 'lucide-react';
+import { Save, Sparkles, EyeOff, Globe, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from './ui';
 import { useToast } from '../context/ToastContext';
 import TermHarvestModal from './TermHarvestModal';

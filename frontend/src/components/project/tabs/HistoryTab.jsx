@@ -1,4 +1,3 @@
-import React from 'react';
 import TMStatsPanel from '../../TMStatsPanel';
 import ReviewQueuePanel from '../../ReviewQueuePanel';
 

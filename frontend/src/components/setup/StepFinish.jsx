@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Circle, PartyPopper } from 'lucide-react';
 import { api } from '../../api';
@@ -33,8 +33,8 @@ const StepFinish = ({ onBack, onFinish }) => {
                 <PartyPopper className="text-white" size={26} />
             </div>
             <div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">You're all set</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Here's what got configured — everything is editable later in Settings.</p>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">You’re all set</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Here’s what got configured — everything is editable later in Settings.</p>
             </div>
 
             {status && (

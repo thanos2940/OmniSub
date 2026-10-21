@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { api } from '../../../api';
 import { Button, Card, Notice } from '../../ui';

@@ -1,20 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useJobs } from '../context/JobContext';
-import {
-    X,
-    ChevronDown,
-    Activity,
-    CheckCircle,
-    AlertCircle,
-    Terminal,
-    ExternalLink,
-    Sparkles,
-    Maximize2,
-    Copy,
-    Check,
-    Download,
-    ArrowDown
-} from 'lucide-react';
+import { X, ChevronDown, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink, Sparkles, Maximize2, Copy, Check, Download, ArrowDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 

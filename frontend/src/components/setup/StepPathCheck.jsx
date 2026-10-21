@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { FolderOpen, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -47,7 +47,7 @@ const StepPathCheck = ({ onNext, onBack, onSkip }) => {
             <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-white">Check your media paths</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Sonarr/Radarr often see a different path than this machine does (e.g. Docker's
+                    Sonarr/Radarr often see a different path than this machine does (e.g. Docker’s
                     <code className="mx-1 px-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">/tv/Show/...</code>
                     vs. <code className="mx-1 px-1 bg-gray-100 dark:bg-gray-700 rounded text-xs">D:\Media\...</code> here).
                     Paste one path Sonarr/Radarr reports to check it resolves.

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { FileText, Sparkles, Plus, Edit2, Trash2, X, Check, RefreshCw } from 'lucide-react';
 import { Button, Card } from './ui';
 import { errorText } from '../hooks/useTranslate';

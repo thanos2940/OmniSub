@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Compass, Copy, Edit3, Eye, Loader2, RotateCcw, Save, Sparkles } from 'lucide-react';
 import { api } from '../../../api';
 import { Button, Card, EmptyState, Notice } from '../../ui';

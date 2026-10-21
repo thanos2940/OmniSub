@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Sparkles, Globe } from 'lucide-react';
 import { api } from '../../api';
 
@@ -26,7 +26,7 @@ const StepWelcome = ({ onNext }) => {
                 </div>
                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">Welcome to Omnisub</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-                    A context-aware AI subtitle translator. Let's get your install configured —
+                    A context-aware AI subtitle translator. Let’s get your install configured —
                     this takes about two minutes and you can change any of it later in Settings.
                 </p>
             </div>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { ArrowDown, Clock, EyeOff, Flame } from 'lucide-react';
 
 const TIERS = [

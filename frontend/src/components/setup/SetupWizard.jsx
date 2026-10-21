@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { api } from '../../api';
@@ -117,7 +117,7 @@ const SetupWizard = ({ onFinished }) => {
                 {stepIndex === 0 && (
                     <div className="px-6 pb-5 text-center">
                         <button onClick={handleSkipAll} className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline">
-                            Skip setup — I'll configure things myself
+                            Skip setup — I’ll configure things myself
                         </button>
                     </div>
                 )}

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Plus, EyeOff } from 'lucide-react';
 import { SOURCE_FILTERS } from './useGlossaryState';
 

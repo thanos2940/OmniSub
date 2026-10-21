@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AlertCircle, EyeOff, Languages, Loader2, PauseCircle, RefreshCw, Settings as SettingsIcon } from 'lucide-react';
 import { useToast } from '../context/ToastContext';

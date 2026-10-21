@@ -1,10 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '../../../api';
 import { useToast } from '../../../context/ToastContext';
-import {
-    Film, X, RefreshCw, AlertCircle, AlertTriangle,
-    Layers, Sparkles, Download, Terminal
-} from 'lucide-react';
+import { Film, X, RefreshCw, AlertCircle, AlertTriangle, Layers, Sparkles, Download, Terminal } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const EmbeddedTracksModal = ({
@@ -24,10 +21,10 @@ const EmbeddedTracksModal = ({
     const [selectedStreamIndex, setSelectedStreamIndex] = useState(null);
     const [migrateSrt, setMigrateSrt] = useState(true);
     const [forceOverwrite, setForceOverwrite] = useState(false);
-    const [autoTranslate, setAutoTranslate] = useState(false);
+    const [autoTranslate] = useState(false);
     const [extracting, setExtracting] = useState(false);
     const [extractLogs, setExtractLogs] = useState([]);
-    const [extractResult, setExtractResult] = useState(null);
+    const [, setExtractResult] = useState(null);
 
     const loadProbeData = async (forceRefresh = false) => {
         if (!projectName || !episodeName) return;

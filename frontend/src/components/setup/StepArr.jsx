@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Tv, Film, CheckCircle2, XCircle, Loader2, Copy } from 'lucide-react';
 import { api } from '../../api';
 
@@ -15,7 +15,7 @@ const ServiceBlock = ({ label, Icon, url, setUrl, apiKey, setApiKey, status, onT
             {status === 'error' && <XCircle size={14} className="text-red-500" />}
             {status === 'ok' ? 'Connected' : 'Test connection'}
         </button>
-        {status === 'error' && <p className="text-[11px] text-red-500">Couldn't connect — check the URL and key.</p>}
+        {status === 'error' && <p className="text-[11px] text-red-500">Couldn’t connect — check the URL and key.</p>}
         {status === 'ok' && webhookUrl && (
             <div className="pt-1">
                 <p className="text-[11px] text-gray-500 mb-1">Webhook URL — add this in {label} → Settings → Connect:</p>

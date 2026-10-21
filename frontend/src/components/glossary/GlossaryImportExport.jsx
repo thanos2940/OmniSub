@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Download, FileJson, FileSpreadsheet } from 'lucide-react';
 import { ensureUids, stripUids } from './useGlossaryState';
 

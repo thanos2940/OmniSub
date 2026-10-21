@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Check, Save, Sparkles, AlertTriangle, ArrowRight, Ban, RefreshCw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, Save, Sparkles, AlertTriangle, Ban } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
 
@@ -13,7 +13,7 @@ const ReviewLineResolver = ({
 }) => {
     const [text, setText] = useState(line.translated || '');
     const [conformance, setConformance] = useState(null);
-    const [measuring, setMeasuring] = useState(false);
+    const [, setMeasuring] = useState(false);
     const [promoting, setPromoting] = useState(false);
     const [blacklisting, setBlacklisting] = useState(false);
     const toast = useToast();

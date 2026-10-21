@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../ui';
 
 // A small confirmation modal. `checkbox` ({label, defaultChecked}) adds one option whose value is passed

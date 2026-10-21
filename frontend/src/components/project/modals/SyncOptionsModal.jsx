@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, RefreshCw, CheckCircle2, Loader2, FileWarning, Languages, Bot, Wrench } from 'lucide-react';
 import { api } from '../../../api';

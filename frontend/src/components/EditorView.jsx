@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Book, X, AlertTriangle, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw, Loader2, RefreshCw } from 'lucide-react';
+import { Download, Book, X, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw, Loader2, RefreshCw } from 'lucide-react';
 import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';

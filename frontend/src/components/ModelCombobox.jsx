@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ChevronDown, Sparkles } from 'lucide-react';
 import { api } from '../api';
 import { INPUT } from './ui';
@@ -162,7 +162,7 @@ const ModelCombobox = ({ value, onChange, label, placeholder = "Select or type m
                                 onMouseDown={(e) => { e.preventDefault(); handleSelect(inputValue.trim()); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700"
                             >
-                                <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Use custom model "{inputValue.trim()}"</div>
+                                <div className="text-sm font-medium text-indigo-600 dark:text-indigo-400">Use custom model “{inputValue.trim()}”</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">Custom Gemini Model Identifier</div>
                             </button>
                         </div>
