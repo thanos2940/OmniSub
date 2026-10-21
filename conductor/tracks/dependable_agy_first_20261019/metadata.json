@@ -1,8 +1,8 @@
 {
   "track_id": "dependable_agy_first_20261019",
   "type": "feature",
-  "status": "in_progress",
+  "status": "completed",
   "created_at": "2026-10-19T00:00:00Z",
-  "updated_at": "2026-10-19T00:00:00Z",
+  "updated_at": "2026-10-21T00:00:00Z",
   "description": "Run like Sonarr/Bazarr (service, updates, logs, Caddy), agy-first translation everywhere, bootstrap context/glossary, single automation, simplified UI"
 }

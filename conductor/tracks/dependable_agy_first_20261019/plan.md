@@ -48,12 +48,12 @@ Rules for every workstream
 - [x] Shared UI kit `frontend/src/components/ui/index.jsx`.
 
 ## Phase 3 — frontend (sequential, after Phase 2)
-- [ ] F1 Navigation (Library · Activity · Review · Settings · System), merged Library, Activity page (Queue + runner panel, History, Autopilot), System page (Status, Logs, Backup, Updates); remove Dashboard page.
-- [ ] F2 Project page (4 tabs, one Translate per episode, overflow menu, "Build with agy"), Episode view retranslate via agy, Settings reorganisation (Translation, Connections, Subtitles, Automation, Security, General); remove Sandbox Tester, Presets, Hyperparameters, Token Stats, Simple-pipeline wizard, legacy auto-translate UI.
+- [x] F1 Navigation (Library · Activity · Review · Settings · System), merged Library, Activity page (Queue + runner panel, History, Autopilot), System page (Status, Logs, Backup, Updates); remove Dashboard page.
+- [x] F2 Project page (4 tabs, one Translate per episode, overflow menu, "Build with agy"), Episode view retranslate via agy, Settings reorganisation (Translation, Connections, Subtitles, Automation, Security, General); remove Sandbox Tester, Presets, Hyperparameters, Token Stats, Simple-pipeline wizard, legacy auto-translate UI.
 
 ## Phase 4 — verification
-- [ ] V1 Full pytest, eslint, vite build; preview the UI (light/dark, narrow width).
-- [ ] V2 Update CLAUDE.md, handoff, memory; commit; deployment steps for the server.
+- [x] V1 Full pytest, eslint, vite build; preview the UI (light/dark, narrow width). *(2026-10-21: every page walked at 1440 and 390 px, light and dark, on a scratch data dir with the test suite's fake agy; Translate → runner → translated → Delete flow driven in the browser. Fixes it found are listed in HANDOFF.md.)*
+- [x] V2 Update CLAUDE.md, handoff, memory; commit; deployment steps for the server. *(CLAUDE.md is git-ignored and absent from fresh clones; its Frontend notes live in HANDOFF.md.)*
 
 ## Phase 3 detail — UI spec (from the 2026-10-19 walkthrough of the running UI)
 

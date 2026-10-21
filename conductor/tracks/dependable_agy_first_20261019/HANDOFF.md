@@ -61,26 +61,47 @@ Frontend (merged; **built and linted, NOT yet visually verified together**):
 - **F2b**: Settings (`?section=translation|connections|subtitles|automation|security|general`, one
   sticky save bar), agy-first setup wizard, `PUT /api/agent/runner/config`.
 
-## What REMAINS (do in this order)
-1. **Verify the merged UI end to end** (plan V1): run backend on a scratch data dir + `npm run dev`
-   (or the built `backend/static`), walk every page at 1440 px and 390 px, light and dark. Known
-   integration risks to check:
-   - EpisodeView uses `h-[calc(100vh-3.75rem)]` for the top-bar height — check against the new TopBar.
-   - Settings › Connections webhook card shows `?token=YOUR_TOKEN` because `webhook_secret` is masked;
-     add a small authenticated endpoint that returns the full webhook URLs (and use it in the card).
-   - `/api/queue` caps at 100 rows; the project page shows "Queued" only for those → add a
-     `project` filter to the queue list endpoint (`routers/queue.py`) and use it in `useEpisodeQueue`.
-   - `JobContext.jsx` job links still point at `/library`, `/queue` (redirect works; update them).
-   - `/api/system/status` returns `port: null` unless `OMBISUB_PORT` is set (it is set by `run_server.py`;
-     fine on the server, null under plain uvicorn).
-   - Duplicate confirm dialogs: kit `ConfirmDialog` (F1) and `project/ConfirmDialog.jsx` (F2a) — consolidate.
-   - The GitHub push-webhook settings card was dropped; decide whether to re-add it under Connections.
-2. Drop unused `api_rescue`/`rescue_model` from `routers/schemas.py` `SettingsRequest` (nothing reads them;
-   the runner config is the source).
-3. Full pytest + lint + build; update `plan.md` checkboxes (V1, V2), `CLAUDE.md` Frontend section
-   (new routes, kit), commit.
-4. **Push** `main` and give the owner server steps (below). Pushing is outward-facing: the owner asked
-   for it, but say what is being pushed.
+## Verification and fixes (2026-10-21, branch `claude/tender-pascal-go38dg`)
+Every page was walked at 1440 and 390 px, light and dark (Playwright), on a scratch `OMNISUB_DATA_DIR`
+with `agent_runner_autostart: false`, no `claude` CLI on PATH, no Gemini key, and agy replaced by the test
+suite's `tests/fake_agent_cli.py` (`OMNISUB_ANTIGRAVITY_CMD`). The Translate → queued → runner → translated
+→ Delete-translation flow was driven in the browser. No console errors, failed API calls or horizontal
+overflow remain. Changed:
+- `GET /integrations/webhooks` (behind the API key when login is on) returns the webhook paths with the
+  stored token; Settings › Connections shows the real URLs.
+- `GET /api/queue?project=` filters items and extractions to one project (cap 1000); `useEpisodeQueue` uses it.
+- One `ConfirmDialog` (kit, with the `checkbox` option); `project/ConfirmDialog.jsx` removed.
+- EpisodeView fills the viewport under the TopBar (`100dvh - 3.5rem - 1px`); EditorView uses `h-full`
+  (its `h-screen` hid the last ~180 px of cues below the window) and its header wraps on phones.
+- `useAdaptivePolling`: the in-flight guard is per effect run. The shared ref let a cancelled run block the
+  next one, so polling died after the first request under React StrictMode (dev) or any effect re-run.
+- `useTranslate.ensureRunnerStarted` starts a runner that is not `running` (it only started `stopped`
+  ones; a runner started without watch ends as `done` and was never restarted).
+- Agent runner: the "queue empty, stop" decision is taken under `claim_lock` and counts claimed episodes
+  (`held`); idle lanes stopped the runner while another lane was bootstrapping a just-claimed episode,
+  leaving it `running` with nobody on it (regression test in `test_agent_runner.py`).
+- Endpoints whose work goes to agy (glossary/context create & enhance, summary generation, retranslate-line)
+  no longer demand a Gemini key in agent mode (`validate_llm_access`); subtitle upload needs none at all.
+- System › Status finds agent CLIs the way the runner does (`agent_cli.engine_command`), not `which`.
+- JobContext fallback link → `/activity`; `SettingsRequest` drops `api_rescue`/`rescue_model`.
+Tests: 1809 pass, 5 skip on Linux; 20 fail identically on the base commit `1590ae8` (Windows paths/UNC/drive
+letters, root ignoring read-only files, no sentence-transformers) and are environment-only.
+
+### Still open
+- Merge `claude/tender-pascal-go38dg` into `main` and push `main`; then the server steps below.
+- Command palette's light/dark toggle has no effect: Tailwind uses `darkMode: 'media'`, nothing reads
+  `localStorage.theme`. Dark mode follows the OS. Decide: drop the command or switch to `class` + init.
+- GitHub push webhook (`/api/webhooks/github`) is not under the auth exemption (`/api/webhook/` only) and
+  accepts unsigned pushes when no secret is set; its settings card stays out (the updater follows
+  `origin/main` by itself). Exempt + require a secret if it is ever re-added.
+- `/api/system/status` `port` is null under plain uvicorn (set by `run_server.py`; fine on the server).
+
+### Frontend map (CLAUDE.md is git-ignored, so here)
+Routes: `/` Library · `/activity?tab=queue|history|autopilot` · `/review` · `/settings?section=translation|
+connections|subtitles|automation|security|general` · `/system?tab=status|logs|backup|updates` ·
+`/project/:name?tab=episodes|glossary|context|history` · `/project/:name/episode/:ep`. Old routes redirect.
+Shared kit: `frontend/src/components/ui/index.jsx` (Page, PageHeader, Card, Button, Tabs, Modal,
+ConfirmDialog, OverflowMenu, StatusChip, ProgressBar, …). Translate actions: `hooks/useTranslate.js`.
 
 ## Server update steps for the owner (after push)
 1. On the PC: **exit the old OmbiSub instance** — tray app (`pythonw tray_app.py`, stuck in a respawn
