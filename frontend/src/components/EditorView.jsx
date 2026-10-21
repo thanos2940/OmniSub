@@ -519,12 +519,12 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="h-screen flex flex-col bg-slate-50 dark:bg-gray-900"
+            className="h-full flex flex-col bg-slate-50 dark:bg-gray-900"
         >
             {/* Header */}
-            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-between items-center shadow-sm z-10">
+            <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 sm:px-6 sm:py-4 flex flex-wrap justify-between items-center gap-2 shadow-sm z-10">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold text-gray-800 dark:text-white">Translation Editor</h1>
+                    <h1 className="hidden text-xl font-bold text-gray-800 dark:text-white sm:block">Translation Editor</h1>
                     <button
                         onClick={() => setShowGlossary(true)}
                         className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm font-medium"
@@ -533,7 +533,7 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
                         Glossary
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                     {dirty && (
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2.5 py-1 rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
@@ -562,7 +562,7 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
                     )}
                     <button
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors shadow-lg shadow-gray-900/20"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors text-sm font-medium shadow-lg shadow-gray-900/20"
                         title="Download the subtitle file in your browser"
                     >
                         <Download className="w-4 h-4" />

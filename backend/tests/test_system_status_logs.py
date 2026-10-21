@@ -163,3 +163,12 @@ def test_status_survives_a_broken_runner(client, monkeypatch):
     monkeypatch.setattr(agent_runner, "get_runner", boom)
     body = client.get("/api/system/status").json()
     assert body["agent_runner"] == {"error": "runner exploded"}
+
+
+def test_status_finds_agent_clis_where_the_runner_does(client, logs, monkeypatch):
+    """agy's default Windows install is not on PATH; the status shows what the runner would run."""
+    from services import agent_cli
+    monkeypatch.setattr(agent_cli, "engine_command",
+                        lambda engine: [r"C:\Users\me\AppData\Local\agy\bin\agy.exe"] if engine == "antigravity" else None)
+    body = client.get("/api/system/status").json()
+    assert body["agent_clis"] == {"agy": r"C:\Users\me\AppData\Local\agy\bin\agy.exe", "claude": None}

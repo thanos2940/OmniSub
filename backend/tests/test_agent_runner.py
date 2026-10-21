@@ -864,3 +864,20 @@ def test_antigravity_quota_recognises_a_prompt_reply(monkeypatch):
     reply = '{"conversation_id":"x","status":"SUCCESS","response":"","usage":{"total_tokens":29728}}'
     monkeypatch.setattr(agent_cli.subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=reply + "\n"))
     assert agent_cli.antigravity_quota(["agy"]) == []
+
+
+def test_idle_lanes_do_not_stop_the_runner_while_another_lane_starts_an_episode(tmp_path, monkeypatch):
+    """One episode, three lanes. The lane that claims it spends a moment on the show's bootstrap before it
+    starts translating; the two idle lanes must not take that moment for an empty queue and stop the runner
+    (which left the episode claimed and 'running' with nobody working on it)."""
+    _show()
+    real_bootstrap = AgentRunner._bootstrap
+
+    def slow_bootstrap(self, *args, **kwargs):
+        time.sleep(0.5)
+        return real_bootstrap(self, *args, **kwargs)
+
+    monkeypatch.setattr(AgentRunner, "_bootstrap", slow_bootstrap)
+    runner = _run(tmp_path, lanes=3, fallback_models=[])
+    assert all(el for _, el in _greek()), _log(runner)
+    assert [i["status"] for i in TranslationQueue().get_all()] == ["completed"]

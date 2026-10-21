@@ -19,7 +19,6 @@ export const useAdaptivePolling = ({
     backgroundInterval = 10000,
     backoffThreshold = 3,
 }) => {
-    const isPollingRef = useRef(false);
     const pollTimerRef = useRef(null);
     const unchangedCountRef = useRef(0);
     const lastProgressSigRef = useRef('');
@@ -39,6 +38,9 @@ export const useAdaptivePolling = ({
         }
 
         let isCancelled = false;
+        // Owned by this run of the effect: a poll still in flight from a cancelled run (a re-run, or React
+        // StrictMode's mount-unmount-mount in development) must not block this run's first poll.
+        let inFlight = false;
 
         const scheduleNextPoll = (delay) => {
             if (isCancelled) return;
@@ -47,8 +49,8 @@ export const useAdaptivePolling = ({
         };
 
         const executePoll = async () => {
-            if (isCancelled || isPollingRef.current) return;
-            isPollingRef.current = true;
+            if (isCancelled || inFlight) return;
+            inFlight = true;
 
             let nextDelay = baseInterval;
 
@@ -79,7 +81,7 @@ export const useAdaptivePolling = ({
             } catch (err) {
                 console.error("Adaptive polling error:", err);
             } finally {
-                isPollingRef.current = false;
+                inFlight = false;
                 if (!isCancelled) {
                     scheduleNextPoll(nextDelay);
                 }

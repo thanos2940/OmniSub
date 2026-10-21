@@ -24,11 +24,12 @@ export function useTranslationEngine() {
     return engine;
 }
 
-// A stopped runner would leave queued work waiting; start it (harmless when it is already running).
+// A runner that is not running would leave queued work waiting; start it. Check `running`, not the status:
+// a runner started without watch mode ends as 'done' (or 'error'), and that one needs starting too.
 async function ensureRunnerStarted() {
     try {
         const res = await api.getAgentRunner();
-        if (res.data?.status !== 'stopped') return { started: false };
+        if (res.data?.running) return { started: false };
         await api.startAgentRunner({});
         return { started: true };
     } catch (err) {

@@ -1,5 +1,6 @@
-"""GET /api/queue?project= lists one project's items past the 100-row cap of the full list, and
-GET /integrations/webhooks gives Settings the webhook paths with the stored (otherwise masked) token."""
+"""Endpoints behind the rebuilt UI: GET /api/queue?project= lists one project's items past the 100-row cap,
+GET /integrations/webhooks gives Settings the webhook paths with the stored (otherwise masked) token, and
+work that goes to agy (uploads, context and glossary jobs) needs no Gemini key in agent mode."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -45,7 +46,7 @@ def test_project_filter_applies_to_extractions(queue, client):
 
     mine = client.get("/api/queue", params={"project": "Quiet Show"}).json()
     assert [it["project_name"] for it in mine["extractions"]] == ["Quiet Show"]
-    assert all(it.get("kind") != "extraction" for it in mine["items"])
+    assert {it["project_name"] for it in mine["items"]} == {"Quiet Show"}  # items list every kind
     assert len(client.get("/api/queue").json()["extractions"]) == 2
 
 
@@ -81,3 +82,45 @@ def test_webhook_urls_need_the_api_key_when_login_is_on(client):
     assert client.get("/integrations/webhooks").status_code == 401
     ok = client.get("/integrations/webhooks", headers={"X-Api-Key": "k-123"})
     assert ok.status_code == 200 and ok.json()["sonarr"].endswith("?token=abc")
+
+
+# ---- agy-first: no Gemini key is needed for work that goes to agy
+
+SRT = "1\n00:00:01,000 --> 00:00:02,000\nHello there.\n\n2\n00:00:03,000 --> 00:00:04,000\nGood night.\n"
+
+
+@pytest.fixture
+def no_gemini_key(monkeypatch, client):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    # The background work would call agy (or Gemini): these tests only cover the endpoint gate.
+    import routers.glossary_context as gc
+    for name in ("_process_create_context", "_process_create_glossary", "_process_enhance_context", "_process_enhance_glossary"):
+        monkeypatch.setattr(gc, name, lambda *a, **k: None)
+    assert client.post("/projects", json={"name": "Keyless", "target_language": "Greek", "type": "show"}).status_code == 200
+
+
+def _engine(name):
+    cfg = storage.load_global_config()
+    cfg["translation_engine"] = name
+    cfg.pop("api_key_obfuscated", None)
+    storage.save_global_config(cfg)
+
+
+@pytest.mark.parametrize("engine", ["agent", "model"])
+def test_uploading_a_subtitle_needs_no_api_key(no_gemini_key, client, engine):
+    _engine(engine)
+    res = client.post("/projects/Keyless/episodes/S01E01/upload", files={"file": ("S01E01.srt", SRT, "text/plain")})
+    assert res.status_code == 200 and res.json()["line_count"] == 2
+
+
+@pytest.mark.parametrize("path", ["context/create", "context/enhance", "glossary/create", "glossary/enhance"])
+def test_context_and_glossary_jobs_start_without_a_key_in_agent_mode(no_gemini_key, client, path):
+    _engine("agent")
+    res = client.post(f"/projects/Keyless/{path}")
+    assert res.status_code == 200 and res.json()["job_id"]
+
+
+def test_context_jobs_still_need_the_key_with_the_model_engine(no_gemini_key, client):
+    _engine("model")
+    res = client.post("/projects/Keyless/context/create")
+    assert res.status_code == 400 and res.json()["detail"]["error"] == "api_key_missing"

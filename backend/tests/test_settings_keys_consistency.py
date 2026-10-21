@@ -32,6 +32,10 @@ ALLOWLIST = {
     "auth_password_hash",
     "api_key",
     "macro_chunking",
+    # Agent runner keys read from the runner's own config (self.config), saved through
+    # PUT /api/agent/runner/config, not the global settings.
+    "api_rescue",
+    "rescue_model",
 }
 
 KEY_RE = re.compile(r'(?:global_config|config|cfg)\.get\(\s*"([a-z][a-z0-9_]*)"')

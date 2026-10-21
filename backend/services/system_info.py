@@ -80,6 +80,17 @@ def _disk(path: Path) -> Dict[str, Any]:
         return {"free_bytes": None, "total_bytes": None}
 
 
+def _agent_clis() -> Dict[str, Optional[str]]:
+    """The agent CLIs as the runner finds them: an ``OMNISUB_<ENGINE>_CMD`` override or the detected install
+    (agy's default Windows install is not on PATH)."""
+    try:
+        from services import agent_cli
+        return {name: " ".join(agent_cli.engine_command(engine) or []) or None
+                for name, engine in (("agy", "antigravity"), ("claude", "claude"))}
+    except Exception:
+        return {"agy": shutil.which("agy"), "claude": shutil.which("claude")}
+
+
 def _runner_summary() -> Dict[str, Any]:
     """The agent runner in a few cheap fields (no quota poll, no log)."""
     try:
@@ -123,7 +134,7 @@ def collect_status(app_version: str = "", active_url_base: Optional[str] = None)
         "platform": platform.platform(),
         "ffmpeg": tools.ffmpeg if tools else None,
         "ffprobe": tools.ffprobe if tools else None,
-        "agent_clis": {"agy": shutil.which("agy"), "claude": shutil.which("claude")},
+        "agent_clis": _agent_clis(),
         "agent_runner": _runner_summary(),
         "disk": _disk(DATA_DIR),
         "logs": list_logs(),

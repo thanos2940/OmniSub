@@ -11,7 +11,7 @@ from utils.subtitle_fixer import fix_subtitles_with_se
 from utils.jobs_manager import create_job
 from services.translation_service import _record_user_edits, _process_retranslation_for_comparison, auto_export_translated_subtitle
 from routers.schemas import SaveEpisodeRequest, TranslateRequest, MergeTranslationRequest, BatchDownloadRequest, DeleteLinesRequest, ApplyFixesRequest, BatchApplyFixesRequest
-from routers.settings import validate_api_key
+from routers.settings import validate_api_key, validate_llm_access
 
 router = APIRouter()
 
@@ -106,7 +106,6 @@ async def get_episode(project_name: str, episode_name: str, request: Request):
 
 @router.post("/projects/{project_name}/episodes/{episode_name}/upload")
 async def upload_episode(project_name: str, episode_name: str, file: UploadFile):
-    validate_api_key()
     content = (await file.read()).decode('utf-8')
     from utils.source_clean import import_and_clean_srt
     try:
@@ -698,7 +697,7 @@ async def retranslate_single_line(
     episode_name: str,
     request: Dict[str, Any]
 ):
-    validate_api_key()
+    validate_llm_access()
     line_index = int(request.get("line_index", 0))
     new_text = request.get("new_text")
     model = request.get("model")

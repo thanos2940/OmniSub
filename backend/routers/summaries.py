@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from utils import storage
 from utils.episode_summaries import EpisodeSummaryManager
 from utils.jobs_manager import create_job, update_job
-from routers.settings import validate_api_key
+from routers.settings import validate_llm_access
 
 router = APIRouter()
 
@@ -67,7 +67,7 @@ async def generate_summary_for_episode(
     Useful when summaries were not auto-generated (e.g. feature was disabled
     at translation time) or when a summary needs to be regenerated.
     """
-    validate_api_key()
+    validate_llm_access()
 
     data = storage.load_episode(project_name, episode_name)
     if not data:

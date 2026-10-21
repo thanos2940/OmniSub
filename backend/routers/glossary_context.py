@@ -20,7 +20,7 @@ from adk_agents import (
 from google.adk.runners import Runner, types as adk_types
 from routers.schemas import EnhanceGlossaryRequest, SyncImportRequest
 from utils.character_profiles import CharacterProfileManager, CharacterProfile
-from routers.settings import validate_api_key
+from routers.settings import validate_llm_access
 from services.translation_service import _gather_project_text, _merge_glossaries
 
 router = APIRouter()
@@ -57,7 +57,7 @@ async def create_glossary(
     background_tasks: BackgroundTasks,
     model: str = "gemini-flash-lite-latest"
 ):
-    validate_api_key()
+    validate_llm_access()
     job_id = create_job("create_glossary", project_name=project_name)
     background_tasks.add_task(_process_create_glossary, job_id, project_name, [], model)
     return {"job_id": job_id}
@@ -71,7 +71,7 @@ async def enhance_glossary(
     model: str = "gemini-flash-lite-latest",
     enable_research: bool = False
 ):
-    validate_api_key()
+    validate_llm_access()
     episode_names = request.episode_names if request else None
     job_id = create_job("enhance_glossary", project_name=project_name)
     background_tasks.add_task(
@@ -98,7 +98,7 @@ async def create_context(
     background_tasks: BackgroundTasks,
     model: str = "gemini-flash-lite-latest"
 ):
-    validate_api_key()
+    validate_llm_access()
     job_id = create_job("create_context", project_name=project_name)
     background_tasks.add_task(_process_create_context, job_id, project_name, [], model)
     return {"job_id": job_id}
@@ -111,7 +111,7 @@ async def enhance_context(
     model: str = "gemini-flash-lite-latest",
     with_research: bool = False
 ):
-    validate_api_key()
+    validate_llm_access()
     job_id = create_job("enhance_context", project_name=project_name)
     background_tasks.add_task(_process_enhance_context, job_id, project_name, model, with_research)
     return {"job_id": job_id}

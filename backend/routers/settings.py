@@ -121,6 +121,15 @@ def validate_api_key(project_metadata: Optional[Dict] = None):
         })
 
 
+def validate_llm_access(project_metadata: Optional[Dict] = None):
+    """For endpoints whose work goes to agy in agent mode (the API is only its rescue for refused lines):
+    no Gemini key needed there; with the model engine the key is required as before."""
+    from services import agy_llm
+    if agy_llm.agent_mode():
+        return
+    validate_api_key(project_metadata)
+
+
 @router.get("/api/config/api-key")
 async def get_api_key_status():
     return {"has_key": has_api_key()}

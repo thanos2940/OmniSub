@@ -835,7 +835,7 @@ class AgentRunner:
     def _next_task(self) -> Optional[Dict]:
         per_show = int(self.config["per_show"] or 1)
         with self.claim_lock:
-            if self._no_new_work():
+            if self.stop_event.is_set() or self._no_new_work():
                 return None
             with self.lock:
                 busy = dict(self.held)
@@ -918,11 +918,14 @@ class AgentRunner:
                     self._release_probe(model, lane)
                     if self._no_new_work():
                         break
-                    with self.lock:
-                        others_busy = any(v.get("task") for i, v in self.lanes.items() if i != lane)
-                    if not others_busy and not self.config["watch"]:
-                        self._finish("done", self._empty_message())
-                        break
+                    # Under the claim lock, so no claim can slip in between this check and the stop: another
+                    # lane counts as busy from its claim (``held``), not only once it starts translating.
+                    with self.claim_lock:
+                        with self.lock:
+                            others_busy = bool(self.held) or any(v.get("task") for i, v in self.lanes.items() if i != lane)
+                        if not others_busy and not self.config["watch"]:
+                            self._finish("done", self._empty_message())
+                            break
                     if not others_busy:
                         self._set_status("idle", "The queue is empty — watching for new episodes.")
                     self._lane_set(lane, state="idle", **NO_WORK)
