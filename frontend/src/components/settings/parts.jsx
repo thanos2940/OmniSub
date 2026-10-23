@@ -146,13 +146,27 @@ export function Disclosure({ title, subtitle, children, defaultOpen = false }) {
 }
 
 // A labelled range input with its current value.
-export function Slider({ label, hint, value, min, max, step, onChange, format = (v) => v }) {
+// A range input. With `unsetLabel`, the value may be empty (null): the chip then shows `unsetLabel` (e.g.
+// "Google default"), the thumb rests at `unsetAt`, dragging sets a value, and Reset empties it again.
+export function Slider({ label, hint, value, min, max, step, onChange, format = (v) => v, unsetLabel, unsetAt }) {
     const id = useId();
+    const unset = unsetLabel !== undefined && (value === null || value === undefined || value === '');
     return (
         <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-3">
                 <label htmlFor={id} className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-                <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-300">{format(value)}</span>
+                <span className="flex items-center gap-2">
+                    {unsetLabel !== undefined && !unset && (
+                        <button type="button" onClick={() => onChange(null)} className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400">
+                            Reset
+                        </button>
+                    )}
+                    <span className={cx('rounded px-2 py-0.5 text-xs', unset
+                        ? 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
+                        : 'bg-gray-100 font-mono text-gray-700 dark:bg-gray-800 dark:text-gray-300')}>
+                        {unset ? unsetLabel : format(value)}
+                    </span>
+                </span>
             </div>
             <input
                 id={id}
@@ -160,9 +174,9 @@ export function Slider({ label, hint, value, min, max, step, onChange, format = 
                 min={min}
                 max={max}
                 step={step}
-                value={value}
+                value={unset ? (unsetAt ?? min) : value}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 accent-indigo-600 dark:bg-gray-700"
+                className={cx('h-2 w-full cursor-pointer appearance-none rounded-lg bg-gray-200 dark:bg-gray-700', unset ? 'accent-gray-400 opacity-70' : 'accent-indigo-600')}
             />
             {hint && <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
         </div>

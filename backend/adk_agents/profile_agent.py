@@ -28,7 +28,7 @@ def create_profile_agent(
         name="CharacterProfileAgent",
         model=create_model(
             model_name,
-            temperature=temperature if temperature is not None else 0.2,
+            temperature=temperature,
         ),
         instruction=f"""You are analyzing subtitle dialogue to build character profiles for {target_language} translation.
 

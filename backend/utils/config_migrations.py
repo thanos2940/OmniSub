@@ -55,10 +55,41 @@ def _update_channel(cfg: Dict) -> str:
     return ""
 
 
+# The sampling values OmbiSub used to write by default (into the settings and into every new project).
+_OLD_SAMPLING_DEFAULTS = {"temperature": 0.3, "top_k": 64, "top_p": 0.95}
+
+
+def _google_sampling_defaults(cfg: Dict) -> str:
+    """Temperature, top-k and top-p now follow Google's defaults for each model unless set by hand. The
+    values OmbiSub stored only because they were its old defaults are removed, from the settings and from
+    every project; any other value was chosen by someone and stays."""
+    removed = [k for k, v in _OLD_SAMPLING_DEFAULTS.items() if k in cfg and cfg[k] == v]
+    for k in removed:
+        cfg.pop(k)
+    cfg.pop("max_output_tokens", None)  # a setting nothing ever read
+    from utils.storage_modules import project_store
+    projects = 0
+    for name in project_store.list_projects():
+        meta = project_store.load_project_metadata(name) or {}
+        settings = meta.get("settings")
+        if not isinstance(settings, dict):
+            continue
+        stale = [k for k, v in _OLD_SAMPLING_DEFAULTS.items() if k in settings and settings[k] in (v, None)]
+        if stale:
+            for k in stale:
+                settings.pop(k)
+            project_store.save_project_metadata(name, meta)
+            projects += 1
+    if not removed and not projects:
+        return ""
+    return f"sampling follows Google's defaults (cleared {', '.join(removed) or 'nothing'} in settings, {projects} project(s))"
+
+
 MIGRATIONS: List[Tuple[str, Callable[[Dict], Optional[str]]]] = [
     ("2026-10-19-agent-engine", _agent_engine),
     ("2026-10-19-autopilot-only", _autopilot_only),
     ("2026-10-19-update-channel", _update_channel),
+    ("2026-10-23-google-sampling-defaults", _google_sampling_defaults),
 ]
 
 

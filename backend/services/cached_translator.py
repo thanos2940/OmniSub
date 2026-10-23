@@ -18,7 +18,7 @@ logger = logging.getLogger("omnisub.cached_translator")
 
 
 async def generate_cached(model: str, user_prompt: str, cache_name=None,
-                          system_instruction: str = "", temperature: float = 0.3,
+                          system_instruction: str = "", temperature: float = None,
                           response_schema = None, response_mime_type: str = None,
                           thinking_budget: int = None, role: str = "other", on_blocked=None,
                           api_key: str = None, meta: dict = None) -> str:
@@ -32,7 +32,8 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
     client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     # Merge configs
-    kwargs = {"temperature": temperature}
+    # Sampling the caller does not set is left to the model (Google's defaults).
+    kwargs = {} if temperature is None else {"temperature": temperature}
     if cache_name:
         kwargs["cached_content"] = cache_name
     else:

@@ -68,7 +68,7 @@ def create_reviewer_agent(
         name="ReviewerAgent",
         model=create_model(
             model_name,
-            temperature=temperature if temperature is not None else 0.1,
+            temperature=temperature,
         ),
         instruction=f"""You are a {target_language} subtitle translation quality reviewer.
 

@@ -72,7 +72,6 @@ async def _retranslate_minority_lines(
             model_name=model_name,
             prompt=prompt,
             system_instruction=f"You are a {target_lang_name} subtitle term-consistency enforcer.",
-            temperature=0.1,
             role="reconciliation",
         )
     except DailyLimitExhausted:
@@ -163,7 +162,6 @@ async def _translate_missing_line_with_context(
         res = await generate(
             model_name=model_name,
             prompt=prompt,
-            temperature=0.3,
             role="translation",
         )
         if res:

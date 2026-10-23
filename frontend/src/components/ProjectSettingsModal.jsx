@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ModelCombobox from './ModelCombobox';
 import QualityTools from './project/QualityTools';
 import { Button } from './ui';
+import { Slider } from './settings/parts';
 
 const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSettings, onSave, tokenSummary, episodes = [], onReload, toast }) => {
     const [settings, setSettings] = useState({
@@ -18,9 +19,10 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
         translate_lyrics: true,
         prefer_ass_format: 'auto',
         embedded_deprioritize_keywords: '',
-        temperature: 0.3,
-        top_k: 64,
-        top_p: 0.95
+        // Sampling left empty inherits Settings (and, empty there too, Google's defaults).
+        temperature: null,
+        top_k: null,
+        top_p: null
     });
     const [parentProject, setParentProject] = useState('');
     const [allProjects, setAllProjects] = useState([]);
@@ -40,9 +42,9 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                     const src = initialSettings || (project && project.settings) || {};
                     setSettings(prev => ({
                         ...prev,
-                        temperature: src.temperature ?? g.temperature ?? 0.3,
-                        top_k: src.top_k ?? g.top_k ?? 64,
-                        top_p: src.top_p ?? g.top_p ?? 0.95,
+                        temperature: src.temperature ?? null,
+                        top_k: src.top_k ?? null,
+                        top_p: src.top_p ?? null,
                         translation_model: src.translation_model ?? g.default_translation_model ?? '',
                         context_model: src.context_model ?? g.default_context_model ?? '',
                         glossary_model: src.glossary_model ?? g.default_glossary_model ?? '',
@@ -197,25 +199,22 @@ const ProjectSettingsModal = ({ isOpen, onClose, project, settings: initialSetti
                             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Sampling Parameters</h3>
                             <div className="space-y-4">
                                 {[
-                                    { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, default: globalSettings?.temperature ?? 0.3, format: v => parseFloat(v).toFixed(2) },
-                                    { key: 'top_k', label: 'Top-K', min: 1, max: 100, step: 1, default: globalSettings?.top_k ?? 64, format: v => v },
-                                    { key: 'top_p', label: 'Top-P', min: 0.1, max: 1, step: 0.01, default: globalSettings?.top_p ?? 0.95, format: v => parseFloat(v).toFixed(2) },
-                                ].map(({ key, label, min, max, step, default: def, format }) => (
-                                    <div key={key} className="space-y-1.5">
-                                        <div className="flex justify-between">
-                                            <label className="text-sm text-gray-600 dark:text-gray-400">{label}</label>
-                                            <span className="text-xs font-mono font-bold px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded-md">
-                                                {format(settings[key] ?? def)}
-                                            </span>
-                                        </div>
-                                        <input
-                                            type="range" min={min} max={max} step={step}
-                                            value={settings[key] ?? def}
-                                            onChange={(e) => handleChange(key, step < 1 ? parseFloat(e.target.value) : parseInt(e.target.value, 10))}
-                                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-indigo-600 bg-gray-200 dark:bg-gray-700"
+                                    { key: 'temperature', label: 'Temperature', min: 0, max: 2, step: 0.05, google: 1, format: v => Number(v).toFixed(2) },
+                                    { key: 'top_k', label: 'Top-K', min: 1, max: 100, step: 1, google: 64, format: v => v },
+                                    { key: 'top_p', label: 'Top-P', min: 0.1, max: 1, step: 0.01, google: 0.95, format: v => Number(v).toFixed(2) },
+                                ].map(({ key, label, min, max, step, google, format }) => {
+                                    const inherited = globalSettings?.[key];
+                                    const has = inherited !== null && inherited !== undefined;
+                                    return (
+                                        <Slider
+                                            key={key} label={label} min={min} max={max} step={step} format={format}
+                                            value={settings[key]}
+                                            onChange={(v) => handleChange(key, v)}
+                                            unsetLabel={has ? `Settings: ${format(inherited)}` : 'Google default'}
+                                            unsetAt={has ? inherited : google}
                                         />
-                                    </div>
-                                ))}
+                                    );
+                                })}
                                 
                             </div>
                         </div>

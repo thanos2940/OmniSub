@@ -41,9 +41,11 @@ def test_new_project_inherits_user_configured_model_parameters(mock_storage, mon
 
     # 3. Assert project metadata settings correctly inherited user's custom global defaults
     settings = proj.get("settings", {})
-    assert settings.get("temperature") == 0.75
-    assert settings.get("top_k") == 80
-    assert settings.get("top_p") == 0.85
+    # Sampling is not copied in (that would freeze it): the project resolves it from the settings.
+    assert not {"temperature", "top_k", "top_p"} & set(settings)
+    assert storage.get_project_setting(proj, "temperature") == 0.75
+    assert storage.get_project_setting(proj, "top_k") == 80
+    assert storage.get_project_setting(proj, "top_p") == 0.85
     assert settings.get("translation_model") == "gemini-1.5-pro"
     assert settings.get("scan_model") == "gemini-1.5-flash"
     assert settings.get("context_model") == "gemini-1.5-pro"

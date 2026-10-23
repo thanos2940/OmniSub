@@ -221,7 +221,7 @@ def create_translator_agent(
     from utils.structured_output import SceneTranslationResponse, use_structured_output
     structured = use_structured_output(model_name)
     instruction = _build_instruction(target_language, glossary_context, context_guide, structured)
-    final_temp = temperature if temperature is not None else 0.3
+    final_temp = temperature  # None: the model's own (Google) default
 
     return Agent(
         name="TranslatorAgent",

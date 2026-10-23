@@ -393,7 +393,7 @@ async def _translate_episode_atomic(
                     cartographer_model=fallback_model,
                     translator_model=fallback_model,
                     skip_glossary_step=True,
-                    temperature=global_config.get("temperature", 0.3),
+                    temperature=global_config.get("temperature"),
                     top_k=global_config.get("top_k"),
                     top_p=global_config.get("top_p"),
                 )
@@ -501,7 +501,7 @@ async def _translate_episode_atomic(
                     model_name=failover_state["cache_model"],
                     prompt=req.prompt,
                     system_instruction=req.system_instruction,
-                    temperature=global_config.get("temperature", 0.3) or 0.3,
+                    temperature=global_config.get("temperature"),
                     response_schema=req.response_schema,
                     cache_name=failover_state["context_cache_name"],
                     role="translation",
@@ -653,7 +653,7 @@ async def _translate_episode_atomic(
                         prompt=prompt,
                         cache_name=failover_state["context_cache_name"],
                         system_instruction=failover_state["cached_system_instruction"] if not failover_state["context_cache_name"] else "",
-                        temperature=global_config.get("temperature", 0.3) or 0.3,
+                        temperature=global_config.get("temperature"),
                         response_schema=SceneTranslationResponse if structured else None,
                         role="translation",
                     )
@@ -782,7 +782,7 @@ async def _translate_episode_atomic(
                                     prompt=sub_prompt,
                                     cache_name=failover_state["context_cache_name"],
                                     system_instruction=failover_state["cached_system_instruction"] if not failover_state["context_cache_name"] else "",
-                                    temperature=0.2,
+                                    temperature=global_config.get("temperature"),
                                     response_schema=SceneTranslationResponse if structured else None,
                                     role="repair",
                                 )

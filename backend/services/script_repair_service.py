@@ -97,7 +97,6 @@ async def _repair_chunk(
             model_name=model_name,
             prompt=prompt,
             system_instruction=f"You are a meticulous {target_lang_name} subtitle corrector.",
-            temperature=0.2,
             role="repair",
         )
 

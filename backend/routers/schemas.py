@@ -99,9 +99,9 @@ class SettingsRequest(BaseModel):
     apply_subtitle_edit_fixes: Optional[bool] = False
     concurrent_scenes: Optional[int] = 3
     max_lines_per_scene: Optional[int] = 200
-    temperature: Optional[float] = 0.3
-    top_k: Optional[int] = 64
-    top_p: Optional[float] = 0.95
+    temperature: Optional[float] = None  # None: Google's default for the model
+    top_k: Optional[int] = None
+    top_p: Optional[float] = None
     tm_enabled: Optional[bool] = True
     tm_similarity_threshold: Optional[float] = 0.80
     tm_exact_match_threshold: Optional[float] = 0.95
@@ -304,9 +304,9 @@ class ProjectSettings(BaseModel):
     translate_all_source_formats: Optional[bool] = False
     prefer_ass_format: Optional[str] = "auto"
     embedded_deprioritize_keywords: Optional[str] = ""
-    temperature: Optional[float] = 0.3
-    top_k: Optional[int] = 64
-    top_p: Optional[float] = 0.95
+    temperature: Optional[float] = None  # None: Google's default for the model
+    top_k: Optional[int] = None
+    top_p: Optional[float] = None
 
 
 class ProjectMetadata(BaseModel):

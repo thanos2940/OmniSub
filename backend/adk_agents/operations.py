@@ -495,7 +495,6 @@ async def generate_episode_summary_adk(
             model_name=model_name,
             prompt=prompt,
             system_instruction="Write extremely concise episode summaries for subtitle translation context. Output ONLY the summary text — no labels, no preamble, no markdown.",
-            temperature=0.2,
             role="summary",
         )
         return summary.strip()

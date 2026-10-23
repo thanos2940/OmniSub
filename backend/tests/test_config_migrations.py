@@ -93,3 +93,34 @@ def test_main_channel_is_kept(agy_installed):
     _write({"update_channel": "main"})
     apply_config_migrations()
     assert _read()["update_channel"] == "main"
+
+
+def test_sampling_follows_google_defaults(agy_installed):
+    """The old defaults OmbiSub wrote (0.3 / 64 / 0.95) go, from the settings and the projects; values
+    someone chose stay."""
+    from utils import storage
+    from utils.storage_modules import project_store
+    storage.create_project("Kept", {"show_name": "Kept"})
+    storage.create_project("Old", {"show_name": "Old"})
+    for name, sampling in (("Kept", {"temperature": 0.7, "top_k": 64}), ("Old", {"temperature": 0.3, "top_k": 64, "top_p": 0.95})):
+        meta = project_store.load_project_metadata(name)
+        meta["settings"].update(sampling)
+        project_store.save_project_metadata(name, meta)
+    _write({"translation_engine": "agent", "temperature": 0.3, "top_k": 64, "top_p": 0.8, "max_output_tokens": 8192})
+
+    changes = apply_config_migrations()
+
+    cfg = _read()
+    assert "temperature" not in cfg and "top_k" not in cfg and "max_output_tokens" not in cfg
+    assert cfg["top_p"] == 0.8
+    kept = project_store.load_project_metadata("Kept")["settings"]
+    old = project_store.load_project_metadata("Old")["settings"]
+    assert kept["temperature"] == 0.7 and "top_k" not in kept
+    assert not {"temperature", "top_k", "top_p"} & set(old)
+    assert any("google-sampling" in c for c in changes)
+
+
+def test_new_projects_store_no_sampling():
+    from utils import storage
+    meta = storage.create_project("Fresh", {"show_name": "Fresh"})
+    assert not {"temperature", "top_k", "top_p"} & set(meta["settings"])

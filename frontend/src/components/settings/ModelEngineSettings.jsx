@@ -101,13 +101,12 @@ export default function ModelEngineSettings({ settings, onChange }) {
                 </div>
             </FieldGrid>
             <FieldGrid cols={3}>
-                <Slider label="Temperature" min={0} max={2} step={0.05} value={settings.temperature ?? 0.3} onChange={(v) => onChange('temperature', v)} format={(v) => Number(v).toFixed(2)} hint="Lower is more literal." />
-                <Slider label="Top-P" min={0.1} max={1} step={0.01} value={settings.top_p ?? 0.95} onChange={(v) => onChange('top_p', v)} format={(v) => Number(v).toFixed(2)} />
-                <Slider label="Top-K" min={1} max={100} step={1} value={settings.top_k ?? 64} onChange={(v) => onChange('top_k', v)} />
+                <Slider label="Temperature" min={0} max={2} step={0.05} value={settings.temperature} onChange={(v) => onChange('temperature', v)} format={(v) => Number(v).toFixed(2)} unsetLabel="Google default" unsetAt={1} hint="Google recommends its default (1.0) for Gemini 3 models." />
+                <Slider label="Top-P" min={0.1} max={1} step={0.01} value={settings.top_p} onChange={(v) => onChange('top_p', v)} format={(v) => Number(v).toFixed(2)} unsetLabel="Google default" unsetAt={0.95} />
+                <Slider label="Top-K" min={1} max={100} step={1} value={settings.top_k} onChange={(v) => onChange('top_k', v)} unsetLabel="Google default" unsetAt={64} />
             </FieldGrid>
             <FieldGrid>
                 <Slider label="Chunk size" min={50} max={400} step={10} value={settings.chunk_size ?? 150} onChange={(v) => onChange('chunk_size', v)} format={(v) => `${v} lines`} hint="Most cues in one chunk when chunking." />
-                <Slider label="Max output tokens" min={2048} max={32768} step={1024} value={settings.max_output_tokens ?? 8192} onChange={(v) => onChange('max_output_tokens', v)} />
             </FieldGrid>
 
             <Divider />

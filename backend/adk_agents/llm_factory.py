@@ -241,7 +241,7 @@ async def generate(
         user_prompt=prompt,
         cache_name=cache_name,
         system_instruction=system_instruction or "",
-        temperature=temperature if temperature is not None else 0.3,
+        temperature=temperature,
         response_schema=response_schema,
         response_mime_type=mime_type,
         thinking_budget=budget,

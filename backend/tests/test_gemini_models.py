@@ -141,3 +141,23 @@ async def test_agents_retry_without_a_refused_thinking_setting(monkeypatch):
         req.config = None
         assert [r async for r in model.generate_content_async(req)] == ["answer"]
     assert [c is not None for c in sent] == [True, False, False]
+
+
+@pytest.mark.asyncio
+async def test_unset_sampling_is_not_sent(fake_client):
+    """Temperature and friends are left to the model (Google's defaults) unless someone set them."""
+    from services.cached_translator import generate_cached
+    sent = []
+    models = fake_client()
+    real = models.generate_content
+    models.generate_content = lambda model, contents, config: sent.append(config) or real(model, contents, config)
+    await generate_cached("gemini-flash-latest", "1| Hello.", thinking_budget=0, role="translation")
+    await generate_cached("gemini-flash-latest", "1| Hello.", temperature=0.7, thinking_budget=0, role="translation")
+    assert sent[0].temperature is None and sent[0].top_k is None and sent[0].top_p is None
+    assert sent[1].temperature == 0.7
+
+
+def test_agents_get_no_sampling_unless_set():
+    from adk_agents.llm_factory import create_model
+    cfg = getattr(create_model("gemini-flash-latest", role="review"), "generation_config", None) or {}
+    assert not {"temperature", "top_k", "top_p"} & set(cfg)

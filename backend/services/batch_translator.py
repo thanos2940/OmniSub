@@ -131,7 +131,6 @@ class BatchTranslator:
         from utils.gemini_safety import safety_settings
         cfg_kwargs = {
             "system_instruction": req.system_instruction,
-            "temperature": 0.3,
         }
         settings = safety_settings()
         if settings:

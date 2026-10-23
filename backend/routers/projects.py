@@ -203,9 +203,10 @@ async def test_project_translation(project_name: str, request: TestTranslationRe
     context_guide = metadata.get("context_guide", "")
     
     model_name = request.model_name or resolve_model("translation", metadata)
-    temperature = request.temperature if request.temperature is not None else storage.get_project_setting(metadata, "temperature", 0.3)
-    top_k = request.top_k if request.top_k is not None else storage.get_project_setting(metadata, "top_k", 40)
-    top_p = request.top_p if request.top_p is not None else storage.get_project_setting(metadata, "top_p", 1.0)
+    # Unset sampling stays unset: the model uses Google's defaults.
+    temperature = request.temperature if request.temperature is not None else storage.get_project_setting(metadata, "temperature")
+    top_k = request.top_k if request.top_k is not None else storage.get_project_setting(metadata, "top_k")
+    top_p = request.top_p if request.top_p is not None else storage.get_project_setting(metadata, "top_p")
     
     from adk_agents.translator_agent import create_translator_agent
     from google.adk.runners import Runner, types as adk_types

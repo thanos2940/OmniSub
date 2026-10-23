@@ -100,6 +100,11 @@ letters, root ignoring read-only files, no sentence-transformers) and are enviro
 - "Send a test line" (`POST /api/config/test-gemini-model`) translates one line with a chosen model through
   the real request path and shows which model answered (`model_version`, i.e. what an alias points to).
 
+- Sampling follows Google's defaults: temperature / top-k / top-p are sent only when set in Settings
+  (or a project); every hard-coded 0.1–0.3 is gone. Migration `2026-10-23-google-sampling-defaults` clears
+  stored values equal to the old defaults (0.3 / 64 / 0.95) from the settings and every project and drops
+  the unused `max_output_tokens`. New projects no longer copy sampling in; they inherit it.
+
 ### Still open
 - Merge `claude/tender-pascal-go38dg` into `main` and push `main`; then the server steps below.
 - Command palette's light/dark toggle has no effect: Tailwind uses `darkMode: 'media'`, nothing reads

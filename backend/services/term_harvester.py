@@ -127,7 +127,6 @@ Analyze the dialogue above and extract all new named entities and key terms. Ret
                 model_name=chosen_model,
                 prompt=prompt,
                 system_instruction=HARVEST_SYSTEM_INSTRUCTION,
-                temperature=0.2,
                 role="glossary",
             )
 
