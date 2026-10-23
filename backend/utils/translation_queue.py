@@ -816,6 +816,33 @@ class TranslationQueue:
             conn.commit()
             return cursor.rowcount > 0
 
+    def release_agent_items(self) -> int:
+        """Waiting translations queued for the agent runner (``options.engine == "agent"``) become ordinary
+        items the Gemini worker takes, for when the translation engine is switched to the model API. A full
+        retranslation (``mode: full``) keeps its meaning as ``force``. Returns how many changed."""
+        import json as _json
+        changed = 0
+        with self._conn() as conn:
+            rows = conn.execute(
+                f"SELECT id, options FROM translation_queue WHERE status IN ('pending', 'queued') AND kind = ? "
+                f"AND {_json_opt('engine')} = 'agent'",
+                (KIND_TRANSLATION,),
+            ).fetchall()
+            for row in rows:
+                try:
+                    opts = _json.loads(row["options"] or "{}")
+                except Exception:
+                    opts = {}
+                full = opts.pop("mode", None) == "full"
+                opts.pop("engine", None)
+                opts.pop("agent_task_id", None)
+                if full:
+                    opts["force"] = True
+                conn.execute("UPDATE translation_queue SET options = ? WHERE id = ?", (_json.dumps(opts), row["id"]))
+                changed += 1
+            conn.commit()
+        return changed
+
     def cancel_all(self, status: Optional[str] = None) -> int:
         """Cancel all pending, running, or paused queue items."""
         with self._conn() as conn:

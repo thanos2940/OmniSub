@@ -87,6 +87,19 @@ overflow remain. Changed:
 Tests: 1809 pass, 5 skip on Linux; 20 fail identically on the base commit `1590ae8` (Windows paths/UNC/drive
 letters, root ignoring read-only files, no sentence-transformers) and are environment-only.
 
+### Engine choice and Gemini API models (2026-10-23)
+- Settings › Translation opens with "Translate with: Antigravity (agy) | Gemini API" (`translation_engine`
+  agent | model); the page shows only the chosen engine's settings. Saving a change runs
+  `services/engine_switch.py`: to the API, the runner finishes its episodes in hand and stops (and stays
+  off at boot) and episodes queued for it go to the worker (`TranslationQueue.release_agent_items`,
+  `mode: full` → `force`); to agy, the runner autostarts (when "Start with OmbiSub" is on).
+- `utils/gemini_models.py` decides the thinking setting per model for all three Gemini paths
+  (`cached_translator`, ADK agents, Batch API). `-latest` aliases now get the thinking budget (they did not,
+  so every API translation thought at full length); a 400 about the thinking setting is retried once
+  without it and remembered for that model.
+- "Send a test line" (`POST /api/config/test-gemini-model`) translates one line with a chosen model through
+  the real request path and shows which model answered (`model_version`, i.e. what an alias points to).
+
 ### Still open
 - Merge `claude/tender-pascal-go38dg` into `main` and push `main`; then the server steps below.
 - Command palette's light/dark toggle has no effect: Tailwind uses `darkMode: 'media'`, nothing reads

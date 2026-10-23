@@ -3,8 +3,9 @@ Direct google-genai call for the cloud path.
 
 Used by the unified ``generate()`` seam (and the context-caching path, Plan 02).
 v2 additions:
-  - per-call ``thinking_budget`` (D2): Gemini 2.5 models think by default and bill
-    thinking tokens as output — mechanical passes (translation/repair/summary) set 0;
+  - per-call ``thinking_budget`` (D2): Gemini 2.5+ models think by default and bill
+    thinking tokens as output — mechanical passes (translation/repair/summary) set 0
+    (utils/gemini_models.py decides what each model accepts);
   - usage telemetry (D8): every response's usage_metadata is recorded.
 Every request carries Omnisub's Gemini safety thresholds (utils/gemini_safety.py); an answer a
 filter stopped is logged with the reason and reported to ``on_blocked``.
@@ -16,26 +17,19 @@ import logging
 logger = logging.getLogger("omnisub.cached_translator")
 
 
-def _supports_thinking(model: str) -> bool:
-    """Only Gemini 2.5+ and 3.x models (or explicitly named thinking models) support thinking_config."""
-    m = (model or "").lower()
-    return "2.5" in m or "3." in m or "thinking" in m
-
-
-def _supports_thinking_budget_zero(model: str) -> bool:
-    """gemini-2.5-pro cannot fully disable thinking; flash/flash-lite can."""
-    return "pro" not in (model or "").lower()
-
-
 async def generate_cached(model: str, user_prompt: str, cache_name=None,
                           system_instruction: str = "", temperature: float = 0.3,
                           response_schema = None, response_mime_type: str = None,
-                          thinking_budget: int = None, role: str = "other", on_blocked=None) -> str:
+                          thinking_budget: int = None, role: str = "other", on_blocked=None,
+                          api_key: str = None, meta: dict = None) -> str:
+    """``api_key``: use this key instead of the configured one. ``meta``: filled with ``model_version`` (the
+    model that answered, which tells what an alias points to) and ``thinking`` (the budget sent, or None)."""
     from google import genai
     from google.genai import types
     from utils.gemini_safety import describe_block, safety_settings
+    from utils.gemini_models import drop_rejected_thinking, thinking_config
 
-    client = genai.Client()
+    client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
     # Merge configs
     kwargs = {"temperature": temperature}
@@ -49,13 +43,10 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
     if response_schema:
         kwargs["response_schema"] = response_schema
 
-    # Thinking budget (D2): 0 disables thinking on flash/flash-lite; None = model default.
-    if _supports_thinking(model) and thinking_budget is not None and thinking_budget >= 0:
-        if thinking_budget > 0 or _supports_thinking_budget_zero(model):
-            try:
-                kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=thinking_budget)
-            except Exception:
-                pass  # older SDK — silently keep model default
+    # Thinking budget (D2): 0 disables thinking where the model allows it; None = model default.
+    thinking = thinking_config(model, thinking_budget)
+    if thinking is not None:
+        kwargs["thinking_config"] = thinking
 
     settings = safety_settings()
     if settings:
@@ -73,7 +64,14 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
             client.models.generate_content, model=model, contents=user_prompt, config=cfg
         )
 
-    resp = await rate_limited_call(_do_call, rate_limiter=limiter)
+    try:
+        resp = await rate_limited_call(_do_call, rate_limiter=limiter)
+    except Exception as exc:
+        # A model that refuses the thinking setting (an alias that moved to a newer model, a model that
+        # only works in thinking mode) is asked once more without it.
+        if not drop_rejected_thinking(model, cfg, exc):
+            raise
+        resp = await rate_limited_call(_do_call, rate_limiter=limiter)
 
     # Telemetry (D8) — never let it break the call.
     try:
@@ -82,6 +80,9 @@ async def generate_cached(model: str, user_prompt: str, cache_name=None,
     except Exception:
         pass
 
+    if meta is not None:
+        meta["model_version"] = getattr(resp, "model_version", None)
+        meta["thinking"] = cfg.thinking_config.thinking_budget if cfg.thinking_config is not None else None
     text = getattr(resp, "text", "") or ""
     if not text.strip():
         reason = describe_block(resp)

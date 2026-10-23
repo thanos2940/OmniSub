@@ -4,6 +4,7 @@ import base64
 import logging
 from pathlib import Path
 from typing import Any, Optional, Dict
+from pydantic import BaseModel
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -216,6 +217,43 @@ async def test_gemini_key(request: Optional[ApiKeyRequest] = None):
     return {"valid": False, "error": verdict["error"]}
 
 
+class GeminiModelTestRequest(BaseModel):
+    model: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+@router.post("/api/config/test-gemini-model")
+async def test_gemini_model(request: Optional[GeminiModelTestRequest] = None):
+    """Translate one short line with a Gemini API model, through the same request path translations use
+    (thinking setting, safety filter, rate limiter). Spends one small request of that model's quota."""
+    import time
+    from services.cached_translator import generate_cached
+    from utils.model_resolver import resolve_model
+    from adk_agents.llm_factory import resolve_thinking_budget
+    from utils.llm_utils import strip_reasoning_blocks
+    typed = request and request.api_key and request.api_key != SECRET_SENTINEL
+    key = request.api_key if typed else get_api_key()
+    if not key:
+        return {"ok": False, "error": "No Gemini API key is stored. Add one first."}
+    model = ((request and request.model) or "").strip() or resolve_model("translation", {}, check_exhaustion=False)
+    target = storage.load_global_config().get("target_language") or "Greek"
+    prompt = (f"Translate this subtitle line into {target}. Answer with the translation only.\n\n"
+              "Wait for me at the station, I'm running late.")
+    meta: Dict[str, Any] = {}
+    started = time.time()
+    try:
+        text = await generate_cached(model, prompt, thinking_budget=resolve_thinking_budget("translation"),
+                                     role="test", api_key=key if typed else None, meta=meta)
+    except Exception as e:
+        return {"ok": False, "model": model, "error": (str(e) or type(e).__name__)[:400]}
+    answer = strip_reasoning_blocks(text or "").strip()
+    out = {"ok": bool(answer), "model": model, "answered_by": meta.get("model_version"),
+           "thinking_budget": meta.get("thinking"), "seconds": round(time.time() - started, 1), "answer": answer[:300]}
+    if not answer:
+        out["error"] = "The model answered without text (a safety filter, or the answer was empty)."
+    return out
+
+
 # Keys whose real value is never sent back over the wire. GET masks them with
 # SECRET_SENTINEL (plus a `secrets_set` map so the UI can show "configured"
 # without knowing the value); POST drops any field still equal to the sentinel
@@ -283,10 +321,17 @@ async def update_settings(settings: SettingsRequest):
             from services.autopilot.store import iso_utc
             from datetime import datetime, timezone
             payload["autopilot_enabled_at"] = iso_utc(datetime.now(timezone.utc))
+    engine_before = storage.load_global_config().get("translation_engine", "agent")
+    if "translation_engine" in payload and payload["translation_engine"] not in ("agent", "model"):
+        raise HTTPException(status_code=422, detail="translation_engine must be 'agent' or 'model'.")
     storage.save_global_config(payload)
     # Reload rate-limit config in case rpm/rpd or model limits changed.
     per_model_rate_limiter.load_config_and_state()
-    return {"status": "success"}
+    result = {"status": "success"}
+    if payload.get("translation_engine", engine_before) != engine_before:
+        from services import engine_switch
+        result["engine_change"] = await asyncio.to_thread(engine_switch.apply, engine_before, payload["translation_engine"])
+    return result
 
 
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}

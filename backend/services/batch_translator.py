@@ -139,13 +139,10 @@ class BatchTranslator:
         if req.structured and req.response_schema is not None:
             cfg_kwargs["response_mime_type"] = "application/json"
             cfg_kwargs["response_schema"] = req.response_schema
-        budget = resolve_thinking_budget("translation")
-        is_thinking_model = "2.5" in model or "3." in model or "thinking" in model.lower()
-        if is_thinking_model and budget is not None and (budget > 0 or "pro" not in model.lower()):
-            try:
-                cfg_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
-            except Exception:
-                pass
+        from utils.gemini_models import thinking_config
+        thinking = thinking_config(model, resolve_thinking_budget("translation"))
+        if thinking is not None:
+            cfg_kwargs["thinking_config"] = thinking
         return types.InlinedRequest(
             model=model,
             contents=[{"role": "user", "parts": [{"text": req.prompt}]}],

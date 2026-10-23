@@ -262,6 +262,8 @@ export const api = {
     setApiKey: (apiKey) => axios.post(`${API_URL}/api/config/api-key`, { api_key: apiKey }),
     deleteApiKey: () => axios.delete(`${API_URL}/api/config/api-key`),
     testGeminiKey: (apiKey = null) => axios.post(`${API_URL}/api/config/test-gemini-key`, apiKey ? { api_key: apiKey } : {}),
+    // Translates one line with a Gemini model through the real request path (one small request of quota).
+    testGeminiModel: (model = null, apiKey = null) => axios.post(`${API_URL}/api/config/test-gemini-model`, { model: model || null, api_key: apiKey || null }),
 
     // Model Registry (Google Gemini)
     fetchAllModels: () => axios.get(`${API_URL}/api/models`),

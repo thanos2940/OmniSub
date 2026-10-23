@@ -13,7 +13,7 @@ import SecuritySettings from './settings/SecuritySettings';
 import GeneralSection, { validateGeneral } from './settings/GeneralSection';
 
 const SECTIONS = [
-    { id: 'translation', label: 'Translation', icon: Languages, blurb: 'The runner, the Gemini API for refused lines, and the model engine.' },
+    { id: 'translation', label: 'Translation', icon: Languages, blurb: 'Who translates, agy or the Gemini API, and how.' },
     { id: 'connections', label: 'Connections', icon: Plug, blurb: 'Sonarr, Radarr, Plex, path mappings and webhooks.' },
     { id: 'subtitles', label: 'Subtitles', icon: Captions, blurb: 'Source formats, extraction, formatting and SubtitleEdit.' },
     { id: 'automation', label: 'Automation', icon: Plane, blurb: 'The Autopilot and its notifications.' },
@@ -47,6 +47,18 @@ const runnerToPayload = (form) => ({
 });
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// What the server did when the translation engine changed (POST /api/settings `engine_change`).
+const engineChangeText = (change) => {
+    if (!change?.engine) return null;
+    if (change.engine === 'model') {
+        const parts = ['Saved. Translation now goes to the Gemini API.'];
+        if (change.runner_stopping) parts.push('The agy runner finishes the episodes in hand, then stops.');
+        if (change.handed_to_worker) parts.push(`${change.handed_to_worker} queued episode${change.handed_to_worker === 1 ? '' : 's'} moved to the Gemini API.`);
+        return parts.join(' ');
+    }
+    return `Saved. Translation now goes to agy${change.runner_started ? '; the runner has started' : '. Start the runner on the Activity page'}.`;
+};
 
 const normalizeLoaded = (data) => ({
     ...data,
@@ -127,12 +139,14 @@ export default function SettingsPage() {
     const save = async () => {
         setSaving(true);
         try {
+            // Runner first: switching the engine to agy starts the runner with the config saved here.
+            if (runnerDirty) await api.saveAgentRunnerConfig(runnerToPayload(runnerForm));
+            let change = null;
             if (changedKeys.length) {
                 const payload = Object.fromEntries(changedKeys.map(k => [k, settings[k]]));
-                await api.updateSettings(payload);
+                change = (await api.updateSettings(payload)).data?.engine_change || null;
             }
-            if (runnerDirty) await api.saveAgentRunnerConfig(runnerToPayload(runnerForm));
-            toast.success('Settings saved');
+            toast.success(engineChangeText(change) || 'Settings saved');
             await load();
         } catch (err) {
             toast.error(`Could not save: ${errorText(err)}`);
@@ -189,7 +203,7 @@ export default function SettingsPage() {
                             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{current.label}</h2>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{current.blurb}</p>
                         </div>
-                        {section === 'translation' && <TranslationSection settings={settings} onChange={onChange} runner={runner} />}
+                        {section === 'translation' && <TranslationSection settings={settings} onChange={onChange} runner={runner} savedEngine={saved.translation_engine} />}
                         {section === 'connections' && <ConnectionsSection settings={settings} onChange={onChange} />}
                         {section === 'subtitles' && <SubtitlesSection settings={settings} onChange={onChange} />}
                         {section === 'automation' && <AutopilotSettings settings={settings} onChange={onChange} />}

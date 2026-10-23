@@ -298,10 +298,13 @@ class TestLLMFactory:
         gen_cfg_pro = getattr(m_pro, "generation_config", {})
         assert "thinking_config" not in gen_cfg_pro
 
-        # Older / non-thinking model -> no thinking_config
+        # The -latest aliases point at current (thinking) models, so they get the budget too
         m_lite = create_model("gemini-flash-lite-latest", role="translation")
-        gen_cfg_lite = getattr(m_lite, "generation_config", {})
-        assert "thinking_config" not in gen_cfg_lite
+        assert m_lite.generation_config["thinking_config"].thinking_budget == 0
+
+        # Generations without thinking -> no thinking_config
+        for old in ("gemini-2.0-flash", "gemma-4-31b-it"):
+            assert "thinking_config" not in (getattr(create_model(old, role="translation"), "generation_config", None) or {})
 
     def test_create_model_structured_output_schema(self):
         """Verify response_schema attaches application/json and schema."""

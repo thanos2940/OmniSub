@@ -120,7 +120,10 @@ class SafetyAwareGemini(Gemini):
             if isinstance(gen_cfg, dict):
                 if llm_request.config is None:
                     llm_request.config = types.GenerateContentConfig()
+                from utils.gemini_models import refused
                 for key in ("temperature", "thinking_config", "response_mime_type", "response_schema", "top_k", "top_p"):
+                    if key == "thinking_config" and refused(self.model):
+                        continue
                     val = gen_cfg.get(key)
                     if val is not None and getattr(llm_request.config, key, None) is None:
                         try:
@@ -130,8 +133,18 @@ class SafetyAwareGemini(Gemini):
         except Exception as e:
             logger.debug(f"Generation config not applied: {e}")
 
-        async for response in super().generate_content_async(llm_request, stream):
-            yield response
+        from utils.gemini_models import drop_rejected_thinking
+        answered = False
+        try:
+            async for response in super().generate_content_async(llm_request, stream):
+                answered = True
+                yield response
+        except Exception as exc:
+            # The API refused the thinking setting (see utils/gemini_models.py): ask once more without it.
+            if answered or not drop_rejected_thinking(self.model, llm_request.config, exc):
+                raise
+            async for response in super().generate_content_async(llm_request, stream):
+                yield response
 
 
 def create_model(
@@ -174,14 +187,11 @@ def create_model(
         gen_config["response_mime_type"] = "application/json"
         gen_config["response_schema"] = response_schema
 
-    # Thinking budget (D2): disable thinking for mechanical agent roles.
-    budget = resolve_thinking_budget(role)
-    is_thinking_model = "2.5" in model_name or "3." in model_name or "thinking" in model_name.lower()
-    if is_thinking_model and budget is not None and (budget > 0 or "pro" not in model_name.lower()):
-        try:
-            gen_config["thinking_config"] = types.ThinkingConfig(thinking_budget=budget)
-        except Exception:
-            pass
+    # Thinking budget (D2): disable thinking for mechanical agent roles where the model allows it.
+    from utils.gemini_models import thinking_config
+    thinking = thinking_config(model_name, resolve_thinking_budget(role))
+    if thinking is not None:
+        gen_config["thinking_config"] = thinking
 
     model_kwargs: Dict[str, Any] = {"model": model_name, "retry_options": RETRY_CONFIG}
     model = SafetyAwareGemini(**model_kwargs)
