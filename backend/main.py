@@ -232,9 +232,34 @@ def _quiet_client_disconnects(loop, context):
     loop.default_exception_handler(context)
 
 
+def _listen_port() -> Optional[int]:
+    """The port this process serves on, for the instance lock's note (best effort)."""
+    import sys as _sys
+    argv = _sys.argv
+    for flag in ("--port",):
+        if flag in argv:
+            try:
+                return int(argv[argv.index(flag) + 1])
+            except (IndexError, ValueError):
+                return None
+    try:
+        return int(os.environ.get("OMBISUB_PORT") or 0) or None
+    except ValueError:
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     asyncio.get_running_loop().set_exception_handler(_quiet_client_disconnects)
+
+    # One OmbiSub process per data folder, however it was started: a second one would run a second
+    # translation runner, worker and autopilot on the same queue (utils/instance_lock.py).
+    from utils import instance_lock
+    from utils.paths import DATA_DIR as _DATA_DIR
+    if not instance_lock.acquire(_DATA_DIR, port=_listen_port()):
+        logger.error(f"Another OmbiSub process ({instance_lock.describe_holder(_DATA_DIR)}) already runs for the data "
+                     f"folder {_DATA_DIR}. This one does not start; stop the other first.")
+        raise SystemExit(3)
 
     # Startup tasks
     if not hasattr(storage, "GLOBAL_CONFIG"):

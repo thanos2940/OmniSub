@@ -39,13 +39,16 @@ def _pid_alive(pid: int) -> bool:
         pass
     if os.name == "nt":  # os.kill(pid, 0) would terminate the process on Windows
         import ctypes
-        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
         if not handle:
-            return False
+            # Access denied: the process exists but runs as someone else (the boot service versus a server
+            # started from the desktop). Only "no such process" means dead.
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED
         code = ctypes.c_ulong()
-        ok = ctypes.windll.kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
-        ctypes.windll.kernel32.CloseHandle(handle)
-        return bool(ok) and code.value == 259  # STILL_ACTIVE
+        ok = kernel32.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel32.CloseHandle(handle)
+        return not ok or code.value == 259  # STILL_ACTIVE (a failed query is not proof of death)
     try:
         os.kill(pid, 0)
         return True
