@@ -56,7 +56,7 @@ def no_bootstrap(monkeypatch):
 @pytest.fixture(autouse=True)
 def fake_env(monkeypatch, tmp_path):
     for var in ("FAKE_AGY_SKIP_AT", "FAKE_AGY_QUOTA_MODELS", "FAKE_AGY_BLOCK_MODELS", "FAKE_AGY_BLOCK_WORD",
-                "FAKE_AGY_CUT"):
+                "FAKE_AGY_CUT", "FAKE_AGY_LINGER", "FAKE_AGY_STALL"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("FAKE_AGY_LOG", str(tmp_path / "calls"))
     storage.save_global_config({"tm_enabled": False})  # no embedding model in these tests
@@ -970,3 +970,39 @@ class TestQuotaGroups:
             assert agent_cli.group_of("gpt-5-mini", order) is claude
         assert agent_cli.group_of("gemini-3.8-flash-low", [argon]) is argon  # the only Gemini group there is
         assert agent_cli.group_of("llama-3", [argon, generic, claude]) is None
+
+
+class TestHungCli:
+    """A CLI that answered but never exits, or goes silent mid-answer, must not hold a lane until the
+    30-minute hard timeout (2026-10-26: three agy processes finished their answers and never exited)."""
+
+    def test_call_model_returns_once_the_result_arrives(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FAKE_AGY_LINGER", "60")
+        monkeypatch.setattr(agent_cli, "EXIT_GRACE", 0.5)
+        prompt = "## Lines to translate (1)\n1| Hello there.\n"
+        started = time.time()
+        reply = agent_cli.call_model("antigravity", FAKE, "gemini-3.8-flash-low", prompt, tmp_path,
+                                     __import__("threading").Event())
+        assert time.time() - started < 15
+        assert reply.failure == "" and "1| Ελ: Hello there." in reply.text
+
+    def test_a_cli_that_never_exits_does_not_hold_the_lane(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FAKE_AGY_LINGER", "60")
+        monkeypatch.setattr(agent_cli, "EXIT_GRACE", 0.5)
+        _show()
+        started = time.time()
+        runner = _run(tmp_path)
+        assert time.time() - started < 60
+        assert all(t == f"Ελ: {s}" for s, t in _greek())
+        assert runner.status == "done"
+
+    def test_a_silent_cli_is_stopped_and_its_streamed_answer_kept(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FAKE_AGY_STALL", "60")
+        monkeypatch.setattr(agent_cli, "IDLE_TIMEOUT", 1)
+        prompt = "## Lines to translate (2)\n1| Hello there.\n2| Bye.\n"
+        started = time.time()
+        reply = agent_cli.call_model("antigravity", FAKE, "gemini-3.8-flash-low", prompt, tmp_path,
+                                     __import__("threading").Event())
+        assert time.time() - started < 20
+        assert reply.failure == ""
+        assert "2| Ελ: Bye." in reply.text and "answer it had streamed is used" in reply.message

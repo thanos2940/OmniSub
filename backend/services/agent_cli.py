@@ -30,6 +30,8 @@ _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 
 
 ENGINES = {"antigravity": "Antigravity", "claude": "Claude Code", "gemini": "Gemini CLI"}
 CALL_TIMEOUT = 30 * 60
+IDLE_TIMEOUT = 10 * 60   # a CLI that prints nothing for this long is stopped (it streams while it answers)
+EXIT_GRACE = 15          # seconds a CLI may take to exit after its final event before it is stopped
 CLAUDE_SYSTEM = "You are an expert subtitle translator. Follow the user's instructions exactly. Answer in plain text."
 
 
@@ -288,12 +290,32 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
     except OSError as exc:
         return Reply(failure="error", message=f"could not start {ENGINES.get(engine, engine)}: {exc}")
     on_proc(proc)
-    timer = threading.Timer(CALL_TIMEOUT + 60, lambda: kill_process(proc))
-    timer.start()
     reply = Reply()
     deltas: List[str] = []
     raw: List[str] = []
     status_error = ""
+    # The answer is complete once the CLI prints its final event; the process exiting is not waited for
+    # beyond EXIT_GRACE (agy has been seen to finish an answer and then never exit, which held a lane
+    # until the hard timeout). A watchdog stops a CLI that goes silent or runs past the hard timeout.
+    finished = False
+    lingered = False
+    watch = {"last": time.time(), "killed": ""}
+    reading = threading.Event()
+
+    def watchdog() -> None:
+        tick = max(0.2, min(5.0, IDLE_TIMEOUT / 4))
+        while not reading.wait(tick):
+            now = time.time()
+            if now - started > CALL_TIMEOUT + 60:
+                watch["killed"] = "timeout"
+            elif now - watch["last"] > IDLE_TIMEOUT:
+                watch["killed"] = "idle"
+            else:
+                continue
+            kill_process(proc)
+            return
+
+    threading.Thread(target=watchdog, daemon=True, name="cli-watchdog").start()
     try:
         try:
             proc.stdin.write(stdin)
@@ -301,6 +323,7 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
         except OSError:
             pass
         for line in proc.stdout:
+            watch["last"] = time.time()
             line = line.strip()
             if not line:
                 continue
@@ -327,6 +350,8 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
                 reply.tokens_out += (u.get("output_tokens") or 0) + (u.get("thinking_tokens") or 0)
                 if str(r.get("status", "")).upper() not in ("SUCCESS", ""):
                     status_error = str(r.get("error") or r.get("status"))
+                finished = True
+                break
             elif ev.get("event") == "error":
                 status_error = json.dumps(ev)[:800]
             elif ev.get("type") == "assistant":                        # Claude Code
@@ -345,22 +370,45 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
                     reply.tokens_out += u.get("output_tokens") or 0
                 if ev.get("is_error") or ev.get("status") == "error":
                     status_error = str(ev.get("result") or ev.get("error") or "error")
+                finished = True
+                break
             elif ev.get("type") == "message" and ev.get("role") == "assistant":   # Gemini CLI
                 deltas.append(ev.get("content") or "")
             elif ev.get("type") == "error":
                 status_error = json.dumps(ev)[:800]
     finally:
-        timer.cancel()
-        proc.wait()
+        try:
+            proc.wait(timeout=EXIT_GRACE)
+        except subprocess.TimeoutExpired:
+            lingered = True
+            kill_process(proc)
+            try:
+                proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                pass
+        reading.set()
     if not reply.text:
         reply.text = "".join(deltas)
     reply.seconds = time.time() - started
-    if stop.is_set() and (proc.returncode != 0 or not reply.text.strip()):
+    returncode = proc.returncode
+    if finished and lingered:
+        returncode = 0  # the answer was complete; the exit code is only that of our kill
+    if stop.is_set() and (returncode != 0 or not reply.text.strip()):
         reply.failure = "stopped"  # cut off; an answer that did arrive is kept and used
         return reply
+    if watch["killed"] and not finished:
+        why = (f"no output for {IDLE_TIMEOUT // 60} min" if watch["killed"] == "idle"
+               else f"still running after {CALL_TIMEOUT // 60} min")
+        if reply.text.strip() and not status_error:
+            # What was streamed is kept: the runner checks every line and asks again for what is missing.
+            reply.message = f"{ENGINES.get(engine, engine)} stopped ({why}); the answer it had streamed is used."
+            return reply
+        reply.failure = "error"
+        reply.message = f"{ENGINES.get(engine, engine)} stopped: {why}."
+        return reply
     blob = " ".join([status_error, *raw[-20:]])
-    if proc.returncode != 0 or status_error:
+    if returncode != 0 or status_error:
         reply.failure = classify_failure(blob)
-        reply.message = (status_error or " ".join(raw[-5:]) or f"exit code {proc.returncode}")[:600]
+        reply.message = (status_error or " ".join(raw[-5:]) or f"exit code {returncode}")[:600]
         reply.wait = parse_wait(blob)
     return reply

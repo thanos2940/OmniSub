@@ -19,6 +19,10 @@ quota report. Behaviour switches (environment variables):
   FAKE_AGY_NO_CONTEXT     the brief prompt (context guide / glossary) is answered with chatter only
   FAKE_AGY_FAIL_MODELS    comma-separated model prefixes that fail with a plain error
   FAKE_AGY_SLEEP          seconds every request takes before it is answered
+  FAKE_AGY_LINGER         seconds the process stays alive after printing its final result (agy has
+                          been seen to answer and then never exit)
+  FAKE_AGY_STALL          seconds the process goes silent after streaming its answer, without ever
+                          printing the final result
 
 Besides translation requests it answers the one-line prompt ("## Line to translate (1)") like a
 translation, the show-brief prompt ("You are preparing the translation brief") with `G|` lines and
@@ -167,9 +171,16 @@ def main():
     text = "\n".join(answer)
     time.sleep(0.05)
     print(json.dumps({"event": "step_update", "step_update": {"step_type": "agent_response", "text_delta": text}}))
+    if os.environ.get("FAKE_AGY_STALL"):
+        sys.stdout.flush()
+        time.sleep(float(os.environ["FAKE_AGY_STALL"]))
+        return
     print(json.dumps({"event": "result", "result": {"status": "SUCCESS", "response": text,
                                                     "usage": {"input_tokens": len(prompt) // 4,
                                                               "output_tokens": len(text) // 4}}}))
+    if os.environ.get("FAKE_AGY_LINGER"):
+        sys.stdout.flush()
+        time.sleep(float(os.environ["FAKE_AGY_LINGER"]))
 
 
 if __name__ == "__main__":
