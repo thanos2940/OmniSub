@@ -141,3 +141,6 @@ docs/
 secrets/
 # Runtime lock files
 backend/*.lock
+
+# updater check cache (DATA_DIR)
+backend/update_check.json

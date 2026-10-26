@@ -575,8 +575,9 @@ class UpdateService:
                 "message": "OmbiSub directory is not a Git repository. Automatic updates require a Git clone.",
             }
 
-        # Guard: Working tree changes check
-        status_res = await asyncio.to_thread(self._run_git, ["status", "--porcelain"], 15.0)
+        # Guard: Working tree changes check. Only tracked files count: a reset --hard leaves untracked
+        # files alone, and the data folder (update_check.json, logs, databases) lives inside the checkout.
+        status_res = await asyncio.to_thread(self._run_git, ["status", "--porcelain", "--untracked-files=no"], 15.0)
         if status_res.returncode == 0 and status_res.stdout.strip():
             changed = len(status_res.stdout.strip().splitlines())
             logger.warning(f"Update not applied: {changed} file(s) have local changes a reset would erase.")
@@ -682,7 +683,7 @@ class UpdateService:
 
             # Pre-reset safety check
             if not force:
-                pre_reset_status = await asyncio.to_thread(self._run_git, ["status", "--porcelain"], 15.0)
+                pre_reset_status = await asyncio.to_thread(self._run_git, ["status", "--porcelain", "--untracked-files=no"], 15.0)
                 if pre_reset_status.returncode == 0 and pre_reset_status.stdout.strip():
                     self._updating = False
                     return {
