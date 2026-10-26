@@ -881,3 +881,92 @@ def test_idle_lanes_do_not_stop_the_runner_while_another_lane_starts_an_episode(
     runner = _run(tmp_path, lanes=3, fallback_models=[])
     assert all(el for _, el in _greek()), _log(runner)
     assert [i["status"] for i in TranslationQueue().get_all()] == ["completed"]
+
+
+# ===========================================================================
+# Crashes inside one episode
+# ===========================================================================
+
+class TestCrashes:
+    """One episode going wrong (an episode that changed under its claim, an exception in the lane) is given
+    back and counted; the other lanes and episodes carry on. Only a run of crashes stops the runner."""
+
+    def _claim_for_runner(self, tmp_path, project, episode):
+        service = AgentTaskService(tasks_dir=tmp_path / "agent_tasks")
+        prep = service.prepare_task_workspace(queue_item_id=TranslationQueue().get_all(limit=10)[0]["id"])
+        assert prep["status"] == "claimed"
+        folder = Path(prep["workspace_dir"])
+        manifest = service._read_manifest(folder)
+        manifest["runner"] = {"engine": "antigravity", "claimed_at": "2026-10-25T08:07:44"}
+        service._write_manifest(folder, manifest)
+        return prep
+
+    def test_a_workspace_whose_episode_shrank_is_planned_again_not_crashed(self, tmp_path):
+        _show(lines=LINES[:8])
+        prep = self._claim_for_runner(tmp_path, "Runner Show", "S01E01")
+        # The lazy ASS compaction / a re-import: fewer cues than the plan addresses.
+        storage.save_episode("Runner Show", "S01E01", _cues(LINES[:3]))
+        runner = _run(tmp_path)
+        log = _log(runner)
+        assert "changed since it was claimed" in log
+        assert "unexpected error" not in log
+        assert runner.status == "done"
+        assert all(t == f"Ελ: {s}" for s, t in _greek()) and len(_greek()) == 3
+        assert AgentTaskService(tasks_dir=tmp_path / "agent_tasks")._read_manifest(
+            Path(prep["workspace_dir"])).get("status") == "released"
+
+    def test_an_exception_in_one_episode_leaves_the_others_running(self, tmp_path, monkeypatch):
+        _show(episodes=("S01E01", "S01E02"))
+        original = AgentRunner._context
+
+        def broken(self, project, episode, *args, **kwargs):
+            if episode == "S01E01":
+                raise RuntimeError("boom")
+            return original(self, project, episode, *args, **kwargs)
+
+        monkeypatch.setattr(AgentRunner, "_context", broken)
+        runner = _run(tmp_path)
+        assert runner.status == "done", runner.message
+        assert all(t == f"Ελ: {s}" for s, t in _greek(episode="S01E02"))
+        assert all(t is None for _, t in _greek(episode="S01E01"))
+        log = _log(runner)
+        assert "failed with an unexpected error (RuntimeError: boom)" in log
+        assert "left for a person" in log  # tried twice (MAX_FAILURES), then left
+        rows = {r["episode_name"]: r for r in TranslationQueue().get_all(limit=10)}
+        assert rows["S01E01"]["status"] == "pending"      # given back, not stuck as running
+        assert rows["S01E02"]["status"] == "completed"
+        assert runner.failures and max(runner.failures.values()) == agent_runner.MAX_FAILURES
+
+    def test_a_run_of_crashes_stops_the_runner(self, tmp_path, monkeypatch):
+        _show(episodes=tuple(f"S01E{n:02d}" for n in range(1, 7)))
+        monkeypatch.setattr(AgentRunner, "_context", lambda self, *a, **k: (_ for _ in ()).throw(RuntimeError("always")))
+        runner = _run(tmp_path)
+        assert runner.status == "error"
+        assert f"{agent_runner.MAX_CRASHES} unexpected errors in a row" in runner.message
+        assert all(r["status"] == "pending" for r in TranslationQueue().get_all(limit=10))
+
+    def test_a_restart_after_an_error_keeps_the_failure_counts(self, tmp_path):
+        runner = _runner(tmp_path)
+        runner.failures = {"q1": 2}
+        runner.start({"lanes": 1}, resumed=True)
+        _join(runner)
+        assert runner.failures.get("q1") == 2
+        runner.failures = {"q1": 2}
+        runner.start({"lanes": 1})
+        _join(runner)
+        assert runner.failures == {}
+
+
+class TestQuotaGroups:
+
+    def test_group_of_prefers_the_specific_group_then_the_generic_one(self):
+        argon = {"name": "Gemini 4 Argon", "description": "Gemini 4 Argon", "buckets": []}
+        generic = {"name": "Gemini Models", "description": "Gemini models", "buckets": []}
+        claude = {"name": "Claude and GPT models", "description": "", "buckets": []}
+        for order in ([argon, generic, claude], [generic, argon, claude]):
+            assert agent_cli.group_of("gemini-3.8-flash-low", order) is generic
+            assert agent_cli.group_of("gemini-4-argon-high", order) is argon
+            assert agent_cli.group_of("claude-sonnet-5-5-low", order) is claude
+            assert agent_cli.group_of("gpt-5-mini", order) is claude
+        assert agent_cli.group_of("gemini-3.8-flash-low", [argon]) is argon  # the only Gemini group there is
+        assert agent_cli.group_of("llama-3", [argon, generic, claude]) is None

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useJobs } from '../context/JobContext';
-import { X, ChevronDown, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink, Sparkles, Maximize2, Copy, Check, Download, ArrowDown } from 'lucide-react';
+import { apiClient } from '../api';
+import { X, ChevronDown, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink, Sparkles, Maximize2, Copy, Check, Download, ArrowDown, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 
@@ -95,6 +96,19 @@ const renderStatusPill = (status) => {
             return (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600">
                     cancelled
+                </span>
+            );
+        case 'orphaned':
+            return (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600" title="The queue says running, but no worker or runner is working on it">
+                    no owner
+                </span>
+            );
+        case 'paused':
+        case 'awaiting_review':
+            return (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+                    {status === 'paused' ? 'paused' : 'awaiting review'}
                 </span>
             );
         case 'pending':
@@ -241,7 +255,7 @@ const getChildTasks = (parentJob, activeJobs = {}) => {
 };
 
 const JobProgressWidget = () => {
-    const { activeJobs, removeJob, cancelJob } = useJobs();
+    const { activeJobs, removeJob, cancelJob, clearAll } = useJobs();
     const [isExpanded, setIsExpanded] = useState(true);
     const [showLogs, setShowLogs] = useState(null); // jobId to show inline logs for
     const [maximizedLogsJobId, setMaximizedLogsJobId] = useState(null);
@@ -273,7 +287,21 @@ const JobProgressWidget = () => {
         return jobs.filter(job => job && !job.parentId && !job.parent_job_id && !knownSubJobIds.has(String(job.id)));
     }, [jobs, knownSubJobIds]);
 
-    const isActive = (job) => job && ['running', 'pending', 'awaiting_review'].includes(job.status);
+    const isActive = (job) => job && ['running', 'pending', 'paused', 'awaiting_review'].includes(job.status);
+    const liveCount = useMemo(
+        () => visibleJobs.filter(job => ['running', 'pending', 'paused', 'awaiting_review', 'orphaned'].includes(job.status)).length,
+        [visibleJobs]
+    );
+
+    // An orphaned queue row (running with no owner): release it so it can be queued again.
+    const releaseOrphan = async (job) => {
+        const queueId = String(job.id).replace(/^bg_/, '');
+        try {
+            await apiClient.stopQueueItem(queueId);
+        } catch (err) {
+            console.error(`Failed to release queue item ${queueId}`, err);
+        }
+    };
 
     const isAccordionExpanded = (jobId) => {
         if (expandedAccordions[jobId] !== undefined) {
@@ -472,16 +500,26 @@ const JobProgressWidget = () => {
                         <div className="p-3 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                             <h3 className="font-semibold text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
                                 <Activity size={16} className="text-indigo-500" />
-                                Active Tasks ({visibleJobs.length})
+                                Active Tasks ({liveCount})
                             </h3>
-                            <button onClick={() => setIsExpanded(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
-                                <ChevronDown size={16} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={clearAll}
+                                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                                    title="Clear every card (the work itself carries on)"
+                                >
+                                    <Trash2 size={13} /> Clear
+                                </button>
+                                <button onClick={() => setIsExpanded(false)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Minimise">
+                                    <ChevronDown size={16} />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="overflow-y-auto p-2 space-y-2">
                             {visibleJobs.map(job => (
-                                <div key={job.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-600">
+                                <div key={job.id} className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 border border-gray-100 dark:border-gray-600 ${job.status === 'orphaned' ? 'opacity-60' : ''}`}>
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className="font-medium text-sm text-gray-800 dark:text-gray-200">
@@ -500,6 +538,7 @@ const JobProgressWidget = () => {
                                                 })()}
                                             </p>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{job.message}</p>
+                                            {job.status === 'orphaned' && <div className="mt-1">{renderStatusPill('orphaned')}</div>}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             {job.status === 'completed' && <CheckCircle size={16} className="text-green-500" />}
@@ -518,18 +557,15 @@ const JobProgressWidget = () => {
                                                     Cancel
                                                 </button>
                                             )}
+                                            {job.status === 'orphaned' && (
+                                                <button onClick={() => releaseOrphan(job)} className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white font-medium px-2 py-1 rounded bg-gray-100 dark:bg-gray-700" title="Release this queue item so it can be picked up again">
+                                                    Release
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => {
-                                                    if (isActive(job)) {
-                                                        if (window.confirm("This job is still active. Dismissing it will hide it from the UI but it will continue running in the background. Are you sure?")) {
-                                                            removeJob(job.id);
-                                                        }
-                                                    } else {
-                                                        removeJob(job.id);
-                                                    }
-                                                }}
+                                                onClick={() => removeJob(job.id)}
                                                 className="text-gray-400 hover:text-gray-600 ml-1"
-                                                title="Dismiss"
+                                                title="Dismiss (hides the card; the work carries on)"
                                             >
                                                 <X size={16} />
                                             </button>
@@ -540,7 +576,8 @@ const JobProgressWidget = () => {
                                     <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5 mb-2 overflow-hidden">
                                         <div
                                             className={`h-full rounded-full transition-all duration-500 ${job.status === 'failed' ? 'bg-red-500' :
-                                                job.status === 'completed' ? 'bg-green-500' : 'bg-indigo-500'
+                                                job.status === 'completed' ? 'bg-green-500' :
+                                                job.status === 'orphaned' ? 'bg-gray-400' : 'bg-indigo-500'
                                                 }`}
                                             style={{ width: `${job.progress}%` }}
                                         />
@@ -752,7 +789,7 @@ const JobProgressWidget = () => {
                     className="bg-white dark:bg-gray-800 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 flex items-center gap-2 self-end hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                     <Activity size={20} className="text-indigo-500" />
-                    <span className="font-semibold text-sm text-gray-700 dark:text-gray-300">{visibleJobs.length}</span>
+                    <span className="font-semibold text-sm text-gray-700 dark:text-gray-300">{liveCount}</span>
                 </motion.button>
             )}
 

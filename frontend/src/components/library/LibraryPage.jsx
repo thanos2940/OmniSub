@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, EyeOff, Film, FolderPlus, Languages, Library, RefreshCw, Search, Settings2, Tv, Folder, Eye } from 'lucide-react';
 import { api } from '../../api';
 import { useJobs } from '../../context/JobContext';
+import { usePoll } from '../../hooks/usePoll';
 import { useToast } from '../../context/ToastContext';
 import { Button, Card, ConfirmDialog, EmptyState, INPUT, Page, PageHeader, ProgressBar, Spinner, Tabs } from '../ui';
 import EmbeddedTracksModal from '../project/modals/EmbeddedTracksModal';
@@ -20,7 +21,7 @@ const missingOf = (item) => Math.max(0, (item.episode_count || 0) - (item.transl
 
 export default function LibraryPage() {
     const toast = useToast();
-    const { activeJobs, addJob } = useJobs();
+    const { activeJobs, addJob, snapshot } = useJobs();
 
     const [library, setLibrary] = useState(null);
     const [manual, setManual] = useState([]);
@@ -69,13 +70,10 @@ export default function LibraryPage() {
         }
     }, []);
 
-    const loadQueue = useCallback(async () => {
-        try {
-            const res = await api.getQueue();
-            setQueueItems(res.data?.items || []);
-        } catch {
-            // the Activity page reports an unreachable queue
-        }
+    // An unreachable queue is reported on the Activity page; a failure here only makes the poller back off.
+    const loadQueue = useCallback(async ({ signal } = {}) => {
+        const res = await api.getQueue(false, undefined, signal);
+        setQueueItems(res.data?.items || []);
     }, []);
 
     useEffect(() => {
@@ -89,14 +87,14 @@ export default function LibraryPage() {
             .catch(() => {});
     }, [loadLibrary, loadManual]);
 
-    useEffect(() => {
-        loadQueue();
-        const interval = setInterval(() => { if (!document.hidden) loadQueue(); }, 8000);
-        return () => clearInterval(interval);
-    }, [loadQueue]);
+    usePoll(loadQueue, { intervalMs: 30000, hiddenIntervalMs: 90000, refreshOn: ['queue_updated', 'agent_submission'] });
 
-    // Counts change when queue items finish.
-    const activeCount = useMemo(() => queueItems.filter(i => ACTIVE_STATES.includes(i.status)).length, [queueItems]);
+    // Counts change when queue items finish. The activity snapshot (5 s) is fresher than the list (30 s).
+    const activeCount = useMemo(() => {
+        const summary = snapshot?.summary;
+        if (summary) return (summary.pending || 0) + (summary.running || 0) + (summary.queued || 0) + (summary.paused_daily_limit || 0);
+        return queueItems.filter(i => ACTIVE_STATES.includes(i.status)).length;
+    }, [queueItems, snapshot]);
     const prevActive = useRef(0);
     useEffect(() => {
         if (activeCount < prevActive.current) loadLibrary();

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { formatErrorMessage } from '../context/ToastContext';
-import { useAdaptivePolling } from './useAdaptivePolling';
+import { usePoll } from './usePoll';
 
 export const errorText = (err, fallback = 'Something went wrong.') =>
     formatErrorMessage(err?.response?.data?.detail ?? err?.response?.data?.message ?? err?.message) || fallback;
@@ -163,9 +163,9 @@ export function useEpisodeQueue(projectName, onSettled) {
     const settledRef = useRef(onSettled);
     settledRef.current = onSettled;
 
-    const poll = useCallback(async () => {
+    const poll = useCallback(async ({ signal } = {}) => {
         if (!projectName) return '';
-        const res = await api.getQueue(false, projectName);
+        const res = await api.getQueue(false, projectName, signal);
         const mine = String(projectName).toLowerCase();
         const next = new Map();
         const consider = (item, kind) => {
@@ -185,6 +185,10 @@ export function useEpisodeQueue(projectName, onSettled) {
         return JSON.stringify([...next.entries()]);
     }, [projectName]);
 
-    useAdaptivePolling({ enabled: !!projectName, pollFn: poll, baseInterval: 3000, maxInterval: 12000, backoffThreshold: 2 });
-    return { active, refresh: poll };
+    // A page about one show: its queue rows change on events, so a slow timer is enough.
+    const { refresh } = usePoll(poll, {
+        intervalMs: 15000, hiddenIntervalMs: 60000, enabled: !!projectName,
+        refreshOn: ['queue_updated', 'job_updated', 'agent_submission', 'agent_runner_submitted', 'sync_completed'],
+    });
+    return { active, refresh };
 }

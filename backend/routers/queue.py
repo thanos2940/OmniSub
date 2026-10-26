@@ -187,6 +187,8 @@ async def pause_queue():
     storage.save_global_config({"queue_worker_paused": True})
     from services.background_worker import worker
     worker.trigger()
+    from utils.event_broadcaster import queue_changed
+    queue_changed("paused")
     return {"status": "success", "paused": True}
 
 
@@ -196,6 +198,8 @@ async def resume_queue():
     storage.save_global_config({"queue_worker_paused": False})
     from services.background_worker import worker
     worker.trigger()
+    from utils.event_broadcaster import queue_changed
+    queue_changed("resumed")
     return {"status": "success", "paused": False}
 
 

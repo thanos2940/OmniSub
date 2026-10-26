@@ -107,6 +107,7 @@ EARLIER_LINES = 8                # translated lines of the previous chunk shown 
 AROUND_BEFORE, AROUND_AFTER = 2, 1   # translated lines shown around a line filled into a translated episode
 MAX_AROUND = 80                  # ... for at most this many lines per request
 MAX_FAILURES = 2                 # an episode that fails this often in one session is left for a person
+MAX_CRASHES = 5                  # unexpected errors in a row (nothing submitted between them) that stop the runner
 KEEPALIVE_SECONDS = 1800         # a waiting runner touches its claimed workspaces so they are not released as idle
 ENGINE_CACHE_SECONDS = 60
 HOUSEKEEPING_SECONDS = 60        # abandoned claims are released at most this often while the runner looks for work
@@ -269,6 +270,7 @@ class AgentRunner:
         self.seq = 0
         self.session = {"episodes": 0, "lines": 0, "calls": 0, "tokens_in": 0, "tokens_out": 0, "quota_hits": 0}
         self.consecutive_errors = 0
+        self.crashes = 0                         # unexpected errors in a row, reset by a submit
         self._kept = 0.0
         self._swept = 0.0                        # when the service last released abandoned claims for us
         self._engines: Tuple[float, Dict] = (0.0, {})
@@ -508,7 +510,11 @@ class AgentRunner:
                 self.started = 0
                 self.alive = 0
                 self.consecutive_errors = 0
-                self.failures = {}
+                self.crashes = 0
+                self.recovering = {}
+                self.quota_streak = {}
+                if not resumed:  # a restart after an error keeps the count, so a bad episode is not retried for ever
+                    self.failures = {}
                 self.held = {}
                 self._swept = 0.0
                 self._busy, self._busy_since, self._active = 0, 0.0, 0.0
@@ -913,7 +919,14 @@ class AgentRunner:
                     if self._pick()[0] is not None:  # only being tested by another lane
                         self._sleep(min(wait, 30))
                     continue  # else: the quota check just paused every model; the top of the loop says so
-                task = self._next_task()
+                try:
+                    task = self._next_task()
+                except Exception as exc:  # claiming went wrong (a broken plan, an unreadable episode)
+                    self._release_probe(model, lane)
+                    if self._crashed(lane, None, exc):
+                        break
+                    self._idle_sleep(30)
+                    continue
                 if task is None:
                     self._release_probe(model, lane)
                     if self._no_new_work():
@@ -933,8 +946,11 @@ class AgentRunner:
                     continue
                 self._set_status("running", "")
                 self._work_begin()
+                crashed = False
                 try:
                     self._episode(lane, task, model)
+                except Exception as exc:  # one bad episode must not stop the other lanes
+                    crashed = self._crashed(lane, task, exc)
                 finally:
                     self._work_end()
                     with self.lock:
@@ -942,6 +958,8 @@ class AgentRunner:
                     self._queue_changed()
                     self._release_probe(model, lane)
                     self._lane_set(lane, state="between episodes", **NO_WORK)
+                if crashed:
+                    break
         except Exception as exc:  # keep the runner honest about crashes
             logger.exception("agent runner lane crashed")
             self._finish("error", f"Lane {lane + 1} stopped after an unexpected error: {exc!r}", "error")
@@ -953,6 +971,37 @@ class AgentRunner:
             if last:
                 self._drop_pid()
                 self._wrap_up()
+
+    # ------------------------------------------------------------------ crashes
+
+    def _crashed(self, lane: int, task: Optional[Dict], exc: BaseException) -> bool:
+        """An unexpected exception in a lane. With ``task``: that episode is given back to the queue and
+        counted against it (``MAX_FAILURES`` leaves it for a person), and the lane goes on. Returns True
+        when the runner should stop instead: ``MAX_CRASHES`` crashes in a row with nothing submitted in
+        between means the fault is not in one episode."""
+        logger.exception("agent runner lane crashed")
+        what = f"{exc.__class__.__name__}: {exc}"
+        with self.lock:
+            self.crashes += 1
+            crashes = self.crashes
+        if task is not None:
+            queue_id = task.get("queue_id") or task["task_id"]
+            with self.lock:
+                n = self.failures[queue_id] = self.failures.get(queue_id, 0) + 1
+            gave_up = " and left for a person" if n >= MAX_FAILURES else ""
+            try:
+                self.service.release_agent_task(task["task_id"])
+            except Exception as release_exc:
+                logger.warning(f"Could not release {task['task_id']} after a crash: {release_exc}")
+            self.log(f"Lane {lane + 1}: {task['project_name']} {task['episode_name']} failed with an unexpected "
+                     f"error ({what}); put back in the queue{gave_up}. Task {task['task_id']}.", "error")
+        else:
+            self.log(f"Lane {lane + 1}: unexpected error while looking for work ({what}).", "error")
+        if crashes >= MAX_CRASHES:
+            self._finish("error", f"Stopped after {crashes} unexpected errors in a row (last: {what}); see the log.",
+                         "error")
+            return True
+        return False
 
     # ------------------------------------------------------------------ one episode
 
@@ -970,6 +1019,14 @@ class AgentRunner:
         episode = manifest.get("episode_name", task["episode_name"])
         title = f"{project} — {episode}"
         if not self._still_mine(folder, lane, title):
+            return
+        if not self.service.workspace_current(folder):
+            # The episode was re-imported, compacted or edited since the claim: the plan's cue positions
+            # are stale. Give it back; the next claim plans it again from the episode as it is now
+            # (gap mode keeps whatever is already translated).
+            self.service.release_agent_task(task["task_id"])
+            self.log(f"Lane {lane + 1}: {title} changed since it was claimed; put back in the queue to be "
+                     f"planned again.", "warn")
             return
         plan = json.loads((folder / aw.PLAN_FILE).read_text(encoding="utf-8"))
         units = aw.units_from_plan(plan)
@@ -1589,7 +1646,8 @@ class AgentRunner:
                 return [{"units": rest, "model": piece["model"], "tries": 1, "isolated": True, "first": piece["first"]},
                         {"units": risky, "model": piece["model"], "tries": 1, "isolated": True, "first": False}]
         if len(units) <= SMALL_BLOCK:
-            fam = agent_cli.family(piece["model"])
+            own = piece["model"]
+            fam = agent_cli.family(own[len(API_PREFIX):] if own.startswith(API_PREFIX) else own)
             for alt in models:
                 if alt != piece["model"] and agent_cli.family(alt) != fam and self._available(alt) \
                         and alt not in piece.get("tried", ()):
@@ -1640,6 +1698,7 @@ class AgentRunner:
         done = len(units) - len(left)
         with self.lock:
             self.session["episodes"] += 1
+            self.crashes = 0
             self.session["lines"] += done
         self._grow_guide(folder, task["project_name"], whole)
         notes = []

@@ -182,15 +182,31 @@ def antigravity_quota(exe: List[str]) -> Optional[List[Dict]]:
     return None
 
 
+def _tokens(text: str) -> set:
+    return {t for t in re.split(r"[^a-z0-9]+", (text or "").lower()) if t}
+
+
 def group_of(model: str, groups: Optional[List[Dict]]) -> Optional[Dict]:
-    """The quota group a model belongs to ('Gemini Models', 'Claude and GPT models', ...)."""
+    """The quota group a model belongs to ('Gemini Models', 'Claude and GPT models', ...).
+
+    A family can have more than one group ('Gemini Models' and 'Gemini 4 Argon'): the group whose name
+    shares the most of the model's own tokens (a version, a code name) wins; with none shared, the most
+    generic group of the family (the fewest extra words) — never simply the first one listed."""
     fam = family(model)
     if fam not in FAMILIES:
         return None
+    model_tokens = _tokens(model) - {fam}
+    best, best_key = None, None
     for g in groups or []:
-        if fam in f"{g.get('name', '')} {g.get('description', '')}".lower():
-            return g
-    return None
+        label = f"{g.get('name', '')} {g.get('description', '')}".lower()
+        if fam not in label:
+            continue
+        name_tokens = _tokens(g.get("name", "")) - {fam, "models", "model", "and"}
+        shared = len(name_tokens & model_tokens)
+        key = (shared, -len(name_tokens))
+        if best_key is None or key > best_key:
+            best, best_key = g, key
+    return best
 
 
 def exhausted_until(group: Optional[Dict], limit: float = 0.001) -> Optional[float]:

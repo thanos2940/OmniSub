@@ -28,6 +28,7 @@ from utils.url_base import UrlBaseMiddleware, safe_url_base
 from routers.settings import has_api_key, validate_api_key
 
 from routers import (
+    activity,
     auth,
     projects,
     episodes,
@@ -309,6 +310,14 @@ async def lifespan(app: FastAPI):
             logger.info(f"Recovered {recovered} orphaned 'running' queue item(s) → pending")
     except Exception as e:
         logger.warning(f"Orphaned-running recovery skipped (non-critical): {e}")
+    # Jobs of the previous process can never finish: close their history rows so clients see a final state.
+    try:
+        from utils.jobs_manager import mark_stale_history
+        stale = mark_stale_history()
+        if stale:
+            logger.info(f"Closed {stale} job(s) left unfinished by the previous process")
+    except Exception as e:
+        logger.warning(f"Stale job sweep skipped (non-critical): {e}")
 
     # Backfill the metadata index from files if empty (Plan 03).
     # Runs in a thread — backfill is filesystem-heavy and must never block the event loop.
@@ -493,6 +502,7 @@ app.include_router(characters.router)
 app.include_router(summaries.router)
 app.include_router(queue.router)
 app.include_router(jobs.router)
+app.include_router(activity.router)
 app.include_router(health.router)
 app.include_router(dashboard.router)
 app.include_router(blacklist.router)

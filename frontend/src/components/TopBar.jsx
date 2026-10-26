@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LayoutGrid, Lock, Unlock, Menu, Search, X } from 'lucide-react';
 import { api } from '../api';
+import { usePoll } from '../hooks/usePoll';
 import RunnerPill from './activity/RunnerPill';
+
+const REVIEW_EVENTS = ['queue_updated', 'agent_submission', 'task_completed'];
 
 const linkClass = ({ isActive }) => [
     'relative inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
@@ -20,37 +23,17 @@ const TopBar = () => {
 
     useEffect(() => { setMenuOpen(false); }, [location.pathname, location.search]);
 
-    useEffect(() => {
-        const fetchCount = async () => {
-            if (document.hidden) return; // don't poll a backgrounded tab
-            try {
-                const res = await api.getGlobalReviewCount();
-                setReviewCount(res.data?.count || 0);
-            } catch (e) {
-                console.error('Failed to fetch review count', e);
-            }
-        };
-        const handleVisibility = () => { if (!document.hidden) fetchCount(); };
-        fetchCount();
-        const interval = setInterval(fetchCount, 15000);
-        document.addEventListener('visibilitychange', handleVisibility);
-        return () => {
-            clearInterval(interval);
-            document.removeEventListener('visibilitychange', handleVisibility);
-        };
+    const fetchCount = useCallback(async ({ signal } = {}) => {
+        const res = await api.getGlobalReviewCount(signal);
+        setReviewCount(res.data?.count || 0);
     }, []);
+    usePoll(fetchCount, { intervalMs: 60000, hiddenIntervalMs: 300000, refreshOn: REVIEW_EVENTS });
 
-    useEffect(() => {
-        const checkUpdates = () => {
-            if (document.hidden) return;
-            api.getUpdateStatus()
-                .then(res => setUpdateAvailable(!!res.data?.update_available))
-                .catch(() => {});
-        };
-        checkUpdates();
-        const interval = setInterval(checkUpdates, 60000);
-        return () => clearInterval(interval);
+    const checkUpdates = useCallback(async ({ signal } = {}) => {
+        const res = await api.getUpdateStatus(signal);
+        setUpdateAvailable(!!res.data?.update_available);
     }, []);
+    usePoll(checkUpdates, { intervalMs: 60000, hiddenIntervalMs: 300000 });
 
     useEffect(() => {
         api.getAuthStatus()

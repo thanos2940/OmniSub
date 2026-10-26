@@ -350,7 +350,15 @@ class AgentTaskService:
             if _ignored_item(item, _options(item)):
                 q.update_status(item["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
                 continue
-            res = self._build_workspace(item)
+            try:
+                res = self._build_workspace(item)
+            except Exception as exc:
+                # The row is already 'running' (claimed): give it back, or it would look like live work
+                # with nobody on it until the claim TTL.
+                logger.exception(f"Could not build a workspace for {item['project_name']} {item['episode_name']}")
+                self._release(item["id"], f"workspace build failed: {exc}")
+                self._broadcast("queue_updated", {"reason": "agent_claim_failed", "queue_id": item["id"]})
+                raise
             if res.get("status") in ("nothing_to_translate", "missing_source") and not queue_item_id:
                 skipped.append({k: res.get(k) for k in ("project_name", "episode_name", "status", "message")})
                 continue
@@ -1491,7 +1499,7 @@ These are the same rules the API translator follows.
         cues = storage.load_episode_data(project_name, episode_name) or []
         from utils.ass_parser import refresh_passthrough
         refresh_passthrough(cues)
-        if not cues or aw.source_fingerprint(cues, units) != plan.get("source_fingerprint"):
+        if not aw.plan_matches(cues, plan):
             return {"success": False, "status": "episode_changed", "task_id": task_id,
                     "message": (f"The source subtitle of {project_name} {episode_name} changed since this task was "
                                 f"claimed. Release it (`{cli_command('release', task_id)}`) and claim it again.")}
@@ -1751,6 +1759,21 @@ These are the same rules the API translator follows.
         return self.housekeeping()
 
     # ------------------------------------------------------------------ cancel / release / clear
+
+    def workspace_current(self, folder: Path) -> bool:
+        """Whether a workspace's plan still matches its episode as stored now. False for a plan made
+        before the episode was re-imported, compacted or edited: such a workspace must be released and
+        planned again, never submitted."""
+        try:
+            manifest = self._read_manifest(folder)
+            plan = json.loads((folder / aw.PLAN_FILE).read_text(encoding="utf-8"))
+            cues = storage.load_episode_data(manifest["project_name"], manifest["episode_name"]) or []
+            from utils.ass_parser import refresh_passthrough
+            refresh_passthrough(cues)
+            return aw.plan_matches(cues, plan)
+        except Exception as exc:
+            logger.warning(f"Could not check workspace {folder}: {exc}")
+            return False
 
     def release_agent_task(self, task_id: str) -> bool:
         """Give a claimed episode back to the queue (e.g. the session is ending)."""

@@ -1,6 +1,17 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { api } from '../api';
-import { useAdaptivePolling } from '../hooks/useAdaptivePolling';
+import { usePoll } from '../hooks/usePoll';
+
+// Live work on the server, as one snapshot (docs/REVIEW_activity_runner_polling_2026-10-26.md, Step 2).
+//
+// `GET /api/activity` is polled every 5 s (15 s hidden) and refreshed at once on server events; it lists
+// the in-memory jobs that are live and the queue rows that are running right now. Everything the panel
+// shows derives from the last snapshot, so a card can never outlive the work it stands for:
+//   - a snapshot job or queue row -> a card while it is listed, then a 10 s "just finished" grace;
+//   - a job this browser started (`addJob`) -> "Starting..." until the snapshot lists it, and once it
+//     is gone its final state is fetched once (`GET /api/jobs/{id}`) and kept for 10 minutes so pages
+//     waiting for `status === 'completed'` still see it.
+// localStorage keeps only the ids started here (`omnisub_started_jobs`), 10 minutes at most.
 
 const JobContext = createContext(null);
 
@@ -12,57 +23,30 @@ export const useJobs = () => {
     return context;
 };
 
-const STORAGE_KEY = 'omnisub_active_jobs';
+export const STARTED_KEY = 'omnisub_started_jobs';
+const STARTED_TTL_MS = 10 * 60 * 1000;   // ids started here live this long in localStorage
+const FINAL_TTL_MS = 10 * 60 * 1000;     // a fetched final state stays this long in the panel
+const STARTING_WINDOW_MS = 30 * 1000;    // "Starting..." card before we ask the server what happened
+const GRACE_MS = 10 * 1000;              // a vanished snapshot entry stays this long with its last state
+const HOUSEKEEPING_MS = 30 * 1000;
+const FINAL_FETCH_ATTEMPTS = 3;          // a non-terminal answer is re-checked this many times
 const TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
-const TERMINAL_RETENTION_MS = 10 * 60 * 1000; // 10 minutes
+const REFRESH_EVENTS = [
+    'job_updated', 'queue_updated', 'agent_runner', 'agent_runner_submitted',
+    'agent_submission', 'task_completed', 'sync_completed',
+];
 
-/**
- * Synchronously writes active jobs to localStorage, truncating logs to avoid quota blowup.
- */
-const persistJobsSync = (jobs) => {
+const loadStarted = () => {
     try {
-        const sanitized = {};
-        for (const [id, j] of Object.entries(jobs || {})) {
-            if (!j) continue;
-            sanitized[id] = {
-                ...j,
-                logs: Array.isArray(j.logs) ? j.logs.slice(-50) : []
-            };
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
-    } catch (err) {
-        console.warn('Failed to persist active jobs to localStorage', err);
-    }
-};
-
-/**
- * Loads persisted jobs from localStorage, retaining terminal jobs within 10-minute TTL.
- */
-const loadPersistedJobs = () => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(STARTED_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw);
         const now = Date.now();
         const live = {};
-
-        for (const [id, job] of Object.entries(parsed)) {
-            if (!job || typeof job !== 'object') continue;
-
-            if (TERMINAL_STATUSES.includes(job.status)) {
-                let finishedAt = job.finished_at;
-                if (!finishedAt) {
-                    finishedAt = now;
-                } else if (finishedAt < 1e11) {
-                    finishedAt = finishedAt * 1000;
-                }
-
-                if (now - finishedAt < TERMINAL_RETENTION_MS) {
-                    live[id] = { ...job, finished_at: finishedAt };
-                }
-            } else {
-                live[id] = job;
-            }
+        for (const [id, entry] of Object.entries(parsed || {})) {
+            if (!entry || typeof entry !== 'object') continue;
+            if (typeof entry.started_at !== 'number' || now - entry.started_at >= STARTED_TTL_MS) continue;
+            live[id] = { ...entry, id };
         }
         return live;
     } catch {
@@ -70,422 +54,442 @@ const loadPersistedJobs = () => {
     }
 };
 
-const hasActiveJobsToPoll = (jobs) =>
-    Object.values(jobs || {}).some(job => job && !TERMINAL_STATUSES.includes(job.status));
-
-const hasJobChanged = (prevJob, nextJob) => {
-    if (!prevJob || !nextJob) return true;
-    if (prevJob.status !== nextJob.status) return true;
-    if (prevJob.parentId !== nextJob.parentId) return true;
-    if (prevJob.progress !== nextJob.progress) return true;
-    if (prevJob.message !== nextJob.message) return true;
-    if (prevJob.pipeline_stage !== nextJob.pipeline_stage) return true;
-    if (prevJob.pipeline_mode !== nextJob.pipeline_mode) return true;
-    if (prevJob.logs?.length !== nextJob.logs?.length) return true;
-    if (prevJob.eta_seconds !== nextJob.eta_seconds) return true;
-    if (prevJob.cues_translated !== nextJob.cues_translated) return true;
-    if (prevJob.total_cues !== nextJob.total_cues) return true;
-    if (prevJob.cues_total !== nextJob.cues_total) return true;
-    if (prevJob.current_scene !== nextJob.current_scene) return true;
-    if (prevJob.total_scenes !== nextJob.total_scenes) return true;
-    if (prevJob.scenes_done !== nextJob.scenes_done) return true;
-    if (prevJob.scenes_total !== nextJob.scenes_total) return true;
-    if (prevJob.daily_limit_reached !== nextJob.daily_limit_reached) return true;
-    if (prevJob.rate_limit_hits !== nextJob.rate_limit_hits) return true;
-    if (prevJob.completed_episodes?.length !== nextJob.completed_episodes?.length) return true;
-    if (prevJob.failed_episodes?.length !== nextJob.failed_episodes?.length) return true;
-    if (prevJob.project_name !== nextJob.project_name) return true;
-    if (prevJob.episode_name !== nextJob.episode_name) return true;
-
-    // Sub-jobs array equality
-    const pSub = prevJob.sub_jobs || [];
-    const nSub = nextJob.sub_jobs || [];
-    if (pSub.length !== nSub.length) return true;
-    for (let i = 0; i < nSub.length; i++) {
-        if (String(pSub[i]) !== String(nSub[i])) return true;
+const saveStarted = (started) => {
+    try {
+        localStorage.setItem(STARTED_KEY, JSON.stringify(started || {}));
+    } catch {
+        // storage full or blocked: the panel still works for this page load
     }
+};
 
-    const pScenes = prevJob.scene_status || {};
-    const nScenes = nextJob.scene_status || {};
-    const pKeys = Object.keys(pScenes);
-    const nKeys = Object.keys(nScenes);
-    if (pKeys.length !== nKeys.length) return true;
-    for (const key of nKeys) {
-        if (pScenes[key] !== nScenes[key]) return true;
+const pruneStarted = (started, now = Date.now()) => {
+    let changed = false;
+    const next = {};
+    for (const [id, entry] of Object.entries(started || {})) {
+        if (entry && now - entry.started_at < STARTED_TTL_MS) next[id] = entry;
+        else changed = true;
     }
+    return changed ? next : started;
+};
 
-    return false;
+const linkFor = (project, episode) => {
+    if (project && episode) return `/project/${encodeURIComponent(project)}/episode/${encodeURIComponent(episode)}`;
+    if (project) return `/project/${encodeURIComponent(project)}`;
+    return null;
+};
+
+const describeJob = (job) => {
+    const type = String(job.type || 'job').replace(/_/g, ' ');
+    if (job.episode && job.project) return `${type}: ${job.project} ${job.episode}`;
+    if (job.project) return `${type}: ${job.project}`;
+    return type;
+};
+
+// A snapshot job in the shape every consumer of activeJobs has always read.
+const jobCard = (job, startedEntry) => {
+    const meta = startedEntry?.metadata || {};
+    const project = job.project ?? meta.projectId ?? null;
+    const episode = job.episode ?? meta.episodeName ?? null;
+    return {
+        id: job.id,
+        type: job.type || startedEntry?.type || 'job',
+        description: startedEntry?.description || describeJob(job),
+        status: job.status || 'running',
+        progress: typeof job.progress === 'number' ? job.progress : 0,
+        message: job.message || '',
+        logs: Array.isArray(job.logs) ? job.logs : [],
+        project_name: project,
+        episode_name: episode,
+        metadata: { ...meta, projectId: project, episodeName: episode, link: job.link || meta.link || linkFor(project, episode) },
+        pipeline_stage: job.stage ?? null,
+        eta_seconds: job.eta_seconds ?? null,
+        parentId: job.parent_id || null,
+        started_at: job.started_at ?? null,
+        finished_at: null,
+    };
+};
+
+// A running queue row (the worker, the extraction lane or an agent) as a card.
+const queueCard = (row) => {
+    const engine = row.engine === 'agent' ? 'agent' : 'queue_worker';
+    const who = engine === 'agent' ? 'Agent' : (row.kind === 'extraction' ? 'Extracting' : 'Worker');
+    const name = row.episode || row.project || `Queue #${row.id}`;
+    const units = Number.isFinite(row.units_total) && row.units_total > 0
+        ? `${row.units_done ?? 0}/${row.units_total} lines`
+        : '';
+    return {
+        id: `bg_${row.id}`,
+        type: 'translate_episode',
+        description: `${who}: ${name}`,
+        status: row.status === 'orphaned' ? 'orphaned' : 'running',
+        progress: typeof row.progress === 'number' ? row.progress : 0,
+        message: row.message || units || (row.status === 'orphaned' ? 'Marked running, but nothing is working on it.' : ''),
+        logs: [],
+        project_name: row.project || null,
+        episode_name: row.episode || null,
+        metadata: {
+            projectId: row.project || null,
+            episodeName: row.episode || null,
+            link: row.link || linkFor(row.project, row.episode),
+            source: engine,
+            kind: row.kind || 'translation',
+            units_done: row.units_done ?? null,
+            units_total: row.units_total ?? null,
+            lane: row.lane ?? null,
+        },
+        pipeline_stage: null,
+        eta_seconds: null,
+        parentId: null,
+        finished_at: null,
+    };
+};
+
+const startingCard = (entry) => ({
+    id: entry.id,
+    type: entry.type,
+    description: entry.description,
+    status: 'pending',
+    progress: 0,
+    message: 'Starting…',
+    logs: [],
+    project_name: entry.metadata?.projectId || null,
+    episode_name: entry.metadata?.episodeName || null,
+    metadata: entry.metadata || {},
+    pipeline_stage: null,
+    eta_seconds: null,
+    parentId: entry.metadata?.parentId || null,
+    finished_at: null,
+});
+
+const toMillis = (value) => {
+    if (typeof value !== 'number') return null;
+    return value < 1e11 ? value * 1000 : value;
 };
 
 export const JobProvider = ({ children }) => {
-    const [activeJobs, setActiveJobs] = useState(loadPersistedJobs);
-    const [isPolling, setIsPolling] = useState(() => hasActiveJobsToPoll(loadPersistedJobs()));
+    const [snapshot, setSnapshot] = useState(null);
+    const [connected, setConnected] = useState(false);
+    const [started, setStarted] = useState(loadStarted);
+    const [finals, setFinals] = useState({});   // id -> final card of a job started here (React state only)
+    const [graced, setGraced] = useState({});   // id -> { card, until } for vanished snapshot entries
+    const [hidden, setHidden] = useState({});   // ids dismissed from the panel while still listed
+    const [clock, setClock] = useState(() => Date.now()); // advanced when a time-based expiry passes
 
-    const activeJobsRef = useRef(activeJobs);
-    const pollErrorsRef = useRef({});
+    const startedRef = useRef(started);
+    startedRef.current = started;
+    const finalsRef = useRef(finals);
+    finalsRef.current = finals;
+    const lastCardsRef = useRef({});            // cards of the previous snapshot, to notice what vanished
+    const lastSummaryRef = useRef(null);
+    const fetchingRef = useRef(new Set());
+    const attemptsRef = useRef({});
     const wsConnectedRef = useRef(false);
 
-    const BASE_INTERVAL = 1500;
-    const MAX_BACKOFF_INTERVAL = 5000;
-    const BACKGROUND_INTERVAL = 10000;
-    const MAX_POLL_ERRORS = 25;
-
-    // Debounce writes only for ongoing background poll updates
-    useEffect(() => {
-        activeJobsRef.current = activeJobs;
-        const timer = setTimeout(() => {
-            persistJobsSync(activeJobs);
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [activeJobs]);
-
-    // Synchronous beforeunload and pagehide flush
-    useEffect(() => {
-        const handleFlush = () => {
-            if (activeJobsRef.current) {
-                persistJobsSync(activeJobsRef.current);
-            }
-        };
-
-        window.addEventListener('beforeunload', handleFlush);
-        window.addEventListener('pagehide', handleFlush);
-        return () => {
-            window.removeEventListener('beforeunload', handleFlush);
-            window.removeEventListener('pagehide', handleFlush);
-        };
-    }, []);
-
-    // Periodic 60s cleanup of expired terminal jobs
-    useEffect(() => {
-        const cleanupInterval = setInterval(() => {
-            const now = Date.now();
-            setActiveJobs(prev => {
-                let changed = false;
-                const next = { ...prev };
-                for (const [id, job] of Object.entries(next)) {
-                    if (job && TERMINAL_STATUSES.includes(job.status) && job.finished_at) {
-                        if (now - job.finished_at >= TERMINAL_RETENTION_MS) {
-                            delete next[id];
-                            changed = true;
-                        }
-                    }
-                }
-                if (changed) {
-                    activeJobsRef.current = next;
-                    persistJobsSync(next);
-                    return next;
-                }
-                return prev;
-            });
-        }, 60000);
-        return () => clearInterval(cleanupInterval);
-    }, []);
-
-    const removeJob = useCallback((jobId) => {
-        delete pollErrorsRef.current[jobId];
-        setActiveJobs(prev => {
-            if (!prev[jobId]) return prev;
-            const next = { ...prev };
-            delete next[jobId];
-            for (const [id, j] of Object.entries(next)) {
-                if (j && j.parentId === jobId) {
-                    delete next[id];
-                    delete pollErrorsRef.current[id];
-                }
-            }
-            activeJobsRef.current = next;
-            persistJobsSync(next);
+    const updateStarted = useCallback((updater) => {
+        setStarted(prev => {
+            const next = updater(prev);
+            if (next !== prev) saveStarted(next);
             return next;
         });
     }, []);
+
+    // ---- the final state of a job this browser started, fetched once it left the snapshot
+    const fetchFinal = useCallback(async (id) => {
+        if (fetchingRef.current.has(id)) return;
+        if (TERMINAL_STATUSES.includes(finalsRef.current[id]?.status)) return; // already known
+        fetchingRef.current.add(id);
+        const entry = startedRef.current[id];
+        try {
+            const res = await api.getJob(id);
+            const s = res.data || {};
+            const attempts = (attemptsRef.current[id] || 0) + 1;
+            attemptsRef.current[id] = attempts;
+            const terminal = TERMINAL_STATUSES.includes(s.status);
+            if (!terminal && attempts < FINAL_FETCH_ATTEMPTS) {
+                // The snapshot no longer lists it but the server still calls it live: look again next tick.
+                return;
+            }
+            const project = s.project_name || entry?.metadata?.projectId || null;
+            const episode = s.episode_name || entry?.metadata?.episodeName || null;
+            const card = {
+                id,
+                type: s.type || entry?.type || 'job',
+                description: entry?.description || describeJob({ type: s.type, project, episode }),
+                status: terminal ? s.status : 'cancelled',
+                progress: typeof s.progress === 'number' ? s.progress : (s.status === 'completed' ? 100 : 0),
+                message: terminal ? (s.message || '') : 'No longer on the server',
+                logs: Array.isArray(s.logs) ? s.logs : [],
+                result: s.result,
+                completed_episodes: s.completed_episodes || [],
+                failed_episodes: s.failed_episodes || [],
+                project_name: project,
+                episode_name: episode,
+                metadata: { ...(entry?.metadata || {}), projectId: project, episodeName: episode, link: entry?.metadata?.link || linkFor(project, episode) },
+                pipeline_stage: s.pipeline_stage ?? null,
+                eta_seconds: null,
+                parentId: s.parent_id || entry?.metadata?.parentId || null,
+                finished_at: Date.now(),
+                server_finished_at: toMillis(s.finished_at),
+            };
+            setFinals(prev => ({ ...prev, [id]: card }));
+        } catch (err) {
+            if (err?.response?.status === 404) {
+                setFinals(prev => ({
+                    ...prev,
+                    [id]: {
+                        id,
+                        type: entry?.type || 'job',
+                        description: entry?.description || id,
+                        status: 'cancelled',
+                        progress: 0,
+                        message: 'No longer on the server',
+                        logs: [],
+                        project_name: entry?.metadata?.projectId || null,
+                        episode_name: entry?.metadata?.episodeName || null,
+                        metadata: entry?.metadata || {},
+                        pipeline_stage: null,
+                        eta_seconds: null,
+                        parentId: null,
+                        finished_at: Date.now(),
+                    },
+                }));
+            }
+            // any other error: the next snapshot tick tries again
+        } finally {
+            fetchingRef.current.delete(id);
+        }
+    }, []);
+
+    // ---- the snapshot poll
+    const fetchActivity = useCallback(async ({ signal } = {}) => {
+        try {
+            const res = await api.getActivity(signal);
+            const data = res.data;
+            if (!data || typeof data !== 'object') return;
+            setSnapshot(data);
+            setConnected(true);
+        } catch (err) {
+            if (!signal?.aborted) setConnected(false);
+            throw err;
+        }
+    }, []);
+
+    const { refresh } = usePoll(fetchActivity, {
+        intervalMs: 5000,
+        hiddenIntervalMs: 15000,
+        refreshOn: REFRESH_EVENTS,
+    });
+
+    // Each new snapshot: notice what vanished (grace or final fetch) and what never showed up.
+    useEffect(() => {
+        if (!snapshot) return;
+        const now = Date.now();
+        const cards = {};
+        for (const job of snapshot.jobs || []) cards[job.id] = jobCard(job, startedRef.current[job.id]);
+        for (const row of snapshot.queue || []) cards[`bg_${row.id}`] = queueCard(row);
+
+        const prev = lastCardsRef.current;
+        const prevSummary = lastSummaryRef.current;
+        const completedRose = !!(prevSummary && snapshot.summary
+            && (snapshot.summary.completed || 0) > (prevSummary.completed || 0));
+        const newlyGraced = {};
+        for (const [id, card] of Object.entries(prev)) {
+            if (cards[id]) continue;
+            if (startedRef.current[id]) {
+                fetchFinal(id);
+                continue;
+            }
+            const done = (card.progress || 0) >= 99 || completedRose;
+            newlyGraced[id] = {
+                until: now + GRACE_MS,
+                card: {
+                    ...card,
+                    status: done ? 'completed' : 'cancelled',
+                    progress: done ? 100 : card.progress,
+                    message: done ? 'Finished' : 'No longer running',
+                    finished_at: now,
+                },
+            };
+        }
+        if (Object.keys(newlyGraced).length) setGraced(g => ({ ...g, ...newlyGraced }));
+
+        // Started here, never listed, and past the starting window: ask the server what happened.
+        for (const [id, entry] of Object.entries(startedRef.current)) {
+            if (cards[id] || finalsRef.current[id]) continue;
+            if (now - entry.started_at >= STARTING_WINDOW_MS) fetchFinal(id);
+        }
+
+        lastCardsRef.current = cards;
+        lastSummaryRef.current = snapshot.summary || null;
+    }, [snapshot, fetchFinal]);
+
+    // Housekeeping: expire started ids (localStorage), finals, grace entries and hidden ids.
+    useEffect(() => {
+        const sweep = () => {
+            const now = Date.now();
+            updateStarted(prev => pruneStarted(prev, now));
+            setFinals(prev => {
+                const next = {};
+                let changed = false;
+                for (const [id, card] of Object.entries(prev)) {
+                    if (now - card.finished_at < FINAL_TTL_MS) next[id] = card;
+                    else changed = true;
+                }
+                return changed ? next : prev;
+            });
+            setGraced(prev => {
+                const next = {};
+                let changed = false;
+                for (const [id, g] of Object.entries(prev)) {
+                    if (g.until > now) next[id] = g;
+                    else changed = true;
+                }
+                return changed ? next : prev;
+            });
+            setClock(now);
+        };
+        const interval = setInterval(sweep, HOUSEKEEPING_MS);
+        return () => clearInterval(interval);
+    }, [updateStarted]);
+
+    // Grace entries leave on time, not at the next housekeeping sweep.
+    useEffect(() => {
+        const untils = Object.values(graced).map(g => g.until);
+        if (!untils.length) return undefined;
+        const delay = Math.max(0, Math.min(...untils) - Date.now()) + 50;
+        const timer = setTimeout(() => {
+            const now = Date.now();
+            setGraced(prev => {
+                const next = {};
+                let changed = false;
+                for (const [id, g] of Object.entries(prev)) {
+                    if (g.until > now) next[id] = g;
+                    else changed = true;
+                }
+                return changed ? next : prev;
+            });
+        }, delay);
+        return () => clearTimeout(timer);
+    }, [graced]);
+
+    // A "Starting..." card turns into a final fetch at 30 s even when no snapshot changes meanwhile.
+    useEffect(() => {
+        const waiting = Object.values(started).filter(e => !finals[e.id] && !lastCardsRef.current[e.id]);
+        if (!waiting.length) return undefined;
+        const soonest = Math.min(...waiting.map(e => e.started_at + STARTING_WINDOW_MS));
+        const timer = setTimeout(() => {
+            const now = Date.now();
+            for (const e of waiting) {
+                if (now - e.started_at >= STARTING_WINDOW_MS && !lastCardsRef.current[e.id]) fetchFinal(e.id);
+            }
+            setClock(now);
+        }, Math.max(0, soonest - Date.now()) + 50);
+        return () => clearTimeout(timer);
+    }, [started, finals, fetchFinal]);
+
+    // ---- public actions
+    const addJob = useCallback((jobId, type, description, metadata = {}) => {
+        if (!jobId) return;
+        const id = String(jobId);
+        updateStarted(prev => ({ ...prev, [id]: { id, type, description, metadata: metadata || {}, started_at: Date.now() } }));
+        setFinals(prev => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setHidden(prev => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        delete attemptsRef.current[id];
+        refresh();
+    }, [updateStarted, refresh]);
+
+    const removeJob = useCallback((jobId) => {
+        const id = String(jobId);
+        updateStarted(prev => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setFinals(prev => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        setGraced(prev => {
+            if (!prev[id]) return prev;
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        if (lastCardsRef.current[id]) setHidden(prev => ({ ...prev, [id]: true }));
+    }, [updateStarted]);
+
+    const clearAll = useCallback(() => {
+        updateStarted(() => ({}));
+        setFinals({});
+        setGraced({});
+        const live = {};
+        for (const id of Object.keys(lastCardsRef.current)) live[id] = true;
+        setHidden(live);
+    }, [updateStarted]);
 
     const cancelJob = useCallback(async (jobId) => {
         try {
             await api.cancelJob(jobId);
-            setActiveJobs(prev => {
-                if (!prev[jobId]) return prev;
-                const now = Date.now();
-                const next = {
-                    ...prev,
-                    [jobId]: {
-                        ...prev[jobId],
-                        status: 'cancelled',
-                        message: 'Cancelled by user',
-                        finished_at: now
-                    }
-                };
-                for (const [id, j] of Object.entries(next)) {
-                    if (j && j.parentId === jobId && !TERMINAL_STATUSES.includes(j.status)) {
-                        next[id] = {
-                            ...j,
-                            status: 'cancelled',
-                            message: 'Cancelled by parent job',
-                            finished_at: now
-                        };
-                    }
-                }
-                activeJobsRef.current = next;
-                persistJobsSync(next);
-                return next;
-            });
         } catch (err) {
             console.error(`Failed to cancel job ${jobId}`, err);
         }
-    }, []);
+        refresh();
+    }, [refresh]);
 
-    const addJob = useCallback((jobId, type, description, metadata = {}) => {
-        setActiveJobs(prev => {
-            const subJobIds = metadata?.sub_job_ids || metadata?.sub_jobs || [];
-            const next = {
-                ...prev,
-                [jobId]: {
-                    id: jobId,
-                    type,
-                    description,
-                    metadata,
-                    parentId: metadata?.parentId || null,
-                    sub_jobs: subJobIds.length > 0 ? subJobIds.map(String) : (prev[jobId]?.sub_jobs || null),
-                    status: 'pending',
-                    progress: 0,
-                    message: 'Initializing...',
-                    logs: [],
-                    pipeline_stage: null,
-                    pipeline_mode: null,
-                    project_name: metadata?.projectId || null,
-                    episode_name: metadata?.episodeName || null,
-                }
-            };
+    const isLive = useCallback((project, episode) => {
+        if (!snapshot || !project) return false;
+        const p = String(project).toLowerCase();
+        const e = episode == null ? null : String(episode).toLowerCase();
+        const match = (jp, je) => String(jp || '').toLowerCase() === p && (e === null || String(je || '').toLowerCase() === e);
+        return (snapshot.jobs || []).some(j => match(j.project, j.episode))
+            || (snapshot.queue || []).some(q => match(q.project, q.episode));
+    }, [snapshot]);
 
-            // If parent job provided initial sub-jobs, pre-seed children immediately with parentId
-            if (subJobIds.length > 0 && ['batch_translate', 'auto_translate', 'simple_pipeline', 'pipeline'].includes(type)) {
-                subJobIds.forEach((childId, idx) => {
-                    const childIdStr = String(childId);
-                    const childKey = childIdStr.startsWith('bg_') ? childIdStr : `bg_${childIdStr}`;
-                    const epName = metadata.episodeNames?.[idx] || null;
-                    const existing = next[childKey] || prev[childKey];
-                    next[childKey] = {
-                        id: childKey,
-                        type: 'translate_episode',
-                        description: `Worker: ${epName || metadata.projectId || `Queue #${childIdStr}`}`,
-                        metadata: {
-                            projectId: metadata.projectId,
-                            episodeName: epName,
-                            parentId: jobId,
-                            source: 'queue_worker'
-                        },
-                        parentId: jobId,
-                        status: existing?.status || 'pending',
-                        progress: existing?.progress || 0,
-                        message: existing?.message || 'Queued in translation worker...',
-                        logs: existing?.logs || [],
-                        pipeline_stage: null,
-                        pipeline_mode: null,
-                        project_name: metadata.projectId || null,
-                        episode_name: epName,
-                    };
-                });
-            }
-
-            activeJobsRef.current = next;
-            persistJobsSync(next);
-            return next;
-        });
-        setIsPolling(true);
-    }, []);
-
-    // Background Worker Job Discovery via /api/queue
-    useEffect(() => {
-        const discoverBackgroundJobs = async () => {
-            if (document.hidden) return;
-            try {
-                const res = await api.getQueue();
-                const items = res.data?.items || [];
-                const currentJobs = activeJobsRef.current || {};
-
-                const runningItems = items.filter(it => it.status === 'running');
-
-                // Episodes claimed by external AI agents have no server-side job to poll:
-                // mirror their work-file progress from the queue, and close the job once
-                // the item is submitted or handed back.
-                const agentItems = new Map(runningItems.filter(it => it.agent).map(it => [`bg_${it.id}`, it]));
-                setActiveJobs(prev => {
-                    let changed = false;
-                    const next = { ...prev };
-                    for (const [jobId, item] of agentItems) {
-                        const cur = prev[jobId];
-                        const message = `AI agent translating: ${item.agent.units_done ?? 0}/${item.agent.units ?? '?'} lines`;
-                        if (cur && cur.status === 'running' && cur.message === message) continue;
-                        const link = `/project/${encodeURIComponent(item.project_name)}/episode/${encodeURIComponent(item.episode_name)}`;
-                        next[jobId] = {
-                            ...(cur || {}),
-                            id: jobId,
-                            type: 'translate_episode',
-                            description: `Agent: ${item.episode_name || item.project_name}`,
-                            metadata: { projectId: item.project_name, episodeName: item.episode_name, link, source: 'agent' },
-                            parentId: cur?.parentId || null,
-                            logs: cur?.logs || [],
-                            project_name: item.project_name,
-                            episode_name: item.episode_name,
-                            status: 'running',
-                            progress: item.progress || 0,
-                            message,
-                        };
-                        changed = true;
-                    }
-                    for (const [jobId, job] of Object.entries(prev)) {
-                        if (job?.metadata?.source !== 'agent' || TERMINAL_STATUSES.includes(job.status) || agentItems.has(jobId)) continue;
-                        const item = items.find(it => `bg_${it.id}` === jobId);
-                        const done = item?.status === 'completed';
-                        next[jobId] = {
-                            ...job,
-                            status: done ? 'completed' : 'cancelled',
-                            progress: done ? 100 : job.progress,
-                            message: done ? 'Translation completed.' : 'Returned to the queue.',
-                            finished_at: Date.now(),
-                        };
-                        changed = true;
-                    }
-                    if (!changed) return prev;
-                    activeJobsRef.current = next;
-                    persistJobsSync(next);
-                    return next;
-                });
-
-                for (const item of runningItems) {
-                    if (item.agent) continue;
-                    const bgJobId = `bg_${item.id}`;
-                    const itemIdStr = String(item.id);
-                    const projectName = item.project_name || null;
-                    const episodeName = item.episode_name || null;
-
-                    // Resolve parent job ID across 3 tiers
-                    let parentJobId = null;
-
-                    // Tier 1: Check known sub_jobs across all active jobs
-                    for (const [pId, pJob] of Object.entries(currentJobs)) {
-                        if (!pJob) continue;
-                        const subList = pJob.sub_jobs || pJob.metadata?.sub_job_ids || pJob.metadata?.child_jobs;
-                        if (Array.isArray(subList)) {
-                            if (subList.some(s => String(s) === itemIdStr || String(s) === bgJobId)) {
-                                parentJobId = pId;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Tier 2: Check item.options for parent_job_id
-                    if (!parentJobId && item.options) {
-                        try {
-                            const opts = typeof item.options === 'string' ? JSON.parse(item.options) : item.options;
-                            if (opts.parent_job_id && currentJobs[opts.parent_job_id]) {
-                                parentJobId = opts.parent_job_id;
-                            }
-                        } catch {
-                            // ignore JSON parse error
-                        }
-                    }
-
-                    // Tier 3: Correlate with in-flight parent jobs for same project
-                    if (!parentJobId && projectName) {
-                        for (const [pId, pJob] of Object.entries(currentJobs)) {
-                            if (!pJob || TERMINAL_STATUSES.includes(pJob.status) || pJob.parentId) continue;
-                            if (['batch_translate', 'auto_translate', 'simple_pipeline', 'pipeline'].includes(pJob.type)) {
-                                const pProj = pJob.project_name || pJob.metadata?.projectId;
-                                if (pProj && pProj.toLowerCase() === projectName.toLowerCase()) {
-                                    const epList = pJob.metadata?.episodeNames;
-                                    if (Array.isArray(epList) && episodeName) {
-                                        if (epList.some(e => e.toLowerCase() === episodeName.toLowerCase())) {
-                                            parentJobId = pId;
-                                            break;
-                                        }
-                                    } else {
-                                        parentJobId = pId;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // If already tracked
-                    const existing = currentJobs[bgJobId];
-                    if (existing) {
-                        if (parentJobId && existing.parentId !== parentJobId) {
-                            existing.parentId = parentJobId;
-                            setActiveJobs(prev => {
-                                if (prev[bgJobId] && prev[bgJobId].parentId !== parentJobId) {
-                                    return {
-                                        ...prev,
-                                        [bgJobId]: { ...prev[bgJobId], parentId: parentJobId }
-                                    };
-                                }
-                                return prev;
-                            });
-                        }
-                        continue;
-                    }
-
-                    const link = projectName && episodeName
-                        ? `/project/${encodeURIComponent(projectName)}/episode/${encodeURIComponent(episodeName)}`
-                        : (projectName ? `/project/${encodeURIComponent(projectName)}` : '/activity');
-
-                    addJob(
-                        bgJobId,
-                        'translate_episode',
-                        `Worker: ${episodeName || projectName || `Queue #${item.id}`}`,
-                        {
-                            projectId: projectName,
-                            episodeName: episodeName,
-                            link,
-                            source: 'queue_worker',
-                            parentId: parentJobId
-                        }
-                    );
-
-                    // If parent job found, ensure parent's sub_jobs includes this ID
-                    if (parentJobId && currentJobs[parentJobId]) {
-                        const parent = currentJobs[parentJobId];
-                        const existingSubs = Array.isArray(parent.sub_jobs) ? parent.sub_jobs : [];
-                        if (!existingSubs.includes(itemIdStr)) {
-                            setActiveJobs(prev => {
-                                if (prev[parentJobId]) {
-                                    const prevSubs = Array.isArray(prev[parentJobId].sub_jobs) ? prev[parentJobId].sub_jobs : [];
-                                    if (!prevSubs.includes(itemIdStr)) {
-                                        return {
-                                            ...prev,
-                                            [parentJobId]: {
-                                                ...prev[parentJobId],
-                                                sub_jobs: [...prevSubs, itemIdStr]
-                                            }
-                                        };
-                                    }
-                                }
-                                return prev;
-                            });
-                        }
-                    }
-                }
-            } catch (err) {
-                console.warn('Background queue discovery error:', err);
-            }
-        };
-
-        const initialTimer = setTimeout(discoverBackgroundJobs, 1000);
-        const interval = setInterval(discoverBackgroundJobs, 10000);
-
-        return () => {
-            clearTimeout(initialTimer);
-            clearInterval(interval);
-        };
-    }, [addJob]);
-
-    // Real-time WebSocket connection to backend
+    // ---- WebSocket to the server, with the HTTP events poll as fallback. Every event is re-dispatched
+    // on `window` as `omnisub:event` (usePoll subscribers) and the legacy per-type events stay.
     useEffect(() => {
         let ws = null;
         let reconnectTimeout = null;
         let pollInterval = null;
         let lastEventId = null;
         let isUnmounted = false;
+
+        const handleIncomingEvent = (payload) => {
+            if (!payload || !payload.type) return;
+            if (payload.id) {
+                lastEventId = Math.max(lastEventId ?? 0, payload.id);
+            }
+
+            window.dispatchEvent(new CustomEvent('omnisub:event', { detail: payload }));
+
+            const data = payload.data || payload;
+            if (payload.type === 'job_updated') {
+                const id = data.id ? String(data.id) : null;
+                if (id && startedRef.current[id] && TERMINAL_STATUSES.includes(data.status)) fetchFinal(id);
+            }
+            if (payload.type === 'agent_submission' || payload.type === 'task_completed') {
+                window.dispatchEvent(new CustomEvent('omnisub:agent-submitted', { detail: data }));
+            }
+            if (payload.type === 'queue_updated') {
+                window.dispatchEvent(new CustomEvent('omnisub:queue-updated', { detail: data }));
+            }
+            if (payload.type === 'sync_completed') {
+                window.dispatchEvent(new CustomEvent('omnisub:sync-completed', { detail: data }));
+            }
+        };
 
         const connectWs = () => {
             if (isUnmounted) return;
@@ -530,76 +534,11 @@ export const JobProvider = ({ children }) => {
                     wsConnectedRef.current = false;
                     if (ws) ws.close();
                 };
-            } catch (err) {
+            } catch {
                 wsConnectedRef.current = false;
                 if (!isUnmounted) {
                     reconnectTimeout = setTimeout(connectWs, 5000);
                 }
-            }
-        };
-
-        const handleIncomingEvent = (payload) => {
-            if (!payload || !payload.type) return;
-            if (payload.id) {
-                lastEventId = Math.max(lastEventId ?? 0, payload.id);
-            }
-
-            window.dispatchEvent(new CustomEvent('omnisub:event', { detail: payload }));
-
-            if (payload.type === 'agent_submission' || payload.type === 'task_completed') {
-                const epData = payload.data || payload;
-                const queueId = epData.queue_id;
-                const bgJobId = queueId ? `bg_${queueId}` : null;
-                const now = Date.now();
-
-                setActiveJobs(prev => {
-                    let updated = false;
-                    const next = { ...prev };
-                    if (bgJobId && next[bgJobId]) {
-                        next[bgJobId] = {
-                            ...next[bgJobId],
-                            status: 'completed',
-                            progress: 100.0,
-                            message: 'Translation completed.',
-                            finished_at: now,
-                        };
-                        updated = true;
-                    }
-                    for (const [id, j] of Object.entries(next)) {
-                        if (!j) continue;
-                        const pMatch = j.project_name === epData.project_name || j.metadata?.projectId === epData.project_name;
-                        const eMatch = j.episode_name === epData.episode_name || j.metadata?.episodeName === epData.episode_name;
-                        if (pMatch && eMatch && !TERMINAL_STATUSES.includes(j.status)) {
-                            next[id] = {
-                                ...next[id],
-                                status: 'completed',
-                                progress: 100.0,
-                                message: 'Translation completed.',
-                                finished_at: now,
-                            };
-                            updated = true;
-                        }
-                    }
-                    if (updated) {
-                        activeJobsRef.current = next;
-                        persistJobsSync(next);
-                        return next;
-                    }
-                    return prev;
-                });
-
-                setIsPolling(true);
-                window.dispatchEvent(new CustomEvent('omnisub:agent-submitted', { detail: epData }));
-            }
-
-            if (payload.type === 'queue_updated') {
-                setIsPolling(true);
-                window.dispatchEvent(new CustomEvent('omnisub:queue-updated', { detail: payload.data || payload }));
-            }
-
-            if (payload.type === 'sync_completed') {
-                setIsPolling(true);
-                window.dispatchEvent(new CustomEvent('omnisub:sync-completed', { detail: payload.data || payload }));
             }
         };
 
@@ -629,7 +568,7 @@ export const JobProvider = ({ children }) => {
             }
         };
 
-        connectWs();
+        if (typeof WebSocket !== 'undefined') connectWs();
         pollInterval = setInterval(pollEventFallback, 6000);
 
         return () => {
@@ -642,131 +581,62 @@ export const JobProvider = ({ children }) => {
                 ws.close();
             }
         };
-    }, []);
+    }, [fetchFinal]);
 
-
-    const pollJobs = useCallback(async () => {
-        const currentJobs = activeJobsRef.current;
-        const jobsToPoll = Object.values(currentJobs).filter(job => {
-            if (!job || TERMINAL_STATUSES.includes(job.status)) return false;
-            if (job.metadata?.source === 'agent') return false;  // fed from /api/queue, no server job
-            const isChild = Boolean(job.parentId || job.id.startsWith('bg_'));
-            if (isChild) {
-                // Only poll children if they are actively running or on first tick without status
-                return job.status === 'running' || !job.status;
-            }
-            return true;
-        });
-
-        if (jobsToPoll.length === 0) {
-            setIsPolling(false);
-            return '';
+    // ---- what the panel and the pages see: a dict keyed by id, as it always was
+    const activeJobs = useMemo(() => {
+        const now = Math.max(clock, Date.now());
+        const out = {};
+        for (const job of snapshot?.jobs || []) {
+            if (!hidden[job.id]) out[job.id] = jobCard(job, started[job.id]);
         }
+        for (const row of snapshot?.queue || []) {
+            const id = `bg_${row.id}`;
+            if (!hidden[id]) out[id] = queueCard(row);
+        }
+        for (const [id, g] of Object.entries(graced)) {
+            if (!out[id] && !hidden[id] && g.until > now) out[id] = g.card;
+        }
+        for (const [id, card] of Object.entries(finals)) {
+            if (!out[id] && now - card.finished_at < FINAL_TTL_MS) out[id] = card;
+        }
+        for (const [id, entry] of Object.entries(started)) {
+            if (out[id] || finals[id]) continue;
+            if (now - entry.started_at < STARTING_WINDOW_MS) out[id] = startingCard(entry);
+        }
+        return out;
+    }, [snapshot, started, finals, graced, hidden, clock]);
 
-        const updates = {};
-        let currentProgressSig = '';
-
-        await Promise.all(jobsToPoll.map(async (job) => {
-            try {
-                const res = await api.getJob(job.id);
-                const s = res.data;
-                pollErrorsRef.current[job.id] = 0;
-
-                const isTerminal = TERMINAL_STATUSES.includes(s.status);
-                const existingFinishedAt = job.finished_at;
-                const serverFinishedAt = s.finished_at ? (s.finished_at < 1e11 ? s.finished_at * 1000 : s.finished_at) : null;
-                const finishedAt = isTerminal ? (existingFinishedAt || serverFinishedAt || Date.now()) : null;
-
-                updates[job.id] = {
-                    ...job,
-                    project_name: s.project_name || job.project_name || job.metadata?.projectId || null,
-                    episode_name: s.episode_name || job.episode_name || job.metadata?.episodeName || null,
-                    status: s.status,
-                    progress: typeof s.progress === 'number' ? s.progress : job.progress,
-                    message: s.message || job.message,
-                    logs: s.logs || job.logs || [],
-                    result: s.result !== undefined ? s.result : job.result,
-                    pipeline_stage: s.pipeline_stage ?? job.pipeline_stage,
-                    pipeline_mode: s.pipeline_mode ?? job.pipeline_mode,
-                    cancelled: Boolean(s.cancelled || job.cancelled),
-                    sub_jobs: s.sub_jobs || job.sub_jobs || null,
-                    scene_status: s.scene_status || job.scene_status || {},
-                    current_scene: s.current_scene ?? s.scenes_done ?? job.current_scene ?? null,
-                    total_scenes: s.total_scenes ?? s.scenes_total ?? job.total_scenes ?? null,
-                    scenes_done: s.scenes_done ?? s.current_scene ?? job.scenes_done ?? null,
-                    scenes_total: s.scenes_total ?? s.total_scenes ?? job.scenes_total ?? null,
-                    cues_translated: s.cues_translated ?? job.cues_translated ?? null,
-                    total_cues: s.total_cues ?? s.cues_total ?? job.total_cues ?? null,
-                    cues_total: s.cues_total ?? s.total_cues ?? job.cues_total ?? null,
-                    eta_seconds: s.eta_seconds ?? job.eta_seconds ?? null,
-                    completed_episodes: s.completed_episodes || job.completed_episodes || [],
-                    failed_episodes: s.failed_episodes || job.failed_episodes || [],
-                    daily_limit_reached: Boolean(s.daily_limit_reached ?? job.daily_limit_reached),
-                    parentId: s.parent_id || job.parentId || null,
-                    rate_limit_hits: s.rate_limit_hits ?? job.rate_limit_hits ?? 0,
-                    finished_at: finishedAt,
-                };
-
-                // Self-healing reconciliation: when parent jobs sync sub_jobs, reconcile active child jobs
-                if (Array.isArray(s.sub_jobs) && s.sub_jobs.length > 0) {
-                    s.sub_jobs.forEach(subId => {
-                        const childIdStr = String(subId);
-                        const childKey = childIdStr.startsWith('bg_') ? childIdStr : `bg_${childIdStr}`;
-                        const existingChild = updates[childKey] || currentJobs[childKey];
-                        if (existingChild && existingChild.parentId !== job.id) {
-                            updates[childKey] = {
-                                ...existingChild,
-                                parentId: job.id
-                            };
-                        }
-                    });
-                }
-
-                currentProgressSig += `${job.id}:${s.status}:${s.progress}:${s.pipeline_stage}:${s.scenes_done ?? s.current_scene ?? ''}:${s.cues_translated ?? ''}:${s.eta_seconds ?? ''};`;
-            } catch (err) {
-                console.error(`Failed to poll job ${job.id}`, err);
-                const n = (pollErrorsRef.current[job.id] || 0) + 1;
-                pollErrorsRef.current[job.id] = n;
-                if (n >= MAX_POLL_ERRORS) {
-                    updates[job.id] = { ...job, status: 'failed', message: 'Failed to connect to server', finished_at: Date.now() };
-                } else {
-                    updates[job.id] = { ...job, message: `Reconnecting to server (${n}/${MAX_POLL_ERRORS})...` };
-                }
-                currentProgressSig += `${job.id}:error:${n};`;
+    // Hidden ids are forgotten once the server stops listing them.
+    useEffect(() => {
+        if (!snapshot || !Object.keys(hidden).length) return;
+        const listed = new Set([
+            ...(snapshot.jobs || []).map(j => j.id),
+            ...(snapshot.queue || []).map(q => `bg_${q.id}`),
+            ...Object.keys(graced),
+        ]);
+        setHidden(prev => {
+            const next = {};
+            let changed = false;
+            for (const id of Object.keys(prev)) {
+                if (listed.has(id)) next[id] = true;
+                else changed = true;
             }
-        }));
-
-        setActiveJobs(prev => {
-            let hasChanges = false;
-            const next = { ...prev };
-            for (const [id, updatedJob] of Object.entries(updates)) {
-                if (next[id]) {
-                    if (hasJobChanged(next[id], updatedJob)) {
-                        next[id] = updatedJob;
-                        hasChanges = true;
-                    }
-                }
-            }
-            return hasChanges ? next : prev;
+            return changed ? next : prev;
         });
-
-        return currentProgressSig;
-    }, []);
-
-    useAdaptivePolling({
-        enabled: isPolling,
-        pollFn: pollJobs,
-        baseInterval: BASE_INTERVAL,
-        maxInterval: MAX_BACKOFF_INTERVAL,
-        backgroundInterval: BACKGROUND_INTERVAL,
-    });
+    }, [snapshot, graced, hidden]);
 
     const contextValue = useMemo(() => ({
         activeJobs,
+        snapshot,
+        connected,
         addJob,
         removeJob,
-        cancelJob
-    }), [activeJobs, addJob, removeJob, cancelJob]);
+        clearAll,
+        cancelJob,
+        refresh,
+        isLive,
+    }), [activeJobs, snapshot, connected, addJob, removeJob, clearAll, cancelJob, refresh, isLive]);
 
     return (
         <JobContext.Provider value={contextValue}>
@@ -774,3 +644,4 @@ export const JobProvider = ({ children }) => {
         </JobContext.Provider>
     );
 };
+

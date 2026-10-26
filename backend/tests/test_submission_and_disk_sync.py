@@ -400,8 +400,12 @@ class TestAgentTaskSubmissionAPI:
             assert sub_res.status_code == 200
             assert sub_res.json()["status"] == "completed"
 
-            # WebSocket client must receive agent_submission event immediately
-            ev = ws.receive_json()
+            # WebSocket client must receive agent_submission event immediately (the queue's own
+            # coalesced ``queue_updated`` for the row's status change may come first).
+            for _ in range(5):
+                ev = ws.receive_json()
+                if ev["type"] == "agent_submission":
+                    break
             assert ev["type"] == "agent_submission"
             assert ev["task_id"] == task_id
             assert ev["project_name"] == project_name

@@ -416,6 +416,7 @@ class TranslationQueue:
                             item["status"] = "running"
                             item["started_at"] = now_str
                             item["attempts"] += 1
+                            self._changed("claimed")
                             return item
                         else:
                             conn.commit()
@@ -447,6 +448,7 @@ class TranslationQueue:
                 (now_str, item_id_str, item_id)
             )
             conn.commit()
+            self._changed("postpone_item")
             return cursor.rowcount > 0
 
     def continue_item(self, item_id: Union[int, str], boost_priority: bool = True) -> bool:
@@ -473,6 +475,7 @@ class TranslationQueue:
                     (now_str, item_id_str, item_id)
                 )
             conn.commit()
+            self._changed("continue_item")
             return cursor.rowcount > 0
 
     def stop_item(self, item_id: Union[int, str]) -> bool:
@@ -505,6 +508,7 @@ class TranslationQueue:
                 (now_str, item_id_str, item_id)
             )
             conn.commit()
+            self._changed("stop_item")
             return cursor.rowcount > 0
 
     def claim_backlog_window(self, limit: int = 200) -> List[Dict]:
@@ -538,6 +542,7 @@ class TranslationQueue:
                             r["status"] = "running"
                             r["attempts"] += 1
                         conn.commit()
+                        self._changed("claim_backlog_window")
                         return rows
                     except Exception:
                         conn.rollback()
@@ -553,6 +558,7 @@ class TranslationQueue:
         with self._conn() as conn:
             conn.execute("UPDATE translation_queue SET status='pending', started_at=NULL WHERE id=?", (item_id,))
             conn.commit()
+        self._changed("repend")
 
     def update_status(self, item_id: str, status: Optional[str] = None, error: Any = _UNSET,
                       started_at: Any = _UNSET, completed_at: Any = _UNSET,
@@ -584,6 +590,16 @@ class TranslationQueue:
         with self._conn() as conn:
             conn.execute(f"UPDATE translation_queue SET {set_clause} WHERE id = ?", values)
             conn.commit()
+        if status is not None:
+            self._changed("update_status")
+
+    def _changed(self, reason: str) -> None:
+        """Tell the UI the queue changed (coalesced; best effort)."""
+        try:
+            from utils.event_broadcaster import queue_changed
+            queue_changed(reason)
+        except Exception:
+            pass
 
     def get_item(self, item_id: str) -> Optional[Dict]:
         """Retrieve a specific queue item by ID as a dictionary."""
@@ -804,6 +820,7 @@ class TranslationQueue:
             else:
                 cursor = conn.execute("DELETE FROM translation_queue WHERE status = ?", (status,))
             conn.commit()
+            self._changed("clear")
             return cursor.rowcount
 
     def cancel(self, item_id: str) -> bool:
@@ -814,6 +831,7 @@ class TranslationQueue:
                 (item_id,)
             )
             conn.commit()
+            self._changed("cancel")
             return cursor.rowcount > 0
 
     def release_agent_items(self) -> int:
@@ -864,6 +882,7 @@ class TranslationQueue:
                     (status,)
                 )
             conn.commit()
+            self._changed("cancel_all")
             return cursor.rowcount
 
     def delete_item(self, item_id: str) -> bool:
@@ -871,6 +890,7 @@ class TranslationQueue:
         with self._conn() as conn:
             cursor = conn.execute("DELETE FROM translation_queue WHERE id = ?", (item_id,))
             conn.commit()
+            self._changed("delete_item")
             return cursor.rowcount > 0
 
     def retry_now(self, item_id: str) -> None:
@@ -881,6 +901,7 @@ class TranslationQueue:
                 (item_id,)
             )
             conn.commit()
+        self._changed("retry_now")
 
     def prioritize(self, item_id: str) -> None:
         """Bump priority of a task to high (0)."""
@@ -890,6 +911,7 @@ class TranslationQueue:
                 (item_id,)
             )
             conn.commit()
+        self._changed("prioritize")
 
     def unpause_daily_limit_items(self, is_model_exhausted_fn=None) -> None:
         """Resume any tasks paused due to daily rate limit exhaustion, optionally checking if their model is unexhausted."""
@@ -939,6 +961,7 @@ class TranslationQueue:
                     to_unpause
                 )
                 conn.commit()
+        self._changed("unpause_daily_limit_items")
 
 
     def counts_by_priority(self) -> Dict[int, int]:
@@ -983,6 +1006,7 @@ class TranslationQueue:
                 f"AND {_json_opt('agent_task_id')} = ''"
             )
             conn.commit()
+            self._changed("reset_orphaned_running")
             return cursor.rowcount
 
     def update_project_priority(self, project_name: str, tier: str) -> Dict[str, int]:
@@ -1002,6 +1026,7 @@ class TranslationQueue:
                     (now_str, project_name)
                 )
                 conn.commit()
+                self._changed("update_project_priority")
                 return {"updated": 0, "cancelled": cursor.rowcount}
             elif tier == "high":
                 cursor = conn.execute(
@@ -1016,6 +1041,7 @@ class TranslationQueue:
                     (project_name,)
                 )
                 conn.commit()
+                self._changed("update_project_priority")
                 return {"updated": cursor.rowcount, "cancelled": 0}
             elif tier == "low":
                 cursor = conn.execute(
@@ -1030,6 +1056,7 @@ class TranslationQueue:
                     (project_name,)
                 )
                 conn.commit()
+                self._changed("update_project_priority")
                 return {"updated": cursor.rowcount, "cancelled": 0}
             else:  # normal
                 cursor = conn.execute(
@@ -1044,6 +1071,7 @@ class TranslationQueue:
                     (project_name,)
                 )
                 conn.commit()
+                self._changed("update_project_priority")
                 return {"updated": cursor.rowcount, "cancelled": 0}
 
 

@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../../api';
+import { usePoll } from '../../hooks/usePoll';
+
+const QUEUE_EVENTS = ['queue_updated', 'agent_submission', 'sync_completed', 'agent_runner_submitted'];
 
 export const useQueueData = ({ toast, activeJobs }) => {
     const [queueData, setQueueData] = useState({ items: [], summary: {}, rate_limits: {}, paused: false });
@@ -9,18 +12,20 @@ export const useQueueData = ({ toast, activeJobs }) => {
     const [checkingLimit, setCheckingLimit] = useState(false);
     const isMounted = useRef(true);
 
-    const fetchQueue = useCallback(async () => {
+    const loadQueue = useCallback(async ({ signal } = {}) => {
         try {
-            const res = await api.getQueue();
+            const res = await api.getQueue(false, undefined, signal);
             if (isMounted.current) {
                 setQueueData(res.data || { items: [], summary: {}, rate_limits: {} });
                 setError(null);
             }
         } catch (e) {
+            if (signal?.aborted) return;
             console.error("Failed to fetch queue:", e);
             if (isMounted.current) {
                 setError("Failed to fetch queue data");
             }
+            throw e; // lets the poller back off
         } finally {
             if (isMounted.current) {
                 setLoading(false);
@@ -28,49 +33,24 @@ export const useQueueData = ({ toast, activeJobs }) => {
         }
     }, []);
 
+    // The queue list: every 10 s (60 s hidden), and at once when the server says it changed.
+    const { refresh } = usePoll(loadQueue, { intervalMs: 10000, hiddenIntervalMs: 60000, refreshOn: QUEUE_EVENTS });
+    const fetchQueue = useCallback(() => refresh().catch(() => {}), [refresh]);
+
     useEffect(() => {
         isMounted.current = true;
-        fetchQueue();
-        const interval = setInterval(() => {
-            if (!document.hidden) {
-                fetchQueue();
-            }
-        }, 5000);
-
-        const handleVisibilityChange = () => {
-            if (!document.hidden) fetchQueue();
-        };
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-
         const handleAgentSubmitted = (e) => {
             const detail = e.detail || {};
             if (toast?.success) {
                 toast.success(`Agent translation submitted: ${detail.project_name || 'Project'} ${detail.episode_name || ''}`);
             }
-            fetchQueue();
         };
-
-        const handleQueueUpdated = () => {
-            fetchQueue();
-        };
-
-        const handleSyncCompleted = () => {
-            fetchQueue();
-        };
-
         window.addEventListener('omnisub:agent-submitted', handleAgentSubmitted);
-        window.addEventListener('omnisub:queue-updated', handleQueueUpdated);
-        window.addEventListener('omnisub:sync-completed', handleSyncCompleted);
-
         return () => {
             isMounted.current = false;
-            clearInterval(interval);
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('omnisub:agent-submitted', handleAgentSubmitted);
-            window.removeEventListener('omnisub:queue-updated', handleQueueUpdated);
-            window.removeEventListener('omnisub:sync-completed', handleSyncCompleted);
         };
-    }, [fetchQueue, toast]);
+    }, [toast]);
 
     const handleAction = useCallback(async (actionFn, itemId, successMsg) => {
         try {
@@ -136,8 +116,10 @@ export const useQueueData = ({ toast, activeJobs }) => {
     const handleViewLogs = useCallback(async (itemId, title) => {
         try {
             let logs = [];
+            // A running queue row's card carries no logs of its own (the activity snapshot lists work,
+            // not log lines); ask the queue for them unless a live job already has some.
             const runningJob = Object.values(activeJobs || {}).find(j => j.id === `bg_${itemId}`);
-            if (runningJob) {
+            if (runningJob && Array.isArray(runningJob.logs) && runningJob.logs.length > 0) {
                 logs = runningJob.logs;
             } else {
                 const res = await api.getQueueItemLogs(itemId);

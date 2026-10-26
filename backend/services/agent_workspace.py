@@ -233,13 +233,33 @@ def build_workspace(
 
 
 
+CHANGED_FINGERPRINT = "changed"   # never a sha1 hex digest, so it compares unequal to every stored fingerprint
+
+
 def source_fingerprint(cues: List[Dict], units: List[Unit]) -> str:
-    """Hash of the cue sources the units point at — detects a re-imported episode."""
+    """Hash of the cue sources the units point at — detects a re-imported episode.
+
+    Units address cues by position. A cue list that got shorter since the plan was made (a re-import,
+    the lazy ASS compaction, an editor deletion) is a changed episode too, so an index past the end
+    yields ``CHANGED_FINGERPRINT`` instead of raising: the caller then rejects the stale plan."""
     h = hashlib.sha1()
+    n = len(cues)
     for u in units:
         for c in u.cues:
+            if not isinstance(c, int) or c < 0 or c >= n:
+                return CHANGED_FINGERPRINT
             h.update(f"{c}\x1f{(cues[c].get('original') or '').strip()}\x1e".encode("utf-8"))
     return h.hexdigest()
+
+
+def plan_matches(cues: List[Dict], plan: Dict) -> bool:
+    """Whether ``plan`` (a workspace's plan.json) still describes ``cues`` (the episode as stored now)."""
+    try:
+        if not cues:
+            return False
+        return source_fingerprint(cues, units_from_plan(plan)) == plan.get("source_fingerprint")
+    except Exception:
+        return False
 
 
 def units_to_plan(units: List[Unit], fingerprint: str, stats: Dict[str, int], mode: str) -> Dict:

@@ -994,3 +994,21 @@ def test_unreachable_video_is_retried_later(service, monkeypatch):
     service.prepare_task_workspace(qid)
     row = _row(qid)
     assert row["status"] == "pending" and row["next_retry_at"]
+
+
+class TestEpisodeShrank:
+
+    def test_a_shorter_cue_list_is_episode_changed_not_an_error(self, service):
+        _project("AgentShrank", [dict(c) for c in SRT_CUES])
+        prep = service.prepare_task_workspace(queue_item_id=_enqueue("AgentShrank"))
+        folder = Path(prep["workspace_dir"])
+        _fill(folder, {1: "Τι κάνεις εδώ;", 2: "Σε περιμένω."})
+        storage.save_episode("AgentShrank", "S01E01", [{"original": "Only one line now."}])
+        assert service.workspace_current(folder) is False
+        res = service.submit_task_result(prep["task_id"])
+        assert res["success"] is False and res["status"] == "episode_changed"
+
+    def test_an_unchanged_episode_is_current(self, service):
+        _project("AgentSame", [dict(c) for c in SRT_CUES])
+        prep = service.prepare_task_workspace(queue_item_id=_enqueue("AgentSame"))
+        assert service.workspace_current(Path(prep["workspace_dir"])) is True

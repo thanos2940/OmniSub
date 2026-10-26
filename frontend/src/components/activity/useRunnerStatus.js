@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { api } from '../../api';
+import { useJobs } from '../../context/JobContext';
+import { usePoll } from '../../hooks/usePoll';
 
 // Live state of whatever translates: the agent runner (default) or, when `translation_engine` is "model",
-// the Gemini worker. Polls on a timer and refreshes at once on `agent_runner` events (JobContext
-// re-dispatches every server event as `omnisub:event`).
+// the Gemini worker. Without `withLog` it is a view of the `/api/activity` snapshot JobContext already
+// polls and makes no request of its own. With `withLog` (the Activity page) it polls
+// `GET /api/agent/runner?since=` for the log lines and refreshes at once on runner events.
 
 export const ENGINE_LABEL = { antigravity: 'agy', claude: 'Claude Code', gemini: 'Gemini CLI' };
 
-const NO_LOG = Number.MAX_SAFE_INTEGER; // "give me log lines after this" -> none
-const ENGINE_REFRESH_MS = 60000;
+const LOG_EVENTS = ['agent_runner', 'agent_runner_log', 'agent_runner_submitted'];
 
 // One short description of the runner for the top-bar pill and the Activity panel.
 // -> { label, tone: neutral | success | warning | danger | info | accent }
@@ -34,79 +36,46 @@ export function describeRunner(info, engine, queue) {
     return { label: `${name} · idle`, tone: 'info' };
 }
 
-export default function useRunnerStatus({ intervalMs = 15000, withLog = false } = {}) {
-    const [info, setInfo] = useState(null);
-    const [engine, setEngine] = useState('agent');
-    const [queue, setQueue] = useState(null);
+export default function useRunnerStatus({ intervalMs = 3000, withLog = false } = {}) {
+    const { snapshot, refresh: refreshSnapshot } = useJobs();
+    const [own, setOwn] = useState(null);     // the runner as GET /api/agent/runner last reported it (withLog)
     const [log, setLog] = useState([]);
-    const [loading, setLoading] = useState(true);
     const seq = useRef(0);
-    const alive = useRef(true);
-    const engineRef = useRef('agent');
-    const lastRefresh = useRef(0);
+    const quotaRef = useRef(false);
 
+    const fetchLog = useCallback(async ({ signal } = {}) => {
+        const quota = quotaRef.current;
+        quotaRef.current = false;
+        const res = await api.getAgentRunner(seq.current, quota, signal);
+        const data = res.data || {};
+        setOwn(data);
+        const since = seq.current;
+        if ((data.log_seq || 0) < since) { // the server restarted: reload the whole log next time
+            seq.current = 0;
+            setLog([]);
+        } else {
+            const fresh = (data.log || []).filter(e => e.seq > since);
+            seq.current = Math.max(since, data.log_seq || 0);
+            if (fresh.length) setLog(prev => [...prev, ...fresh].slice(-400));
+        }
+    }, []);
+
+    const { refresh: refreshLog } = usePoll(fetchLog, { intervalMs, enabled: withLog, refreshOn: LOG_EVENTS });
+
+    // refresh(quota): with the log view, asks the runner (and agy's quota when `quota`); otherwise
+    // refreshes the shared snapshot.
     const refresh = useCallback(async (quota = false) => {
-        lastRefresh.current = Date.now();
-        try {
-            const res = await api.getAgentRunner(withLog ? seq.current : NO_LOG, quota);
-            if (!alive.current) return;
-            const data = res.data || {};
-            setInfo(data);
-            if (withLog) {
-                const since = seq.current;
-                if ((data.log_seq || 0) < since) { // the server restarted: reload the whole log next time
-                    seq.current = 0;
-                    setLog([]);
-                } else {
-                    const fresh = (data.log || []).filter(e => e.seq > since);
-                    seq.current = Math.max(since, data.log_seq || 0);
-                    if (fresh.length) setLog(prev => [...prev, ...fresh].slice(-400));
-                }
-            }
-        } catch {
-            // an unreachable server shows up elsewhere
+        if (withLog) {
+            if (quota) quotaRef.current = true;
+            await refreshLog();
         }
-        if (engineRef.current === 'model') {
-            try {
-                const res = await api.getQueue();
-                if (alive.current) setQueue(res.data || null);
-            } catch {
-                // see above
-            }
-        }
-        if (alive.current) setLoading(false);
-    }, [withLog]);
+        await refreshSnapshot();
+    }, [withLog, refreshLog, refreshSnapshot]);
 
-    useEffect(() => {
-        alive.current = true;
-        const loadEngine = async () => {
-            try {
-                const res = await api.getSettings();
-                const value = res.data?.translation_engine === 'model' ? 'model' : 'agent';
-                engineRef.current = value;
-                if (alive.current) setEngine(value);
-            } catch {
-                // keep the last known engine
-            }
-        };
-        loadEngine().then(() => refresh());
-        const tick = setInterval(() => { if (!document.hidden) refresh(); }, intervalMs);
-        const engineTick = setInterval(() => { if (!document.hidden) loadEngine(); }, ENGINE_REFRESH_MS);
-        const onVisible = () => { if (!document.hidden) refresh(); };
-        const onEvent = (e) => {
-            const type = e.detail?.type || '';
-            if (type.startsWith('agent_runner') && Date.now() - lastRefresh.current > 1000) refresh();
-        };
-        document.addEventListener('visibilitychange', onVisible);
-        window.addEventListener('omnisub:event', onEvent);
-        return () => {
-            alive.current = false;
-            clearInterval(tick);
-            clearInterval(engineTick);
-            document.removeEventListener('visibilitychange', onVisible);
-            window.removeEventListener('omnisub:event', onEvent);
-        };
-    }, [refresh, intervalMs]);
+    const engine = snapshot?.translation_engine === 'model' ? 'model' : 'agent';
+    const info = withLog ? (own || snapshot?.runner || null) : (snapshot?.runner || null);
+    const queue = snapshot ? { summary: snapshot.summary || {}, paused: !!snapshot.worker?.paused } : null;
+    const loading = !snapshot && !(withLog && own);
 
     return { info, engine, queue, log, loading, refresh };
 }

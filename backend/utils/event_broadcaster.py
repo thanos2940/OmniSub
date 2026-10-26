@@ -129,3 +129,43 @@ broadcaster = EventBroadcaster()
 def broadcast_event(event_type: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Helper to broadcast an event globally."""
     return broadcaster.broadcast_event(event_type, data)
+
+
+# ------------------------------------------------------------------ coalesced "the queue changed" event
+
+_QUEUE_EVENT_GAP = 0.5   # seconds: queue changes come in bursts (a sync enqueues fifty rows); one event per burst
+_queue_lock = threading.Lock()
+_queue_last = 0.0
+_queue_timer: Optional[threading.Timer] = None
+_queue_reason = ""
+
+
+def queue_changed(reason: str, **data: Any) -> None:
+    """Broadcast ``queue_updated`` for a change to the translation queue, at most once per
+    ``_QUEUE_EVENT_GAP``; a change inside the gap is sent when the gap ends (never dropped)."""
+    global _queue_last, _queue_timer, _queue_reason
+
+    def fire() -> None:
+        global _queue_last, _queue_timer
+        with _queue_lock:
+            _queue_last = time.time()
+            _queue_timer = None
+            why = _queue_reason
+        try:
+            broadcast_event("queue_updated", {"reason": why, **data})
+        except Exception as exc:  # events are best effort
+            logger.debug(f"queue_updated not sent: {exc}")
+
+    with _queue_lock:
+        _queue_reason = reason
+        wait = _QUEUE_EVENT_GAP - (time.time() - _queue_last)
+        if wait <= 0:
+            pending = False
+        else:
+            if _queue_timer is None:
+                _queue_timer = threading.Timer(wait, fire)
+                _queue_timer.daemon = True
+                _queue_timer.start()
+            pending = True
+    if not pending:
+        fire()

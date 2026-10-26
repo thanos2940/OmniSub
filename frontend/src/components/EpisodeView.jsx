@@ -21,7 +21,7 @@ const isTranslatableLine = (item) => item.translatable !== false && item._ass?.t
 const EpisodeView = () => {
     const { projectName, episodeName } = useParams();
     const navigate = useNavigate();
-    const { addJob, activeJobs } = useJobs();
+    const { addJob, activeJobs, isLive } = useJobs();
     const toast = useToast();
     const [data, setData] = useState([]);
     const [project, setProject] = useState(null);
@@ -143,19 +143,9 @@ const EpisodeView = () => {
         }
     }, [completedJob]);
 
-    // Live View Polling: Fetch data progressively while any translation job is running in this project
-    const isTranslating = useMemo(() => {
-        return Object.values(activeJobs).some(job =>
-            ['running', 'pending'].includes(job.status) &&
-            ['translate_episode', 'batch_translate', 'auto_translate', 'pipeline', 'retranslate_compare', 'retranslate_invalidated', 'simple_pipeline'].includes(job.type) &&
-            (
-                job.project_name === projectName ||
-                job.metadata?.projectId === projectName ||
-                job.episode_name === episodeName ||
-                job.metadata?.episodeName === episodeName
-            )
-        );
-    }, [activeJobs, projectName, episodeName]);
+    // Live View Polling: reload progressively while the server lists work on THIS episode (a job or a
+    // running queue row whose project and episode both match).
+    const isTranslating = isLive(projectName, episodeName);
 
     useEffect(() => {
         let interval;

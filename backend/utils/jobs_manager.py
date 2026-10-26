@@ -40,6 +40,7 @@ class JobStatus(BaseModel):
     scenes_done: Optional[int] = None
     scenes_total: Optional[int] = None
     parent_id: Optional[str] = None
+    created_at: float = Field(default_factory=time.time)
 
 
 # In-memory jobs registry
@@ -62,6 +63,9 @@ def evict_old_jobs(max_age_seconds: int = 1800, max_jobs: int = 500) -> int:
     """
     now = time.time()
     removed = 0
+    # 0. Jobs that never got going, and worker jobs whose queue row is no longer running, are
+    #    closed so no client keeps a card for them (see time_out_stale_jobs).
+    time_out_stale_jobs(now)
     # 1. Age-based eviction of terminal jobs.
     for jid in [j for j, job in jobs.items()
                 if job.status in _TERMINAL and job.finished_at and (now - job.finished_at) > max_age_seconds]:
@@ -78,6 +82,73 @@ def evict_old_jobs(max_age_seconds: int = 1800, max_jobs: int = 500) -> int:
             jobs.pop(jid, None)
             removed += 1
     return removed
+
+
+PENDING_TIMEOUT_SECONDS = 600   # a job still "pending" after this never started
+
+
+def _queue_row_status(item_id: str) -> Optional[str]:
+    try:
+        from utils.translation_queue import TranslationQueue
+        row = TranslationQueue().get_item(item_id)
+        return row["status"] if row else None
+    except Exception:
+        return None
+
+
+def time_out_stale_jobs(now: Optional[float] = None) -> int:
+    """Close in-memory jobs that are not really alive: a ``pending`` job older than
+    ``PENDING_TIMEOUT_SECONDS`` (its background task never ran), and a worker ``bg_<id>`` job whose
+    queue row is no longer ``running`` (completed, failed, cancelled, re-queued or deleted). Their final
+    status follows the row where there is one. Returns how many were closed."""
+    now = now or time.time()
+    closed = 0
+    for jid, job in list(jobs.items()):
+        if job.status in _TERMINAL:
+            continue
+        if jid.startswith("bg_"):
+            row_status = _queue_row_status(jid[3:])
+            if row_status == "running" or row_status in ("paused_daily_limit",) and job.status == "paused":
+                continue
+            if row_status is None:
+                final, message = "cancelled", "Removed from the queue."
+            elif row_status in ("completed", "failed", "cancelled"):
+                final = row_status
+                message = {"completed": "Translation completed.", "failed": "Failed; see the queue.",
+                           "cancelled": "Cancelled."}[final]
+            elif job.status == "pending" and now - job.created_at < PENDING_TIMEOUT_SECONDS:
+                continue  # a retry waiting for its turn
+            else:
+                final, message = "cancelled", f"No longer running (queue says {row_status})."
+        elif job.status == "pending" and now - job.created_at >= PENDING_TIMEOUT_SECONDS:
+            final, message = "failed", "Never started (timed out)."
+        else:
+            continue
+        update_job(jid, status=final, message=message)
+        closed += 1
+    return closed
+
+
+def mark_stale_history() -> int:
+    """At startup: job_history rows a previous process left ``pending``/``running`` can never finish
+    (the registry is in memory). Mark them failed so a client that kept their id sees a final state."""
+    try:
+        conn = sqlite3.connect(DB_FILE, timeout=30.0)
+        with conn:
+            conn.execute(_JOB_HISTORY_DDL)
+            cur = conn.execute(
+                "UPDATE job_history SET status = 'failed', message = 'The server restarted before this job finished.', "
+                "completed_at = ? WHERE status IN ('pending', 'running', 'paused', 'awaiting_review')",
+                (datetime.now(timezone.utc).isoformat(),))
+            return cur.rowcount
+    except Exception as exc:
+        logger.warning(f"Could not close stale job_history rows: {exc}")
+        return 0
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 
 _JOB_HISTORY_DDL = """
@@ -272,6 +343,27 @@ def create_job(job_type: str, project_name: Optional[str] = None, episode_name: 
     return job_id
 
 
+_JOB_EVENT_GAP = 1.0
+_last_job_event: Dict[str, float] = {}
+
+
+def _notify_job(job: "JobStatus", status_changed: bool = False) -> None:
+    """``job_updated`` over the websocket: every status change at once, progress at most once a second."""
+    now = time.time()
+    if not status_changed and now - _last_job_event.get(job.id, 0.0) < _JOB_EVENT_GAP:
+        return
+    _last_job_event[job.id] = now
+    try:
+        from utils.event_broadcaster import broadcast_event
+        broadcast_event("job_updated", {"id": job.id, "status": job.status, "progress": job.progress,
+                                        "message": job.message, "project_name": job.project_name,
+                                        "episode_name": job.episode_name})
+    except Exception:
+        pass
+    if job.status in _TERMINAL:
+        _last_job_event.pop(job.id, None)
+
+
 def update_job(
     job_id: str,
     status: str = None,
@@ -356,5 +448,4 @@ def update_job(
         job.scenes_total = scenes_total
     
     _sync_job_to_db(job)
-
-
+    _notify_job(job, status_changed=bool(status))

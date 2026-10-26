@@ -2,7 +2,7 @@ import json
 import sqlite3
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from utils.jobs_manager import jobs
+from utils.jobs_manager import jobs, update_job
 from utils.translation_queue import DB_FILE, TranslationQueue
 
 router = APIRouter()
@@ -12,15 +12,19 @@ router = APIRouter()
 async def get_job(job_id: str):
     if job_id in jobs:
         if job_id.startswith("bg_"):
+            # The queue row is the truth for a worker job: when the two disagree, follow the row.
             try:
                 target_id = job_id[3:]
                 q_item = TranslationQueue().get_item(target_id)
-                if q_item and q_item["status"] in ("completed", "failed", "cancelled"):
-                    if jobs[job_id].status != q_item["status"]:
-                        jobs[job_id].status = q_item["status"]
-                        if q_item["status"] == "completed":
-                            jobs[job_id].progress = 100.0
-                            jobs[job_id].message = "Translation completed."
+                job = jobs[job_id]
+                if q_item is None and job.status not in ("completed", "failed", "cancelled"):
+                    update_job(job_id, status="cancelled", message="Removed from the queue.")
+                elif q_item and q_item["status"] in ("completed", "failed", "cancelled") and job.status != q_item["status"]:
+                    final = q_item["status"]
+                    message = {"completed": "Translation completed.",
+                               "failed": f"Failed: {q_item.get('last_error') or 'see the queue'}",
+                               "cancelled": "Cancelled."}[final]
+                    update_job(job_id, status=final, progress=100.0 if final == "completed" else None, message=message)
             except Exception:
                 pass
         return jobs[job_id]
@@ -52,6 +56,11 @@ async def get_job(job_id: str):
         raise HTTPException(status_code=500, detail=f"Database lookup failed: {e}")
 
     if not row:
+        if job_id.startswith("bg_"):
+            # The row is gone (cleared or deleted): a final answer, so a client stops asking.
+            return {"id": job_id, "status": "cancelled", "progress": 0.0, "message": "Removed from the queue.",
+                    "logs": [], "result": None, "scene_status": {}, "cancelled": True, "completed_episodes": [],
+                    "failed_episodes": [], "rate_limit_hits": 0, "daily_limit_reached": False, "parent_id": None}
         raise HTTPException(status_code=404, detail="Job not found")
 
     status = row["status"]
