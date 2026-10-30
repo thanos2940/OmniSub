@@ -107,12 +107,80 @@ letters, root ignoring read-only files, no sentence-transformers) and are enviro
 
 ### Still open
 - Merge `claude/tender-pascal-go38dg` into `main` and push `main`; then the server steps below.
-- Command palette's light/dark toggle has no effect: Tailwind uses `darkMode: 'media'`, nothing reads
-  `localStorage.theme`. Dark mode follows the OS. Decide: drop the command or switch to `class` + init.
-- GitHub push webhook (`/api/webhooks/github`) is not under the auth exemption (`/api/webhook/` only) and
-  accepts unsigned pushes when no secret is set; its settings card stays out (the updater follows
-  `origin/main` by itself). Exempt + require a secret if it is ever re-added.
+- ~~Command palette's light/dark toggle has no effect~~ (2026-10-30: `darkMode: 'class'`, see below).
+- ~~GitHub push webhook accepts unsigned pushes when no secret is set~~ (2026-10-30: it now refuses every
+  event without `github_webhook_secret`). Its settings card stays out; exempting it from the API key is only
+  needed if it is ever re-added.
 - `/api/system/status` `port` is null under plain uvicorn (set by `run_server.py`; fine on the server).
+
+### Review 2026-10-30: cancellation, the runner's claims, cleanup (branch `claude/ecstatic-lovelace-efom9o`)
+Found by reading the queue/runner/worker/autopilot paths end to end and driving the UI against the fake agy.
+Every item has a regression test (`tests/test_cancel_and_cleanup.py` unless noted); full suite: same 20
+environment-only failures on Linux as before, nothing new.
+- **Cancel never reached the runner.** Cancel, Stop, Delete, "cancel all", "clear the queue", a job cancel,
+  the pipeline cascade and the Autopilot (file deleted in Sonarr) only flipped the row; the lane kept
+  translating, submitted, exported, and `update_status(completed)` brought the cancelled row back as
+  completed (MorpiceHub then saw "completed" too). Now every path goes through
+  `queue_service.cancel_item` (worker task, job flag, agent workspace, row); `cancel_agent_task` tells the
+  runner (`AgentRunner.cancel_task`), which kills that lane's CLI request so the lane moves on at once;
+  `_ask` treats a failure on a workspace that is no longer its own as a stop, not a model failure; and
+  `submit_task_result` refuses when the row is cancelled or gone. `POST /api/queue/{id}/release` puts an
+  orphaned running row back to pending (the Active Tasks "Release" used to cancel it).
+- `/api/queue/cancel-all` ignored the UI's `?status=` (always "active"); it now honours it. The Activity
+  menu has "Cancel waiting translations" and "Cancel all translations" instead of one mislabelled item.
+- **The runner ignored `next_retry_at`**: an episode whose share was offline was re-claimed in a tight loop
+  and spent its five extraction attempts in seconds. `_pending_items` now waits for the retry time.
+- **Extraction inside the claim lock**: building a workspace may extract the source subtitle from the video
+  (minutes); it ran under `claim_lock`, so no other lane could claim meanwhile. The claim
+  (`claim_item`) stays under the lock, the build (`build_claimed_workspace`) runs outside it; the claim is
+  held as `claim:<id>` so per-show limits stay exact, the lane shows "preparing the episode", the Activity
+  snapshot shows "being prepared" instead of "orphaned", `release_item` refuses it, and a cancel during the
+  build closes the new workspace.
+- **Give-ups were invisible**: an episode that failed twice stayed `pending` for nobody (and a Retry did
+  nothing until a restart). It is now marked failed with the reason (History shows it with Retry) and the
+  count is forgotten so a Retry works; give-ups inside a run of crashes that stops the runner are put back
+  to pending (the fault was not the episode's). `test_agent_runner.py::TestCrashes` updated.
+- **Autopilot undid cancels**: a cancelled row counted as a failed attempt and was queued again 5 min later
+  (three times). It now parks the item as skipped, reason `cancelled` (`test_autopilot_pipeline.py`).
+- **A restart cancelled model-engine work**: `worker.stop()` cancels its tasks and the handler marked the
+  rows cancelled, so they never resumed. During shutdown (`worker.stopping`) and without a user cancel they
+  go back to pending. `worker.cancel_task`/`trigger` are thread-safe now (they are called from threads).
+  The worker's idle wait woke on "new item AND a translation finished" (gather); it is FIRST_COMPLETED now.
+- **Process cleanup**: one-off agy requests (`agy_llm`) were not killed at shutdown and their timeout timer
+  was non-daemon (shutdown could wait 5 min); `stop_all` kills them and they end as `stopped` instead of
+  trying the fallback model. On POSIX the CLI runs in its own process group and the whole group is killed
+  (a launcher's child kept the output pipe open, so a killed CLI could still hold a lane).
+- **One working folder for every CLI request** (`agent_cli.call_dir()`, in the system temp folder): lanes ran
+  each request in the episode's workspace, inside the repo when `DATA_DIR` is `backend/`. Claude Code and the
+  Gemini CLI put the working folder into the context they send (the Gemini CLI also its listing) and read
+  CLAUDE.md / GEMINI.md from it and its parents, so every episode's prompt differed early on and could pull in
+  the checkout's own files. What Antigravity sends about its folder is not documented; one stable, empty
+  folder costs nothing either way and keeps the CLI's preamble plus the show's shared block identical from
+  request to request, which is what provider prefix caching needs.
+- **Closed workspaces piled up** (each with the episode and a copy of the glossary): the maintenance loop
+  deletes completed/cancelled/expired/released ones older than 7 days (`prune_closed_workspaces`).
+- `/api/queue` did its SQLite reads and one metadata file per finished item on the event loop; it runs in a
+  thread now. Sonarr/Radarr webhook token compared in constant time.
+- UI: the runner panel's "Last error" disappears once something succeeded after it; History offers Retry only
+  for failed/cancelled rows (it did nothing for completed ones); the floating Active Tasks panel waits as its
+  pill on the Activity page (it covered the running rows' Cancel buttons) and opens again elsewhere; the
+  Active Tasks text says "Building the show's context…" during the bootstrap; dark mode is `darkMode:
+  'class'` with a pre-paint script in index.html (`src/utils/theme.js`): the palette toggle works and is
+  remembered, "Use the system theme" goes back to following the OS.
+- Tests: `test_auto_update.py::test_apply_update_executes_when_idle` ran a real `npm ci && npm run build` and
+  replaced `backend/static` (network, and a working UI on the PC); it builds nothing now. The fake agy also
+  records each request's working folder (`call_NNN.cwd`).
+
+Not changed, worth knowing:
+- **Session reuse per show** was considered and rejected: a resumed CLI conversation re-sends its whole
+  history every request (tokens and quota grow with every episode, quality drops with context length, lanes
+  could no longer run a show's episodes in parallel, and a failure poisons the session). The runner's
+  stateless requests with the shared block first (guide, style rules), then a curated per-chunk context
+  (three episode summaries, matching glossary terms, characters, the last 8 translated lines) are the
+  better design; the stable working folder above is what lets prefix caching do its part.
+- Two lanes on a new show: the second waits on the per-show bootstrap lock and then finds the context built
+  (no second request), so it idles for the bootstrap's duration. `per_show` 1 avoids that if it matters.
+- `/api/agent/runner/start` has no `bootstrap` field (only `PUT /api/agent/runner/config` sets it).
 
 ### Frontend map (CLAUDE.md is git-ignored, so here)
 Routes: `/` Library · `/activity?tab=queue|history|autopilot` · `/review` · `/settings?section=translation|
