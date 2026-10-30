@@ -555,7 +555,9 @@ class AutopilotPipeline:
                 return True
             return False
         status = row["status"]
-        if status in ("failed", "cancelled"):
+        if status == "cancelled":
+            return await self._cancelled(item, "extraction")
+        if status == "failed":
             await self._fail_attempt(item, f"extraction {status}: {_short(row.get('last_error'))}")
             return True
         if status == "completed":
@@ -572,12 +574,23 @@ class AutopilotPipeline:
                 return True
             return False
         status = row["status"]
-        if status in ("failed", "cancelled"):
+        if status == "cancelled":
+            return await self._cancelled(item, "translation")
+        if status == "failed":
             await self._fail_attempt(item, f"translation {status}: {_short(row.get('last_error'))}")
             return True
         if status != "completed":
             return False  # pending, running, paused for quota...: the engine's business
         return await self._verify(item)
+
+    async def _cancelled(self, item: Dict, what: str) -> bool:
+        """Someone cancelled the queue row (a person in Activity, the project set to Ignored): that is a decision,
+        not a failure, so the item is parked as skipped instead of being queued again by the retries. Retry in
+        the Autopilot list brings it back."""
+        updated = self.store.transition(item["id"], "skipped", reason="cancelled",
+                                        message=f"the {what} was cancelled in the queue")
+        await self._emit("skipped", updated, reason="cancelled")
+        return True
 
     async def _verify(self, item: Dict) -> bool:
         meta = await self._blocking(storage.load_episode_metadata, item["project_name"], item["episode_name"])

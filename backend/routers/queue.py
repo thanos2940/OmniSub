@@ -26,7 +26,7 @@ async def get_queue_status(reconcile: bool = False, project: Optional[str] = Non
     """Queue items (100 at most) and summary. ``project`` narrows items and extractions to that project
     (case-insensitive) with a much higher cap, so a page about one show sees all its queued work."""
     global _last_queue_reconcile_at
-    import time, asyncio
+    import time
     from services.agent_task_service import agent_task_service
     now = time.monotonic()
     if reconcile or (now - _last_queue_reconcile_at >= 5.0):
@@ -37,7 +37,13 @@ async def get_queue_status(reconcile: bool = False, project: Optional[str] = Non
                 await asyncio.to_thread(agent_task_service.reconcile_queue_with_storage)
         except Exception:
             pass
+    # SQLite and an episode metadata file per finished item: off the event loop, which the WebSocket, every
+    # other request and the worker share.
+    return await asyncio.to_thread(_queue_status, project)
 
+
+def _queue_status(project: Optional[str]):
+    from services.agent_task_service import agent_task_service
     queue = TranslationQueue()
     from utils import storage
     from utils.concurrency_controller import concurrency_manager
@@ -53,7 +59,7 @@ async def get_queue_status(reconcile: bool = False, project: Optional[str] = Non
     # Agent-routed items: tag them, and give claimed ones the agent's live progress
     # (measured from its work file, since no in-process job tracks an external agent).
     try:
-        active_agent = {t["queue_id"]: t for t in await asyncio.to_thread(agent_task_service.list_active_tasks)}
+        active_agent = {t["queue_id"]: t for t in agent_task_service.list_active_tasks()}
     except Exception:
         active_agent = {}
     import json as _json
@@ -138,18 +144,27 @@ class CancelAllRequest(BaseModel):
     status: Optional[str] = "active"
 
 
-@router.post("/api/queue/cancel-all")
-async def cancel_all_queue_items(request: Optional[CancelAllRequest] = None):
-    """Cancel all pending, running, or active queue items and terminate running worker jobs."""
-    queue = TranslationQueue()
-    target_status = (request.status if request and request.status else "active")
-    
-    # Cancel running background worker jobs
+def _stop_running_work() -> None:
+    """Before rows that may be running are cancelled or removed: abort the worker's translations and close
+    the agents' workspaces (runner lanes on them let go at once), so nothing is saved for them later."""
     from services.background_worker import worker
+    from services.queue_service import cancel_agent_claims
     worker.cancel_all_tasks()
+    cancel_agent_claims()
 
+
+@router.post("/api/queue/cancel-all")
+async def cancel_all_queue_items(request: Optional[CancelAllRequest] = None, status: Optional[str] = None):
+    """Cancel queue items by status: ``active`` (the default: waiting and running), ``pending`` (waiting only),
+    ``running``. Work on running items stops (worker jobs aborted, agent workspaces closed). The status may come
+    in the body or the query string."""
+    queue = TranslationQueue()
+    target_status = (request.status if request and request.status else None) or status or "active"
+    if target_status in ("active", "all", "running"):
+        await asyncio.to_thread(_stop_running_work)
     cancelled_count = queue.cancel_all(target_status)
-    return {"status": "success", "cancelled_count": cancelled_count, "target_status": target_status}
+    return {"status": "success", "cancelled_count": cancelled_count, "cancelled": cancelled_count,
+            "target_status": target_status}
 
 
 @router.delete("/api/queue/clear")
@@ -162,10 +177,9 @@ async def clear_queue(status: Optional[str] = None, request: Optional[ClearQueue
     if not target_status:
         target_status = "history"
 
-    # If clearing all or active/pending, also abort running worker tasks
-    if target_status in ("all", "active", "pending", "*"):
-        from services.background_worker import worker
-        worker.cancel_all_tasks()
+    # Rows that may be running are removed: stop the work on them first (worker and agents alike).
+    if target_status in ("all", "active", "*"):
+        await asyncio.to_thread(_stop_running_work)
 
     cleared_count = queue.clear(target_status)
     return {"status": "success", "cleared_count": cleared_count, "target_status": target_status}
@@ -173,9 +187,9 @@ async def clear_queue(status: Optional[str] = None, request: Optional[ClearQueue
 
 @router.delete("/api/queue/{item_id}")
 async def delete_queue_item(item_id: str):
-    """Permanently delete a single queue item."""
-    from services.background_worker import worker
-    worker.cancel_task(item_id)
+    """Permanently delete a single queue item (work on it is stopped first)."""
+    from services.queue_service import cancel_item
+    await asyncio.to_thread(cancel_item, item_id)
     queue = TranslationQueue()
     deleted = queue.delete_item(item_id)
     return {"status": "success", "deleted": deleted}
@@ -246,11 +260,20 @@ async def retry_queue_item(item_id: str):
 
 @router.post("/api/queue/{item_id}/cancel")
 async def cancel_queue_item(item_id: str):
-    from services.background_worker import worker
-    worker.cancel_task(item_id)
-    queue = TranslationQueue()
-    queue.cancel(item_id)
+    from services.queue_service import cancel_item
+    await asyncio.to_thread(cancel_item, item_id)
     return {"status": "success"}
+
+
+@router.post("/api/queue/{item_id}/release")
+async def release_queue_item(item_id: str):
+    """Put an item marked running that nothing works on (an orphan) back in the queue, to be translated again."""
+    from fastapi import HTTPException
+    from services.queue_service import release_item
+    if not await asyncio.to_thread(release_item, item_id):
+        raise HTTPException(status_code=409, detail="Not put back: it is not marked running, or it is being "
+                                                    "worked on right now (cancel it instead).")
+    return {"status": "success", "released": True, "item_id": item_id}
 
 
 @router.post("/api/queue/{item_id}/prioritize")
@@ -297,6 +320,6 @@ async def continue_queue_item(item_id: str, request: Optional[ContinueRequest] =
 @router.post("/queue/{item_id}/stop")
 async def stop_queue_item(item_id: str):
     from services.queue_service import stop_item
-    success = stop_item(item_id)
+    success = await asyncio.to_thread(stop_item, item_id)
     return {"status": "success" if success else "not_found", "item_id": item_id}
 

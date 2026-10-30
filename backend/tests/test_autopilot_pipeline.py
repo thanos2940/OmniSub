@@ -611,6 +611,23 @@ async def test_failed_extraction_is_retried(env):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", [KIND_TRANSLATION, KIND_EXTRACTION])
+async def test_a_row_cancelled_in_the_queue_parks_the_item_instead_of_retrying(env, kind):
+    """A person cancelling the episode in Activity (or the project set to Ignored) decided against it: the item is
+    skipped, not queued again five minutes later by the retries."""
+    item = env.make(sidecars=[(".en.srt", SRT)]) if kind == KIND_TRANSLATION else env.make(tracks=[track(2, "ass")])
+    await env.run(item)
+    row = env.queue.find_item("Show", "S01E01", "", kind)
+    env.queue.cancel(row["id"])
+    assert await env.pipeline.track_active() == 1
+    item = env.store.get(item["id"])
+    assert (item["state"], item["reason"], item["attempts"]) == ("skipped", "cancelled", 0)
+    env.clock.advance(days=1)
+    assert env.store.due_items(env.clock()) == []
+    assert env.queue.find_item("Show", "S01E01", "", kind)["status"] == "cancelled"   # nothing queued again
+
+
+@pytest.mark.asyncio
 async def test_lost_translation_job_is_routed_again(env):
     item = env.make(sidecars=[(".en.srt", SRT)])
     await env.run(item)

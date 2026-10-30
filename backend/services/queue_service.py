@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Union
@@ -212,9 +213,120 @@ def continue_item(item_id: Union[str, int], boost_priority: bool = True) -> bool
     return res
 
 
+ACTIVE_STATUSES = ("pending", "queued", "running", "paused", "paused_daily_limit", "postponed")
+
+
+def _row_options(row: Optional[Dict]) -> Dict:
+    raw = (row or {}).get("options")
+    if isinstance(raw, dict):
+        return raw
+    try:
+        value = json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def cancel_item(item_id: Union[str, int], queue: Optional[TranslationQueue] = None) -> bool:
+    """Cancel one queue item wherever its work is. A waiting row is cancelled; a worker job on it is aborted;
+    an episode an agent holds (the runner, or someone running agent_task.py) has its workspace closed and the
+    runner lane on it cut off, so nothing is saved or exported for it afterwards. Every cancel in the app goes
+    through here. ``queue``: the queue the caller works with (the worker's). True when an active item was
+    cancelled."""
+    queue = queue or get_queue()
+    item_id = str(item_id)
+    row = queue.get_item(item_id)   # None: only an in-memory job or a worker task may be left to stop
+    was_active = bool(row) and row.get("status") in ACTIVE_STATUSES
+    try:
+        from utils.jobs_manager import jobs
+        job = jobs.get(f"bg_{item_id}")
+        if job is not None:
+            job.cancelled = True
+    except Exception:
+        pass
+    try:
+        from services.background_worker import worker
+        worker.cancel_task(item_id)
+    except Exception as e:
+        logger.debug(f"Could not cancel the worker task of {item_id}: {e}")
+    task_id = _row_options(row).get("agent_task_id") if row else None
+    if task_id:
+        try:
+            from services.agent_task_service import agent_task_service
+            agent_task_service.cancel_agent_task(task_id)
+        except Exception as e:
+            logger.warning(f"Could not close the agent workspace {task_id} of {item_id}: {e}")
+    queue.cancel(item_id)
+    if not was_active:
+        return False
+    now = queue.get_item(item_id)
+    return bool(now) and now.get("status") == "cancelled"
+
+
+def cancel_agent_claims() -> int:
+    """Close the workspace of every episode an agent holds (``running`` rows with an agent task), cutting off
+    the runner lanes on them: what "cancel everything" and "clear the queue" do before touching the rows.
+    Returns how many."""
+    queue = get_queue()
+    with queue._conn() as conn:
+        rows = conn.execute("SELECT id, options FROM translation_queue WHERE status = 'running' AND kind = ?",
+                            (KIND_TRANSLATION,)).fetchall()
+    task_ids = [t for t in (_row_options(dict(r)).get("agent_task_id") for r in rows) if t]
+    if not task_ids:
+        return 0
+    from services.agent_task_service import agent_task_service
+    closed = 0
+    for task_id in task_ids:
+        try:
+            closed += bool(agent_task_service.cancel_agent_task(task_id))
+        except Exception as e:
+            logger.warning(f"Could not close the agent workspace {task_id}: {e}")
+    return closed
+
+
+def release_item(item_id: Union[str, int]) -> bool:
+    """Hand an item marked ``running`` back to the queue (pending) so it is translated again by whoever takes it
+    next: for a row nothing works on any more (an orphan, after a crash or a stopped runner). An agent's claim
+    is released (its workspace closed, a runner lane still on it lets go); a row the worker is processing right
+    now is left alone. True when the row is pending again."""
+    queue = get_queue()
+    item_id = str(item_id)
+    row = queue.get_item(item_id)
+    if not row or row.get("status") != "running":
+        return False
+    try:
+        from services.background_worker import worker
+        task = worker.active_tasks.get(item_id)
+        if task is not None and not task.done():
+            return False
+    except Exception:
+        pass
+    try:
+        from services import agent_runner
+        runner = agent_runner.current_runner()
+        if runner is not None and item_id in runner.preparing():
+            return False   # a lane is preparing it right now (extracting its subtitle, say): not an orphan
+    except Exception:
+        pass
+    task_id = _row_options(row).get("agent_task_id")
+    if task_id:
+        from services.agent_task_service import agent_task_service
+        agent_task_service.release_agent_task(task_id)
+        agent_task_service._stop_runner_lane(task_id)
+    with queue._conn() as conn:
+        conn.execute("UPDATE translation_queue SET status = 'pending', started_at = NULL WHERE id = ? AND status = 'running'",
+                     (item_id,))
+        conn.commit()
+    queue._changed("release_item")
+    _wake_worker()
+    _wake_runner()
+    now = queue.get_item(item_id)
+    return bool(now) and now.get("status") == "pending"
+
+
 def stop_item(item_id: Union[str, int]) -> bool:
-    """Stop/cancel a queue item and abort any running worker job."""
-    return get_queue().stop_item(item_id)
+    """Stop/cancel a queue item and abort any work on it (``cancel_item``)."""
+    return cancel_item(item_id)
 
 
 def list_queue_items(limit: int = 100, work_types: Optional[Union[tuple, list, str]] = None) -> List[Dict]:

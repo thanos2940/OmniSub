@@ -29,28 +29,39 @@ class BackgroundTranslationWorker:
         self._new_item_event = asyncio.Event()
         self.active_tasks: dict = {}  # Dict[str, asyncio.Task] mapping item_id -> running Task
         self._last_task_sync_at = 0.0
+        self._loop: Optional[asyncio.AbstractEventLoop] = None   # the loop the worker runs on (set by start)
 
     def cancel_task(self, item_id: str) -> bool:
-        """Cancel an in-flight translation task by queue item_id."""
+        """Cancel an in-flight translation task by queue item_id (callable from any thread)."""
         task = self.active_tasks.get(item_id)
         if task and not task.done():
-            task.cancel()
+            loop = task.get_loop()
+            try:
+                here = asyncio.get_running_loop()
+            except RuntimeError:
+                here = None
+            if here is loop or not loop.is_running():
+                task.cancel()
+            else:   # a request handler's thread or the autopilot's: Task.cancel is not thread-safe
+                loop.call_soon_threadsafe(task.cancel)
             return True
         return False
 
+    @property
+    def stopping(self) -> bool:
+        """The server is shutting down: a translation cut off now is resumed at the next start, not cancelled."""
+        return self._shutdown_event.is_set()
+
     def cancel_all_tasks(self) -> int:
-        """Cancel all in-flight translation tasks."""
-        cancelled = 0
-        for task in list(self.active_tasks.values()):
-            if not task.done():
-                task.cancel()
-                cancelled += 1
+        """Cancel all in-flight translation tasks (callable from any thread)."""
+        cancelled = sum(1 for item_id in list(self.active_tasks) if self.cancel_task(item_id))
         self.active_tasks.clear()
         self.trigger()
         return cancelled
 
     def start(self):
         if not self.running_task or self.running_task.done():
+            self._loop = asyncio.get_running_loop()
             self._shutdown_event.clear()
             self._new_item_event.clear()
             self.running_task = asyncio.create_task(self._run_loop())
@@ -67,8 +78,17 @@ class BackgroundTranslationWorker:
             logger.info("BackgroundTranslationWorker stopped.")
 
     def trigger(self):
-        """Wake up the worker loop immediately to process a new task."""
-        self._new_item_event.set()
+        """Wake up the worker loop immediately to process a new task (callable from any thread: enqueues
+        happen in request threads and the runner's lanes; asyncio.Event.set is not thread-safe)."""
+        loop = self._loop
+        try:
+            here = asyncio.get_running_loop()
+        except RuntimeError:
+            here = None
+        if loop is None or not loop.is_running() or here is loop:
+            self._new_item_event.set()
+        else:
+            loop.call_soon_threadsafe(self._new_item_event.set)
 
     @staticmethod
     def _within_window(now, start_str: str, end_str: str) -> bool:
@@ -176,18 +196,16 @@ class BackgroundTranslationWorker:
                     except Exception:
                         pass
 
-                    wait_coros = [self._new_item_event.wait()]
-                    if active_tasks:
-                        wait_coros.append(asyncio.wait(active_tasks, return_when=asyncio.FIRST_COMPLETED))
-                    
+                    # Whichever comes first: a new item, a running translation finishing, or the timeout (a
+                    # gather here waited for a new item AND a finished translation, so a queued episode sat
+                    # until the timeout while others were translating).
+                    waiter = asyncio.ensure_future(self._new_item_event.wait())
                     try:
-                        await asyncio.wait_for(
-                            asyncio.gather(*wait_coros, return_exceptions=True) if len(wait_coros) > 1 else wait_coros[0],
-                            timeout=timeout_val
-                        )
-                    except asyncio.TimeoutError:
-                        pass
-                        
+                        await asyncio.wait({waiter, *active_tasks}, timeout=timeout_val,
+                                           return_when=asyncio.FIRST_COMPLETED)
+                    finally:
+                        waiter.cancel()
+
                     self._new_item_event.clear()
                     completed = {t for t in active_tasks if t.done()}
                     active_tasks.difference_update(completed)

@@ -138,8 +138,10 @@ async def _batch_loop():
 
 
 async def _maintenance_loop():
-    """Periodic housekeeping: evict old in-memory jobs."""
+    """Periodic housekeeping: evict old in-memory jobs, prune telemetry and finished agent workspaces."""
+    import time as _time
     from utils.jobs_manager import evict_old_jobs
+    pruned_at = float("-inf")   # the first tick (3 min after start) prunes
     while True:
         try:
             await asyncio.sleep(180)
@@ -167,6 +169,14 @@ async def _maintenance_loop():
                 await asyncio.to_thread(agent_runner.recover)
             except Exception:
                 pass
+            # Workspaces of finished episodes (each a copy of the episode and the show's glossary), hourly.
+            if _time.monotonic() - pruned_at >= 3600:
+                pruned_at = _time.monotonic()
+                try:
+                    from services.agent_task_service import agent_task_service
+                    await asyncio.to_thread(agent_task_service.prune_closed_workspaces)
+                except Exception as e:
+                    logger.warning(f"Pruning finished agent workspaces failed (non-critical): {e}")
         except asyncio.CancelledError:
             break
         except Exception as e:

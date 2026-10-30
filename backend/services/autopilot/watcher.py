@@ -428,12 +428,13 @@ class ArrWatcher:
             if other["id"] != item["id"] and other["state"] in CANCEL_STATES:
                 return
         try:
+            from services.queue_service import cancel_item
             from utils.translation_queue import KIND_EXTRACTION, KIND_TRANSLATION, TranslationQueue
             queue = TranslationQueue()
             for kind in (KIND_EXTRACTION, KIND_TRANSLATION):
                 row = queue.find_item(project, episode, "", kind)
                 if row and row["status"] in ("pending", "running", "paused_daily_limit"):
-                    queue.cancel(row["id"])
+                    cancel_item(row["id"])   # a runner lane on it stops too: the file is gone
         except Exception as e:
             logger.warning(f"Could not cancel queue rows for {project}/{episode}: {e}")
 

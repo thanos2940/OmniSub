@@ -931,11 +931,15 @@ class TestCrashes:
         assert all(t is None for _, t in _greek(episode="S01E01"))
         log = _log(runner)
         assert "failed with an unexpected error (RuntimeError: boom)" in log
-        assert "left for a person" in log  # tried twice (MAX_FAILURES), then left
+        assert "put back in the queue" in log   # the first attempt
+        assert f"marked failed after {agent_runner.MAX_FAILURES} attempts" in log
         rows = {r["episode_name"]: r for r in TranslationQueue().get_all(limit=10)}
-        assert rows["S01E01"]["status"] == "pending"      # given back, not stuck as running
+        # Given up visibly: failed with the reason (History shows it with a Retry), not pending for nobody.
+        assert rows["S01E01"]["status"] == "failed"
+        assert "gave up after 2 attempts" in rows["S01E01"]["last_error"] and "boom" in rows["S01E01"]["last_error"]
         assert rows["S01E02"]["status"] == "completed"
-        assert runner.failures and max(runner.failures.values()) == agent_runner.MAX_FAILURES
+        assert runner.gave_up == 1 and runner.failures == {}   # a Retry starts counting again
+        assert "1 episode(s) failed 2 times and are marked failed" in runner.message
 
     def test_a_run_of_crashes_stops_the_runner(self, tmp_path, monkeypatch):
         _show(episodes=tuple(f"S01E{n:02d}" for n in range(1, 7)))

@@ -45,6 +45,7 @@ logger = logging.getLogger("omnisub.agent_task")
 
 AGENT_TASKS_DIR = DATA_DIR / "agent_tasks"
 DEFAULT_CLAIM_TTL_HOURS = 12.0
+CLOSED_WORKSPACE_DAYS = 7.0      # a finished workspace is deleted after this long (prune_closed_workspaces)
 GUIDE_MAX_CHARS = 6000           # the context guide stops growing here (every prompt carries it)
 GUIDE_ADDITIONS_HEADING = "## Story so far"
 
@@ -337,7 +338,6 @@ class AgentTaskService:
         ``next`` always hands the agent real work or reports an empty queue.
         """
         self.housekeeping()
-        q = TranslationQueue()
         skipped: List[Dict[str, Any]] = []
         for _ in range(50):
             item = self._claim_specific(queue_item_id) if queue_item_id else self._claim_from_queue()
@@ -347,18 +347,9 @@ class AgentTaskService:
                 if skipped:
                     res["finalized_without_work"] = skipped
                 return res
-            if _ignored_item(item, _options(item)):
-                q.update_status(item["id"], status="cancelled", error="Project set to Ignored", completed_at=_now())
+            res = self.build_claimed_workspace(item)
+            if res.get("status") == "ignored":
                 continue
-            try:
-                res = self._build_workspace(item)
-            except Exception as exc:
-                # The row is already 'running' (claimed): give it back, or it would look like live work
-                # with nobody on it until the claim TTL.
-                logger.exception(f"Could not build a workspace for {item['project_name']} {item['episode_name']}")
-                self._release(item["id"], f"workspace build failed: {exc}")
-                self._broadcast("queue_updated", {"reason": "agent_claim_failed", "queue_id": item["id"]})
-                raise
             if res.get("status") in ("nothing_to_translate", "missing_source") and not queue_item_id:
                 skipped.append({k: res.get(k) for k in ("project_name", "episode_name", "status", "message")})
                 continue
@@ -370,6 +361,44 @@ class AgentTaskService:
 
     def claim(self, queue_item_id: Optional[str] = None) -> Dict[str, Any]:
         return self.prepare_task_workspace(queue_item_id)
+
+    def claim_item(self, queue_item_id: str) -> Optional[Dict[str, Any]]:
+        """Claim one waiting queue item (pending -> running) without building its workspace; None when it is no
+        longer waiting. ``build_claimed_workspace`` does the rest."""
+        return self._claim_specific(queue_item_id)
+
+    def build_claimed_workspace(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the workspace of an item already claimed (its row is ``running``). Apart from the claim so that a
+        caller claiming under its own lock (the agent runner) builds outside it: a build may first pull the source
+        subtitle out of the video, which takes minutes. An item of an Ignored project is cancelled (status
+        ``ignored``); a build that fails gives the item back to the queue and raises."""
+        if _ignored_item(item, _options(item)):
+            TranslationQueue().update_status(item["id"], status="cancelled", error="Project set to Ignored",
+                                             completed_at=_now())
+            return {"success": False, "status": "ignored", "queue_id": item["id"],
+                    "project_name": item["project_name"], "episode_name": item["episode_name"]}
+        try:
+            res = self._build_workspace(item)
+        except Exception as exc:
+            # The row is already 'running' (claimed): give it back, or it would look like live work
+            # with nobody on it until the claim TTL.
+            logger.exception(f"Could not build a workspace for {item['project_name']} {item['episode_name']}")
+            self._release(item["id"], f"workspace build failed: {exc}")
+            self._broadcast("queue_updated", {"reason": "agent_claim_failed", "queue_id": item["id"]})
+            raise
+        if res.get("status") == "claimed":
+            row = TranslationQueue().get_item(item["id"])
+            if not row or row.get("status") != "running":
+                # Cancelled (or removed) while it was being prepared, e.g. during a long extraction.
+                folder = Path(res["workspace_dir"])
+                manifest = self._read_manifest(folder)
+                manifest.update(status="cancelled", cancelled_at=_now())
+                self._write_manifest(folder, manifest)
+                if row:
+                    self._set_item_options(item["id"], agent_task_id=None)
+                return {"success": False, "status": "cancelled", "queue_id": item["id"],
+                        "project_name": item["project_name"], "episode_name": item["episode_name"]}
+        return res
 
     def _claim_specific(self, queue_item_id: str) -> Optional[Dict[str, Any]]:
         q = TranslationQueue()
@@ -1483,6 +1512,17 @@ These are the same rules the API translator follows.
         if manifest.get("status") in ("cancelled", "expired"):
             return {"success": False, "status": manifest["status"], "task_id": task_id,
                     "message": f"Task '{task_id}' was {manifest['status']}; claim the episode again with `{cli_command('next')}`."}
+        if queue_id:
+            row = TranslationQueue().get_item(queue_id)
+            if row is None or row.get("status") == "cancelled":
+                # Cancelled (or removed with "Clear the queue") while it was being translated: nothing is saved,
+                # and the row is not brought back as completed.
+                manifest.update(status="cancelled", cancelled_at=_now())
+                self._write_manifest(folder, manifest)
+                return {"success": False, "status": "cancelled", "task_id": task_id,
+                        "project_name": project_name, "episode_name": episode_name,
+                        "message": f"{project_name} {episode_name} was cancelled while it was being translated; "
+                                   f"nothing was saved."}
 
         units = aw.units_from_plan(plan)
         translations = self._read_translations(folder, units, self._resolve_content(file_path_or_content, allow_file_path=True, allowed_dir=folder))
@@ -1790,7 +1830,8 @@ These are the same rules the API translator follows.
         return True
 
     def cancel_agent_task(self, task_id: str) -> bool:
-        """Cancel a task: its workspace is closed and the queue item cancelled."""
+        """Cancel a task: its workspace is closed, the queue item cancelled, and a runner lane working on it
+        lets go at once (its request in flight is cut off)."""
         folder = self._find_task_folder(task_id)
         if not folder:
             return False
@@ -1801,8 +1842,51 @@ These are the same rules the API translator follows.
             if manifest.get("queue_id"):
                 TranslationQueue().cancel(manifest["queue_id"])
                 self._set_item_options(manifest["queue_id"], agent_task_id=None)
+            self._stop_runner_lane(task_id)
         self._broadcast("queue_updated", {"reason": "agent_cancelled", "task_id": task_id})
         return True
+
+    @staticmethod
+    def _stop_runner_lane(task_id: str) -> None:
+        """Tell the agent runner (when this process has one) that the episode of ``task_id`` was cancelled."""
+        try:
+            from services import agent_runner
+            runner = agent_runner.current_runner()
+            if runner is not None:
+                runner.cancel_task(task_id)
+        except Exception as e:
+            logger.debug(f"Could not tell the runner about the cancelled task {task_id}: {e}")
+
+    def prune_closed_workspaces(self, older_than_days: float = CLOSED_WORKSPACE_DAYS) -> int:
+        """Delete workspaces closed (completed, cancelled, expired, released) more than ``older_than_days`` ago.
+        Each holds the episode's lines, its plan and a copy of the show's glossary; nothing reads a closed one
+        again, and over a library thousands pile up. Open claims are never touched, nor folders of older builds'
+        locations. Returns how many."""
+        cutoff = time.time() - older_than_days * 86400
+        closed = {"completed", "cancelled", "expired", "released"}
+        removed = 0
+        try:
+            entries = list(self.tasks_dir.iterdir())
+        except OSError:
+            entries = []
+        for folder in entries:
+            if not (folder.is_dir() and folder.name.startswith("task_")):
+                continue
+            try:
+                if (folder / "manifest.json").stat().st_mtime > cutoff:
+                    continue
+            except OSError:
+                continue
+            if self._read_manifest(folder).get("status") not in closed:
+                continue
+            try:
+                shutil.rmtree(folder)
+                removed += 1
+            except OSError as e:
+                logger.debug(f"Could not remove {folder}: {e}")
+        if removed:
+            logger.info(f"Removed {removed} closed agent workspace(s) older than {older_than_days:g} days.")
+        return removed
 
     def cancel_all_agent_tasks(self, status: Optional[str] = None) -> int:
         """Cancel every open (prepared) agent task."""

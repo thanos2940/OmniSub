@@ -130,6 +130,12 @@ async def get_job(job_id: str):
 
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str):
+    from services.background_worker import worker
+    from services.queue_service import cancel_item as _cancel_item
+
+    def cancel_item(item_id: str) -> bool:   # the worker's queue: the one its jobs live in
+        return _cancel_item(item_id, queue=getattr(worker, "queue", None))
+
     db_id = job_id
     if db_id.startswith("bg_"):
         db_id = db_id[3:]
@@ -143,34 +149,12 @@ async def cancel_job(job_id: str):
             job.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] Cancelled by user")
             
             if job.id.startswith("bg_"):
-                # Also cancel the queue item and cancel in-flight worker task
-                q = None
-                try:
-                    from services.background_worker import worker
-                    q = getattr(worker, "queue", None)
-                    worker.cancel_task(db_id)
-                except Exception:
-                    pass
-                if not q:
-                    q = TranslationQueue()
-                q.cancel(db_id)
+                # The queue item too, wherever its work is (worker task, agent runner lane).
+                cancel_item(db_id)
             else:
                 if job.sub_jobs:
-                    q = None
-                    try:
-                        from services.background_worker import worker
-                        q = getattr(worker, "queue", None)
-                    except Exception:
-                        pass
-                    if not q:
-                        q = TranslationQueue()
                     for child_id in job.sub_jobs:
-                        q.cancel(child_id)
-                        try:
-                            from services.background_worker import worker
-                            worker.cancel_task(child_id)
-                        except Exception:
-                            pass
+                        cancel_item(child_id)
                         child_job = jobs.get(f"bg_{child_id}")
                         if child_job:
                             child_job.cancelled = True
@@ -180,15 +164,6 @@ async def cancel_job(job_id: str):
         return {"status": "cancelled"}
 
     # Database/Queue fallback
-    q = None
-    try:
-        from services.background_worker import worker
-        q = getattr(worker, "queue", None)
-        worker.cancel_task(db_id)
-    except Exception:
-        pass
-    if not q:
-        q = TranslationQueue()
-    q.cancel(db_id)
+    cancel_item(db_id)
     return {"status": "cancelled"}
 

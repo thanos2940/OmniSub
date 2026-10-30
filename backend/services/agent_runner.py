@@ -49,7 +49,7 @@ import sys
 import threading
 import time
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -117,6 +117,9 @@ PAUSED_MESSAGE = "Translations are paused (Pause translations is on); episodes i
 GUIDE_GROWTH_EVERY = 6           # translated episodes between two rounds of additions to the context guide
 GUIDE_ADDITIONS_FILE = "guide_additions.txt"   # in an episode's workspace: the additions its reply asked for (empty: asked, none came)
 BOOTSTRAP_TIMEOUT = 600          # seconds the bootstrap request may take
+BOOTSTRAP_STATE = "building the show's context"   # a lane's state during the bootstrap
+PREPARING_STATE = "preparing the episode"          # ... while its workspace is built (maybe extracting the subtitle)
+CLAIM_PREFIX = "claim:"                            # held[] key of a claim whose workspace is being built
 CONTEXT_CACHE_SECONDS = 300      # a show's glossary matcher and prompt prefix are reused this long
 PID_STALE_SECONDS = 45 * 60      # a lock file not touched for this long belongs to a runner that died
 TERMINAL = ("completed", "cancelled", "expired", "released")
@@ -267,12 +270,15 @@ class AgentRunner:
         self.procs: Dict[int, subprocess.Popen] = {}
         self.lanes: Dict[int, Dict] = {}
         self.held: Dict[str, str] = {}           # task_id -> project, for episodes in a lane's hands
+        self._building = 0                       # claims whose workspace is being built (outside claim_lock)
         self.failures: Dict[str, int] = {}       # queue id -> failed attempts this session
+        self.gave_up = 0                         # episodes marked failed this session (MAX_FAILURES reached)
         self.log_lines: deque = deque(maxlen=1500)
         self.seq = 0
         self.session = {"episodes": 0, "lines": 0, "calls": 0, "tokens_in": 0, "tokens_out": 0, "quota_hits": 0}
         self.consecutive_errors = 0
         self.crashes = 0                         # unexpected errors in a row, reset by a submit
+        self._crash_run_failed: List[str] = []   # queue ids marked failed during the current run of crashes
         self._kept = 0.0
         self._swept = 0.0                        # when the service last released abandoned claims for us
         self._engines: Tuple[float, Dict] = (0.0, {})
@@ -513,11 +519,14 @@ class AgentRunner:
                 self.alive = 0
                 self.consecutive_errors = 0
                 self.crashes = 0
+                self._crash_run_failed = []
                 self.recovering = {}
                 self.quota_streak = {}
                 if not resumed:  # a restart after an error keeps the count, so a bad episode is not retried for ever
                     self.failures = {}
+                self.gave_up = 0
                 self.held = {}
+                self._building = 0
                 self._swept = 0.0
                 self._busy, self._busy_since, self._active = 0, 0.0, 0.0
                 self.lanes = {i: {"state": "starting", "task": None, "project": None, "episode": None, "model": None,
@@ -574,9 +583,28 @@ class AgentRunner:
         if self.draining.is_set():
             return "draining"
         limit = int(self.config["max_episodes"] or 0)
-        if limit and self.started >= limit:
+        if limit and self.started + self._building >= limit:
             return "limit"
         return None
+
+    def preparing(self) -> List[str]:
+        """Queue ids claimed by a lane whose workspace is being built right now."""
+        with self.lock:
+            return [k[len(CLAIM_PREFIX):] for k in self.held if k.startswith(CLAIM_PREFIX)]
+
+    def cancel_task(self, task_id: str) -> bool:
+        """An episode a lane holds was taken away from outside (cancelled, or released by hand; its workspace is
+        closed): cut off that lane's request in flight, so the lane lets go now rather than when the reply comes.
+        A show-context build in progress is left to finish, since it serves the show's next episodes too. True
+        when a lane held the episode."""
+        with self.lock:
+            lanes = [i for i, v in self.lanes.items() if v.get("task") == task_id]
+            procs = [self.procs[i] for i in lanes if i in self.procs and self.lanes[i].get("state") != BOOTSTRAP_STATE]
+        for proc in procs:
+            agent_cli.kill_process(proc)
+        if lanes:
+            self.log(f"Lane {lanes[0] + 1}: its episode was taken back from the queue ({task_id}); leaving it.", "warn")
+        return bool(lanes)
 
     def _paused(self) -> bool:
         """"Pause translations" (the queue's pause switch) is on: the lanes take no new episode, they finish the
@@ -804,14 +832,17 @@ class AgentRunner:
 
     def _pending_items(self) -> List[Dict]:
         """Pending translation items in claim order (``list_pending_tasks``' order), without its per-episode
-        metadata reads: id, project and episode are all a claim needs."""
+        metadata reads: id, project and episode are all a claim needs. An item whose retry time has not come
+        (a media share that was offline, a delayed request) waits for it, as it does for the worker."""
+        now = datetime.now(timezone.utc).isoformat()
         with TranslationQueue()._conn() as conn:
             rows = conn.execute("""
                 SELECT id, project_name, episode_name
                 FROM translation_queue
                 WHERE status IN ('pending', 'queued') AND kind = ?
+                  AND (next_retry_at IS NULL OR next_retry_at <= ?)
                 ORDER BY CASE WHEN priority = 10 THEN -2 ELSE priority END ASC, created_at ASC
-            """, (KIND_TRANSLATION,)).fetchall()
+            """, (KIND_TRANSLATION, now)).fetchall()
         return [{k: r[k] for k in ("id", "project_name", "episode_name")} for r in rows]
 
     def _pending_count(self) -> int:
@@ -840,38 +871,77 @@ class AgentRunner:
             self._swept = time.time()
         self.service.housekeeping()
 
-    def _next_task(self) -> Optional[Dict]:
+    def _next_task(self, lane: Optional[int] = None) -> Optional[Dict]:
+        """The next episode for a lane: one of the runner's own half-done claims first, else the next waiting item.
+        The claim is taken under ``claim_lock`` (so per-show limits stay exact); the workspace is built outside
+        it, because building may first pull the source subtitle out of the video, which takes minutes and must
+        not keep the other lanes from claiming. While it is built the item counts as held, and ``preparing``
+        lists it (the queue shows it as being prepared, not as an orphan)."""
         per_show = int(self.config["per_show"] or 1)
-        with self.claim_lock:
-            if self.stop_event.is_set() or self._no_new_work():
-                return None
-            with self.lock:
-                busy = dict(self.held)
+        for _ in range(50):   # items that turn out to need no work are passed over
+            with self.claim_lock:
+                if self.stop_event.is_set() or self._no_new_work():
+                    return None
+                with self.lock:
+                    busy = dict(self.held)
 
-            def show_full(project: str) -> bool:
-                return sum(1 for p in busy.values() if p == project) >= per_show
+                def show_full(project: str) -> bool:
+                    return sum(1 for p in busy.values() if p == project) >= per_show
 
-            for t in self._runner_tasks():
-                if t["task_id"] not in busy and not show_full(t["project_name"]):
-                    return self._hold(t)
-            self._housekeeping()
-            for item in self._pending_items():
-                if self.failures.get(item["id"], 0) >= MAX_FAILURES or show_full(item["project_name"]):
-                    continue
-                res = self.service.prepare_task_workspace(queue_item_id=item["id"])
-                self._queue_changed()
+                for t in self._runner_tasks():
+                    if t["task_id"] not in busy and not show_full(t["project_name"]):
+                        return self._hold(t)
+                self._housekeeping()
+                item = None
+                for row in self._pending_items():
+                    if self.failures.get(row["id"], 0) >= MAX_FAILURES or show_full(row["project_name"]):
+                        continue
+                    item = self.service.claim_item(row["id"])
+                    if item:
+                        break
+                if item is None:
+                    return None
+                placeholder = f"{CLAIM_PREFIX}{item['id']}"
+                with self.lock:
+                    self.held[placeholder] = item["project_name"]
+                    self._building += 1
+            if lane is not None:
+                self._lane_set(lane, state=PREPARING_STATE, task=placeholder, project=item["project_name"],
+                               episode=item["episode_name"], progress=None, units_done=0, units_total=0,
+                               since=_now_iso())
+            self._queue_changed()
+            placed = False
+
+            def unplace() -> None:
+                with self.lock:
+                    self.held.pop(placeholder, None)
+                    self._building -= 1
+
+            try:
+                res = self.service.build_claimed_workspace(item)
                 status = res.get("status")
                 if status == "claimed":
-                    folder = Path(res["workspace_dir"])
-                    manifest = self.service._read_manifest(folder)
-                    manifest["runner"] = {"engine": self.config["engine"], "claimed_at": _now_iso()}
-                    self.service._write_manifest(folder, manifest)
-                    return self._hold({k: res[k] for k in ("task_id", "queue_id", "project_name", "episode_name",
-                                                           "workspace_dir")})
-                if status == "nothing_to_translate":
-                    self.log(f"{item['project_name']} {item['episode_name']}: already fully translated (re-exported).")
-                elif status == "missing_source":
-                    self.log(res.get("message") or f"{item['project_name']} {item['episode_name']}: no source subtitle.", "warn")
+                    with self.claim_lock:   # stamped and held at once: no other lane may resume it as its own
+                        folder = Path(res["workspace_dir"])
+                        manifest = self.service._read_manifest(folder)
+                        manifest["runner"] = {"engine": self.config["engine"], "claimed_at": _now_iso()}
+                        self.service._write_manifest(folder, manifest)
+                        unplace()
+                        placed = True
+                        return self._hold({k: res[k] for k in ("task_id", "queue_id", "project_name", "episode_name",
+                                                               "workspace_dir")})
+            finally:
+                if not placed:
+                    unplace()
+                if lane is not None:
+                    self._lane_set(lane, state="between episodes", **NO_WORK)
+            self._queue_changed()
+            if status == "nothing_to_translate":
+                self.log(f"{item['project_name']} {item['episode_name']}: already fully translated (re-exported).")
+            elif status == "missing_source":
+                self.log(res.get("message") or f"{item['project_name']} {item['episode_name']}: no source subtitle.", "warn")
+            elif status == "cancelled":
+                self.log(f"{item['project_name']} {item['episode_name']}: cancelled while it was being prepared.", "warn")
         return None
 
     def _keep_claims(self) -> None:
@@ -888,11 +958,43 @@ class AgentRunner:
             pass
 
     def _empty_message(self) -> str:
-        stuck = sum(1 for n in self.failures.values() if n >= MAX_FAILURES)
-        if stuck:
-            return (f"Nothing more the runner can do: {stuck} episode(s) failed twice and stay in the queue for a "
-                    f"person (see the log). Runner stopped.")
+        if self.gave_up:
+            return (f"The queue is empty. {self.gave_up} episode(s) failed {MAX_FAILURES} times and are marked failed "
+                    f"(see the log; Retry them in Activity > History). Runner stopped.")
         return "The queue is empty. Runner stopped."
+
+    def _put_back(self, task: Dict, why: str, crash: bool = False) -> str:
+        """Give an episode back to the queue after a failed attempt and count the failure. The ``MAX_FAILURES``-th
+        failure in a session marks the queue item failed with ``why`` instead, so it shows in the history with a
+        Retry rather than waiting in the queue for nobody; a retry, or a new request for the episode, starts
+        counting again. ``crash``: an unexpected error, which may turn out to be the runner's own (see
+        ``_crashed``). Returns what happened, for the log line."""
+        queue_id = task.get("queue_id") or task["task_id"]
+        with self.claim_lock:   # no lane can claim it between the release and the failure
+            try:
+                self.service.release_agent_task(task["task_id"])
+            except Exception as exc:
+                logger.warning(f"Could not release {task['task_id']}: {exc}")
+            with self.lock:
+                n = self.failures[queue_id] = self.failures.get(queue_id, 0) + 1
+                if n >= MAX_FAILURES:
+                    self.failures.pop(queue_id, None)
+                    self.gave_up += 1
+                    if crash:
+                        self._crash_run_failed.append(queue_id)
+            if n < MAX_FAILURES:
+                return "put back in the queue"
+            try:
+                with TranslationQueue()._conn() as conn:
+                    conn.execute("UPDATE translation_queue SET status = 'failed', last_error = ?, completed_at = ? "
+                                 "WHERE id = ? AND status IN ('pending', 'queued')",
+                                 (f"The translation runner gave up after {n} attempts: {why}"[:2000],
+                                  datetime.now(timezone.utc).isoformat(), queue_id))
+                    conn.commit()
+                TranslationQueue()._changed("runner_gave_up")
+            except Exception as exc:
+                logger.warning(f"Could not mark {queue_id} failed: {exc}")
+        return f"marked failed after {n} attempts (Retry it in Activity > History)"
 
     # ------------------------------------------------------------------ lanes
 
@@ -922,7 +1024,7 @@ class AgentRunner:
                         self._sleep(min(wait, 30))
                     continue  # else: the quota check just paused every model; the top of the loop says so
                 try:
-                    task = self._next_task()
+                    task = self._next_task(lane)
                 except Exception as exc:  # claiming went wrong (a broken plan, an unreadable episode)
                     self._release_probe(model, lane)
                     if self._crashed(lane, None, exc):
@@ -987,23 +1089,35 @@ class AgentRunner:
             self.crashes += 1
             crashes = self.crashes
         if task is not None:
-            queue_id = task.get("queue_id") or task["task_id"]
-            with self.lock:
-                n = self.failures[queue_id] = self.failures.get(queue_id, 0) + 1
-            gave_up = " and left for a person" if n >= MAX_FAILURES else ""
-            try:
-                self.service.release_agent_task(task["task_id"])
-            except Exception as release_exc:
-                logger.warning(f"Could not release {task['task_id']} after a crash: {release_exc}")
+            outcome = self._put_back(task, f"unexpected error ({what})", crash=True)
             self.log(f"Lane {lane + 1}: {task['project_name']} {task['episode_name']} failed with an unexpected "
-                     f"error ({what}); put back in the queue{gave_up}. Task {task['task_id']}.", "error")
+                     f"error ({what}); {outcome}. Task {task['task_id']}.", "error")
         else:
             self.log(f"Lane {lane + 1}: unexpected error while looking for work ({what}).", "error")
         if crashes >= MAX_CRASHES:
+            self._unfail_crash_run()
             self._finish("error", f"Stopped after {crashes} unexpected errors in a row (last: {what}); see the log.",
                          "error")
             return True
         return False
+
+    def _unfail_crash_run(self) -> None:
+        """The runner stops on a run of crashes with nothing submitted in between: the fault is the runner's (or
+        the machine's), not the episodes'. Those it marked failed during the run wait in the queue again."""
+        with self.lock:
+            ids, self._crash_run_failed = list(self._crash_run_failed), []
+            self.gave_up = max(0, self.gave_up - len(ids))
+        if not ids:
+            return
+        try:
+            with TranslationQueue()._conn() as conn:
+                for queue_id in ids:
+                    conn.execute("UPDATE translation_queue SET status = 'pending', completed_at = NULL WHERE id = ? "
+                                 "AND status = 'failed' AND last_error LIKE 'The translation runner gave up%'", (queue_id,))
+                conn.commit()
+            TranslationQueue()._changed("runner_crash_run")
+        except Exception as exc:
+            logger.warning(f"Could not put the episodes of the crash run back in the queue: {exc}")
 
     # ------------------------------------------------------------------ one episode
 
@@ -1114,7 +1228,7 @@ class AgentRunner:
                 return
         except Exception:
             return
-        self._lane_set(lane, state="building the show's context", task=task["task_id"], project=project,
+        self._lane_set(lane, state=BOOTSTRAP_STATE, task=task["task_id"], project=project,
                        episode=episode, model=model, progress=None, units_done=0, units_total=0, since=_now_iso())
 
         def ask(prompt: str) -> str:
@@ -1555,7 +1669,7 @@ class AgentRunner:
             if via_api:
                 reply = self._api_call(piece["model"][len(API_PREFIX):], prompt, project, episode)
             else:
-                reply = agent_cli.call_model(engine, exe, piece["model"], prompt, folder, self.stop_event,
+                reply = agent_cli.call_model(engine, exe, piece["model"], prompt, agent_cli.call_dir(), self.stop_event,
                                              on_proc=lambda p: self.procs.__setitem__(lane, p))
                 self.procs.pop(lane, None)
             with self.lock:
@@ -1568,6 +1682,8 @@ class AgentRunner:
                 self._usage(piece["model"], lane, project, episode, reply)
             if reply.failure == "stopped":
                 return None
+            if reply.failure and not self._still_mine(folder, lane, title):
+                return None  # cancelled while the request ran (cancel_task cut it off): not the model's failure
             if via_api and reply.failure:
                 self.log(f"Lane {lane + 1}: the Gemini API did not translate {len(piece['units'])} line(s) "
                          f"({reply.message[:200]}).", "warn")
@@ -1674,16 +1790,11 @@ class AgentRunner:
         back to the queue instead."""
         task_id = task["task_id"]
         title = f"{task['project_name']} {task['episode_name']}"
-        queue_id = task.get("queue_id") or task_id
         cur = current()
         left = [u for u in units if needs(u, cur)]
         if len(left) > len(units) * 0.5:
-            self.service.release_agent_task(task_id)
-            with self.lock:
-                n = self.failures[queue_id] = self.failures.get(queue_id, 0) + 1
-            gave_up = " and left for a person" if n >= MAX_FAILURES else ""
-            self.log(f"Lane {lane + 1}: {title} — {len(left)} of {len(units)} lines never came back; put back in the "
-                     f"queue{gave_up}.", "error")
+            outcome = self._put_back(task, f"{len(left)} of {len(units)} lines never came back")
+            self.log(f"Lane {lane + 1}: {title} — {len(left)} of {len(units)} lines never came back; {outcome}.", "error")
             return
         if left:  # clear what is still English, so it stays a gap instead of being saved as a translation
             work = folder / aw.WORK_FILE
@@ -1701,6 +1812,7 @@ class AgentRunner:
         with self.lock:
             self.session["episodes"] += 1
             self.crashes = 0
+            self._crash_run_failed = []   # another episode went through: those were the episodes' own faults
             self.session["lines"] += done
         self._grow_guide(folder, task["project_name"], whole)
         notes = []
@@ -1759,6 +1871,7 @@ class AgentRunner:
                 "lanes": [{"lane": i + 1, **v} for i, v in sorted(self.lanes.items())],
                 "pauses": pauses, "session": dict(self.session), "started": self.started,
                 "pending": pending, "throughput": throughput, "eta_minutes": eta,
+                "preparing": [k[len(CLAIM_PREFIX):] for k in self.held if k.startswith(CLAIM_PREFIX)],
                 "quota": groups,
                 "quota_fetched": datetime.fromtimestamp(self.quota["fetched"]).isoformat(timespec="seconds")
                 if self.quota else None,
@@ -1780,6 +1893,11 @@ def get_runner() -> AgentRunner:
         if _runner is None:
             _runner = AgentRunner()
         return _runner
+
+
+def current_runner() -> Optional[AgentRunner]:
+    """The process's runner if one was built (never builds one: for callers that only need to notify it)."""
+    return _runner
 
 
 def nudge() -> None:
@@ -1843,7 +1961,13 @@ def autostart() -> bool:
 
 
 def stop_all() -> None:
-    """Shutdown: stop the CLI processes but leave the runner enabled, so it resumes next time."""
+    """Shutdown: stop the CLI processes (the lanes' and those of one-off requests) but leave the runner enabled,
+    so it resumes next time."""
+    try:
+        from services import agy_llm
+        agy_llm.kill_all()
+    except Exception:
+        pass
     r = _runner
     if r is None:
         return

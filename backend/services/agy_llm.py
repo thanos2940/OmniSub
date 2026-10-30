@@ -14,20 +14,21 @@ every model failing for another reason, the call raises ``AgyError`` — a one-o
 never spends API money behind the user's back.
 
 ``complete`` blocks; async code calls ``acomplete``. At most ``MAX_CONCURRENT`` one-off
-requests run at once, so a burst of them cannot starve the runner's lanes.
+requests run at once, so a burst of them cannot starve the runner's lanes. Their CLI processes are
+known here, so a shutdown (``kill_all``) does not leave them running or wait for them.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import subprocess
 import threading
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Callable, Dict, List, Optional
 
-from utils import paths, storage
+from utils import storage
 from services import agent_cli, agent_prompts as ap, agent_workspace as aw
 
 logger = logging.getLogger("omnisub.agy_llm")
@@ -38,6 +39,20 @@ CONTEXT_PAIRS = 4                # neighbouring lines shown on each side of a re
 GUIDE_EXCERPT = 1800             # characters of the context guide a one-line prompt carries
 
 _slots = threading.BoundedSemaphore(MAX_CONCURRENT)
+_live: Dict[subprocess.Popen, Dict] = {}   # CLI process of each request in flight -> that request's state
+_live_lock = threading.Lock()
+
+
+def kill_all() -> int:
+    """Stop the CLI processes of every one-off request in flight (shutdown); each ends with ``AgyError``
+    (``stopped``) instead of going on to the next model. Returns how many."""
+    with _live_lock:
+        live = list(_live.items())
+        for _, state in live:
+            state["stopped"] = True
+    for proc, _ in live:
+        agent_cli.kill_process(proc)
+    return len(live)
 
 
 class AgyError(RuntimeError):
@@ -55,12 +70,6 @@ def agent_mode(cfg: Optional[Dict] = None) -> bool:
     return cfg.get("translation_engine", "agent") == "agent"
 
 
-def _scratch() -> Path:
-    folder = Path(paths.DATA_DIR) / "agy_calls"
-    folder.mkdir(parents=True, exist_ok=True)
-    return folder
-
-
 def _call(runner, model: str, prompt: str, purpose: str, project: Optional[str], stop: threading.Event,
           on_proc: Optional[Callable], deadline: float) -> agent_cli.Reply:
     """One CLI request, cut off when the deadline passes."""
@@ -68,23 +77,31 @@ def _call(runner, model: str, prompt: str, purpose: str, project: Optional[str],
     left = deadline - time.time()
     if left <= 0:
         raise AgyError("The request timed out.", "timeout")
-    state: Dict = {"timer": None, "late": False}
+    state: Dict = {"timer": None, "late": False, "proc": None, "stopped": False}
 
     def started(proc) -> None:
         def cut() -> None:
             state["late"] = True
             agent_cli.kill_process(proc)
+        state["proc"] = proc
+        with _live_lock:
+            _live[proc] = state
         state["timer"] = threading.Timer(left, cut)
+        state["timer"].daemon = True   # a pending cut-off must not keep a stopping server alive
         state["timer"].start()
         if on_proc:
             on_proc(proc)
 
     try:
-        reply = agent_cli.call_model(engine, exe, model, prompt, _scratch(), stop, on_proc=started)
+        reply = agent_cli.call_model(engine, exe, model, prompt, agent_cli.call_dir(), stop, on_proc=started)
     finally:
         if state["timer"]:
             state["timer"].cancel()
+        with _live_lock:
+            _live.pop(state["proc"], None)
     runner.note_call(model, reply, project or "", purpose)
+    if state["stopped"]:
+        raise AgyError("The request was stopped (OmbiSub is shutting down).", "stopped")
     if state["late"]:
         raise AgyError("The request timed out.", "timeout")
     return reply

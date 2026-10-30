@@ -17,8 +17,10 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import dataclass, field
@@ -68,6 +70,23 @@ def engine_command(engine: str) -> Optional[List[str]]:
 
 def engine_status() -> Dict[str, Optional[str]]:
     return {name: (" ".join(engine_command(name) or []) or None) for name in ENGINES}
+
+
+def call_dir() -> Path:
+    """The folder every CLI request runs in: one empty folder, the same for every request, outside
+    OmbiSub's own tree. Claude Code and the Gemini CLI describe their working folder in the context they send
+    (the Gemini CLI with its listing) and read CLAUDE.md / GEMINI.md from it and its parents; one folder keeps
+    that part identical from request to request, so the provider's prompt cache can reuse it together with a
+    show's shared block, and outside the checkout none of OmbiSub's own files reach a translation request. A
+    model that reaches for tools finds no files either."""
+    folder = Path(tempfile.gettempdir()) / "ombisub-agent-cli"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError:   # no usable temp folder for this account: the data folder still keeps it stable
+        from utils import paths
+        folder = Path(paths.DATA_DIR) / "agy_calls"
+        folder.mkdir(parents=True, exist_ok=True)
+    return folder
 
 
 # ------------------------------------------------------------------ reading failures
@@ -265,11 +284,18 @@ def build_command(engine: str, exe: List[str], model: str, prompt: str) -> Tuple
 
 
 def kill_process(proc: subprocess.Popen) -> None:
+    """Stop a CLI and everything it started (a launcher script's node or language server holds the
+    output pipe open, so killing only the launcher would leave the read waiting)."""
     if proc.poll() is not None:
         return
     try:
         if os.name == "nt":
-            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=20, creationflags=_SUBPROCESS_FLAGS)
+            done = subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=20,
+                                  creationflags=_SUBPROCESS_FLAGS)
+            if done.returncode == 0:
+                return
+        elif os.getpgid(proc.pid) == proc.pid:   # started with its own process group (call_model)
+            os.killpg(proc.pid, signal.SIGKILL)
             return
     except Exception:
         pass
@@ -285,8 +311,10 @@ def call_model(engine: str, exe: List[str], model: str, prompt: str, cwd: Path, 
     cmd, stdin, env = build_command(engine, exe, model, prompt)
     started = time.time()
     try:
+        # Its own process group on POSIX, so kill_process can end the helpers it starts (Windows: taskkill /T).
         proc = subprocess.Popen(cmd, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace", creationflags=_SUBPROCESS_FLAGS, env=env)
+                                text=True, encoding="utf-8", errors="replace", creationflags=_SUBPROCESS_FLAGS, env=env,
+                                start_new_session=os.name != "nt")
     except OSError as exc:
         return Reply(failure="error", message=f"could not start {ENGINES.get(engine, engine)}: {exc}")
     on_proc(proc)

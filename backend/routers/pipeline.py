@@ -158,8 +158,9 @@ async def _monitor_stage3_queue_progress(
 
         # 1. Cascade cancellation if parent was cancelled
         if parent_job.cancelled or parent_job.status == "cancelled":
+            from services.queue_service import cancel_item
             for item_id in item_ids:
-                queue.cancel(item_id)
+                await asyncio.to_thread(cancel_item, item_id)
                 child_job = jobs.get(f"bg_{item_id}")
                 if child_job:
                     child_job.cancelled = True

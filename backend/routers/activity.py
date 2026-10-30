@@ -68,6 +68,14 @@ def _jobs_part(now: float) -> List[Dict[str, Any]]:
     return out
 
 
+def _lane_message(lane: Dict[str, Any]) -> str:
+    """What a runner lane is doing with its episode, in the words the Activity panel shows."""
+    from services.agent_runner import BOOTSTRAP_STATE
+    if lane.get("state") == BOOTSTRAP_STATE:
+        return "Building the show's context guide and glossary first"
+    return f"Translating with {lane.get('model') or 'the agent'}"
+
+
 def _queue_part(runner_info: Dict[str, Any], worker_alive: bool) -> List[Dict[str, Any]]:
     from utils.jobs_manager import jobs
     from utils.translation_queue import TranslationQueue
@@ -89,6 +97,7 @@ def _queue_part(runner_info: Dict[str, Any], worker_alive: bool) -> List[Dict[st
         if lane.get("task"):
             lanes[lane["task"]] = lane
     runner_running = bool(runner_info.get("running"))
+    preparing = set(runner_info.get("preparing") or [])
 
     out = []
     for row in rows:
@@ -108,11 +117,14 @@ def _queue_part(runner_info: Dict[str, Any], worker_alive: bool) -> List[Dict[st
             entry.update(units_done=done, units_total=units,
                          progress=round(100.0 * (done or 0) / units, 1) if units else 0.0)
             if lane:
-                entry.update(lane=lane.get("lane"), message=f"Translating with {lane.get('model') or 'the agent'}")
+                entry.update(lane=lane.get("lane"), message=_lane_message(lane))
             elif runner_running:
                 entry["message"] = "Claimed by the runner"
             else:
                 entry.update(status="orphaned", message="Claimed by the agent runner, which is not running")
+        elif row["id"] in preparing:
+            entry.update(engine="agent", message="Being prepared by the runner (the subtitle may be extracted from "
+                                                 "the video first)")
         elif job is not None and job.status in ("running", "pending", "paused"):
             entry.update(progress=round(float(job.progress or 0.0), 1), message=job.message or "",
                          units_done=job.cues_translated, units_total=job.cues_total)

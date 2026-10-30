@@ -7,7 +7,8 @@ so it counts as translated, and still recognisably the translation of its own li
 ``S|``/``G|`` lines and a new term when the prompt asks for them. ``agy -p /quota`` prints a
 quota report. Behaviour switches (environment variables):
 
-  FAKE_AGY_LOG            folder: each prompt is saved there (call_001.txt, ...)
+  FAKE_AGY_LOG            folder: each prompt is saved there (call_001.txt, ...), with the working
+                          folder it was asked from (call_001.cwd, ...)
   FAKE_AGY_SKIP_AT        in translate requests, drop the answer to this line but keep counting
                           (every later answer lands one number too early, the last is missing)
   FAKE_AGY_QUOTA_MODELS   comma-separated model prefixes that fail with a quota error (and
@@ -121,6 +122,7 @@ def main():
         folder.mkdir(parents=True, exist_ok=True)
         n = len(list(folder.glob("call_*.txt"))) + 1
         (folder / f"call_{n:03d}.txt").write_text(f"model: {model}\n\n{prompt}", encoding="utf-8")
+        (folder / f"call_{n:03d}.cwd").write_text(os.getcwd(), encoding="utf-8")
 
     if matches(model, "FAKE_AGY_QUOTA_MODELS"):
         fail("RESOURCE_EXHAUSTED: You have exhausted your quota on this model. Your quota will reset after 1h0m0s.")

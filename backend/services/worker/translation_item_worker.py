@@ -34,6 +34,15 @@ class UnrecoverableTranslationError(ValueError):
 _glossary_save_locks: Dict[str, threading.RLock] = {}
 _glossary_registry_lock = threading.Lock()
 
+def _worker_stopping() -> bool:
+    """The background worker is shutting down (its tasks are cancelled because the server stops)."""
+    try:
+        from services.background_worker import worker
+        return bool(worker.stopping)
+    except Exception:
+        return False
+
+
 def _get_project_glossary_lock(project_name: str) -> threading.RLock:
     with _glossary_registry_lock:
         if project_name not in _glossary_save_locks:
@@ -605,6 +614,15 @@ async def process_translation_item(*args, **kwargs) -> None:
             raise ValueError(f"Translation failed: {reason}" if reason else "Translation failed to complete successfully.")
 
     except asyncio.CancelledError:
+        if _worker_stopping() and not _is_task_cancelled():
+            # The server is stopping (a restart, an update), nobody cancelled the episode: it is translated
+            # again at the next start instead of ending up cancelled.
+            logger.info(f"Task {item_id} interrupted by the shutdown; it continues at the next start.")
+            queue.update_status(item_id, status="pending", started_at=None, attempts=max(0, attempts - 1),
+                                logs=jobs[job_id].logs if job_id in jobs else None)
+            if job_id in jobs:
+                update_job(job_id, status="pending", message="Interrupted by a restart; continues when OmbiSub starts again.")
+            return
         logger.info(f"Task {item_id} aborted via CancelledError.")
         if job_id in jobs:
             jobs[job_id].cancelled = True
