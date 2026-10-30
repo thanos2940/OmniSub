@@ -137,11 +137,17 @@ async def test_apply_update_blocks_when_active_jobs(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_apply_update_executes_when_idle(monkeypatch):
+async def test_apply_update_executes_when_idle(monkeypatch, tmp_path):
     """Verify apply_update executes git pull and restart when idle."""
     svc = UpdateService()
     monkeypatch.setattr(svc, "has_active_jobs", lambda: False)
     monkeypatch.setattr(svc, "is_git_repo", lambda: True)
+    # A checkout without a UI build makes apply rebuild it: never the real `npm ci && npm run build` into the
+    # real backend/static from a test (it needs the network and replaces a working UI).
+    monkeypatch.setattr(svc, "frontend_dir", tmp_path / "frontend")
+    monkeypatch.setattr(svc, "static_dir", tmp_path / "static")
+    built = []
+    monkeypatch.setattr(svc, "_build_frontend", lambda: built.append(True) or True)
 
     run_git_mock = MagicMock()
     run_git_mock.returncode = 0
@@ -172,15 +178,44 @@ def test_verify_github_signature():
     assert _verify_github_signature(payload, valid_sig, secret) is True
     assert _verify_github_signature(payload, invalid_sig, secret) is False
     assert _verify_github_signature(payload, None, secret) is False
-    # No secret configured allows request
-    assert _verify_github_signature(payload, None, "") is True
+    # No secret configured: nothing verifies (a push makes the server update and restart)
+    assert _verify_github_signature(payload, None, "") is False
+    assert _verify_github_signature(payload, valid_sig, "") is False
 
 
-def test_webhook_ping_event(client):
-    """Verify ping event is handled with pong."""
-    resp = client.post("/api/webhooks/github", headers={"X-GitHub-Event": "ping"}, json={"zen": "Design for failure."})
+def test_webhook_ping_event(client, monkeypatch):
+    """Verify a signed ping event is handled with pong."""
+    from utils import storage
+    secret = "ping_secret"
+    cfg = storage.load_global_config()
+    cfg["github_webhook_secret"] = secret
+    monkeypatch.setattr(storage, "load_global_config", lambda: cfg)
+    body = json.dumps({"zen": "Design for failure."}).encode("utf-8")
+    sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    resp = client.post("/api/webhooks/github", content=body,
+                       headers={"X-GitHub-Event": "ping", "X-Hub-Signature-256": sig, "Content-Type": "application/json"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "pong"
+
+
+def test_webhook_without_a_secret_is_refused(client, monkeypatch):
+    """Without github_webhook_secret nobody who reaches the port can make the server update and restart."""
+    from utils import storage
+    cfg = storage.load_global_config()
+    cfg["github_webhook_secret"] = ""
+    cfg["auto_update_enabled"] = True
+    monkeypatch.setattr(storage, "load_global_config", lambda: cfg)
+    applied = []
+
+    async def mock_apply(force=False):
+        applied.append(True)
+        return {"success": True}
+
+    monkeypatch.setattr("routers.webhooks.update_service.apply_update", mock_apply)
+    for event in ("push", "ping"):
+        resp = client.post("/api/webhooks/github", headers={"X-GitHub-Event": event}, json={"ref": "refs/heads/main"})
+        assert resp.status_code == 401
+    assert applied == []
 
 
 def test_webhook_push_invalid_secret(client, monkeypatch):

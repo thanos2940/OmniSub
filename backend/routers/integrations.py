@@ -1,5 +1,6 @@
 import os
 import asyncio
+import hmac
 import logging
 import time
 import threading
@@ -350,7 +351,7 @@ def _verify_webhook_token(token: Optional[str], header_token: Optional[str]) -> 
             detail="No webhook secret configured — set one in Settings before using webhooks.",
         )
     supplied = (token or header_token or "").strip()
-    if supplied != secret:
+    if not hmac.compare_digest(supplied.encode("utf-8"), secret.encode("utf-8")):
         raise HTTPException(status_code=401, detail="Invalid or missing webhook token")
 
 

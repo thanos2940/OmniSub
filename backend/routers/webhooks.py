@@ -19,10 +19,10 @@ router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
 def _verify_github_signature(raw_body: bytes, signature_header: Optional[str], secret: str) -> bool:
-    """Verify GitHub HMAC-SHA256 signature."""
+    """Verify GitHub HMAC-SHA256 signature. Without a configured secret nothing verifies: a push event makes
+    the server update and restart, which nobody who merely reaches the port may trigger."""
     if not secret:
-        # If no secret is configured, allow payload (optional security)
-        return True
+        return False
     if not signature_header or not signature_header.startswith("sha256="):
         return False
 
@@ -50,8 +50,11 @@ async def github_webhook(
 
     raw_body = await request.body()
 
-    # 1. Verify HMAC Signature if secret is configured
-    if secret and not _verify_github_signature(raw_body, x_hub_signature_256, secret):
+    # 1. Verify the HMAC signature; without a secret the hook is off (it can restart the server)
+    if not secret:
+        logger.warning("GitHub webhook rejected: no github_webhook_secret is configured.")
+        raise HTTPException(status_code=401, detail="Set github_webhook_secret before using the GitHub webhook.")
+    if not _verify_github_signature(raw_body, x_hub_signature_256, secret):
         logger.warning("GitHub webhook rejected: invalid HMAC signature.")
         raise HTTPException(status_code=401, detail="Invalid webhook signature.")
 
