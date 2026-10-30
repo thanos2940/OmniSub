@@ -197,7 +197,7 @@ export default function QueueItemList({ items = [], view = 'queue', onViewLogs, 
                 {view === 'queue' && ['running', 'pending', 'queued', 'postponed', 'paused_daily_limit'].includes(item.status) && (
                     <IconButton icon={X} label="Cancel" className="text-rose-500 dark:text-rose-400" onClick={() => onAction(api.stopQueueItem, item.id, 'Cancelled.')} />
                 )}
-                {view === 'history' && ['failed', 'cancelled', 'completed'].includes(item.status) && (
+                {view === 'history' && ['failed', 'cancelled'].includes(item.status) && (
                     <IconButton icon={RotateCcw} label="Retry" onClick={() => onAction(api.retryQueueItem, item.id, 'Queued again.')} />
                 )}
                 <IconButton icon={Terminal} label="Logs" onClick={() => onViewLogs(item.id, `${item.project_name} · ${item.episode_name}`)} />
@@ -205,7 +205,7 @@ export default function QueueItemList({ items = [], view = 'queue', onViewLogs, 
                     items={[
                         { label: 'Move to the top', icon: ArrowUp, hidden: view !== 'queue' || !waiting || !(item.priority > 0), onClick: () => onAction(api.prioritizeQueueItem, item.id, 'Moved up.') },
                         { label: 'Claim for an external agent', icon: Bot, hidden: item.status !== 'pending' || preparingId === item.id, onClick: () => claimForAgent(item) },
-                        { label: 'Release the agent claim', icon: Check, hidden: !(item.status === 'running' && item.agent?.task_id), onClick: () => onAction(api.releaseAgentTask, item.agent.task_id, 'Released back to the queue.') },
+                        { label: 'Put back in the queue', icon: Check, hidden: !(item.status === 'running' && item.agent?.task_id), onClick: () => onAction(api.releaseQueueItem, item.id, 'Put back in the queue.') },
                         { label: 'Remove from the list', icon: Trash2, danger: true, hidden: !onDelete, onClick: () => onDelete(item.id) },
                     ]}
                 />

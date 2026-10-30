@@ -184,15 +184,12 @@ export const useQueueData = ({ toast, activeJobs }) => {
         }
     }, [fetchQueue, toast]);
 
-    const handleCancelAll = useCallback(async (status = 'pending') => {
+    // 'active': everything waiting and running (episodes being translated stop at once); 'pending': waiting only.
+    const handleCancelAll = useCallback(async (status = 'active') => {
         try {
             const res = await api.cancelAllQueueItems(status);
-            try {
-                await api.cancelAllAgentTasks(status);
-            } catch {
-                // optional fallback
-            }
-            if (toast?.success) toast.success(`Cancelled ${res.data?.cancelled ?? 'all'} pending/active queue item(s)`);
+            const n = res.data?.cancelled_count ?? 0;
+            if (toast?.success) toast.success(`Cancelled ${n} translation${n === 1 ? '' : 's'}.`);
             fetchQueue();
         } catch (e) {
             console.error("Failed to cancel all tasks:", e);

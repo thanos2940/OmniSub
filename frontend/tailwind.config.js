@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    // The `dark` class on <html> (src/utils/theme.js): the system setting, or the theme chosen in the command palette.
+    darkMode: 'class',
     content: [
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",

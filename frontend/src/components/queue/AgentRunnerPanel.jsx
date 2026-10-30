@@ -94,7 +94,10 @@ export default function AgentRunnerPanel({ runner, queuePaused, onTogglePause, t
     const rate = fmtRate(throughput?.lines_per_min);
     const eta = fmtMinutes(info.eta_minutes);
     const engineMissing = info.engines && !info.engines[config.engine];
-    const lastError = [...log].reverse().find(e => e.level === 'error');
+    // The last error, until something went right after it (a submit, a start): a runner that recovered
+    // does not keep a red banner from hours ago.
+    const lastEntry = [...log].reverse().find(e => e.level === 'error' || e.level === 'ok');
+    const lastError = lastEntry?.level === 'error' ? lastEntry : null;
     const startRunner = () => act(() => api.startAgentRunner({ ...config, watch: true }), 'Runner started.');
 
     const checkQuota = async () => {

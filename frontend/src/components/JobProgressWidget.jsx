@@ -3,7 +3,7 @@ import { useJobs } from '../context/JobContext';
 import { apiClient } from '../api';
 import { X, ChevronDown, Activity, CheckCircle, AlertCircle, Terminal, ExternalLink, Sparkles, Maximize2, Copy, Check, Download, ArrowDown, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const renderColorizedLog = (log) => {
     if (!log) return null;
@@ -256,7 +256,15 @@ const getChildTasks = (parentJob, activeJobs = {}) => {
 
 const JobProgressWidget = () => {
     const { activeJobs, removeJob, cancelJob, clearAll } = useJobs();
-    const [isExpanded, setIsExpanded] = useState(true);
+    // The Activity page lists the same live work in full: there the panel waits as its pill instead of
+    // covering the queue's rows (and their Cancel buttons); it opens again on the other pages.
+    const onActivityPage = useLocation().pathname === '/activity';
+    const [isExpanded, setIsExpanded] = useState(!onActivityPage);
+    const [lastPage, setLastPage] = useState(onActivityPage);
+    if (lastPage !== onActivityPage) {
+        setLastPage(onActivityPage);
+        setIsExpanded(!onActivityPage);
+    }
     const [showLogs, setShowLogs] = useState(null); // jobId to show inline logs for
     const [maximizedLogsJobId, setMaximizedLogsJobId] = useState(null);
     const [maximizedTab, setMaximizedTab] = useState('logs'); // 'logs' | 'ai_response' | 'prompt'
@@ -293,11 +301,11 @@ const JobProgressWidget = () => {
         [visibleJobs]
     );
 
-    // An orphaned queue row (running with no owner): release it so it can be queued again.
+    // An orphaned queue row (running with no owner): put it back in the queue so it is translated again.
     const releaseOrphan = async (job) => {
         const queueId = String(job.id).replace(/^bg_/, '');
         try {
-            await apiClient.stopQueueItem(queueId);
+            await apiClient.releaseQueueItem(queueId);
         } catch (err) {
             console.error(`Failed to release queue item ${queueId}`, err);
         }

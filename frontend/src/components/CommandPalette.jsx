@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Search, Film, Tv, Settings, Library, ShieldAlert,
-    Activity, Server, Plane, ScrollText, RefreshCw, Moon, CornerDownLeft, X
+    Activity, Server, Plane, ScrollText, RefreshCw, Moon, Monitor, CornerDownLeft, X
 } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../context/ToastContext';
+import { setTheme } from '../utils/theme';
 
 export default function CommandPalette() {
     const [isOpen, setIsOpen] = useState(false);
@@ -88,15 +89,18 @@ export default function CommandPalette() {
             category: 'Action',
             icon: Moon,
             action: () => {
-                const isDark = document.documentElement.classList.contains('dark');
-                if (isDark) {
-                    document.documentElement.classList.remove('dark');
-                    localStorage.setItem('theme', 'light');
-                } else {
-                    document.documentElement.classList.add('dark');
-                    localStorage.setItem('theme', 'dark');
-                }
-                toast.info(`Switched to ${isDark ? 'light' : 'dark'} mode`);
+                const dark = setTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
+                toast.info(`Switched to ${dark ? 'dark' : 'light'} mode`);
+            }
+        },
+        {
+            id: 'action-theme-system',
+            title: 'Use the system theme',
+            category: 'Action',
+            icon: Monitor,
+            action: () => {
+                const dark = setTheme(null);
+                toast.info(`Following the system theme (${dark ? 'dark' : 'light'} now)`);
             }
         }
     ], [toast]);

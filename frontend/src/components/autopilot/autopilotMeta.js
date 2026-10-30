@@ -49,6 +49,7 @@ export const REASON_LABEL = {
     skip_tag: 'skip tag',
     unmonitored: 'not monitored',
     manual: 'skipped manually',
+    cancelled: 'cancelled in the queue',
     media_missing: 'video file not found',
     image_only: 'only image-based subtitles',
     no_subtitles: 'no subtitles in the file',

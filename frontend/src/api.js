@@ -51,6 +51,7 @@ export const apiClient = {
     postponeQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/postpone`),
     continueQueueItem: (itemId, boostPriority = true) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/continue`, null, { params: { boost_priority: boostPriority } }),
     stopQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/stop`),
+    releaseQueueItem: (itemId) => apiClient.post(`/api/queue/${encodeURIComponent(itemId)}/release`),
 };
 
 export const api = {
@@ -364,7 +365,10 @@ export const api = {
     postponeQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/postpone`),
     continueQueueItem: (itemId, boostPriority = true) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/continue`, null, { params: { boost_priority: boostPriority } }),
     stopQueueItem: (itemId) => apiClient.post(`/queue/${encodeURIComponent(itemId)}/stop`),
-    cancelAllQueueItems: (status = 'pending') => axios.post(`${API_URL}/api/queue/cancel-all`, null, { params: { status }, ...JOB_START }),
+    // status: 'active' (waiting and running; work in progress stops) or 'pending' (waiting only).
+    cancelAllQueueItems: (status = 'active') => axios.post(`${API_URL}/api/queue/cancel-all`, null, { params: { status }, ...JOB_START }),
+    // A row marked running that nothing works on (an orphan) goes back to the queue.
+    releaseQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${encodeURIComponent(itemId)}/release`),
     deleteQueueItem: (itemId) => axios.delete(`${API_URL}/api/queue/${itemId}`),
     prioritizeQueueItem: (itemId) => axios.post(`${API_URL}/api/queue/${itemId}/prioritize`),
     getQueueItemLogs: (itemId) => axios.get(`${API_URL}/api/queue/${itemId}/logs`),

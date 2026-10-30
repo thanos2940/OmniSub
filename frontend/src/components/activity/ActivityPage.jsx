@@ -63,8 +63,12 @@ export default function ActivityPage() {
         { label: 'Sync subtitles on disk', icon: FolderSync, onClick: handleSyncDisk },
         { label: 'Sync agent tasks', icon: Sparkles, onClick: handleSyncTasks },
         {
-            label: 'Cancel everything waiting', icon: Ban, danger: true,
-            onClick: () => ask('Cancel everything waiting?', 'All waiting and running translations are cancelled. Subtitles already written stay.', 'Cancel them', () => handleCancelAll('pending')),
+            label: 'Cancel waiting translations', icon: Ban, danger: true,
+            onClick: () => ask('Cancel the waiting translations?', 'Every translation that has not started is cancelled. Episodes being translated right now finish.', 'Cancel them', () => handleCancelAll('pending')),
+        },
+        {
+            label: 'Cancel all translations', icon: Ban, danger: true,
+            onClick: () => ask('Cancel all translations?', 'Every waiting translation is cancelled, and the episodes being translated right now stop at once (nothing is saved for them). Subtitles already written stay.', 'Cancel all', () => handleCancelAll('active')),
         },
         { label: 'Clear finished history', icon: Trash2, onClick: () => handleClearQueue('history') },
         { label: 'Clear cancelled items', icon: XCircle, onClick: () => handleClearQueue('cancelled') },
