@@ -1,7 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 // Eagerly loaded: always on screen (chrome + always-mounted widgets).
-import JobProgressWidget from './components/JobProgressWidget';
 import CommandPalette from './components/CommandPalette';
 import TopBar from './components/TopBar';
 import LoginPage from './components/LoginPage';
@@ -42,7 +41,7 @@ import { api, AUTH_STORAGE_KEY } from './api';
 
 function App() {
     // Auth gate (docs/PLAN_auth_security.md): resolved before anything else
-    // mounts, so JobProgressWidget/TopBar/etc. never start polling — and
+    // mounts, so TopBar/JobContext/etc. never start polling — and
     // therefore never 401-storm the console — while a login is pending.
     const [authChecked, setAuthChecked] = useState(false);
     const [needsLogin, setNeedsLogin] = useState(false);
@@ -148,9 +147,6 @@ function App() {
                                             <Route path="/dashboard" element={<Navigate to="/system" replace />} />
                                         </Routes>
                                     </Suspense>
-                                </ErrorBoundary>
-                                <ErrorBoundary title="Background Task Widget Error">
-                                    <JobProgressWidget />
                                 </ErrorBoundary>
                             </div>
                         </div>

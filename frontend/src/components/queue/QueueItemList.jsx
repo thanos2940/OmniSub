@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    AlertTriangle, ArrowUp, Bot, Check, CheckCircle2, Clock, FileText, Folder, ListTodo, Loader2, Pause,
+    AlertTriangle, ArrowUp, Bot, Check, CheckCircle2, Clock, CornerUpLeft, FileText, Folder, ListTodo, Loader2, Pause,
     Play, RotateCcw, Terminal, Trash2, X, XCircle,
 } from 'lucide-react';
 import { api } from '../../api';
@@ -48,9 +48,14 @@ const countdown = (iso) => {
     return `in ${Math.ceil(diff / 60000)} min`;
 };
 
-function StatusCell({ item }) {
-    const key = item.status === 'completed' && item.review_count > 0 ? 'review' : item.status;
-    const s = key === 'review' ? { tone: 'warning', icon: AlertTriangle, label: 'Needs review' } : STATUS[key] || { tone: 'neutral', label: key };
+// `live`: the row as the activity snapshot sees it (liveWork.liveQueueRows): what is being done with it right
+// now, or that nothing is (an orphan).
+function StatusCell({ item, live }) {
+    const key = item.status === 'completed' && item.review_count > 0 ? 'review'
+        : item.status === 'running' && live?.orphaned ? 'orphaned' : item.status;
+    const s = key === 'review' ? { tone: 'warning', icon: AlertTriangle, label: 'Needs review' }
+        : key === 'orphaned' ? { tone: 'warning', icon: AlertTriangle, label: 'Nothing is working on it' }
+            : STATUS[key] || { tone: 'neutral', label: key };
     return (
         <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -70,7 +75,7 @@ function StatusCell({ item }) {
                     <span className="text-xs text-gray-500 dark:text-gray-400">{item.auto_repaired_count} line(s) repaired automatically</span>
                 )}
             </div>
-            {item.status === 'running' && (
+            {item.status === 'running' && !live?.orphaned && (
                 <div className="w-full max-w-[16rem]">
                     <div className="flex items-center gap-2">
                         <ProgressBar value={Math.max(3, item.progress || 0)} />
@@ -87,13 +92,14 @@ function StatusCell({ item }) {
                             )}
                         {item.eta_seconds != null && <span>about {formatEta(item.eta_seconds)} left</span>}
                     </div>
+                    {live?.message && <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400" title={live.message}>{live.message}</p>}
                 </div>
             )}
         </div>
     );
 }
 
-export default function QueueItemList({ items = [], view = 'queue', onViewLogs, onAction, onDelete, onBulkDelete, onRefresh }) {
+export default function QueueItemList({ items = [], view = 'queue', live = {}, onViewLogs, onAction, onDelete, onBulkDelete, onRefresh }) {
     const toast = useToast();
     const [selected, setSelected] = useState(() => new Set());
     const [filter, setFilter] = useState('all'); // queue view: all | running | waiting | postponed
@@ -194,6 +200,9 @@ export default function QueueItemList({ items = [], view = 'queue', onViewLogs, 
                 {view === 'queue' && ['pending', 'queued'].includes(item.status) && (
                     <IconButton icon={Pause} label="Postpone" onClick={() => onAction(api.postponeQueueItem, item.id, 'Postponed.')} />
                 )}
+                {view === 'queue' && item.status === 'running' && live[item.id]?.orphaned && (
+                    <IconButton icon={CornerUpLeft} label="Put back in the queue" onClick={() => onAction(api.releaseQueueItem, item.id, 'Put back in the queue.')} />
+                )}
                 {view === 'queue' && ['running', 'pending', 'queued', 'postponed', 'paused_daily_limit'].includes(item.status) && (
                     <IconButton icon={X} label="Cancel" className="text-rose-500 dark:text-rose-400" onClick={() => onAction(api.stopQueueItem, item.id, 'Cancelled.')} />
                 )}
@@ -205,7 +214,7 @@ export default function QueueItemList({ items = [], view = 'queue', onViewLogs, 
                     items={[
                         { label: 'Move to the top', icon: ArrowUp, hidden: view !== 'queue' || !waiting || !(item.priority > 0), onClick: () => onAction(api.prioritizeQueueItem, item.id, 'Moved up.') },
                         { label: 'Claim for an external agent', icon: Bot, hidden: item.status !== 'pending' || preparingId === item.id, onClick: () => claimForAgent(item) },
-                        { label: 'Put back in the queue', icon: Check, hidden: !(item.status === 'running' && item.agent?.task_id), onClick: () => onAction(api.releaseQueueItem, item.id, 'Put back in the queue.') },
+                        { label: 'Put back in the queue', icon: Check, hidden: !(item.status === 'running' && item.agent?.task_id) || live[item.id]?.orphaned, onClick: () => onAction(api.releaseQueueItem, item.id, 'Put back in the queue.') },
                         { label: 'Remove from the list', icon: Trash2, danger: true, hidden: !onDelete, onClick: () => onDelete(item.id) },
                     ]}
                 />
@@ -288,7 +297,7 @@ export default function QueueItemList({ items = [], view = 'queue', onViewLogs, 
                                         <div className="mt-1 truncate text-xs text-rose-600 dark:text-rose-400" title={item.last_error}>{item.last_error.split('\n')[0]}</div>
                                     )}
                                 </div>
-                                <div className="min-w-0 basis-52"><StatusCell item={item} /></div>
+                                <div className="min-w-0 basis-52"><StatusCell item={item} live={live[item.id]} /></div>
                                 {rowActions(item)}
                             </li>
                         );

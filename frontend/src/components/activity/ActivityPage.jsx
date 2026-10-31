@@ -10,8 +10,10 @@ import QueueStats from '../queue/QueueStats';
 import QueueItemList from '../queue/QueueItemList';
 import QueueLogsModal from '../queue/QueueLogsModal';
 import AutopilotPanel from '../autopilot/AutopilotPanel';
-import { ConfirmDialog, OverflowMenu, Page, PageHeader, Spinner, Tabs } from '../ui';
+import { Card, ConfirmDialog, OverflowMenu, Page, PageHeader, Spinner, Tabs } from '../ui';
+import LiveWorkList from './LiveWorkList';
 import useRunnerStatus from './useRunnerStatus';
+import { useLiveWork } from './useLiveWork';
 
 const TAB_IDS = ['queue', 'history', 'autopilot'];
 
@@ -24,6 +26,8 @@ export default function ActivityPage() {
     const [confirming, setConfirming] = useState(false);
 
     const runner = useRunnerStatus({ intervalMs: 3000, withLog: true });
+    const live = useLiveWork();
+    const liveById = useMemo(() => Object.fromEntries(live.rows.map(r => [r.id, r])), [live.rows]);
     const {
         queueData, loading, error, selectedJobLogs, setSelectedJobLogs, checkingLimit, fetchQueue,
         handleAction, handlePauseResume, handleCheckDailyLimit, handleCancelAll, handleClearQueue,
@@ -89,6 +93,18 @@ export default function ActivityPage() {
             <div className="space-y-5">
                 <AgentRunnerPanel runner={runner} queuePaused={queueData.paused} onTogglePause={handlePauseResume} toast={toast} />
 
+                {(live.jobs.length > 0 || live.finished.length > 0) && (
+                    <Card title="Background jobs" subtitle="Library syncs, context and glossary builds, summaries and other work beside the queue.">
+                        <LiveWorkList
+                            jobs={live.jobs}
+                            finished={live.finished}
+                            onCancelJob={live.cancelJob}
+                            onDismissJob={live.dismissJob}
+                            onLogs={live.showLogs}
+                        />
+                    </Card>
+                )}
+
                 <Tabs tabs={tabs} value={tab} onChange={setTab} className="!mb-0" />
 
                 {tab !== 'autopilot' && error && (
@@ -110,6 +126,7 @@ export default function ActivityPage() {
                             <QueueItemList
                                 items={items}
                                 view="queue"
+                                live={liveById}
                                 onViewLogs={handleViewLogs}
                                 onAction={handleAction}
                                 onDelete={handleDeleteQueueItem}
@@ -136,6 +153,7 @@ export default function ActivityPage() {
             </div>
 
             <QueueLogsModal logs={logs} onClose={() => setSelectedJobLogs(null)} />
+            <QueueLogsModal logs={live.logs} onClose={live.closeLogs} />
 
             <ConfirmDialog
                 open={!!confirm}

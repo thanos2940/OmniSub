@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { LayoutGrid, Lock, Unlock, Menu, Search, X } from 'lucide-react';
 import { api } from '../api';
 import { usePoll } from '../hooks/usePoll';
-import RunnerPill from './activity/RunnerPill';
+import ActivityIndicator from './activity/ActivityIndicator';
 
 const REVIEW_EVENTS = ['queue_updated', 'agent_submission', 'task_completed'];
 
@@ -78,7 +78,7 @@ const TopBar = () => {
                 <nav aria-label="Main" className="hidden items-center gap-1 md:flex">{links}</nav>
 
                 <div className="ml-auto flex items-center gap-2">
-                    <RunnerPill />
+                    <ActivityIndicator />
                     <button
                         type="button"
                         onClick={() => window.dispatchEvent(new CustomEvent('omnisub:open-command-palette'))}
