@@ -192,6 +192,15 @@ async def process_extraction_item(queue, item: dict, global_config: dict) -> Non
             )
         await loop.run_in_executor(None, _do_import)
 
+        row = queue.get_item(item_id)
+        if row and row.get("status") == "cancelled":
+            # Cancelled while the track was being pulled out: the source stays imported (it is useful as it is),
+            # but the row stays cancelled and no translation is chained after it.
+            update_job(job_id, status="cancelled", progress=100.0,
+                       message=f"Cancelled; {sidecar.name} was imported but is not translated.")
+            logger.info(f"Extraction of {project_name}/{episode_name} was cancelled while it ran; not translating it.")
+            return
+
         update_job(job_id, status="completed", progress=100.0,
                    message=f"Extracted and imported {sidecar.name}.")
         queue.update_status(

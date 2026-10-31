@@ -530,3 +530,102 @@ def test_router_maps_service_errors_to_status_and_code(client, monkeypatch):
 
 def test_router_unknown_request_id_is_404(client):
     assert client.get("/api/on-demand/subtitles/nope").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# What a waiting viewer sees: progress, place in the queue, cancel
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_progress_of_an_episode_the_agent_runner_translates(od_env, monkeypatch):
+    """The agent runner keeps no worker job, so the progress comes from the lane that holds the episode."""
+    import threading
+    from types import SimpleNamespace
+    from services import agent_runner, on_demand
+
+    created = await on_demand.create_request(
+        on_demand.MediaQuery(media_type="series", tvdb_id=371980, season=1, episodes=[1]))
+    row = od_env["queue"].find_item("Severance", "S01E01", "", KIND_TRANSLATION)
+    od_env["queue"].update_status(row["id"], status="running")
+    lanes = {0: {"project": "Severance", "episode": "S01E01", "units_done": 3, "units_total": 12}}
+    monkeypatch.setattr(agent_runner, "_runner", SimpleNamespace(lock=threading.RLock(), lanes=lanes))
+    episode = on_demand.get_request(created["id"])["episodes"][0]
+    assert (episode["state"], episode["progress"]) == ("translating", 25)
+
+
+@pytest.mark.asyncio
+async def test_a_waiting_episode_says_how_many_are_ahead_of_it(od_env):
+    from services import on_demand
+
+    queue = od_env["queue"]
+    queue.enqueue("Other Show", "S01E01", PRIORITY_MANUAL)   # queued earlier, same priority: ahead
+    queue.enqueue("Other Show", "S01E02", 3)                  # backlog: behind
+    created = await on_demand.create_request(
+        on_demand.MediaQuery(media_type="series", tvdb_id=371980, season=1, episodes=[1]))
+    episode = on_demand.get_request(created["id"])["episodes"][0]
+    assert (episode["state"], episode["ahead"]) == ("queued", 1)
+
+
+@pytest.mark.asyncio
+async def test_cancelling_a_request_stops_only_its_own_unfinished_work(od_env):
+    from services import on_demand
+
+    first = await on_demand.create_request(
+        on_demand.MediaQuery(media_type="series", tvdb_id=371980, season=1, episodes=[1, 2, 3]),
+        client="morpicehub", client_ref="a")
+    # A second viewer asks for episode 1 too: its queue row now serves that request.
+    second = await on_demand.create_request(
+        on_demand.MediaQuery(media_type="series", tvdb_id=371980, season=1, episodes=[1]),
+        client="morpicehub", client_ref="b")
+
+    cancelled = on_demand.cancel_request(first["id"])
+    states = _states(cancelled)
+    assert states["S01E02"] == ("cancelled", None)                     # the extraction it queued
+    assert states["S01E01"][0] == "queued"                               # taken over by the second request
+    assert states["S01E03"] == ("available", "Severance.S01E03.el.srt")  # already done, untouched
+    assert cancelled["status"] == "in_progress"   # episode 1 still comes, for the second viewer
+    assert _states(on_demand.get_request(second["id"]))["S01E01"][0] == "queued"
+
+    only = on_demand.cancel_request(second["id"])
+    assert only["status"] == "cancelled" and _states(only)["S01E01"] == ("cancelled", None)
+    assert on_demand.cancel_request("nope") is None
+
+
+def test_router_cancel_of_an_unknown_request_is_404(client):
+    assert client.post("/api/on-demand/subtitles/nope/cancel").status_code == 404
+
+
+def test_rollup_of_a_cancelled_request():
+    from services.on_demand import _rollup
+    assert _rollup(["cancelled", "cancelled"]) == "cancelled"
+    assert _rollup(["cancelled", "not_downloaded"]) == "cancelled"
+    assert _rollup(["cancelled", "failed"]) == "failed"
+
+
+@pytest.mark.asyncio
+async def test_an_extraction_cancelled_while_it_ran_does_not_chain_a_translation(od_env, monkeypatch):
+    from services.worker.extraction_worker import process_extraction_item
+    import services.queue_service as queue_service
+
+    season = od_env["season_dir"]
+    media_path = season / "Severance.S01E02.mkv"
+    (season / "Severance.S01E02.en.srt").write_text(SAMPLE_SRT, encoding="utf-8")
+    storage.create_project("Severance", {"show_name": "Severance", "target_language": "Greek"})
+    captured = []
+    monkeypatch.setattr(queue_service, "enqueue_translation", lambda *a, **k: captured.append((a, k)) or "id")
+
+    queue = od_env["queue"]
+    item_id = queue.enqueue("Severance", "S01E02", PRIORITY_MANUAL, kind=KIND_EXTRACTION)
+    queue.cancel(item_id)   # cancelled while it was being extracted
+    item = {
+        "id": item_id, "project_name": "Severance", "episode_name": "S01E02", "attempts": 1, "priority": 1,
+        "options": json.dumps({
+            "media_path": str(media_path), "stream_index": 2, "source_lang_code": "en",
+            "output_format": "srt", "track": {"codec": "subrip"},
+            "translate_after": {"options": {"ensure_context": True}, "lang": ""},
+        }),
+    }
+    await process_extraction_item(queue, item, storage.load_global_config())
+    assert captured == []
+    assert queue.get_item(item_id)["status"] == "cancelled"
+    assert storage.original_subtitle_exists("Severance", "S01E02")   # the extracted source is kept

@@ -22,6 +22,7 @@ see ``render``. There is no status column to drift away from what the worker did
 """
 
 import asyncio
+import json
 import logging
 import re
 import unicodedata
@@ -47,6 +48,7 @@ logger = logging.getLogger(__name__)
 # Episode states a request can report.
 ACTIVE_STATES = {"queued", "extracting", "translating", "paused"}
 DONE_STATES = {"available", "completed"}
+CANCELLABLE = ("pending", "queued", "running", "paused_daily_limit", "postponed")
 
 # Bounded like the sync's own probes: ffprobe is a header read, but a season of
 # them unbounded over SMB still saturates the link.
@@ -293,6 +295,37 @@ def _short_error(raw: Optional[str]) -> Optional[str]:
 # Live status
 # ---------------------------------------------------------------------------
 
+def _runner_progress(project_name: str, episode_name: str) -> Optional[int]:
+    """Percentage of lines done of an episode an agent runner lane holds right now (None: no lane holds it)."""
+    try:
+        from services import agent_runner
+        runner = agent_runner.current_runner()
+        if runner is None:
+            return None
+        with runner.lock:
+            lanes = [dict(v) for v in runner.lanes.values()]
+    except Exception:
+        return None
+    for lane in lanes:
+        if lane.get("project") == project_name and lane.get("episode") == episode_name and lane.get("units_total"):
+            return round(100 * (lane.get("units_done") or 0) / lane["units_total"])
+    return None
+
+
+def _ahead(queue: TranslationQueue, row: Dict) -> Optional[int]:
+    """How many waiting translations come before this one in claim order (priority, then age). Approximate: an
+    item waiting for its retry time, or held back by a per-show limit, still counts."""
+    rank = "CASE WHEN priority = 10 THEN -2 ELSE priority END"
+    mine = -2 if row.get("priority") == 10 else row.get("priority")
+    try:
+        with queue._conn() as conn:
+            return conn.execute(
+                f"SELECT COUNT(*) FROM translation_queue WHERE kind = ? AND status IN ('pending', 'queued') AND id != ? "
+                f"AND ({rank} < ? OR ({rank} = ? AND created_at < ?))",
+                (KIND_TRANSLATION, row["id"], mine, mine, row.get("created_at") or "")).fetchone()[0]
+    except Exception:
+        return None
+
 def _live_state(queue: TranslationQueue, project_name: str, entry: Dict, lang_key: str) -> Dict:
     """Current state of one requested episode, derived from queue + metadata."""
     initial = entry.get("initial_state")
@@ -325,9 +358,10 @@ def _live_state(queue: TranslationQueue, project_name: str, entry: Dict, lang_ke
 
     if tr:
         status = tr["status"]
-        if status == "pending":
+        if status in ("pending", "queued"):
             state = "queued"
             detail = _short_error(tr.get("last_error")) if tr.get("next_retry_at") else None
+            return {"state": state, "detail": detail, "progress": None, "ahead": _ahead(queue, tr)}
         elif status == "running":
             state, detail = "translating", None
             try:
@@ -337,6 +371,8 @@ def _live_state(queue: TranslationQueue, project_name: str, entry: Dict, lang_ke
                     progress = round(float(job.progress or 0))
             except Exception:
                 pass
+            if progress is None:   # the agent runner translates it: its lane counts the lines
+                progress = _runner_progress(project_name, ep_name)
         elif status == "paused_daily_limit":
             state, detail = "paused", "daily_quota"
         elif status == "failed":
@@ -349,6 +385,8 @@ def _live_state(queue: TranslationQueue, project_name: str, entry: Dict, lang_ke
 
     if ex and ex["status"] == "failed":
         return {"state": "failed", "detail": _short_error(ex.get("last_error")), "progress": None}
+    if ex and ex["status"] == "cancelled":
+        return {"state": "cancelled", "detail": None, "progress": None}
     if ex and ex["status"] == "completed":
         # Extracted; the chained translation is being enqueued.
         return {"state": "queued", "detail": None, "progress": None}
@@ -363,6 +401,8 @@ def _rollup(states: List[str]) -> str:
         return "completed"
     if done:
         return "partial"
+    if "cancelled" in states and "failed" not in states:
+        return "cancelled"
     if any(s in ("failed", "cancelled") for s in states):
         return "failed"
     return "unavailable"
@@ -402,6 +442,38 @@ def render(record: Dict) -> Dict:
 def get_request(request_id: str) -> Optional[Dict]:
     record = on_demand_store.get(request_id)
     return render(record) if record else None
+
+
+def _owner(row: Dict) -> Optional[str]:
+    """The on-demand request a queue row's work belongs to (the last one that queued it), if any."""
+    try:
+        opts = json.loads(row.get("options") or "{}") if isinstance(row.get("options"), str) else (row.get("options") or {})
+    except (TypeError, ValueError):
+        return None
+    if row.get("kind") == KIND_EXTRACTION:
+        opts = ((opts.get("translate_after") or {}).get("options")) or {}
+    return opts.get("on_demand_request_id")
+
+
+def cancel_request(request_id: str) -> Optional[Dict]:
+    """Stop the work a request queued that has not finished: its waiting or running translations and extractions
+    are cancelled (a runner lane on one lets go at once, nothing is saved for it). Work that belongs to another
+    request since (a later request for the same episode took the queue row over), work queued by someone else,
+    and everything already done stay as they are. The request as it stands now, or None for an unknown id."""
+    from services.queue_service import cancel_item
+    record = on_demand_store.get(request_id)
+    if not record:
+        return None
+    queue = TranslationQueue(paths.DB_FILE)
+    lang_key = record.get("lang_key") or ""
+    cancelled = 0
+    for entry in record.get("episodes") or []:
+        for kind, lang in ((KIND_TRANSLATION, lang_key), (KIND_EXTRACTION, "")):
+            row = queue.find_item(record["project_name"], entry["episode_name"], lang, kind)
+            if row and row["status"] in CANCELLABLE and _owner(row) == request_id:
+                cancelled += bool(cancel_item(row["id"], queue=queue))
+    logger.info(f"On-demand request {request_id} cancelled: {cancelled} queue item(s) stopped.")
+    return render(on_demand_store.get(request_id))
 
 
 def list_requests(limit: int = 50) -> List[Dict]:

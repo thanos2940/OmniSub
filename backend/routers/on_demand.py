@@ -6,6 +6,7 @@ services/on_demand.py; these handlers only translate between HTTP and it.
 
 Protected by the global X-Api-Key middleware like every other /api/ route.
 """
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -81,12 +82,22 @@ async def request_subtitles(body: OnDemandSubtitleRequest):
 
 @router.get("/subtitles")
 async def list_subtitle_requests(limit: int = 50):
-    return {"requests": on_demand.list_requests(limit)}
+    return {"requests": await asyncio.to_thread(on_demand.list_requests, max(1, min(int(limit), 200)))}
 
 
 @router.get("/subtitles/{request_id}")
 async def get_subtitle_request(request_id: str):
-    request = on_demand.get_request(request_id)
+    request = await asyncio.to_thread(on_demand.get_request, request_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail="Unknown request id.")
+    return request
+
+
+@router.post("/subtitles/{request_id}/cancel")
+async def cancel_subtitle_request(request_id: str):
+    """Stop what the request queued and has not finished (see ``on_demand.cancel_request``); answers the request
+    as it stands afterwards."""
+    request = await asyncio.to_thread(on_demand.cancel_request, request_id)
     if request is None:
         raise HTTPException(status_code=404, detail="Unknown request id.")
     return request
