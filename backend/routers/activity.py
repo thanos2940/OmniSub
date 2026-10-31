@@ -136,6 +136,22 @@ def _queue_part(runner_info: Dict[str, Any], worker_alive: bool) -> List[Dict[st
     return out
 
 
+def _by_project() -> Dict[str, Dict[str, int]]:
+    """Waiting and running translations and extractions per project, for the Library's per-title status (one
+    grouped query, so the page needs no queue listing and is right however long the queue is)."""
+    from utils.translation_queue import TranslationQueue
+    out: Dict[str, Dict[str, int]] = {}
+    with TranslationQueue()._conn() as conn:
+        rows = conn.execute(
+            "SELECT project_name, status = 'running' AS running, COUNT(*) AS n FROM translation_queue "
+            "WHERE kind IN ('translation', 'extraction') AND status IN ('pending', 'queued', 'running', 'paused_daily_limit') "
+            "GROUP BY project_name, status = 'running'").fetchall()
+    for r in rows:
+        entry = out.setdefault(r["project_name"], {"queued": 0, "running": 0})
+        entry["running" if r["running"] else "queued"] += r["n"]
+    return out
+
+
 def _compute() -> Dict[str, Any]:
     from utils import storage
     from utils.translation_queue import TranslationQueue
@@ -158,6 +174,11 @@ def _compute() -> Dict[str, Any]:
         summary = TranslationQueue().get_summary()
     except Exception:
         pass
+    by_project = {}
+    try:
+        by_project = _by_project()
+    except Exception:
+        pass
     return {
         "ts": now,
         "jobs": _jobs_part(now),
@@ -167,6 +188,7 @@ def _compute() -> Dict[str, Any]:
         "worker": {"paused": bool(config.get("queue_worker_paused", False)),
                    "pending": summary.get("pending", 0), "running": summary.get("running", 0)},
         "summary": summary,
+        "by_project": by_project,
         "translation_engine": config.get("translation_engine", "agent"),
     }
 

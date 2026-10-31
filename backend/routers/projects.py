@@ -52,6 +52,15 @@ async def list_projects():
     return await asyncio.to_thread(_get_projects_list)
 
 
+@router.get("/api/library")
+async def library():
+    """The Library page in one small answer: every project grouped (series, movies, other, ignored) with only the
+    fields a row shows and its episode counts (storage.get_library). Per-show queue counts come with the activity
+    snapshot (``by_project``), so the page needs no queue listing."""
+    import asyncio
+    return await asyncio.to_thread(storage.get_library)
+
+
 @router.post("/projects")
 @router.post("/api/projects")
 async def create_project(request: CreateProjectRequest):

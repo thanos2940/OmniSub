@@ -1,5 +1,6 @@
+import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Film, Tv, Folder, Check, Clock, Loader2, EyeOff, Languages } from 'lucide-react';
+import { Film, Tv, Folder, Check, Clock, Loader2, Eye, EyeOff, Languages, Search } from 'lucide-react';
 import { Button, OverflowMenu, ProgressBar, StatusChip } from '../ui';
 import { PRIORITY_OPTIONS, isMovieItem, itemPriority } from './libraryUtils';
 
@@ -17,9 +18,11 @@ function statusFor(item, queued, running) {
     return { tone: 'neutral', icon: Clock, label: 'Not started' };
 }
 
-export default function LibraryRow({
+// Memoized: the page re-renders with every activity snapshot, a row only when its own title, counts or
+// selection change (the handlers passed in are stable).
+function LibraryRow({
     item, queued = 0, running = 0, selected = false, onToggle, onPriorityChange,
-    onTranslateMissing, translating = false, menuItems = [],
+    onTranslateMissing, translating = false, onInspectTracks, onExtract,
 }) {
     const navigate = useNavigate();
     const movie = isMovieItem(item);
@@ -34,6 +37,11 @@ export default function LibraryRow({
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     const title = item.show_name || item.name;
     const open = () => navigate(`/project/${encodeURIComponent(item.name)}`);
+    const menuItems = [
+        { label: 'Stop ignoring', icon: Eye, hidden: !ignored, onClick: () => onPriorityChange(item.name, 'normal') },
+        { label: 'Inspect tracks in the video', icon: Search, hidden: !movie || manual || ignored || !onInspectTracks, onClick: () => onInspectTracks(item) },
+        { label: 'Extract subtitles from videos', icon: Film, hidden: manual || ignored || !onExtract, onClick: () => onExtract(item) },
+    ];
 
     return (
         <li className={`flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-5 ${ignored ? 'opacity-70' : ''} ${selected ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}>
@@ -95,3 +103,5 @@ export default function LibraryRow({
         </li>
     );
 }
+
+export default memo(LibraryRow);

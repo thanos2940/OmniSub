@@ -284,9 +284,10 @@ async def _run_arr_sync(job_id: str, source: str = "both", sync_req: Optional[Ar
 async def arr_library():
     """Return the full media library grouped by series/movies/disabled.
 
-    Reads locally-stored project metadata — does NOT contact Sonarr/Radarr.
+    Reads locally-stored project metadata — does NOT contact Sonarr/Radarr. In a thread: a cold cache reads
+    every project's metadata.
     """
-    return storage.get_arr_library()
+    return await asyncio.to_thread(storage.get_arr_library)
 
 
 @router.post("/integrations/arr/library/{project_name}/disable")

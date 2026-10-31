@@ -352,6 +352,8 @@ export const api = {
 
     // Arr Library & Sync
     getArrLibrary: () => axios.get(`${API_URL}/integrations/arr/library`, JOB_START),
+    // The Library page in one small answer: every project grouped, only what a row shows.
+    getLibrary: () => axios.get(`${API_URL}/api/library`, JOB_START),
     disableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/disable`),
     enableLibraryEntry: (project) => axios.post(`${API_URL}/integrations/arr/library/${encodeURIComponent(project)}/enable`),
     

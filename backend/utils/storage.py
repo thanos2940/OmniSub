@@ -84,6 +84,7 @@ from utils.storage_modules.stats_and_index import (
     _index_episode,
     update_project_stats_on_change,
     get_arr_library,
+    get_library,
     get_project_line_frequencies,
     _arr_library_cache,
 )
@@ -131,5 +132,6 @@ __all__ = [
     "invalidate_arr_library_cache",
     "update_project_stats_on_change",
     "get_arr_library",
+    "get_library",
     "get_project_line_frequencies",
 ]

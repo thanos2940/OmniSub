@@ -1,32 +1,32 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, EyeOff, Film, FolderPlus, Languages, Library, RefreshCw, Search, Settings2, Tv, Folder, Eye } from 'lucide-react';
+import { AlertTriangle, EyeOff, Film, FolderPlus, Languages, Library, RefreshCw, Search, Settings2, Tv, Folder } from 'lucide-react';
 import { api } from '../../api';
 import { useJobs } from '../../context/JobContext';
-import { usePoll } from '../../hooks/usePoll';
 import { useToast } from '../../context/ToastContext';
 import { Button, Card, ConfirmDialog, EmptyState, INPUT, Page, PageHeader, ProgressBar, Spinner, Tabs } from '../ui';
 import EmbeddedTracksModal from '../project/modals/EmbeddedTracksModal';
 import LibrarySyncModal from '../LibrarySyncModal';
 import LibraryRow from './LibraryRow';
 import NewProjectModal from './NewProjectModal';
-import { describeEnqueueResult, isMovieItem, itemPriority } from './libraryUtils';
+import { describeEnqueueResult, itemPriority } from './libraryUtils';
 import { getSavedSyncOptions } from './syncOptions';
 
-const ACTIVE_STATES = ['pending', 'queued', 'running', 'paused_daily_limit'];
 const PRIORITY_RANK = { high: 0, normal: 1, low: 2, ignored: 3 };
+const PAGE = 200;               // rows rendered at first (and per "Show more"); a big library renders in steps
+const RELOAD_GAP_MS = 15000;    // finished episodes reload the counts at most this often
+const NO_COUNTS = {};
 
 const byName = (a, b) => (a.show_name || a.name || '').localeCompare(b.show_name || b.name || '');
 const missingOf = (item) => Math.max(0, (item.episode_count || 0) - (item.translated_count || 0));
 
 export default function LibraryPage() {
     const toast = useToast();
-    const { activeJobs, addJob, snapshot } = useJobs();
+    const { activeJobs, addJob, snapshot, refresh: refreshActivity } = useJobs();
 
     const [library, setLibrary] = useState(null);
-    const [manual, setManual] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [queueItems, setQueueItems] = useState([]);
+    const [shown, setShown] = useState(PAGE);
     const [arrConfigured, setArrConfigured] = useState(true); // assume yes until checked, to avoid a flash
     const [defaultLanguage, setDefaultLanguage] = useState('Greek');
 
@@ -49,9 +49,11 @@ export default function LibraryPage() {
 
     // ------------------------------------------------------------------ data
 
+    // Every project in one small answer (GET /api/library). Per-title queue counts are not in it: they come with
+    // the activity snapshot every page already polls (`snapshot.by_project`).
     const loadLibrary = useCallback(async () => {
         try {
-            const res = await api.getArrLibrary();
+            const res = await api.getLibrary();
             setLibrary(res.data);
         } catch (err) {
             console.error('Failed to load library', err);
@@ -61,45 +63,42 @@ export default function LibraryPage() {
         }
     }, [toast]);
 
-    const loadManual = useCallback(async () => {
-        try {
-            const res = await api.getProjects();
-            setManual((res.data || []).filter(p => !p.arr_source));
-        } catch (err) {
-            console.error('Failed to load projects', err);
-        }
-    }, []);
-
-    // An unreachable queue is reported on the Activity page; a failure here only makes the poller back off.
-    const loadQueue = useCallback(async ({ signal } = {}) => {
-        const res = await api.getQueue(false, undefined, signal);
-        setQueueItems(res.data?.items || []);
-    }, []);
-
     useEffect(() => {
         loadLibrary();
-        loadManual();
         api.getArrStatus()
             .then(res => setArrConfigured(!!(res.data?.sonarr?.configured || res.data?.radarr?.configured)))
             .catch(() => {});
         api.getSettings()
             .then(res => { if (res.data?.default_target_language) setDefaultLanguage(res.data.default_target_language); })
             .catch(() => {});
-    }, [loadLibrary, loadManual]);
+    }, [loadLibrary]);
 
-    usePoll(loadQueue, { intervalMs: 30000, hiddenIntervalMs: 90000, refreshOn: ['queue_updated', 'agent_submission'] });
+    const summaryNow = snapshot?.summary;
+    const activeCount = summaryNow
+        ? (summaryNow.pending || 0) + (summaryNow.running || 0) + (summaryNow.paused_daily_limit || 0)
+        : 0;
 
-    // Counts change when queue items finish. The activity snapshot (5 s) is fresher than the list (30 s).
-    const activeCount = useMemo(() => {
-        const summary = snapshot?.summary;
-        if (summary) return (summary.pending || 0) + (summary.running || 0) + (summary.queued || 0) + (summary.paused_daily_limit || 0);
-        return queueItems.filter(i => ACTIVE_STATES.includes(i.status)).length;
-    }, [queueItems, snapshot]);
-    const prevActive = useRef(0);
+    // A finished episode changes a title's counts: reload them, at most every RELOAD_GAP_MS (a runner finishing an
+    // episode every minute must not reload the library each time it does).
+    const finishedCount = summaryNow?.completed ?? null;
+    const reloadState = useRef({ seen: null, last: 0, timer: null });
     useEffect(() => {
-        if (activeCount < prevActive.current) loadLibrary();
-        prevActive.current = activeCount;
-    }, [activeCount, loadLibrary]);
+        const st = reloadState.current;
+        if (finishedCount == null) return;
+        if (st.seen == null || finishedCount <= st.seen) {
+            st.seen = finishedCount;
+            return;
+        }
+        st.seen = finishedCount;
+        if (st.timer) return;
+        const wait = Math.max(0, st.last + RELOAD_GAP_MS - Date.now());
+        st.timer = setTimeout(() => {
+            st.timer = null;
+            st.last = Date.now();
+            loadLibrary();
+        }, wait);
+    }, [finishedCount, loadLibrary]);
+    useEffect(() => () => clearTimeout(reloadState.current.timer), []);
 
     // The library sync runs as a background job.
     useEffect(() => {
@@ -116,29 +115,21 @@ export default function LibraryPage() {
         }
     }, [activeJobs, syncJobId, loadLibrary, toast]);
 
-    const queueByProject = useMemo(() => {
-        const map = {};
-        for (const q of queueItems) {
-            if (!ACTIVE_STATES.includes(q.status)) continue;
-            const entry = map[q.project_name] || (map[q.project_name] = { queued: 0, running: 0 });
-            if (q.status === 'running') entry.running += 1;
-            else entry.queued += 1;
-        }
-        return map;
-    }, [queueItems]);
+    // Waiting and running work per title, from the activity snapshot (exact however long the queue is).
+    const queueByProject = snapshot?.by_project || NO_COUNTS;
 
     // ------------------------------------------------------------------ tabs and filters
 
-    const groups = useMemo(() => {
-        const manualIgnored = manual.filter(p => itemPriority(p) === 'ignored');
-        const manualActive = manual.filter(p => itemPriority(p) !== 'ignored');
-        return {
-            series: library?.series || [],
-            movies: library?.movies || [],
-            other: manualActive,
-            ignored: [...(library?.disabled || []), ...manualIgnored],
-        };
-    }, [library, manual]);
+    const groups = useMemo(() => ({
+        series: library?.series || [],
+        movies: library?.movies || [],
+        other: library?.other || [],
+        ignored: library?.ignored || [],
+    }), [library]);
+    const parents = useMemo(
+        () => [...groups.other, ...groups.ignored].filter(p => !p.arr_source && p.type === 'parent'),
+        [groups],
+    );
 
     const summary = useMemo(() => {
         const items = [...groups.series, ...groups.movies];
@@ -170,7 +161,14 @@ export default function LibraryPage() {
         { id: 'ignored', label: 'Ignored', icon: EyeOff, count: groups.ignored.length },
     ];
 
-    const changeTab = (id) => { setTab(id); setSelected(new Set()); };
+    const changeTab = (id) => { setTab(id); setSelected(new Set()); setShown(PAGE); };
+    // Another tab, search or filter starts again with the first rows.
+    const viewKey = `${tab}|${search}|${filterStatus}|${filterPriority}|${sortBy}`;
+    const [lastViewKey, setLastViewKey] = useState(viewKey);
+    if (lastViewKey !== viewKey) {
+        setLastViewKey(viewKey);
+        setShown(PAGE);
+    }
 
     // ------------------------------------------------------------------ actions
 
@@ -215,7 +213,7 @@ export default function LibraryPage() {
                 addJob(res.data.job_id, 'translate_missing_library', 'Looking for subtitles inside videos...', { link: '/activity' });
             }
             toast.success(`${queued ? `Queued ${queued} now` : 'Nothing with an imported subtitle to queue'}; looking for subtitles inside videos in the background.`);
-            loadQueue();
+            refreshActivity();
         } catch (err) {
             toast.error(`Could not queue the missing translations: ${err.response?.data?.detail || err.message}`);
         } finally {
@@ -224,31 +222,32 @@ export default function LibraryPage() {
         }
     };
 
-    const translateMissing = async (item) => {
+    const translateMissing = useCallback(async (item) => {
         setTranslatingProject(item.name);
         try {
             const res = await api.enqueueMissing(item.name);
             toast.success(`${item.show_name || item.name}: ${describeEnqueueResult(res.data || {})}`);
             if (res.data?.error) toast.warning(res.data.error);
-            loadQueue();
+            refreshActivity();
         } catch (err) {
             toast.error(`Could not queue ${item.show_name || item.name}: ${err.response?.data?.detail || err.message}`);
         } finally {
             setTranslatingProject('');
         }
-    };
+    }, [toast, refreshActivity]);
 
-    const setPriority = async (names, priority) => {
+    const setPriority = useCallback(async (names, priority) => {
         try {
             if (names.length === 1) await api.updateProjectPriority(names[0], priority);
             else await api.bulkUpdateProjectPriority(names, priority);
             toast.success(names.length === 1 ? `Priority set to ${priority}.` : `${names.length} titles set to ${priority}.`);
-            await Promise.all([loadLibrary(), loadManual()]);
-            loadQueue();
+            await loadLibrary();
+            refreshActivity();
         } catch (err) {
             toast.error(`Could not change the priority: ${err.response?.data?.detail || err.message}`);
         }
-    };
+    }, [toast, loadLibrary, refreshActivity]);
+    const changePriority = useCallback((name, priority) => setPriority([name], priority), [setPriority]);
 
     const bulkPriority = async (priority) => {
         setBulkBusy(true);
@@ -272,10 +271,10 @@ export default function LibraryPage() {
         toast.success(`Queued ${queued} item${queued === 1 ? '' : 's'} from ${items.length} title${items.length === 1 ? '' : 's'}.`);
         setSelected(new Set());
         setBulkBusy(false);
-        loadQueue();
+        refreshActivity();
     };
 
-    const extractFromVideo = async (item) => {
+    const extractFromVideo = useCallback(async (item) => {
         try {
             const res = await api.batchExtractEmbedded(item.name, {});
             if (res.data?.job_id) {
@@ -285,13 +284,8 @@ export default function LibraryPage() {
         } catch (err) {
             toast.error(`Could not start the extraction: ${err.response?.data?.detail || err.message}`);
         }
-    };
-
-    const menuFor = (item) => [
-        { label: 'Stop ignoring', icon: Eye, hidden: itemPriority(item) !== 'ignored', onClick: () => setPriority([item.name], 'normal') },
-        { label: 'Inspect tracks in the video', icon: Search, hidden: !isMovieItem(item) || !item.arr_source || itemPriority(item) === 'ignored', onClick: () => setEmbeddedTarget({ project: item.name, episode: item.name }) },
-        { label: 'Extract subtitles from videos', icon: Film, hidden: !item.arr_source || itemPriority(item) === 'ignored', onClick: () => extractFromVideo(item) },
-    ];
+    }, [addJob, toast]);
+    const inspectTracks = useCallback((item) => setEmbeddedTarget({ project: item.name, episode: item.name }), []);
 
     // ------------------------------------------------------------------ render
 
@@ -433,7 +427,7 @@ export default function LibraryPage() {
                         <span>{visible.length} title{visible.length === 1 ? '' : 's'}{selected.size ? ` · ${selected.size} selected` : ''}</span>
                     </div>
                     <ul className="divide-y divide-gray-100 dark:divide-gray-750">
-                        {visible.map(item => (
+                        {visible.slice(0, shown).map(item => (
                             <LibraryRow
                                 key={item.name}
                                 item={item}
@@ -441,13 +435,21 @@ export default function LibraryPage() {
                                 running={queueByProject[item.name]?.running || 0}
                                 selected={selected.has(item.name)}
                                 onToggle={toggle}
-                                onPriorityChange={(name, priority) => setPriority([name], priority)}
+                                onPriorityChange={changePriority}
                                 onTranslateMissing={translateMissing}
                                 translating={translatingProject === item.name}
-                                menuItems={menuFor(item)}
+                                onInspectTracks={inspectTracks}
+                                onExtract={extractFromVideo}
                             />
                         ))}
                     </ul>
+                    {visible.length > shown && (
+                        <div className="border-t border-gray-100 px-4 py-3 text-center dark:border-gray-750">
+                            <Button variant="ghost" onClick={() => setShown(n => n + PAGE)}>
+                                Show {Math.min(PAGE, visible.length - shown)} more of {visible.length - shown}
+                            </Button>
+                        </div>
+                    )}
                 </Card>
             )}
 
@@ -497,8 +499,8 @@ export default function LibraryPage() {
             <NewProjectModal
                 open={newProjectOpen}
                 onClose={() => setNewProjectOpen(false)}
-                onCreated={loadManual}
-                parents={manual.filter(p => p.type === 'parent')}
+                onCreated={loadLibrary}
+                parents={parents}
                 defaultLanguage={defaultLanguage}
             />
 
