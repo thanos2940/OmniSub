@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowDownCircle, CheckCircle2, ExternalLink, GitCommit, Info, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowDownCircle, CheckCircle2, Clock, ExternalLink, GitCommit, Info, RefreshCw } from 'lucide-react';
 import { api } from '../../api';
 import { useToast } from '../../context/ToastContext';
-import { Button, Card, ConfirmDialog, Field, INPUT, Spinner, StatusChip, Toggle } from '../ui';
+import { usePoll } from '../../hooks/usePoll';
+import { Button, Card, ConfirmDialog, Field, INPUT, Notice, Spinner, StatusChip, Toggle } from '../ui';
 import { waitForServer } from './waitForServer';
 
 const CHANNELS = [
@@ -11,6 +12,18 @@ const CHANNELS = [
     { id: 'releases', label: 'GitHub releases only' },
 ];
 const INTERVALS = [1, 3, 6, 12, 24];
+// How a waiting update ended without a restart that is worth showing (cancelling, or finding nothing to
+// install, is not news).
+const QUIET_ENDINGS = ['cancelled', 'up_to_date'];
+
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+function pendingTitle(pending) {
+    if (pending.state === 'installing' || pending.state === 'restarting') return 'Installing the update';
+    if (pending.state === 'retrying') return 'The update is tried again';
+    if (pending.holding) return 'Update waiting: no new work starts';
+    return 'Update waiting for the work in progress';
+}
 
 function Fact({ label, children, sub }) {
     return (
@@ -30,7 +43,9 @@ export default function UpdatesPanel() {
     const [applying, setApplying] = useState(false);
     const [confirmApply, setConfirmApply] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
     const alive = useRef(true);
+    const commitBeforeUpdate = useRef(null);   // the installed commit while an update waits (to tell when it went in)
 
     const load = useCallback(async (force = false) => {
         if (force) setChecking(true);
@@ -66,6 +81,38 @@ export default function UpdatesPanel() {
         return () => { alive.current = false; };
     }, [load]);
 
+    // While an update waits, follow it: what it waits for changes, and the server restarts once it is in.
+    const pending = update?.pending_update || null;
+    useEffect(() => {
+        if (pending && !commitBeforeUpdate.current) commitBeforeUpdate.current = update.current_commit_full || null;
+    }, [pending, update]);
+    const followPending = useCallback(async ({ signal } = {}) => {
+        const res = await api.getUpdateStatus(signal);
+        if (!alive.current) return;
+        const data = res.data;
+        setUpdate(data);
+        const before = commitBeforeUpdate.current;
+        if (before && data.current_commit_full && data.current_commit_full !== before) {
+            commitBeforeUpdate.current = null;
+            toast.success('OmbiSub restarted on the new version.');
+        }
+    }, [toast]);
+    usePoll(followPending, { intervalMs: 10000, enabled: !!pending });
+
+    const cancelPending = async () => {
+        setCancelling(true);
+        try {
+            const res = await api.cancelPendingUpdate();
+            commitBeforeUpdate.current = null;
+            toast.info(res.data?.message || 'The waiting update was cancelled.');
+            await load(false);
+        } catch (err) {
+            toast.error(`Could not cancel the update: ${err.response?.data?.detail || err.message}`);
+        } finally {
+            if (alive.current) setCancelling(false);
+        }
+    };
+
     const saveAuto = async (patch) => {
         const next = {
             enabled: update.auto_update_enabled ?? false,
@@ -93,6 +140,14 @@ export default function UpdatesPanel() {
         const before = (await api.getSystemStatus().catch(() => null))?.data?.started_at;
         try {
             const res = await api.applyUpdate(false);
+            if (res.data?.status === 'deferred') {
+                // Work is in progress: the update waits for it (new work is held meanwhile) and goes in after.
+                commitBeforeUpdate.current = update?.current_commit_full || null;
+                setUpdate(prev => ({ ...prev, pending_update: res.data.pending_update }));
+                toast.info(res.data.message);
+                setApplying(false);
+                return;
+            }
             toast.success(res.data?.message || 'Update installed. Restarting...');
         } catch (err) {
             const detail = err.response?.data?.detail || err.message;
@@ -121,6 +176,8 @@ export default function UpdatesPanel() {
     const installed = update.installed_release?.tag_name || update.tag_name || update.current_commit;
     const notChecked = update.checked === false;
     const noReleases = update.release_status === 'no_releases_published' && !isMain;
+    const lastDeferred = !pending && update.last_deferred_update && !QUIET_ENDINGS.includes(update.last_deferred_update.status)
+        ? update.last_deferred_update : null;
 
     let chip;
     if (update.update_available) {
@@ -155,6 +212,25 @@ export default function UpdatesPanel() {
                     </Fact>
                     <Fact label="Last checked">{update.last_checked || (notChecked ? 'never' : 'just now')}</Fact>
                 </dl>
+                {pending && (
+                    <Notice
+                        className="mt-4"
+                        tone={pending.holding ? 'warning' : 'info'}
+                        icon={Clock}
+                        title={`${pendingTitle(pending)} (${pending.source}${pending.requested_at ? `, ${clock(pending.requested_at)}` : ''})`}
+                        actions={pending.cancellable && (
+                            <Button size="sm" loading={cancelling} onClick={cancelPending}>Cancel</Button>
+                        )}
+                    >
+                        {pending.message}
+                    </Notice>
+                )}
+                {lastDeferred && (
+                    <Notice className="mt-4" tone="warning" icon={AlertTriangle}
+                        title={`The update that waited since ${clock(lastDeferred.requested_at)} was not installed`}>
+                        {lastDeferred.message}
+                    </Notice>
+                )}
                 {isMain && update.ahead > 0 && (
                     <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
                         This copy has {update.ahead} commit{update.ahead === 1 ? '' : 's'} that are not on origin/main. Updating is refused until they are pushed.
@@ -191,7 +267,7 @@ export default function UpdatesPanel() {
                 </Card>
             )}
 
-            <Card title="Automatic updates" subtitle="OmbiSub checks GitHub in the background. With this on, it installs an update and restarts as soon as the translation queue is idle.">
+            <Card title="Automatic updates" subtitle="OmbiSub checks GitHub in the background. With this on, an update it finds (or a GitHub push announces) is installed at the first moment nothing is in progress; if work keeps it busy for 10 minutes, no new work starts until the work in hand is finished and the update is in.">
                 <div className="space-y-4">
                     <Toggle
                         checked={!!update.auto_update_enabled}
@@ -217,7 +293,7 @@ export default function UpdatesPanel() {
             <ConfirmDialog
                 open={confirmApply}
                 title="Install the update?"
-                message={`OmbiSub downloads ${isMain ? 'the newest commits of main' : `release ${latestRelease?.tag_name || ''}`}, updates changed dependencies, rebuilds the web interface and restarts. Projects, glossaries and settings in the data folder are not touched.`}
+                message={`OmbiSub downloads ${isMain ? 'the newest commits of main' : `release ${latestRelease?.tag_name || ''}`}, updates changed dependencies, rebuilds the web interface and restarts. Projects, glossaries and settings in the data folder are not touched. If episodes are being translated, no new work starts and the update goes in once they are finished.`}
                 confirmLabel="Install and restart"
                 busy={applying}
                 onConfirm={apply}

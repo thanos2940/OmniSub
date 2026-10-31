@@ -45,7 +45,7 @@ def dispatch_extractions(
             f"Background worker claiming extraction {item['id']}: "
             f"{item['project_name']} - {item['episode_name']}"
         )
-        task = asyncio.create_task(process_extraction_item(queue, item, global_config))
+        task = asyncio.create_task(process_extraction_item(queue, item, global_config), name=f"extract_{item['id']}")
         extraction_tasks.add(task)
 
         def _extraction_done(t, _tasks=extraction_tasks):

@@ -7,9 +7,8 @@ Handles incoming external webhooks, including GitHub push events for instant aut
 import hmac
 import hashlib
 import logging
-import asyncio
 from typing import Optional
-from fastapi import APIRouter, Request, Header, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Request, Header, HTTPException
 
 from services.update_service import update_service
 from utils import storage
@@ -38,11 +37,11 @@ def _verify_github_signature(raw_body: bytes, signature_header: Optional[str], s
 @router.post("/github")
 async def github_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_github_event: Optional[str] = Header(None, alias="X-GitHub-Event"),
     x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
 ):
-    """Receive GitHub push events and trigger auto-update."""
+    """Receive GitHub push events and install the update: at once when nothing is in progress, else as soon as
+    the work in hand allows (services/update_service.request_update_when_idle). The reply says which."""
     config = storage.load_global_config()
     webhook_enabled = config.get("github_webhook_enabled", True)
     auto_update_enabled = config.get("auto_update_enabled", True)
@@ -91,29 +90,13 @@ async def github_webhook(
 
         if not auto_update_enabled:
             logger.info("Auto-update is disabled in settings; update not applied automatically.")
-            # Still invalidate cache so UI shows new version immediately
-            update_service._cached_status = None
+            update_service.note_remote_change()   # the UI shows the new commits without waiting for the next check
             return {"status": "received", "message": "Push received. Auto-update is disabled."}
 
-        # Check if busy with translation jobs
-        if update_service.has_active_jobs():
-            logger.info("Translation jobs currently active. Deferring update until server is idle.")
-            # Invalidate status so UI alerts user
-            update_service._cached_status = None
-            return {
-                "status": "deferred",
-                "message": "Translation job currently running. Update will be applied when queue is idle.",
-            }
-
-        # Trigger update in background task
-        async def _apply_in_background():
-            await asyncio.sleep(1.0)
-            await update_service.apply_update(force=False)
-
-        background_tasks.add_task(_apply_in_background)
-        return {
-            "status": "updating",
-            "message": f"Update to commit '{commit_id}' initiated. Server will restart shortly.",
-        }
+        source = f"GitHub push {commit_id}" if commit_id else "GitHub push"
+        answer = update_service.request_update_when_idle(source=source, commit=commit_id)
+        if answer["status"] == "deferred":
+            logger.info(f"GitHub push {commit_id}: work is in progress, the update waits. {answer['message']}")
+        return {"status": answer["status"], "message": answer["message"], "busy": answer["busy"]}
 
     return {"status": "unhandled", "message": f"Unhandled event type: {x_github_event}"}

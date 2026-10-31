@@ -9,10 +9,11 @@ under ``services.worker``.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, List, Optional
 
 from utils.translation_queue import TranslationQueue
 from utils import storage
+from services import work_hold
 from services.worker.scheduler import is_within_window, get_schedule_ceiling
 from services.worker.daily_probe import recover_daily_limits
 from services.worker.extraction_worker import dispatch_extractions, process_extraction_item
@@ -28,6 +29,8 @@ class BackgroundTranslationWorker:
         self._shutdown_event = asyncio.Event()
         self._new_item_event = asyncio.Event()
         self.active_tasks: dict = {}  # Dict[str, asyncio.Task] mapping item_id -> running Task
+        self._extraction_tasks: set = set()   # the loop's extraction and export-retry tasks (see work_in_hand)
+        self._export_tasks: set = set()
         self._last_task_sync_at = 0.0
         self._loop: Optional[asyncio.AbstractEventLoop] = None   # the loop the worker runs on (set by start)
 
@@ -46,6 +49,20 @@ class BackgroundTranslationWorker:
                 loop.call_soon_threadsafe(task.cancel)
             return True
         return False
+
+    def work_in_hand(self) -> Dict[str, List[str]]:
+        """What this worker runs right now, as the job ids it reports under (``bg_<item>`` for a translation,
+        ``extract_<item>`` for an extraction) plus export retries, which have no job. Read from the loop's own
+        task sets, so a task counts from the moment it is created, before its job is registered."""
+        def live(tasks) -> list:
+            try:
+                return [t for t in list(tasks) if not t.done()]
+            except RuntimeError:   # changed size while copied (read from another thread): look again next time
+                return []
+        translations = [f"bg_{item_id}" for item_id, t in list(self.active_tasks.items()) if not t.done()]
+        extractions = [t.get_name() for t in live(self._extraction_tasks)]
+        exports = [t.get_name() for t in live(self._export_tasks)]
+        return {"translations": translations, "extractions": extractions, "exports": exports}
 
     @property
     def stopping(self) -> bool:
@@ -114,8 +131,8 @@ class BackgroundTranslationWorker:
 
     async def _run_loop(self):
         active_tasks = set()
-        extraction_tasks = set()
-        export_tasks = set()
+        extraction_tasks = self._extraction_tasks = set()
+        export_tasks = self._export_tasks = set()
         while not self._shutdown_event.is_set():
             try:
                 global_config = storage.load_global_config()
@@ -137,12 +154,19 @@ class BackgroundTranslationWorker:
                 # Off-peak scheduling ceiling
                 max_priority = self._schedule_ceiling(global_config)
 
+                # While an update waits for the work in hand (services/work_hold.py) no lane starts anything.
+                # Read right before each dispatch, with no await in between, so a hold taken on this loop
+                # is never slipped past.
+                held = work_hold.reason()
+
                 # Embedded-subtitle extraction lane (runs even when translation worker is paused)
-                self._dispatch_extractions(extraction_tasks, global_config, max_priority)
+                if not held:
+                    self._dispatch_extractions(extraction_tasks, global_config, max_priority)
 
                 # Export retry lane (Requirement R1 - runs even when translation worker is paused)
-                from services.worker.export_retry_worker import dispatch_export_retries
-                dispatch_export_retries(self.queue, export_tasks, global_config, self.trigger)
+                if not held:
+                    from services.worker.export_retry_worker import dispatch_export_retries
+                    dispatch_export_retries(self.queue, export_tasks, global_config, self.trigger)
 
                 # Release abandoned agent claims once a minute.
                 import time as _time
@@ -155,8 +179,8 @@ class BackgroundTranslationWorker:
                     except Exception:
                         pass
 
-                # Check global pause switch (pauses only translation claiming)
-                if global_config.get("queue_worker_paused", False):
+                # Check global pause switch (pauses only translation claiming), and the update hold
+                if held or global_config.get("queue_worker_paused", False):
                     try:
                         await asyncio.wait_for(self._new_item_event.wait(), timeout=5.0)
                     except asyncio.TimeoutError:
@@ -177,7 +201,8 @@ class BackgroundTranslationWorker:
                 # 2. Get next pending item and claim it atomically. In agent mode the
                 # translations wait for external agents; only the lanes above run.
                 agent_mode = global_config.get("translation_engine", "agent") == "agent"
-                item = None if agent_mode else self.queue.claim_next(max_priority=max_priority, exclude_agent=True)
+                no_claim = agent_mode or work_hold.reason()   # the awaits above may have let a hold in
+                item = None if no_claim else self.queue.claim_next(max_priority=max_priority, exclude_agent=True)
                 if not item:
                     timeout_val = 15.0
                     try:

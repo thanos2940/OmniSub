@@ -431,6 +431,8 @@ export const api = {
     getUpdateStatus: (signal = undefined) => axios.get(`${API_URL}/api/system/updates/status`, { signal }),
     checkForUpdates: () => axios.post(`${API_URL}/api/system/updates/check`, JOB_START),
     applyUpdate: (force = false) => axios.post(`${API_URL}/api/system/updates/apply`, { force }, VERY_LONG_CALL),
+    // The update that waits for the work in progress (202 from applyUpdate, or a push / scheduled check).
+    cancelPendingUpdate: () => axios.delete(`${API_URL}/api/system/updates/pending`),
     restartServer: () => axios.post(`${API_URL}/api/system/restart`, JOB_START),
     getBackupEstimate: () => axios.get(`${API_URL}/api/backup/estimate`, LONG_CALL),
     // A one-time link the browser downloads straight to disk (bundles are several GB).

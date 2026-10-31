@@ -17,6 +17,7 @@ const LOG_EVENTS = ['agent_runner', 'agent_runner_log', 'agent_runner_submitted'
 export function describeRunner(info, engine, queue) {
     if (engine === 'model') {
         const summary = queue?.summary || {};
+        if (queue?.held) return { label: 'worker · update waiting', tone: 'warning' };
         if (queue?.paused) return { label: 'worker · paused', tone: 'warning' };
         if ((summary.running || 0) > 0) return { label: `worker · translating ${summary.running}`, tone: 'success' };
         if ((summary.pending || 0) > 0) return { label: `worker · ${summary.pending} queued`, tone: 'info' };
@@ -74,7 +75,8 @@ export default function useRunnerStatus({ intervalMs = 3000, withLog = false } =
 
     const engine = snapshot?.translation_engine === 'model' ? 'model' : 'agent';
     const info = withLog ? (own || snapshot?.runner || null) : (snapshot?.runner || null);
-    const queue = snapshot ? { summary: snapshot.summary || {}, paused: !!snapshot.worker?.paused } : null;
+    // `held`: an update waits for the work in hand and no new work starts (its reason, else null).
+    const queue = snapshot ? { summary: snapshot.summary || {}, paused: !!snapshot.worker?.paused, held: snapshot.worker?.held || null } : null;
     const loading = !snapshot && !(withLog && own);
 
     return { info, engine, queue, log, loading, refresh };

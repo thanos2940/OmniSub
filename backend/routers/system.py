@@ -11,6 +11,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from services import system_info
@@ -54,6 +55,10 @@ def _update_payload(status: dict) -> dict:
         "update_channel": config.get("update_channel", "auto"),
         "github_webhook_enabled": config.get("github_webhook_enabled", True),
         "has_webhook_secret": bool(config.get("github_webhook_secret")),
+        # An update that waits for the work in progress (update_service.request_update_when_idle), and how
+        # the last one ended when it did not restart the server.
+        "pending_update": update_service.pending_update_info(),
+        "last_deferred_update": update_service.last_deferred_update(),
     }
 
 
@@ -80,7 +85,9 @@ async def check_updates_now():
 
 @router.post("/api/system/updates/apply")
 async def apply_update_now(payload: Optional[ApplyUpdateRequest] = None):
-    """Download latest release tag or commits, sync dependencies, and restart."""
+    """Download latest release tag or commits, sync dependencies, and restart. While work is in progress the
+    update waits for it instead (202, ``status: deferred``): new work is held at once, the work in hand is
+    finished, then the update is installed. ``force`` installs now and cuts off what is in progress."""
     force = payload.force if payload else False
     target_tag = payload.target_tag if payload else None
 
@@ -89,17 +96,30 @@ async def apply_update_now(payload: Optional[ApplyUpdateRequest] = None):
     else:
         result = await update_service.apply_update(force=force)
     if not result.get("success") and result.get("status") == "busy":
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot update while a translation job is running. Please wait for completion or force update."
-        )
-    if not result.get("success") and result.get("status") in ("local_changes", "local_commits", "wrong_branch"):
+        if target_tag is not None:   # a release picked by tag is installed now or not at all
+            raise HTTPException(status_code=409, detail=result.get("message"))
+        answer = update_service.request_update_when_idle(source="Install button", hold_now=True, automatic=False)
+        return JSONResponse(status_code=202, content={
+            "success": False, "status": "deferred", "message": answer["message"], "busy": answer["busy"],
+            "pending_update": answer["pending_update"],
+        })
+    if not result.get("success") and result.get("status") in ("local_changes", "local_commits", "wrong_branch",
+                                                               "already_updating"):
         raise HTTPException(status_code=409, detail=result.get("message"))
     if not result.get("success"):
         raise HTTPException(
             status_code=500,
             detail=result.get("message", "Failed to apply update.")
         )
+    return result
+
+
+@router.delete("/api/system/updates/pending")
+async def cancel_pending_update():
+    """Drop the update that waits for the work in progress, and let new work start again."""
+    result = update_service.cancel_pending_update()
+    if not result["cancelled"] and update_service.pending_update_info() is not None:
+        raise HTTPException(status_code=409, detail=result["message"])
     return result
 
 

@@ -25,8 +25,10 @@ conversation. This runner drives the same workspaces directly:
   dialogue and the model's own knowledge. A failure never holds the translation up. Every few
   translated episodes the last part of an episode may add a few short facts to the guide.
 * "Pause translations" (``queue_worker_paused``) makes the lanes take no new episode; the ones in
-  hand are finished. Requests outside the lanes (retranslate a line, guide and glossary buttons,
-  summaries, term harvest, wrong-alphabet repair) go through services/agy_llm.py.
+  hand are finished. An update that waits for a gap holds new work the same way, in memory only
+  (services/work_hold.py), until the restart that installs it. Requests outside the lanes
+  (retranslate a line, guide and glossary buttons, summaries, term harvest, wrong-alphabet repair)
+  go through services/agy_llm.py.
 * A finished episode is submitted through the normal agent submit — validation, Script Guard,
   glossary merge, Translation Memory, summary, export — exactly as if an agent had typed
   ``agent_task.py submit``.
@@ -57,7 +59,7 @@ _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 
 
 from utils import paths, storage
 from utils.translation_queue import TranslationQueue, KIND_TRANSLATION
-from services import agent_cli, agent_prompts as ap, agent_workspace as aw
+from services import agent_cli, agent_prompts as ap, agent_workspace as aw, work_hold
 
 logger = logging.getLogger("omnisub.agent_runner")
 
@@ -119,6 +121,7 @@ GUIDE_ADDITIONS_FILE = "guide_additions.txt"   # in an episode's workspace: the 
 BOOTSTRAP_TIMEOUT = 600          # seconds the bootstrap request may take
 BOOTSTRAP_STATE = "building the show's context"   # a lane's state during the bootstrap
 PREPARING_STATE = "preparing the episode"          # ... while its workspace is built (maybe extracting the subtitle)
+HELD_STATE = "waiting for the update"              # ... while new work is held for an update (services/work_hold.py)
 CLAIM_PREFIX = "claim:"                            # held[] key of a claim whose workspace is being built
 CONTEXT_CACHE_SECONDS = 300      # a show's glossary matcher and prompt prefix are reused this long
 PID_STALE_SECONDS = 45 * 60      # a lock file not touched for this long belongs to a runner that died
@@ -592,6 +595,27 @@ class AgentRunner:
         with self.lock:
             return [k[len(CLAIM_PREFIX):] for k in self.held if k.startswith(CLAIM_PREFIX)]
 
+    def work_in_hand(self) -> List[str]:
+        """What the lanes are doing that a restart would cut off: an episode being prepared, translated or
+        submitted ("<show> <episode>"). Lanes that wait for quota, are paused or idle have nothing in hand.
+        A claim being taken at this very moment holds ``claim_lock`` and counts too (never waited for: the
+        caller may be the event loop). Empty when the runner is not working."""
+        claiming = not self.claim_lock.acquire(blocking=False)
+        try:
+            with self.lock:
+                named = [f"{v.get('project') or ''} {v.get('episode') or ''}".strip()
+                         for _, v in sorted(self.lanes.items()) if v.get("task")]
+                count = max(len(self.held), self._busy, len(named))
+        finally:
+            if not claiming:
+                self.claim_lock.release()
+        out = [f"{name or 'an episode'} (agy runner)" for name in named]
+        if count > len(named):
+            out.append(f"{count - len(named)} episode(s) being picked up by the agy runner")
+        if claiming and not out:
+            out.append("the agy runner is taking its next episode")
+        return out
+
     def cancel_task(self, task_id: str) -> bool:
         """An episode a lane holds was taken away from outside (cancelled, or released by hand; its workspace is
         closed): cut off that lane's request in flight, so the lane lets go now rather than when the reply comes.
@@ -880,7 +904,7 @@ class AgentRunner:
         per_show = int(self.config["per_show"] or 1)
         for _ in range(50):   # items that turn out to need no work are passed over
             with self.claim_lock:
-                if self.stop_event.is_set() or self._no_new_work():
+                if self.stop_event.is_set() or self._no_new_work() or work_hold.reason():
                     return None
                 with self.lock:
                     busy = dict(self.held)
@@ -1010,6 +1034,13 @@ class AgentRunner:
                     self._keep_claims()
                     self._idle_sleep(5)
                     continue
+                held = work_hold.reason()
+                if held:   # an update waits for the episodes in hand; this lane starts nothing new
+                    self._set_status("waiting", held)
+                    self._lane_set(lane, state=HELD_STATE, **NO_WORK)
+                    self._keep_claims()
+                    self._idle_sleep(5)
+                    continue
                 model, wait = self._pick()
                 if model is None:
                     resume = datetime.now() + timedelta(seconds=wait)
@@ -1035,6 +1066,8 @@ class AgentRunner:
                     self._release_probe(model, lane)
                     if self._no_new_work():
                         break
+                    if work_hold.reason():   # held since the top of the loop: say so there, do not finish
+                        continue
                     # Under the claim lock, so no claim can slip in between this check and the stop: another
                     # lane counts as busy from its claim (``held``), not only once it starts translating.
                     with self.claim_lock:

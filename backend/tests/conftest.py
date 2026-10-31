@@ -75,3 +75,25 @@ def no_real_runner_autostart(request, monkeypatch):
         return
     from services import agent_runner
     monkeypatch.setattr(agent_runner, "autostart", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def no_leftover_update_hold():
+    """A hold on new work (services/work_hold.py) or a waiting update left by one test must not reach the next:
+    a held runner takes no episode, and a waiter would go on looking for a moment to install."""
+    yield
+    from services import work_hold
+    from services.update_service import update_service
+    with work_hold._lock:
+        work_hold._holds.clear()
+    waiter = update_service._waiter
+    if waiter is not None and not waiter.done():
+        try:
+            waiter.cancel()
+        except RuntimeError:   # its loop is already closed
+            pass
+    update_service._waiter = None
+    update_service._wake = None
+    update_service._pending = None
+    update_service._last_deferred = None
+    update_service._updating = False

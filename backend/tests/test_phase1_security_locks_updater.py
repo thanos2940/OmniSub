@@ -207,17 +207,20 @@ def test_auto_update_enabled_defaults_to_false():
 
 
 def test_has_active_jobs_checks_agent_runner(monkeypatch):
-    """has_active_jobs returns True if agent runner status is running."""
+    """has_active_jobs counts the agent runner's episodes in hand, whatever its status says: the status reads
+    "waiting" while one lane is paused and another translates, and "running" between two episodes."""
     import utils.jobs_manager as jm
     monkeypatch.setattr(jm, "jobs", {})
     svc = UpdateService()
     mock_runner = MagicMock()
-    mock_runner.status = "running"
-    monkeypatch.setattr("services.agent_runner.get_runner", lambda: mock_runner)
+    mock_runner.status = "waiting"
+    mock_runner.work_in_hand.return_value = ["Show S01E01 (agy runner)"]
+    monkeypatch.setattr("services.agent_runner.current_runner", lambda: mock_runner)
 
     assert svc.has_active_jobs() is True
 
-    mock_runner.status = "idle"  # watching an empty queue is not work in flight
+    mock_runner.status = "running"   # between episodes, or waiting for quota: nothing a restart would cut off
+    mock_runner.work_in_hand.return_value = []
     assert svc.has_active_jobs() is False
 
 

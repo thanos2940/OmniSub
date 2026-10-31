@@ -187,6 +187,27 @@ Follow-up 2026-10-31 (same branch):
   `deploy/morpicehub/README.md`. MorpiceHub's own code is not in any repository this account reaches, so
   whether it calls these endpoints today could not be checked from here.
 
+Follow-up 2026-10-31, updates wait for the work in progress (same branch):
+- A GitHub push that found OmbiSub busy answered "deferred ... applied when queue is idle" and nothing ever
+  applied it (only the polling loop could, and it also skipped busy ticks). Now `update_service.
+  request_update_when_idle` serves the push webhook, the scheduled check and Install pressed during work: one
+  waiter task installs at the first moment nothing is in progress (checked every 30 s, at once on a new
+  request). After 10 minutes of continuous work (at once for Install) new work is held
+  (`services/work_hold.py`, in memory only): the runner's lanes and the Gemini worker start nothing new and
+  the episodes in hand finish. Nothing in progress is cut off. The hold is lifted after 2 hours if something
+  never ends, on a refused install (local changes, wrong branch), on Cancel (`DELETE /api/system/updates/
+  pending`) and at shutdown; a failed `git fetch` is tried again twice, 10 minutes apart.
+- `has_active_jobs` read the runner's status, which says "waiting" while one lane is paused and another
+  translates; it now counts episodes in hand (`AgentRunner.work_in_hand`, a claim in progress included), the
+  worker's tasks before their job registers, export retries and one-off agy requests (`busy_reasons`). The
+  install holds new work from its busy check to the restart (an episode started during the UI rebuild was
+  cut off); a restart that cannot be started lifts the hold.
+- System › Updates shows the waiting update (what it waits for, whether new work is held) with Cancel, and
+  why the last one was not installed; Install during work answers 202 `deferred`. The top bar says
+  "update waiting" for the Gemini engine; the runner's status message says it for agy.
+- Pushes and scheduled checks install only with "Install updates when idle" on (`auto_update_enabled`, off
+  by default); with it off a push only refreshes the update check.
+
 Not changed, worth knowing:
 - **Session reuse per show** was considered and rejected: a resumed CLI conversation re-sends its whole
   history every request (tokens and quota grow with every episode, quality drops with context length, lanes

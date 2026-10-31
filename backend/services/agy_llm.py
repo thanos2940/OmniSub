@@ -55,6 +55,12 @@ def kill_all() -> int:
     return len(live)
 
 
+def in_flight() -> List[str]:
+    """The purpose of every one-off request whose CLI process is running now (retranslate, summary, ...)."""
+    with _live_lock:
+        return [str(state.get("purpose") or "request") for state in _live.values()]
+
+
 class AgyError(RuntimeError):
     """A one-off request could not be answered. ``kind``: unavailable (no CLI, every model paused),
     busy, blocked (the safety filter refused and nothing else may answer), timeout, failed."""
@@ -77,7 +83,7 @@ def _call(runner, model: str, prompt: str, purpose: str, project: Optional[str],
     left = deadline - time.time()
     if left <= 0:
         raise AgyError("The request timed out.", "timeout")
-    state: Dict = {"timer": None, "late": False, "proc": None, "stopped": False}
+    state: Dict = {"timer": None, "late": False, "proc": None, "stopped": False, "purpose": purpose}
 
     def started(proc) -> None:
         def cut() -> None:

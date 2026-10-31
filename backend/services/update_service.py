@@ -11,6 +11,10 @@ Features:
   has no release tags and ``releases`` once it has.
 - Safe update execution: guards against interrupting active translation jobs
   and refuses to erase uncommitted or unpushed local changes.
+- An update that finds OmbiSub busy (a GitHub push, a scheduled check, Install pressed during work) waits
+  for it: one waiter task installs at the first moment nothing is in progress. A server that stays busy
+  holds new work after a while (services/work_hold.py, in memory only) so the work in hand can finish;
+  nothing in progress is ever cut off for an update.
 - Automatically updates Python dependencies (pip install) and frontend static
   assets (static.zip or npm build) on release diffs.
 - Supports detached restart helper and tray supervisor code 42 exit.
@@ -34,6 +38,7 @@ from urllib.error import URLError, HTTPError
 
 from utils import storage
 from utils.paths import DATA_DIR
+from services import work_hold
 
 logger = logging.getLogger("omnisub.update_service")
 
@@ -62,6 +67,37 @@ CHECK_CACHE_FILE = DATA_DIR / "update_check.json"
 CHECK_MAX_AGE_SECONDS = 6 * 3600
 CHECK_RETRY_SECONDS = 600  # minimum gap between two background refreshes, successful or not
 
+# An update deferred because work is in progress (request_update_when_idle).
+IDLE_CHECK_SECONDS = 30          # how often the waiting update looks for a moment with nothing in progress
+HOLD_AFTER_SECONDS = 10 * 60     # still busy after this long: new work is held so the work in hand can finish
+HOLD_MAX_SECONDS = 2 * 3600      # held this long and still busy (something never ends): the hold is lifted
+RETRY_SECONDS = 600              # an install that failed for a passing reason (git fetch) is tried again after this
+MAX_INSTALL_ATTEMPTS = 3
+RETRYABLE_FAILURES = ("fetch_failed", "reset_failed", "error")
+HOLD_MESSAGE = ("An update is waiting to be installed: the work in hand is finished first, and new work starts "
+                "after OmbiSub restarts on the new version.")
+INSTALL_MESSAGE = "Installing an update: new work starts after OmbiSub restarts on the new version."
+BUSY_SHOWN = 3                   # in-progress items named in a message; the rest are counted
+
+
+def _iso(ts: Optional[float]) -> Optional[str]:
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="seconds") if ts else None
+
+
+def _span(seconds: float) -> str:
+    """A duration in the words of a message: "2 hours", "10 minutes"."""
+    minutes = round(seconds / 60)
+    if minutes >= 60 and minutes % 60 == 0:
+        return f"{minutes // 60} hour{'s' if minutes != 60 else ''}"
+    if minutes >= 1:
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    return f"{max(1, round(seconds))} seconds"
+
+
+def _clock(ts: float) -> str:
+    """The server's local time of day, for messages (the UI formats the ISO times itself)."""
+    return datetime.fromtimestamp(ts).strftime("%H:%M")
+
 
 class UpdateService:
     """Manages update checking, dependency synchronization, and graceful restarts."""
@@ -74,6 +110,10 @@ class UpdateService:
         self._last_attempt: float = 0.0
         self._refresh_task: Optional["asyncio.Task"] = None
         self._updating: bool = False
+        self._pending: Optional[Dict[str, Any]] = None        # the deferred update, while one waits
+        self._waiter: Optional["asyncio.Task"] = None          # the one task that installs it
+        self._wake: Optional["asyncio.Event"] = None           # set by a new request: the waiter looks now
+        self._last_deferred: Optional[Dict[str, Any]] = None  # how the last one ended without a restart
         self.github_repo: str = GITHUB_REPO
         self.backend_dir: Path = BACKEND_DIR
         self.frontend_dir: Path = FRONTEND_DIR
@@ -538,34 +578,316 @@ class UpdateService:
         self._last_attempt = now
         return True
 
-    def has_active_jobs(self) -> bool:
-        """Check whether translation or sync jobs are currently in-flight."""
+    def busy_reasons(self) -> List[str]:
+        """What is in progress right now that the restart of an update would cut off, a few words each: jobs in
+        the registry (Gemini translations, extractions, syncs), the agy runner's episodes in hand (a lane that
+        waits for quota or is paused has none), Gemini worker tasks whose job is not registered yet, export
+        retries and one-off agy requests. Empty: nothing would be lost. Cheap and never blocks (event loop)."""
+        out: List[str] = []
+        live_jobs = set()
         try:
             from utils.jobs_manager import jobs, _TERMINAL
-            for j in jobs.values():
-                if j.status not in _TERMINAL and j.status in ("running", "in_progress", "pending"):
-                    return True
+            for job_id, job in list(jobs.items()):
+                if job.status in _TERMINAL or job.status not in ("running", "in_progress", "pending"):
+                    continue
+                live_jobs.add(job_id)
+                what = " ".join(x for x in (job.project_name, job.episode_name) if x) or job_id
+                message = (job.message or "").strip()
+                out.append(f"{what}: {message[:80]}" if message else what)
         except Exception:
             pass
         try:
             from services import agent_runner
-            if agent_runner.get_runner().status == "running":  # translating now; "idle" (watching) does not count
-                return True
+            runner = agent_runner.current_runner()
+            if runner is not None:
+                out.extend(runner.work_in_hand())
         except Exception:
             pass
-        return False
+        try:
+            from services.background_worker import worker
+            hand = worker.work_in_hand()
+            starting = [t for t in hand["translations"] + hand["extractions"] if t not in live_jobs]
+            if starting:
+                out.append(f"{len(starting)} Gemini worker task(s) starting")
+            if hand["exports"]:
+                out.append(f"{len(hand['exports'])} subtitle export(s)")
+        except Exception:
+            pass
+        try:
+            from services import agy_llm
+            asks = [p for p in agy_llm.in_flight() if p != "bootstrap"]   # a show's bootstrap is a runner lane's
+            if asks:
+                out.append(f"{len(asks)} agy request(s) ({', '.join(sorted(set(asks)))})")
+        except Exception:
+            pass
+        return out
+
+    def has_active_jobs(self) -> bool:
+        """Anything in progress that an update's restart would cut off (``busy_reasons``)."""
+        return bool(self.busy_reasons())
+
+    @staticmethod
+    def _summary(busy: List[str]) -> str:
+        shown = "; ".join(busy[:BUSY_SHOWN])
+        return shown + (f"; and {len(busy) - BUSY_SHOWN} more" if len(busy) > BUSY_SHOWN else "")
+
+    # ------------------------------------------------------------------ an update that waits for a gap
+
+    def request_update_when_idle(self, source: str, commit: str = "", hold_now: bool = False,
+                                 automatic: bool = True) -> Dict[str, Any]:
+        """Install the update at the first moment nothing is in progress, and say what will happen.
+
+        One waiter task serves every request: another push or check while one waits only refreshes it. New work
+        is held (services/work_hold.py) once OmbiSub has stayed busy for HOLD_AFTER_SECONDS, or at once with
+        ``hold_now`` (a person pressed Install), so the work in hand can finish. A hold that lasts
+        HOLD_MAX_SECONDS without the work in hand ending is lifted, and the update then waits for a natural gap.
+        Nothing in progress is cut off. ``automatic`` requests (a push, a scheduled check) are dropped when
+        automatic updates are switched off while they wait. Call on the event loop."""
+        now = time.time()
+        p = self._pending
+        if p is None:
+            p = self._pending = {
+                "requested_at": now, "source": source, "commit": commit, "hold_now": hold_now,
+                "automatic": automatic, "state": "waiting", "attempts": 0, "next_try": 0.0,
+                "hold_token": None, "holding_since": None, "hold_lifted": False, "busy": [], "last_result": None,
+            }
+            logger.info(f"Update requested ({source}): it is installed at the first moment nothing is in progress.")
+        else:
+            p["source"] = source
+            p["commit"] = commit or p["commit"]
+            p["automatic"] = p["automatic"] and automatic   # once a person asked, the setting no longer drops it
+            if hold_now:   # a person asked (again): hold at once, even after an earlier hold was lifted
+                p["hold_now"], p["hold_lifted"] = True, False
+            if p["state"] == "retrying":   # a new push or a person: try again now rather than at next_try
+                p["state"], p["next_try"] = "waiting", 0.0
+        self._last_deferred = None
+        p["busy"] = self.busy_reasons()
+        if p["busy"] and p["state"] in ("waiting", "holding"):
+            self._pace_hold(p, now)   # Install pressed: the hold starts with the answer, not 30 s later
+        self._ensure_waiter()
+        return {"status": "deferred" if p["busy"] else "updating", "busy": list(p["busy"]),
+                "message": self._describe(p), "pending_update": self.pending_update_info()}
+
+    def pending_update_info(self) -> Optional[Dict[str, Any]]:
+        """The update that waits, for the UI: what it waits for, whether new work is held (since when, or from
+        when on), the last failed attempt, and one sentence saying all of it. None when none waits."""
+        p = self._pending
+        if p is None:
+            return None
+        holding = p["holding_since"] is not None
+        hold_at = None
+        if not holding and not p["hold_lifted"]:
+            hold_at = p["requested_at"] + (0 if p["hold_now"] else HOLD_AFTER_SECONDS)
+        return {
+            "state": p["state"], "source": p["source"], "commit": p["commit"],
+            "requested_at": _iso(p["requested_at"]), "holding": holding,
+            "holding_since": _iso(p["holding_since"]), "hold_at": _iso(hold_at), "hold_lifted": p["hold_lifted"],
+            "busy": list(p["busy"]), "attempts": p["attempts"],
+            "next_try": _iso(p["next_try"]) if p["next_try"] > time.time() else None,
+            "last_result": p["last_result"], "cancellable": p["state"] not in ("installing", "restarting"),
+            "message": self._describe(p),
+        }
+
+    def last_deferred_update(self) -> Optional[Dict[str, Any]]:
+        """How the last waiting update ended without a restart (refused, cancelled, nothing to install)."""
+        return self._last_deferred
+
+    def cancel_pending_update(self) -> Dict[str, Any]:
+        """Drop the waiting update and lift its hold. Refused once the install has begun."""
+        p = self._pending
+        if p is None:
+            return {"cancelled": False, "message": "No update is waiting."}
+        if p["state"] in ("installing", "restarting"):
+            return {"cancelled": False, "message": "The update is being installed and can no longer be stopped."}
+        self._end_pending("cancelled", "Cancelled by hand; nothing was installed.")
+        waiter, self._waiter = self._waiter, None
+        if waiter is not None and not waiter.done():
+            waiter.cancel()
+        return {"cancelled": True, "message": "The waiting update was cancelled; new work goes on as usual."}
+
+    def shutdown(self) -> None:
+        """Server stop: the waiter ends with the process, and its hold is lifted (it is in memory only anyway)."""
+        waiter, self._waiter = self._waiter, None
+        if waiter is not None and not waiter.done():
+            waiter.cancel()
+        if self._pending is not None and self._pending["state"] != "restarting":
+            self._lift_hold(self._pending)
+
+    def note_remote_change(self) -> None:
+        """New commits were pushed: the cached check is out of date, so check again now, in the background."""
+        self._forget_check()
+        self._last_attempt = 0.0
+        self.schedule_refresh()
+
+    def _ensure_waiter(self) -> None:
+        loop = asyncio.get_running_loop()
+        waiter = self._waiter
+        if waiter is not None and not waiter.done() and waiter.get_loop() is loop and self._wake is not None:
+            self._wake.set()
+            return
+        self._wake = asyncio.Event()   # one per waiter: an Event belongs to the loop it is first awaited on
+        self._waiter = loop.create_task(self._wait_and_install())
+
+    async def _nap(self, seconds: float) -> None:
+        """Sleep until the next check, or until a new request wants a look now."""
+        wake = self._wake
+        if wake is None:
+            await asyncio.sleep(seconds)
+            return
+        try:
+            await asyncio.wait_for(wake.wait(), timeout=max(0.0, seconds))
+        except asyncio.TimeoutError:
+            pass
+        wake.clear()
+
+    async def _wait_and_install(self) -> None:
+        """Every IDLE_CHECK_SECONDS: install when nothing is in progress, else take or lift the hold as the
+        timings say. Ends once the update is installed (the process restarts), refused, cancelled or not needed."""
+        try:
+            while self._pending is not None:
+                p = self._pending
+                now = time.time()
+                if p["automatic"] and storage.load_global_config().get("auto_update_enabled") is False:
+                    self._end_pending("cancelled", "Automatic updates were switched off while the update waited.")
+                    return
+                if now < p["next_try"]:
+                    await self._nap(min(IDLE_CHECK_SECONDS, p["next_try"] - now))
+                    continue
+                busy = await asyncio.to_thread(self.busy_reasons)   # the runner's lock is never waited on here
+                if busy:
+                    p["busy"] = busy
+                    self._pace_hold(p, time.time())
+                    await self._nap(IDLE_CHECK_SECONDS)
+                    continue
+                p["busy"] = []
+                if await self._install_pending(p):
+                    return
+        except asyncio.CancelledError:
+            if self._pending is not None and self._pending["state"] != "restarting":
+                self._lift_hold(self._pending)
+            raise
+        except Exception as e:
+            logger.error(f"The waiting update stopped on an unexpected error: {e}", exc_info=True)
+            self._end_pending("error", f"Stopped on an unexpected error: {e}")
+
+    async def _install_pending(self, p: Dict[str, Any]) -> bool:
+        """Nothing is in progress: install. True when the waiting is over (restarting, or ended)."""
+        p["state"] = "installing"
+        status = await self.check_for_updates(force=True)
+        if status.get("checked") and not status.get("update_available"):
+            self._end_pending("up_to_date", "Already up to date: there was nothing to install.")
+            return True
+        result = await self.apply_update(force=False)
+        outcome = result.get("status") or ""
+        if result.get("success"):
+            if outcome == "restarting":
+                p["state"] = "restarting"   # the process exits in a moment; the hold stays until then
+            else:
+                self._end_pending(outcome or "installed", result.get("message") or "")
+            return True
+        if outcome in ("busy", "already_updating"):   # something started after the idle check
+            p["state"] = "holding" if p["holding_since"] else "waiting"
+            p["busy"] = result.get("busy") or self.busy_reasons() or ["work in progress"]
+            await asyncio.sleep(IDLE_CHECK_SECONDS)   # not cut short: another install may be running
+            return False
+        p["attempts"] += 1
+        p["last_result"] = {"status": outcome, "message": result.get("message") or ""}
+        if outcome in RETRYABLE_FAILURES and p["attempts"] < MAX_INSTALL_ATTEMPTS:
+            p["state"] = "retrying"
+            p["next_try"] = time.time() + RETRY_SECONDS
+            self._lift_hold(p)   # nothing is held through the pause; it is taken again if work is in progress then
+            logger.warning(f"Installing the waiting update failed ({outcome}: {result.get('message')}); trying again "
+                           f"in {_span(RETRY_SECONDS)} (attempt {p['attempts']} of {MAX_INSTALL_ATTEMPTS}).")
+            return False
+        self._end_pending(outcome or "failed", result.get("message") or "The update could not be installed.")
+        return True
+
+    def _pace_hold(self, p: Dict[str, Any], now: float) -> None:
+        """Work is in progress: hold new work once the update has waited long enough (at once when a person
+        asked), and lift a hold that has lasted HOLD_MAX_SECONDS without the work in hand ending."""
+        if p["hold_token"] is None:
+            if not p["hold_lifted"] and (p["hold_now"] or now - p["requested_at"] >= HOLD_AFTER_SECONDS):
+                p["hold_token"] = work_hold.hold(HOLD_MESSAGE)
+                p["holding_since"] = now
+                logger.info(f"The waiting update holds new work until the work in hand is done "
+                            f"({self._summary(p['busy'])}).")
+        elif now - p["holding_since"] >= HOLD_MAX_SECONDS:
+            self._lift_hold(p)
+            p["hold_lifted"] = True
+            logger.warning(f"New work was held for {_span(HOLD_MAX_SECONDS)} for the waiting update and work is "
+                           f"still in progress ({self._summary(p['busy'])}). New work starts again; the update goes in "
+                           f"at the first moment nothing is in progress.")
+        p["state"] = "holding" if p["hold_token"] is not None else "waiting"
+
+    @staticmethod
+    def _lift_hold(p: Dict[str, Any]) -> None:
+        token, p["hold_token"], p["holding_since"] = p["hold_token"], None, None
+        if token is not None:
+            work_hold.release(token)
+
+    def _end_pending(self, outcome: str, message: str) -> None:
+        p, self._pending = self._pending, None
+        if p is None:
+            return
+        self._lift_hold(p)
+        self._last_deferred = {"status": outcome, "message": message, "source": p["source"],
+                               "requested_at": _iso(p["requested_at"]), "ended_at": _iso(time.time())}
+        log = logger.info if outcome in ("up_to_date", "cancelled") else logger.warning
+        log(f"The waiting update ({p['source']}) ended without a restart: {message}")
+
+    def _describe(self, p: Dict[str, Any]) -> str:
+        """One sentence that promises only what will happen."""
+        state = p["state"]
+        if state in ("installing", "restarting"):
+            return "Installing the update now; OmbiSub restarts on the new version when it is in."
+        if state == "retrying":
+            failed = ((p["last_result"] or {}).get("message") or "").strip()
+            return (f"The last attempt to install failed{f' ({failed[:160]})' if failed else ''}; "
+                    f"OmbiSub tries again at {_clock(p['next_try'])}.")
+        busy = p["busy"]
+        if not busy:
+            return "Nothing is in progress: installing the update now; OmbiSub restarts on the new version when it is in."
+        what = self._summary(busy)
+        if p["holding_since"] is not None:
+            return (f"Waiting for the work in hand to finish ({what}). No new work starts until the update is "
+                    "installed and OmbiSub has restarted.")
+        if p["hold_lifted"]:
+            return (f"Waiting for a moment with nothing in progress ({what}). New work is no longer held: it was "
+                    f"held for {_span(HOLD_MAX_SECONDS)} without the work in hand finishing.")
+        hold_at = p["requested_at"] + (0 if p["hold_now"] else HOLD_AFTER_SECONDS)
+        return (f"Waiting for a moment with nothing in progress ({what}). If OmbiSub is still busy at "
+                f"{_clock(hold_at)}, new work is held so that the work in hand can finish and the update go in.")
 
     async def apply_update(self, force: bool = False, target_tag: Optional[str] = None) -> Dict[str, Any]:
-        """Safely pull release tag/commits, update dependencies, rebuild static, and restart."""
+        """Safely pull release tag/commits, update dependencies, rebuild static, and restart.
+
+        New work is held (services/work_hold.py) from the busy check to the restart: an episode that started
+        while the web UI is rebuilt would be cut off by the restart. The hold is taken before the check, so
+        no lane can claim between the two. An update that is refused or fails lifts it again."""
         if self._updating:
             return {"success": False, "status": "already_updating", "message": "Update is already in progress."}
+        self._updating = True   # from here, not from the reset: two installs at once would both reset
+        token = work_hold.hold(INSTALL_MESSAGE)
+        restarting = False
+        try:
+            result = await self._install(force, target_tag)
+            restarting = bool(result.get("success")) and result.get("status") == "restarting"
+            return result
+        finally:
+            if not restarting:
+                self._updating = False
+                work_hold.release(token)
 
+    async def _install(self, force: bool, target_tag: Optional[str]) -> Dict[str, Any]:
         # Guard: In-flight job check
         if not force and self.has_active_jobs():
+            busy = self.busy_reasons()
             return {
                 "success": False,
                 "status": "busy",
-                "message": "Cannot update while a translation job is running. Update postponed until queue is idle.",
+                "busy": busy,
+                "message": (f"Work is in progress ({self._summary(busy)}); installing now would cut it off."
+                            if busy else "Work is in progress; installing now would cut it off."),
             }
 
         if not self.is_git_repo():
@@ -756,7 +1078,14 @@ class UpdateService:
 
             # Trigger graceful restart
             logger.info("Update applied successfully. Triggering server restart...")
-            self.trigger_restart(delay_seconds=1.5)
+            if self.trigger_restart(delay_seconds=1.5) is False:
+                self._updating = False
+                return {
+                    "success": True,
+                    "status": "installed",
+                    "message": f"Update installed ({tag_name or target_ref}), but OmbiSub could not restart itself. "
+                               "Restart it to run the new version.",
+                }
 
             return {
                 "success": True,
@@ -840,17 +1169,18 @@ class UpdateService:
             raise
         shutil.rmtree(old, ignore_errors=True)
 
-    def trigger_restart(self, delay_seconds: float = 1.0):
-        """Spawn detached restart helper script or exit with code 42 under tray supervisor."""
+    def trigger_restart(self, delay_seconds: float = 1.0) -> bool:
+        """Spawn detached restart helper script or exit with code 42 under tray supervisor. True when the exit
+        is scheduled, False when nothing will restart the server."""
         if os.environ.get("OMBISUB_SUPERVISOR") == "tray":
             logger.info("Running under OMBISUB_SUPERVISOR=tray; exiting with code 42 for automatic tray respawn.")
             threading.Timer(0.5, lambda: os._exit(42)).start()
-            return
+            return True
 
         helper_script = ROOT_DIR / "scripts" / "restart_helper.py"
         if not helper_script.is_file():
             logger.error(f"Restart helper script not found at {helper_script}")
-            return
+            return False
 
         parent_pid = os.getpid()
         cmd = [
@@ -877,8 +1207,10 @@ class UpdateService:
             )
             logger.info(f"Detached restart helper launched for PID {parent_pid}.")
             threading.Timer(0.5, lambda: os._exit(0)).start()
+            return True
         except Exception as e:
             logger.error(f"Failed to launch restart helper: {e}")
+            return False
 
 
 # Singleton instance

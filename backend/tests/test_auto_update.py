@@ -254,14 +254,11 @@ def test_webhook_push_valid_secret(client, monkeypatch):
     payload_bytes = json.dumps(payload_dict).encode("utf-8")
     sig = "sha256=" + hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
 
-    # Mock apply_update so test doesn't actually restart server
-    applied = []
-    async def mock_apply(force=False):
-        applied.append(True)
-        return {"success": True}
-
-    monkeypatch.setattr("routers.webhooks.update_service.has_active_jobs", lambda: False)
-    monkeypatch.setattr("routers.webhooks.update_service.apply_update", mock_apply)
+    # The push goes to the waiter (tests/test_update_when_idle.py drives it); here it must not start, since it
+    # would check GitHub and install from inside the request's short-lived loop.
+    waiters = []
+    monkeypatch.setattr("routers.webhooks.update_service.busy_reasons", lambda: [])
+    monkeypatch.setattr("routers.webhooks.update_service._ensure_waiter", lambda: waiters.append(True))
 
     resp = client.post(
         "/api/webhooks/github",
@@ -274,6 +271,8 @@ def test_webhook_push_valid_secret(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "updating"
+    assert waiters == [True]
+    assert update_service.pending_update_info()["source"] == "GitHub push abcdef1"
 
 
 # ===========================================================================

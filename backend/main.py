@@ -90,28 +90,30 @@ _batch_task: Optional[asyncio.Task] = None
 _auto_update_task: Optional[asyncio.Task] = None
 
 
+async def _auto_update_tick() -> None:
+    """One scheduled check: with automatic updates on, an update that is found is installed at the first moment
+    nothing is in progress (update_service.request_update_when_idle), not at the next check."""
+    from services.update_service import update_service
+    if not storage.load_global_config().get("auto_update_enabled", False):
+        return
+    status = await update_service.check_for_updates(force=True)
+    if status.get("update_available"):
+        answer = update_service.request_update_when_idle(source="scheduled check",
+                                                         commit=status.get("latest_commit") or "")
+        logger.info(f"Auto-update: an update is available on {status.get('branch')}. {answer['message']}")
+
+
 async def _auto_update_loop():
     """Periodically poll GitHub for updates when auto_update_enabled is True."""
-    from services.update_service import update_service
     while True:
         try:
             config = storage.load_global_config()
-            enabled = config.get("auto_update_enabled", False)
             interval_hours = max(1, config.get("auto_update_interval_hours", 6))
             # Sleep in 60s increments to react promptly to shutdown or interval changes
             sleep_seconds = interval_hours * 3600
             for _ in range(int(sleep_seconds // 60)):
                 await asyncio.sleep(60)
-
-            config = storage.load_global_config()
-            if config.get("auto_update_enabled", False):
-                status = await update_service.check_for_updates(force=True)
-                if status.get("update_available") and not update_service.has_active_jobs():
-                    logger.info(
-                        f"Auto-update: new commits detected on {status.get('branch')}. "
-                        f"Applying update automatically..."
-                    )
-                    await update_service.apply_update(force=False)
+            await _auto_update_tick()
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -424,6 +426,11 @@ async def lifespan(app: FastAPI):
     if _auto_update_task:
         _auto_update_task.cancel()
         _auto_update_task = None
+    try:   # an update waiting for a gap goes with the process (its hold on new work too)
+        from services.update_service import update_service
+        update_service.shutdown()
+    except Exception:
+        pass
 
     # Stop background translation worker
     from services.background_worker import worker

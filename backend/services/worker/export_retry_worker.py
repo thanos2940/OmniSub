@@ -31,7 +31,7 @@ def dispatch_export_retries(
         if not item:
             return
         logger.info(f"Claiming export retry for {item['project_name']} - {item['episode_name']}")
-        task = asyncio.create_task(process_export_retry_item(queue, item, global_config))
+        task = asyncio.create_task(process_export_retry_item(queue, item, global_config), name=f"export_{item['id']}")
         export_tasks.add(task)
 
         def _done(t, _tasks=export_tasks):

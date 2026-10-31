@@ -152,6 +152,11 @@ def _by_project() -> Dict[str, Dict[str, int]]:
     return out
 
 
+def _held() -> Optional[str]:
+    from services import work_hold
+    return work_hold.reason()
+
+
 def _compute() -> Dict[str, Any]:
     from utils import storage
     from utils.translation_queue import TranslationQueue
@@ -186,6 +191,7 @@ def _compute() -> Dict[str, Any]:
         "runner": {k: runner_info.get(k) for k in ("status", "running", "paused", "message", "lanes", "config",
                                                    "pending", "throughput", "eta_minutes")},
         "worker": {"paused": bool(config.get("queue_worker_paused", False)),
+                   "held": _held(),   # an update waits for the work in hand: no new work starts (why), else None
                    "pending": summary.get("pending", 0), "running": summary.get("running", 0)},
         "summary": summary,
         "by_project": by_project,

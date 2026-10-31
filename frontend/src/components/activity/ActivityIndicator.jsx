@@ -48,7 +48,7 @@ export default function ActivityIndicator() {
     const failed = live.finished.some(j => j.status === 'failed');
     const summary = live.snapshot?.summary || {};
     const waiting = summary.pending || 0;
-    const message = info?.message || (engine === 'model' ? 'Translating through the Gemini API.' : '');
+    const message = (engine === 'model' && queue?.held) || info?.message || (engine === 'model' ? 'Translating through the Gemini API.' : '');
     const close = () => setOpen(false);
     const pillTitle = [label, background ? `${background} background job${background === 1 ? '' : 's'}` : '', failed ? 'a job failed' : '']
         .filter(Boolean).join(' · ');
