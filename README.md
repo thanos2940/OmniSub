@@ -26,6 +26,7 @@ Omnisub is a monorepo:
 - Optional **SubtitleEdit** integration for one-click "Fix Common Errors" / "Split Long Lines" passes on SRT tracks.
 
 **Automation & integrations**
+- **On-demand requests from MorpiceHub** (or any client with the API key): look up which subtitles exist for a title, request the missing ones, follow or cancel the request. See [the integration guide](deploy/morpicehub/README.md).
 - **Sonarr & Radarr** direct integration — scheduled and webhook-triggered sync discovers new/missing episodes and movies and enqueues them for translation automatically. Filesystem-based scanning finds existing subtitles without needing Bazarr.
 - **Priority translation queue** (SQLite, WAL mode): `Webhook > Manual > Sync > Backlog`, drained by a background worker that runs items in parallel and can be restricted to an off-peak time window.
 - **Gemini Batch API lane** for the backlog — a much cheaper, async bulk-draft pass using the same glossary/context as the live pipeline; anything flagged gets refined interactively.

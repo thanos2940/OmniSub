@@ -171,6 +171,22 @@ environment-only failures on Linux as before, nothing new.
   replaced `backend/static` (network, and a working UI on the PC); it builds nothing now. The fake agy also
   records each request's working folder (`call_NNN.cwd`).
 
+Follow-up 2026-10-31 (same branch):
+- **Top-bar indicator replaces the floating Active Tasks panel** (`JobProgressWidget.jsx` removed):
+  `activity/ActivityIndicator.jsx` (runner/worker state, `+n` background jobs, a mark when one failed; click:
+  episodes in progress with Cancel / Put back, background jobs with Log / Cancel, just-finished jobs), built
+  from the activity snapshot (`activity/liveWork.js`, `useLiveWork.js`, `LiveWorkList.jsx`). Activity gains a
+  "Background jobs" card; its running queue rows show the snapshot's live step or "Nothing is working on it".
+- **Library**: `GET /api/library` (`storage.get_library`: every project grouped, only row fields, cached) and
+  per-title queue counts as `by_project` in `GET /api/activity`; the page no longer polls `/api/queue` (its
+  counts were wrong past 100 queued items) or loads every project's full metadata. Rows memoized, 200 rendered
+  at a time.
+- **On-demand (MorpiceHub)**: progress of agy-translated episodes (from the runner lane), `ahead` for queued
+  episodes, `POST /api/on-demand/subtitles/{id}/cancel`, status reports `engine`/`paused`/`runner`; a cancelled
+  extraction reads as cancelled and no longer chains a translation. The integration guide for MorpiceHub is
+  `deploy/morpicehub/README.md`. MorpiceHub's own code is not in any repository this account reaches, so
+  whether it calls these endpoints today could not be checked from here.
+
 Not changed, worth knowing:
 - **Session reuse per show** was considered and rejected: a resumed CLI conversation re-sends its whole
   history every request (tokens and quota grow with every episode, quality drops with context length, lanes
