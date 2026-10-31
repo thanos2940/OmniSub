@@ -629,3 +629,17 @@ async def test_an_extraction_cancelled_while_it_ran_does_not_chain_a_translation
     assert captured == []
     assert queue.get_item(item_id)["status"] == "cancelled"
     assert storage.original_subtitle_exists("Severance", "S01E02")   # the extracted source is kept
+
+
+def test_status_says_whether_anything_takes_the_queue(od_env, monkeypatch):
+    from types import SimpleNamespace
+    from services import agent_runner, on_demand
+
+    monkeypatch.setattr(agent_runner, "_runner", SimpleNamespace(status="idle"))
+    caps = on_demand.capabilities()
+    assert (caps["engine"], caps["runner"], caps["paused"]) == ("agent", "idle", False)
+    assert caps["sonarr"] and caps["radarr"] and caps["max_episodes"] == 30 and caps["default_language"] == "el"
+    storage.save_global_config({"queue_worker_paused": True})
+    assert on_demand.capabilities()["paused"] is True
+    storage.save_global_config({"translation_engine": "model"})
+    assert on_demand.capabilities()["runner"] is None

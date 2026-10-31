@@ -912,6 +912,12 @@ def capabilities() -> Dict:
     from integrations import embedded_subs
     config = storage.load_global_config()
     code, name = _language(config, None)
+    engine = config.get("translation_engine", "agent")
+    runner = None
+    if engine == "agent":   # whether anything takes the queue right now: a client can say why a request waits
+        from services import agent_runner
+        current = agent_runner.current_runner()
+        runner = current.status if current is not None else "stopped"
     return {
         "sonarr": bool(config.get("sonarr_enabled") and config.get("sonarr_api_key")),
         "radarr": bool(config.get("radarr_enabled") and config.get("radarr_api_key")),
@@ -920,4 +926,7 @@ def capabilities() -> Dict:
         "default_language": code,
         "default_language_name": name,
         "max_episodes": int(config.get("on_demand_max_episodes", 30) or 30),
+        "engine": engine,
+        "paused": bool(config.get("queue_worker_paused", False)),
+        "runner": runner,
     }
