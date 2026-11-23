@@ -457,25 +457,38 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Omnisub API", version="5.0", lifespan=lifespan)
 
-# CORS: drive allowed origins from config. A non-empty list is spec-correct with
-# credentials; an empty/unset list falls back to wildcard WITHOUT credentials.
-_cors_origins = storage.load_global_config().get("cors_allow_origins") or []
-if _cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# CORS: the built web app is served by this process (same origin), so it needs no CORS at all. Other
+# origins get in only when listed in ``cors_allow_origins``; without that setting only the Vite dev server
+# on this machine may call the API. A wildcard would let any web page the user happens to open read and
+# change a server without a login (sonarr keys, settings, the queue): the browser runs that page's
+# requests against localhost or the LAN.
+DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:4173", "http://127.0.0.1:4173"]
+_cors_origins = [o for o in (storage.load_global_config().get("cors_allow_origins") or []) if isinstance(o, str)]
+_allowed_origins = set(_cors_origins or DEV_ORIGINS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins or DEV_ORIGINS,
+    allow_credentials=bool(_cors_origins),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _cross_site(headers) -> bool:
+    """A browser request made by a page of another site (Fetch Metadata), from an origin not allowed above.
+    Server-to-server callers (Sonarr, Radarr, MorpiceHub, curl) send no Sec-Fetch-Site and are never refused."""
+    return headers.get("sec-fetch-site") == "cross-site" and headers.get("origin", "") not in _allowed_origins
+
+
+@app.middleware("http")
+async def refuse_cross_site_writes(request: Request, call_next):
+    """CSRF guard: a page on another site must not change anything here, even without auth (a request
+    without custom headers or a JSON body gets no CORS preflight, so CORS alone cannot stop it)."""
+    if request.method in _UNSAFE_METHODS and _cross_site(request.headers):
+        return JSONResponse({"detail": "Cross-site request refused."}, status_code=403)
+    return await call_next(request)
 
 # Auth gate: when auth_enabled, every request under a PROTECTED prefix needs a
 # matching X-Api-Key header, except the small allowlist below. Everything else
@@ -572,6 +585,9 @@ async def health_check():
 async def websocket_endpoint(websocket: WebSocket):
     """Real-time event feed for browser UI (agent submissions, queue updates, disk sync)."""
     from utils.event_broadcaster import broadcaster
+    if _cross_site(websocket.headers):   # another site's page must not read the event feed
+        await websocket.close(code=1008)
+        return
     await broadcaster.connect(websocket)
     try:
         while True:
