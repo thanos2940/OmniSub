@@ -191,11 +191,13 @@ class SubmissionMixin:
         return file_path_or_content if file_path_or_content.strip() else None
 
     @staticmethod
-    def _export(project_name: str, episode_name: str, cues: List[Dict[str, Any]]) -> Optional[str]:
+    def _export(project_name: str, episode_name: str, cues: List[Dict[str, Any]], overwrite: bool = False) -> Optional[str]:
+        """Write the subtitle next to the video. ``overwrite``: the person asked to replace the file there even if
+        Omnisub did not write it (otherwise a foreign subtitle is protected)."""
         try:
             from services.translation.export_formatter import auto_export_translated_subtitle
             ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
-            exported = auto_export_translated_subtitle(project_name, episode_name, cues, ep_meta)
+            exported = auto_export_translated_subtitle(project_name, episode_name, cues, ep_meta, force=overwrite)
             if exported:
                 ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
                 ep_meta["arr_translated_from_fingerprint"] = ep_meta.get("arr_sub_fingerprint")
@@ -235,8 +237,10 @@ class SubmissionMixin:
         if manifest.get("status") in ("cancelled", "expired"):
             return {"success": False, "status": manifest["status"], "task_id": task_id,
                     "message": f"Task '{task_id}' was {manifest['status']}; claim the episode again with `{cli_command('next')}`."}
+        overwrite = False
         if queue_id:
             row = TranslationQueue().get_item(queue_id)
+            overwrite = bool(row and _options(row).get("overwrite"))
             if row is None or row.get("status") == "cancelled":
                 # Cancelled (or removed with "Clear the queue") while it was being translated: nothing is saved,
                 # and the row is not brought back as completed.
@@ -330,7 +334,10 @@ class SubmissionMixin:
                 logger.warning(f"Failed to save episode summary: {e}")
 
         # Export (primary language: next to the video, named after the current video file)
-        exported_path = self._export(project_name, episode_name, cues) if is_primary else None
+        exported_path = None
+        if is_primary:
+            exported_path = (self._export(project_name, episode_name, cues, overwrite=True) if overwrite
+                             else self._export(project_name, episode_name, cues))
 
         ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
         ep_meta.update(translated=True, translation_status="completed", last_translated_at=_now(),

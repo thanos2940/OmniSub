@@ -1,5 +1,5 @@
 import asyncio
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from uuid import uuid4
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -663,6 +663,26 @@ async def harvest_project_terms_endpoint(
             unique_terms.append(t)
             
     return {"project_name": project_name, "terms": unique_terms}
+
+
+class MergeTermsRequest(BaseModel):
+    terms: List[Dict[str, Any]]
+
+
+@router.post("/projects/{project_name}/glossary/merge-terms")
+async def merge_glossary_terms(project_name: str, request: MergeTermsRequest):
+    """Add terms (found in chosen episodes and checked by a person) to the project's glossary the way a translated
+    episode's new terms are added: new terms join, an existing term keeps its rendering (a different one comes back
+    as a conflict), and a single everyday word without a sense is left out."""
+    from services.agent_task_service import agent_task_service
+    from utils.language_codes import to_code
+    meta = storage.load_project_metadata(project_name)
+    if not meta:
+        raise HTTPException(status_code=404, detail="Project not found")
+    terms = [{**t, "notes": t.get("notes") or t.get("description") or ""} for t in request.terms if isinstance(t, dict)]
+    result = await asyncio.to_thread(agent_task_service._merge_terms, project_name, terms,
+                                     to_code(meta.get("target_language", "Greek")))
+    return {"status": "success", **result}
 
 
 @router.delete("/projects/{project_name}")

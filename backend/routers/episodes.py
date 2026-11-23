@@ -933,8 +933,9 @@ async def batch_export_to_path(project_name: str, request: BatchDownloadRequest)
 # ---------------------------------------------------------------------------
 
 @router.get("/projects/{project_name}/episodes/{episode_name}/download")
-async def download_single_episode(project_name: str, episode_name: str):
-    """Download a single translated episode as an SRT file.
+async def download_single_episode(project_name: str, episode_name: str, lang: Optional[str] = None):
+    """Download a single translated episode as a subtitle file, the same way the export writes it (ASS stays
+    ASS, long lines balanced). ``lang``: one of the project's other target languages (default: the primary one).
 
     Uses the original source filename (adjusted language tag).
     Applies SubtitleEdit fixes if enabled.
@@ -947,7 +948,7 @@ async def download_single_episode(project_name: str, episode_name: str):
     ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
     global_config = storage.load_global_config()
 
-    lang_code = _lang_code(proj_meta.get("target_language", "English"))
+    lang_code = _lang_code(lang) if lang else _lang_code(proj_meta.get("target_language", "English"))
     filename = _output_filename(episode_name, ep_meta, lang_code)
     srt_content = _prepare_srt_content(project_name, episode_name, ep_data, global_config, lang_code)
 

@@ -52,6 +52,7 @@ class EnqueueProjectRequest(BaseModel):
     priority: int = 1
     full: bool = False
     include_translated: bool = False
+    overwrite: bool = False   # the export may replace a subtitle next to the video that Omnisub did not write
 
 
 class AuditRequest(BaseModel):
@@ -144,6 +145,7 @@ async def enqueue_project_for_agent(payload: EnqueueProjectRequest):
     result = await asyncio.to_thread(
         agent_task_service.enqueue_target_project,
         payload.project_name, payload.episode_names, payload.priority, payload.full, payload.include_translated,
+        payload.overwrite,
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("message", "Failed to enqueue project for agent."))

@@ -227,8 +227,11 @@ async def get_project_embedded_status(project_name: str):
     }
 
 
-async def _run_batch_extract(job_id: str, project_name: str, episode_names: Optional[List[str]], force: bool, migrate_srt: bool):
-    """Background task to extract embedded ASS tracks for multiple episodes."""
+async def _run_batch_extract(job_id: str, project_name: str, episode_names: Optional[List[str]], force: bool,
+                             migrate_srt: bool, prefer: Optional[str] = None, translate_after: bool = False):
+    """Background task: extract the source-language subtitle track of each episode's video into a file next to
+    it (``.ass`` or ``.srt``) and import it. ``prefer`` picks the format when the video has both; ``translate_after``
+    queues every extracted episode for translation."""
     try:
         if job_id in jobs and getattr(jobs[job_id], "cancelled", False):
             update_job(
@@ -239,7 +242,7 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
             )
             return
 
-        update_job(job_id, status="running", progress=0.0, message="Starting embedded ASS extraction batch...")
+        update_job(job_id, status="running", progress=0.0, message="Starting the subtitle extraction...")
         proj_meta = storage.load_project_metadata(project_name)
         if not proj_meta:
             if not (job_id in jobs and getattr(jobs[job_id], "cancelled", False)):
@@ -254,6 +257,10 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
 
 
         source_lang, keywords, prefer_ass = _get_project_embedded_settings(proj_meta, global_config)
+        prefer = (prefer or "").strip().lower()
+        if prefer in ("ass", "srt"):
+            prefer_ass = prefer == "ass"
+        queued_for_translation = 0
 
         all_episodes = storage.list_episodes_with_metadata(project_name)
         if episode_names is not None:
@@ -262,7 +269,8 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
             target_list = [e["name"] for e in all_episodes]
         total = len(target_list)
 
-        update_job(job_id, log=f"Scanning {total} episode(s) for embedded ASS tracks...")
+        update_job(job_id, log=f"Scanning {total} episode(s) for embedded subtitle tracks "
+                              f"({'ASS first' if prefer_ass else 'SRT first'})...")
 
         extracted = 0
         skipped = 0
@@ -312,8 +320,11 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
 
             has_actual_sub = (ep_meta.get("has_source_sub", True) and ep_meta.get("line_count", 0) > 0) or storage.original_subtitle_exists(project_name, ep_name)
             orig_fmt = (ep_meta.get("original_format") or ep_meta.get("original_extension") or "srt").lstrip(".").lower()
-            if has_actual_sub and orig_fmt in ("ass", "ssa") and not force:
-                update_job(job_id, log=f"[{ep_name}] Skipped: already has .ass source.")
+            is_ass = orig_fmt in ("ass", "ssa")
+            # An episode that already has a source in the wanted format keeps it unless asked to extract again
+            # (an ASS source is never replaced by the "best" pick either: it is the richer format).
+            if has_actual_sub and not force and (is_ass if prefer != "srt" else not is_ass):
+                update_job(job_id, log=f"[{ep_name}] Skipped: already has a .{orig_fmt} source (extract again to replace it).")
                 skipped += 1
                 continue
 
@@ -393,8 +404,14 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
                 res = await loop.run_in_executor(None, _do_batch_import)
 
                 extracted += 1
-                results.append({"name": ep_name, "stream": chosen_track.index, "cues": res.get("line_count", 0)})
-                update_job(job_id, log=f"[{ep_name}] ✓ Successfully extracted and imported {res.get('line_count', 0)} cues.")
+                results.append({"name": ep_name, "stream": chosen_track.index, "format": chosen_track.output_format,
+                                "cues": res.get("line_count", 0)})
+                update_job(job_id, log=f"[{ep_name}] ✓ Extracted {chosen_track.output_format.upper()} to {sidecar.name} "
+                                       f"and imported {res.get('line_count', 0)} cues.")
+                if translate_after:
+                    from services.queue_service import enqueue_translation, PRIORITY_MANUAL
+                    if enqueue_translation(project_name, ep_name, PRIORITY_MANUAL):
+                        queued_for_translation += 1
             except Exception as e:
                 failed += 1
                 logger.error(f"Failed to extract embedded ASS for {project_name}/{ep_name}: {e}", exc_info=True)
@@ -441,8 +458,10 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
             job_id,
             status="completed",
             progress=100.0,
-            message=f"Batch extraction complete: {extracted} extracted, {skipped} skipped, {failed} failed.",
-            result={"extracted": extracted, "skipped": skipped, "failed": failed, "results": results},
+            message=(f"Extraction complete: {extracted} extracted, {skipped} skipped, {failed} failed"
+                     + (f"; {queued_for_translation} queued for translation." if translate_after else ".")),
+            result={"extracted": extracted, "skipped": skipped, "failed": failed, "results": results,
+                    "queued_for_translation": queued_for_translation},
         )
 
     except Exception as e:
@@ -483,6 +502,8 @@ async def batch_extract_embedded_endpoint(project_name: str, background_tasks: B
         request.episode_names,
         request.force,
         request.migrate_srt,
+        request.prefer,
+        request.translate_after,
     )
     return {"job_id": job_id}
 

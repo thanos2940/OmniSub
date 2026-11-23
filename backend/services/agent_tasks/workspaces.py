@@ -449,8 +449,10 @@ These are the same rules the API translator follows.
         priority: int = PRIORITY_MANUAL,
         full: bool = False,
         include_translated: bool = False,
+        overwrite: bool = False,
     ) -> Dict[str, Any]:
-        """Queue episodes of a project for agent translation.
+        """Queue episodes of a project for agent translation. ``overwrite``: the export may replace a subtitle file
+        next to the video that Omnisub did not write.
 
         Without ``episode_names`` this queues the untranslated episodes, or every
         episode with ``include_translated`` (gap mode then finalizes the complete
@@ -480,6 +482,8 @@ These are the same rules the API translator follows.
 
         from services.queue_service import enqueue_translation
         opts = {"engine": "agent", "mode": "full" if full else "gaps"}
+        if overwrite:
+            opts["overwrite"] = True
         enqueued = [qid for qid in (enqueue_translation(matched_proj, ep, priority, dict(opts)) for ep in target_eps) if qid]
         self._broadcast("queue_updated", {"reason": "agent_enqueue", "project_name": matched_proj, "count": len(enqueued)})
         return {

@@ -541,9 +541,9 @@ def reconstruct_cleaned_srt(
         return reconstruct_subtitle(rows, fmt=fmt, original_content=raw_content, font_scale=font_scale, target_lang_code=target_lang_code)
 
     if not raw_content:
-        # Shallow-copy: cleaned_data is the caller's live row list (often the editor
-        # data) and export-only balancing must not leak back into it.
-        rows = [dict(e) for e in cleaned_data]
+        # New rows (cleaned_data is the caller's live row list, often the editor data, and export-only balancing
+        # must not leak back into it), with the text of the language asked for (not always the primary one).
+        rows = _rows_from_cleaned()
         _autobalance_for_export(rows, fmt)
         if fmt in ("ass", "ssa"):
             return export_ass(rows, font_scale=font_scale, target_lang=target_lang_code)

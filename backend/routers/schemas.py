@@ -401,8 +401,10 @@ class ExtractEmbeddedRequest(BaseModel):
 
 class BatchExtractEmbeddedRequest(BaseModel):
     episode_names: Optional[List[str]] = None
-    force: bool = False
+    force: bool = False               # extract again even when the episode already has a source of that format
     migrate_srt: bool = True
+    prefer: Optional[str] = None      # "ass" | "srt": the format to take when the video has both (None: the project's)
+    translate_after: bool = False     # queue each episode for translation once its subtitle is in
 
 
 class ProbeMediaTestRequest(BaseModel):
