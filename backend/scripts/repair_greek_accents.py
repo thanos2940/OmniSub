@@ -5,7 +5,7 @@ It only changes a word when the same project shows its real accent elsewhere, in
 line, and lists the capitalised words it cannot decide (names, mostly) for a person to check. Nothing is
 written without --apply; --export also rewrites the subtitle files next to the videos.
 
-Run from backend/ with OmbiSub stopped (or at least idle):
+Run from backend/ with Omnisub stopped (or at least idle):
     ../.venv/Scripts/python.exe -m scripts.repair_greek_accents                   # report only
     ../.venv/Scripts/python.exe -m scripts.repair_greek_accents --apply --export  # fix and re-export
     ... --project "Breaking Bad"                                                  # one project

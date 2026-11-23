@@ -332,7 +332,7 @@ export default function LibraryPage() {
                 <EmptyState
                     icon={Library}
                     title="Connect Sonarr or Radarr"
-                    description="OmbiSub imports your library from them. You can also add a project of your own in the Other tab."
+                    description="Omnisub imports your library from them. You can also add a project of your own in the Other tab."
                     action={<Link to="/settings?section=connections"><Button variant="primary">Open connection settings</Button></Link>}
                 />
             );
@@ -492,8 +492,8 @@ export default function LibraryPage() {
                 open={confirmAll}
                 title="Translate all missing?"
                 message={summary.missing
-                    ? `${summary.missing} episode${summary.missing === 1 ? '' : 's'} across ${summary.titles} titles have no translation yet. They are queued now. OmbiSub also looks for subtitles inside your video files in the background and queues those.`
-                    : 'Every imported episode is translated. OmbiSub will still look for subtitles inside your video files and queue any it finds.'}
+                    ? `${summary.missing} episode${summary.missing === 1 ? '' : 's'} across ${summary.titles} titles have no translation yet. They are queued now. Omnisub also looks for subtitles inside your video files in the background and queues those.`
+                    : 'Every imported episode is translated. Omnisub will still look for subtitles inside your video files and queue any it finds.'}
                 confirmLabel="Queue them"
                 busy={translatingAll}
                 onConfirm={translateAllMissing}

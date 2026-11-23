@@ -9,7 +9,7 @@ const SEGMENT = /^[A-Za-z0-9._~-]+$/;
 export function urlBaseError(value) {
     const segments = String(value || '').trim().split('/').filter(Boolean);
     const bad = segments.some(s => s === '.' || s === '..' || !SEGMENT.test(s));
-    return bad ? 'Use letters, digits, ".", "_", "~" and "-" in each part, like /ombisub.' : null;
+    return bad ? 'Use letters, digits, ".", "_", "~" and "-" in each part, like /omnisub.' : null;
 }
 
 export function validateGeneral(settings) {
@@ -42,11 +42,11 @@ export default function GeneralSection({ settings, onChange, status }) {
             <Card title="Network" subtitle="For running behind a reverse proxy such as Caddy.">
                 <div className="space-y-4">
                     <FieldGrid>
-                        <Field label="Port" htmlFor="net-port" hint="Set when OmbiSub is installed. Re-run the installer to change it.">
+                        <Field label="Port" htmlFor="net-port" hint="Set when Omnisub is installed. Re-run the installer to change it.">
                             <input id="net-port" className={cx(INPUT, 'sm:w-32')} value={port} readOnly />
                         </Field>
-                        <Field label="URL base" htmlFor="net-base" error={baseError} hint="The path the proxy serves OmbiSub under, like /ombisub. Empty for the root.">
-                            <input id="net-base" className={cx(INPUT, 'font-mono')} value={settings.url_base || ''} onChange={(e) => onChange('url_base', e.target.value)} placeholder="/ombisub" aria-invalid={!!baseError} />
+                        <Field label="URL base" htmlFor="net-base" error={baseError} hint="The path the proxy serves Omnisub under, like /omnisub. Empty for the root.">
+                            <input id="net-base" className={cx(INPUT, 'font-mono')} value={settings.url_base || ''} onChange={(e) => onChange('url_base', e.target.value)} placeholder="/omnisub" aria-invalid={!!baseError} />
                         </Field>
                     </FieldGrid>
                     <Field label="Trusted proxies" htmlFor="net-proxies" hint="Addresses whose X-Forwarded-For and X-Forwarded-Proto headers are believed, comma separated. 127.0.0.1 suits Caddy on the same machine.">

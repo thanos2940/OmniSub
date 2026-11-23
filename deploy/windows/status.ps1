@@ -1,14 +1,17 @@
 <#
 .SYNOPSIS
-  Shows the OmbiSub task state, last run result, server process, /api/health and the Autopilot status.
+  Shows the Omnisub task state, last run result, server process, /api/health and the Autopilot status.
 #>
 param(
-    [string]$TaskName = 'OmbiSub',
+    [string]$TaskName = 'Omnisub',
     [int]$Port = 8000,
     [string]$DataDir = ''
 )
 
 function Show($label, $value) { Write-Host ("{0,-22}: {1}" -f $label, $value) }
+
+# Installs from before the rename have a task called 'OmbiSub': use it when no other name was given.
+if (-not $PSBoundParameters.ContainsKey('TaskName') -and -not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) -and (Get-ScheduledTask -TaskName 'OmbiSub' -ErrorAction SilentlyContinue)) { $TaskName = 'OmbiSub' }
 
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if (-not $task) { Write-Host "Scheduled task '$TaskName' is not registered (run deploy\windows\install.ps1)." -ForegroundColor Yellow }
@@ -22,7 +25,8 @@ else {
 
 $backend = Join-Path (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path 'backend'
 if (-not $DataDir) { $DataDir = $backend }
-$lock = Join-Path $DataDir 'ombisub_server.lock'
+$lock = Join-Path $DataDir 'omnisub_server.lock'
+if (-not (Test-Path $lock)) { $lock = Join-Path $DataDir 'ombisub_server.lock' }
 if (Test-Path $lock) {
     try {
         $l = Get-Content $lock -Raw | ConvertFrom-Json
@@ -56,5 +60,6 @@ if ($a.Ok) {
 elseif ($a.Code -eq 404) { Show 'Autopilot' 'not available in this build (404)' }
 else { Show 'Autopilot' "unavailable ($($a.Error))" }
 
-$log = Join-Path $DataDir 'logs\ombisub.log'
+$log = Join-Path $DataDir 'logs\omnisub.log'
+if (-not (Test-Path $log)) { $log = Join-Path $DataDir 'logs\ombisub.log' }
 if (Test-Path $log) { Write-Host "`nLast log lines ($log):"; Get-Content $log -Tail 8 }

@@ -2,7 +2,7 @@
 Event Broadcaster
 =================
 Thread-safe and asyncio-friendly WebSocket and polling event broadcast system
-for OmbiSub. Broadcasts real-time events (agent submissions, queue updates,
+for Omnisub. Broadcasts real-time events (agent submissions, queue updates,
 disk sync status, etc.) to all connected browser clients.
 """
 

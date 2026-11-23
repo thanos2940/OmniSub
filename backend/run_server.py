@@ -1,9 +1,9 @@
-"""Production entry point for OmbiSub (24/7 server use).
+"""Production entry point for Omnisub (24/7 server use).
 
-    python backend/run_server.py [--host 0.0.0.0] [--port 8000] [--data-dir D:/OmbiSub/data] [--check]
+    python backend/run_server.py [--host 0.0.0.0] [--port 8000] [--data-dir D:/Omnisub/data] [--check]
 
 * one uvicorn worker, no reload, graceful shutdown;
-* console + rotating file log (<data dir>/logs/ombisub.log, 10 MB x 5);
+* console + rotating file log (<data dir>/logs/omnisub.log, 10 MB x 5);
 * honours X-Forwarded-* headers from the ``trusted_proxies`` setting (default 127.0.0.1: a Caddy on this machine);
 * refuses to start twice for the same data directory (lock file with stale detection);
 * ``--check`` prints the resolved configuration and exits 0 (ready) / 1 (problem) without serving.
@@ -23,7 +23,8 @@ from types import SimpleNamespace
 
 BACKEND_DIR = Path(__file__).resolve().parent
 DEFAULT_PORT = 8000
-LOCK_NAME = "ombisub_server.lock"
+LOCK_NAME = "omnisub_server.lock"
+LEGACY_LOCK_NAME = "ombisub_server.lock"   # before the rename; still honoured
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
@@ -67,6 +68,14 @@ def _read_lock(path: Path) -> dict:
 def acquire_lock(data_dir: Path, port: int):
     """Create the lock file. Returns (path, None) on success, (None, message) when another server owns it."""
     path = data_dir / LOCK_NAME
+    legacy = _read_lock(data_dir / LEGACY_LOCK_NAME)   # a server of a version from before the rename
+    try:
+        legacy_pid = int(legacy.get("pid") or 0)
+    except (TypeError, ValueError):
+        legacy_pid = 0
+    if legacy_pid and legacy_pid != os.getpid() and _pid_alive(legacy_pid):
+        return None, (f"An older Omnisub server (PID {legacy_pid}, port {legacy.get('port', '?')}) is already running "
+                      f"for the data folder {data_dir}. Stop it first (or use a different --data-dir).")
     payload = json.dumps({"pid": os.getpid(), "port": port,
                           "started": datetime.now(timezone.utc).isoformat(timespec="seconds")})
     for _ in range(3):
@@ -79,7 +88,7 @@ def acquire_lock(data_dir: Path, port: int):
             except (TypeError, ValueError):
                 pid = 0
             if pid and _pid_alive(pid):
-                return None, (f"Another OmbiSub server (PID {pid}, port {info.get('port', '?')}, started "
+                return None, (f"Another Omnisub server (PID {pid}, port {info.get('port', '?')}, started "
                               f"{info.get('started', '?')}) is already running for the data folder {data_dir}. "
                               f"Stop it first (or use a different --data-dir).")
             try:  # stale: the owner died without cleaning up
@@ -119,14 +128,14 @@ def setup_logging(data_dir: Path) -> Path:
     root.addHandler(console)
     # Same file name main.py uses, installed first so main.py's own check finds a RotatingFileHandler
     # and adds no second one.
-    fh = RotatingFileHandler(str(logs_dir / "ombisub.log"), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
+    fh = RotatingFileHandler(str(logs_dir / "omnisub.log"), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
     fh.setFormatter(logging.Formatter(LOG_FORMAT))
     root.addHandler(fh)
     # A log that runs for months keeps only what matters: every Sonarr/Radarr poll (httpx) and
     # every request of an open browser tab (uvicorn.access) would bury it. Webhooks log themselves.
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    return logs_dir / "ombisub.log"
+    return logs_dir / "omnisub.log"
 
 
 def _ffmpeg_tools():
@@ -151,14 +160,14 @@ def _port_free(host: str, port: int) -> bool:
 
 def run_check(data_dir: Path, host: str, port: int) -> int:
     problems = []
-    print("OmbiSub server check")
+    print("Omnisub server check")
     print(f"  python        : {sys.version.split()[0]} ({sys.executable})")
     if sys.version_info < (3, 11):
         problems.append("Python 3.11+ is required")
     print(f"  data dir      : {data_dir}")
     cfg = data_dir / "config.json"
     print(f"  config.json   : {cfg}  ({'found' if cfg.is_file() else 'not yet created'})")
-    print(f"  log file      : {data_dir / 'logs' / 'ombisub.log'}")
+    print(f"  log file      : {data_dir / 'logs' / 'omnisub.log'}")
     lock = data_dir / LOCK_NAME
     info = _read_lock(lock) if lock.exists() else {}
     try:
@@ -199,7 +208,7 @@ def run_check(data_dir: Path, host: str, port: int) -> int:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="Run the OmbiSub server (production).")
+    ap = argparse.ArgumentParser(description="Run the Omnisub server (production).")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=int(os.environ.get("PORT") or DEFAULT_PORT))
     ap.add_argument("--data-dir", default=None, help="Folder for config, databases, projects and logs (OMNISUB_DATA_DIR).")
@@ -211,7 +220,8 @@ def main(argv=None) -> int:
     data_dir = Path(os.environ.get("OMNISUB_DATA_DIR") or BACKEND_DIR).resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ["OMNISUB_DATA_DIR"] = str(data_dir)
-    os.environ["OMBISUB_PORT"] = str(args.port)  # read by the updater's restart and agent tools
+    from utils.env_names import set_env   # (utils has no package init: nothing reads the data dir yet)
+    set_env("PORT", str(args.port))  # read by the updater's restart and agent tools
     os.chdir(BACKEND_DIR)
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -232,7 +242,7 @@ def main(argv=None) -> int:
         if not _ffmpeg_tools():
             log.warning("ffmpeg/ffprobe were not found (ffmpeg_path setting or PATH): embedded subtitle tracks "
                         "cannot be read or extracted.")
-        log.info("Starting OmbiSub on %s:%s (data dir %s, log %s, PID %s)", args.host, args.port, data_dir, log_file, os.getpid())
+        log.info("Starting Omnisub on %s:%s (data dir %s, log %s, PID %s)", args.host, args.port, data_dir, log_file, os.getpid())
 
         import uvicorn
         from main import app
@@ -247,7 +257,7 @@ def main(argv=None) -> int:
                                 proxy_headers=True,  # X-Forwarded-For/-Proto from a reverse proxy (Caddy) ...
                                 forwarded_allow_ips=trusted_proxies(storage.load_global_config()))  # ... if it is trusted
         uvicorn.Server(config).run()  # handles Ctrl+C / SIGTERM and runs the lifespan shutdown
-        log.info("OmbiSub stopped.")
+        log.info("Omnisub stopped.")
         return 0
     finally:
         release_lock(lock)

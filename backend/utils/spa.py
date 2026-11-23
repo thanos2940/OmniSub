@@ -3,7 +3,7 @@
 ``install_spa(app, static_dir, url_base)`` mounts ``/assets``, answers browser loads of the app's pages with
 ``index.html`` and hands every other non-API GET to the static files / ``index.html`` (so React Router's
 client-side routes survive a hard refresh). ``index.html`` gets ``<base href>`` and
-``window.__OMBISUB_BASE__`` so the app works under a reverse-proxy path (see utils/url_base.py).
+``window.__OMNISUB_BASE__`` so the app works under a reverse-proxy path (see utils/url_base.py).
 """
 import html
 import json
@@ -27,7 +27,7 @@ _HEAD = re.compile(r"<head[^>]*>", re.IGNORECASE)
 
 
 def inject_base(index_html: str, url_base: str) -> str:
-    """index.html with ``<base href="{url_base}/">`` and ``window.__OMBISUB_BASE__`` right after ``<head>``.
+    """index.html with ``<base href="{url_base}/">`` and ``window.__OMNISUB_BASE__`` right after ``<head>``.
 
     ``url_base`` is re-validated here (an invalid value counts as "no prefix") and escaped for both the
     attribute and the script, so a configured value can never inject markup.
@@ -36,7 +36,7 @@ def inject_base(index_html: str, url_base: str) -> str:
     as_js = json.dumps(base).replace("</", "<\\/")
     tags = (
         f'<base href="{html.escape(base + "/", quote=True)}">'
-        f"<script>window.__OMBISUB_BASE__ = {as_js};</script>"
+        f"<script>window.__OMBISUB_BASE__ = window.__OMNISUB_BASE__ = {as_js};</script>"
     )
     match = _HEAD.search(index_html)
     if not match:

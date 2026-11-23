@@ -101,7 +101,7 @@ def _call(runner, model: str, prompt: str, purpose: str, project: Optional[str],
             _live.pop(state["proc"], None)
     runner.note_call(model, reply, project or "", purpose)
     if state["stopped"]:
-        raise AgyError("The request was stopped (OmbiSub is shutting down).", "stopped")
+        raise AgyError("The request was stopped (Omnisub is shutting down).", "stopped")
     if state["late"]:
         raise AgyError("The request timed out.", "timeout")
     return reply

@@ -252,14 +252,14 @@ class SettingsRequest(BaseModel):
     setup_completed: Optional[bool] = False
     # --- Autopilot (docs/PLAN_autopilot.md): unattended Greek subtitles for new arr imports ---
     autopilot_enabled: Optional[bool] = False
-    autopilot_grace_minutes: Optional[float] = 5          # Bazarr's window before OmbiSub acts
+    autopilot_grace_minutes: Optional[float] = 5          # Bazarr's window before Omnisub acts
     autopilot_poll_seconds: Optional[int] = 60            # Sonarr/Radarr history polling
     autopilot_reconcile_hours: Optional[float] = 6        # library reconcile interval
     autopilot_backlog_mode: Optional[str] = "off"         # "off" | "newest" | "oldest"
     autopilot_backlog_daily_limit: Optional[int] = 20
     autopilot_count_embedded_greek: Optional[bool] = True
     autopilot_skip_original_greek: Optional[bool] = True
-    autopilot_skip_tags: Optional[str] = "ombisub-skip,no-greek"
+    autopilot_skip_tags: Optional[str] = "omnisub-skip,no-greek"
     autopilot_monitored_only: Optional[bool] = True
     autopilot_protect_foreign_subs: Optional[bool] = True
     autopilot_repair_foreign_encoding: Optional[bool] = True
@@ -271,7 +271,7 @@ class SettingsRequest(BaseModel):
     plex_token: Optional[str] = ""
     translate_lyrics: Optional[bool] = True
     # --- Reverse proxy (Caddy) ---
-    # Path OmbiSub is served under, e.g. "/ombisub" ("" = the root). Takes effect after a restart.
+    # Path Omnisub is served under, e.g. "/omnisub" ("" = the root). Takes effect after a restart.
     url_base: Optional[str] = ""
     # Addresses whose X-Forwarded-For/-Proto headers are trusted (comma separated; "*" = any). Takes effect after a restart.
     trusted_proxies: Optional[str] = "127.0.0.1"

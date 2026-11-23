@@ -103,7 +103,7 @@ class AutopilotPipeline:
             from services.autopilot import ownership
             ownership.register_file(path, item.get("project_name"), item.get("episode_name"))
         except Exception as e:
-            logger.debug(f"Could not register {path} as written by OmbiSub: {e}")
+            logger.debug(f"Could not register {path} as written by Omnisub: {e}")
 
     # ------------------------------------------------------------------
     # Due items
@@ -172,7 +172,7 @@ class AutopilotPipeline:
         source_code = cfg.get("arr_source_language") or "en"
 
         # 3. Greek check: sidecars first (no probe needed), then the container. A Greek file
-        # OmbiSub wrote itself (an upgrade that kept the file name, an interrupted earlier
+        # Omnisub wrote itself (an upgrade that kept the file name, an interrupted earlier
         # attempt) is not "Greek present": only foreign files stand the autopilot down.
         ep_meta = await self._episode_meta(item)
         info = await self._blocking(media_inspect.inspect, media_path, TARGET_CODE, source_code, False)
@@ -211,7 +211,7 @@ class AutopilotPipeline:
         return await self._route(item, engine, choice, cfg)
 
     def _clean_replaced(self, item: Dict) -> List[str]:
-        """Delete the Greek files OmbiSub wrote for a video this one replaced (blocking).
+        """Delete the Greek files Omnisub wrote for a video this one replaced (blocking).
 
         Sonarr/Radarr delete the old video on an upgrade, but our ``.el.ass``/``.el.srt`` under
         its name would stay behind as orphans. Only superseded items whose video is gone are
@@ -259,7 +259,7 @@ class AutopilotPipeline:
 
     @staticmethod
     def _foreign_paths(found: List[str], meta: Optional[Dict]) -> List[str]:
-        """The Greek sidecars OmbiSub did not write."""
+        """The Greek sidecars Omnisub did not write."""
         return [p for p in found if _ownership_check(p, meta) is not True]
 
     async def _skip_reason(self, item: Dict, settings: AutopilotSettings) -> Optional[str]:
@@ -356,7 +356,7 @@ class AutopilotPipeline:
         return [media.parent / n for n in names]
 
     def _reuse_existing(self, item: Dict, engine, info: Dict, choice: Dict) -> bool:
-        """Re-export a translation OmbiSub already holds for this exact source (blocking)."""
+        """Re-export a translation Omnisub already holds for this exact source (blocking)."""
         from integrations.media_sync_engine import MediaSyncEngine
         project, episode = item.get("project_name"), item.get("episode_name")
         if not project or not episode:
@@ -368,7 +368,7 @@ class AutopilotPipeline:
         if not any(MediaSyncEngine._fingerprint(p) == fingerprint for p in info.get("source_paths") or []):
             return False
         scan = engine.scanner.scan_media_file(item["media_path"])
-        # The Greek files beside the video are OmbiSub's own (the check ruled foreign ones out):
+        # The Greek files beside the video are Omnisub's own (the check ruled foreign ones out):
         # re-export over them rather than treating them as someone else's subtitle.
         scan.has_target_sub = False
         if not engine._reuse_and_export_existing_translation(project, episode, item["media_path"], scan, storage, meta):
@@ -604,7 +604,7 @@ class AutopilotPipeline:
             stale_ok = {expected[-1]}
 
         def good(path: Path) -> bool:
-            """Written since the routing, and by OmbiSub (a fresh foreign file is not our output)."""
+            """Written since the routing, and by Omnisub (a fresh foreign file is not our output)."""
             try:
                 if path not in stale_ok and path.stat().st_mtime < routed - FRESH_SLACK_SECONDS:
                     return False
@@ -640,7 +640,7 @@ class AutopilotPipeline:
 
     @staticmethod
     def _has_foreign(found: List[str], meta: Optional[Dict]) -> bool:
-        """True when a Greek file beside the video is not one OmbiSub wrote."""
+        """True when a Greek file beside the video is not one Omnisub wrote."""
         return any(_ownership_check(p, meta) is not True for p in found)
 
     async def _fail_attempt(self, item: Dict, error: str, delay: Optional[float] = None) -> Dict:

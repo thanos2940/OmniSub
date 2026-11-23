@@ -1,5 +1,5 @@
 """
-OmbiSub Agent Task Service
+Omnisub Agent Task Service
 ==========================
 Lets an external AI agent (Claude Code, Antigravity, any CLI assistant) take the
 translation model's place. Omnisub prepares each episode as a small workspace — a

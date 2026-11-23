@@ -91,7 +91,7 @@ def project_with_episodes(isolate_test_data_dir):
         {"id": "1", "timecode": "00:00:01,000 --> 00:00:02,000", "original": "World", "translated": ""}
     ])
     storage.save_episode(proj_name, "S01E03", [
-        {"id": "1", "timecode": "00:00:01,000 --> 00:00:02,000", "original": "OmbiSub", "translated": ""}
+        {"id": "1", "timecode": "00:00:01,000 --> 00:00:02,000", "original": "Omnisub", "translated": ""}
     ])
     yield proj_name
     try:

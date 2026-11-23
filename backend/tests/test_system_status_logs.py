@@ -68,21 +68,21 @@ def test_tail_of_a_log_without_line_breaks_is_bounded(tmp_path, monkeypatch):
 # ------------------------------------------------------------------ the endpoints
 
 def test_log_endpoint_returns_name_path_lines_size_modified(client, logs):
-    (logs / "ombisub.log").write_text("".join(f"row {i}\n" for i in range(10)), encoding="utf-8")
-    body = client.get("/api/system/logs", params={"name": "ombisub", "lines": 3}).json()
-    assert body["name"] == "ombisub"
+    (logs / "omnisub.log").write_text("".join(f"row {i}\n" for i in range(10)), encoding="utf-8")
+    body = client.get("/api/system/logs", params={"name": "omnisub", "lines": 3}).json()
+    assert body["name"] == "omnisub"
     assert body["lines"] == ["row 7", "row 8", "row 9"]
-    assert body["size"] == (logs / "ombisub.log").stat().st_size
-    assert body["path"].endswith("ombisub.log") and body["modified"]
+    assert body["size"] == (logs / "omnisub.log").stat().st_size
+    assert body["path"].endswith("omnisub.log") and body["modified"]
 
 
-def test_log_endpoint_defaults_to_ombisub_and_500_lines(client, logs):
-    (logs / "ombisub.log").write_text("".join(f"{i}\n" for i in range(800)), encoding="utf-8")
+def test_log_endpoint_defaults_to_omnisub_and_500_lines(client, logs):
+    (logs / "omnisub.log").write_text("".join(f"{i}\n" for i in range(800)), encoding="utf-8")
     assert len(client.get("/api/system/logs").json()["lines"]) == 500
 
 
 def test_line_count_is_clamped(client, logs):
-    (logs / "ombisub.log").write_text("".join(f"{i}\n" for i in range(6000)), encoding="utf-8")
+    (logs / "omnisub.log").write_text("".join(f"{i}\n" for i in range(6000)), encoding="utf-8")
     assert len(client.get("/api/system/logs", params={"lines": 100000}).json()["lines"]) == 5000
     assert len(client.get("/api/system/logs", params={"lines": 0}).json()["lines"]) == 1
     assert client.get("/api/system/logs", params={"lines": "many"}).status_code == 422
@@ -95,25 +95,25 @@ def test_missing_log_is_a_404_not_a_500(client, logs):
 
 
 @pytest.mark.parametrize("name", [
-    "../config", "..\\config", "config.json", "ombisub.log", "/etc/passwd", "C:\\Windows\\win.ini",
-    "ombisub/../../config", "%2e%2e%2fconfig", "", "OMBISUB",
+    "../config", "..\\config", "config.json", "omnisub.log", "/etc/passwd", "C:\\Windows\\win.ini",
+    "omnisub/../../config", "%2e%2e%2fconfig", "", "OMNISUB",
 ])
 def test_only_whitelisted_names_are_readable(client, logs, tmp_path, name):
     (tmp_path / "config.json").write_text('{"api_key": "secret"}')
-    (logs / "ombisub.log").write_text("fine\n")
+    (logs / "omnisub.log").write_text("fine\n")
     resp = client.get("/api/system/logs", params={"name": name})
     assert resp.status_code == 404
     assert "secret" not in resp.text
 
 
 def test_list_shows_only_existing_whitelisted_logs(client, logs):
-    (logs / "ombisub.log").write_text("x")
+    (logs / "omnisub.log").write_text("x")
     (logs / "service_console.log").write_text("yy")
     (logs / "other.log").write_text("not listed")
     listed = client.get("/api/system/logs/list").json()["logs"]
-    assert {entry["name"] for entry in listed} == {"ombisub", "service_console"}
+    assert {entry["name"] for entry in listed} == {"omnisub", "service_console"}
     sizes = {entry["name"]: entry["size"] for entry in listed}
-    assert sizes == {"ombisub": 1, "service_console": 2}
+    assert sizes == {"omnisub": 1, "service_console": 2}
 
 
 def test_logs_and_status_sit_behind_the_api_key_gate(client, logs, tmp_path, monkeypatch):
@@ -129,28 +129,28 @@ def test_logs_and_status_sit_behind_the_api_key_gate(client, logs, tmp_path, mon
 # ------------------------------------------------------------------ /api/system/status
 
 def test_status_reports_the_runtime(client, logs, tmp_path, monkeypatch):
-    monkeypatch.setenv("OMBISUB_PORT", "2945")
-    monkeypatch.setenv("OMBISUB_SUPERVISOR", "tray")
-    monkeypatch.setattr(storage, "load_global_config", lambda: {"url_base": "ombisub/"})
-    (logs / "ombisub.log").write_text("x")
+    monkeypatch.setenv("OMNISUB_PORT", "2945")
+    monkeypatch.setenv("OMNISUB_SUPERVISOR", "tray")
+    monkeypatch.setattr(storage, "load_global_config", lambda: {"url_base": "omnisub/"})
+    (logs / "omnisub.log").write_text("x")
 
     body = client.get("/api/system/status").json()
 
     assert body["port"] == "2945"
     assert body["supervisor"] == "tray"
-    assert body["url_base"] == "/ombisub"
+    assert body["url_base"] == "/omnisub"
     assert body["data_dir"] == str(system_info.DATA_DIR)
     assert body["python"]["version"].count(".") >= 1
     assert body["uptime_seconds"] >= 0 and body["started_at"]
     assert set(body["agent_clis"]) == {"agy", "claude"}
     assert "free_bytes" in body["disk"]
-    assert [entry["name"] for entry in body["logs"]] == ["ombisub"]
+    assert [entry["name"] for entry in body["logs"]] == ["omnisub"]
     assert "agent_runner" in body and "ffmpeg" in body and "ffprobe" in body
     assert body["commit"] is not None and "branch" in body
 
 
 def test_status_without_supervisor_says_none(client, monkeypatch):
-    monkeypatch.delenv("OMBISUB_SUPERVISOR", raising=False)
+    monkeypatch.delenv("OMNISUB_SUPERVISOR", raising=False)
     assert client.get("/api/system/status").json()["supervisor"] == "none"
 
 

@@ -1,4 +1,4 @@
-﻿# Plan: Dependable, agy-first OmbiSub (`dependable_agy_first_20261019`)
+﻿# Plan: Dependable, agy-first Omnisub (`dependable_agy_first_20261019`)
 
 Implementation by Claude Sonnet 5.5 subagents (high effort) in isolated worktrees; every change set is
 reviewed, tested and merged by the orchestrator (Opus). Spec: [spec.md](./spec.md).
@@ -18,10 +18,10 @@ Rules for every workstream
 - [x] A1 Service mode runs the headless supervisor (`tray_app.py --headless`): respawn with back-off on crash, at once on exit 42; `/api/system/restart` and the updater use exit 42 when supervised. Console output to `logs/service_console.log`.
 - [x] A2 `deploy/windows/install.cmd` (self-elevating, asks port once, default 2945, Service mode + firewall + keep-awake), `update.cmd`, `uninstall.cmd`.
 - [x] A3 Updater: `update_channel` `main` | `releases`; `main` follows `origin/main` (ahead/behind, changelog of commits), apply with guards, lock-file deps, UI build when `frontend/` changed, exit 42. Remove duplicate `/api/system/update` + `/api/system/check-update` (point the UI at `/api/system/updates/*`).
-- [x] A4 `GET /api/system/status` and `GET /api/system/logs?name=&lines=` (whitelist: ombisub, agent_runner, tray_app, service_console).
-- [x] A5 URL base (`url_base`): prefix-tolerant ASGI middleware, `<base href>` + `window.__OMBISUB_BASE__` injection into index.html, Vite `base: './'`, router basename, API/WS URLs under base; uvicorn `proxy_headers`/`forwarded_allow_ips`.
+- [x] A4 `GET /api/system/status` and `GET /api/system/logs?name=&lines=` (whitelist: omnisub, agent_runner, tray_app, service_console).
+- [x] A5 URL base (`url_base`): prefix-tolerant ASGI middleware, `<base href>` + `window.__OMNISUB_BASE__` injection into index.html, Vite `base: './'`, router basename, API/WS URLs under base; uvicorn `proxy_headers`/`forwarded_allow_ips`.
 - [x] A6 Git-ignore lock/runtime files (`backend/*.lock`, `backend/logs/`, …) so the updater's dirty-tree guard is meaningful.
-- [x] A7 `docs/DEPLOYMENT_GUIDE.md`: install/update/uninstall, Caddyfile (subdomain + `/ombisub` path), auth before exposing.
+- [x] A7 `docs/DEPLOYMENT_GUIDE.md`: install/update/uninstall, Caddyfile (subdomain + `/omnisub` path), auth before exposing.
 
 ### WS-B: Engine & context — agy first, bootstrap, growth
 - [x] B1 `services/agy_llm.py` `complete()` (agent CLI first; API rescue only on safety refusal).
@@ -34,7 +34,7 @@ Rules for every workstream
 ### WS-C: Integrations & automation
 - [x] C1 Autopilot is the only automation: webhooks always to the watcher; with Autopilot off only a library refresh of that title; remove legacy auto-translate execution path and "Bazarr wait delay".
 - [x] C2 Scheduled sync never mass-enqueues translations.
-- [x] C3 Plex refresh after every OmbiSub export (debounced per section), `POST` test endpoint for Plex; Sonarr/Radarr/Plex connection tests reachable from one router.
+- [x] C3 Plex refresh after every Omnisub export (debounced per section), `POST` test endpoint for Plex; Sonarr/Radarr/Plex connection tests reachable from one router.
 - [x] C4 Movie / episode with no imported source: "translate" path creates the episode from the media file and extracts (verify every entry point; fix gaps).
 
 ## Phase 2 — orchestrator

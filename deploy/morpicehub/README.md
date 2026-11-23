@@ -1,15 +1,15 @@
-# MorpiceHub × OmbiSub: requesting subtitles
+# MorpiceHub × Omnisub: requesting subtitles
 
-This is the integration contract between **MorpiceHub** (the Plex front-end) and **OmbiSub** (the subtitle
+This is the integration contract between **MorpiceHub** (the Plex front-end) and **Omnisub** (the subtitle
 translator). It is written for whoever adds the feature to MorpiceHub: everything needed is here, and every
-response shape below was produced by OmbiSub's own code.
+response shape below was produced by Omnisub's own code.
 
 **What the feature does.** A MorpiceHub user looks at a movie or an episode in Plex and sees whether Greek
-subtitles exist. If they don't, the user asks for them, MorpiceHub passes the request to OmbiSub, and shows
-its progress until OmbiSub has written the subtitle file next to the video and asked Plex to rescan. The user
+subtitles exist. If they don't, the user asks for them, MorpiceHub passes the request to Omnisub, and shows
+its progress until Omnisub has written the subtitle file next to the video and asked Plex to rescan. The user
 then picks the new subtitle in Plex like any other.
 
-OmbiSub's side is built and tested (`backend/routers/on_demand.py`, `backend/services/on_demand.py`,
+Omnisub's side is built and tested (`backend/routers/on_demand.py`, `backend/services/on_demand.py`,
 `backend/tests/test_on_demand.py`). MorpiceHub only needs an HTTP client, a small table of requests, and UI.
 
 ---
@@ -17,7 +17,7 @@ OmbiSub's side is built and tested (`backend/routers/on_demand.py`, `backend/ser
 ## 1. How a request flows
 
 ```
-MorpiceHub (server side)                         OmbiSub                                   Sonarr / Radarr / Plex
+MorpiceHub (server side)                         Omnisub                                   Sonarr / Radarr / Plex
 ────────────────────────                         ───────                                   ──────────────────────
 GET  /api/on-demand/status          ───────────▶ capabilities, defaults, is it running?
 POST /api/on-demand/subtitles/lookup ──────────▶ finds the title in Sonarr/Radarr ───────▶ series/episodes/files
@@ -39,30 +39,30 @@ GET  /api/on-demand/subtitles/{id}   ──────────▶ live stat
 
 Key properties:
 
-- **Nothing to download.** OmbiSub writes the subtitle into the video's own folder (`Show.S01E02.el.srt`,
+- **Nothing to download.** Omnisub writes the subtitle into the video's own folder (`Show.S01E02.el.srt`,
   or `.el.ass` plus an `.el.srt` companion for styled subtitles) and asks Plex for a rescan of that folder.
   Plex shows it as an external Greek subtitle stream.
-- **Progress is computed live.** OmbiSub stores only who asked for what; every `GET` derives the state from
+- **Progress is computed live.** Omnisub stores only who asked for what; every `GET` derives the state from
   its translation queue and episode files, so it never drifts from what really happened.
-- **Requests are cheap to repeat.** Work is keyed by (title, episode, language) inside OmbiSub. Asking again
+- **Requests are cheap to repeat.** Work is keyed by (title, episode, language) inside Omnisub. Asking again
   for an episode that is already waiting or translating does not start a second translation.
 
 ---
 
-## 2. What has to be set up in OmbiSub
+## 2. What has to be set up in Omnisub
 
-| Setting (OmbiSub UI) | Why it matters |
+| Setting (Omnisub UI) | Why it matters |
 |---|---|
-| **Settings › Connections › Sonarr / Radarr** connected (Test passes) | OmbiSub finds titles, episodes and video paths through them. Without Sonarr, series requests answer `503 sonarr_not_configured`; same for Radarr and movies. |
-| **Settings › Connections › path mappings** | When Sonarr/Radarr report paths OmbiSub sees differently (another machine, a share), the mapping lets OmbiSub reach the files. Otherwise episodes come back `unavailable` / `media_unreachable`. |
-| **Settings › Connections › Plex** (optional, recommended) | OmbiSub asks Plex to rescan the folder after writing a subtitle. Without it Plex finds the file at its next scheduled scan. |
+| **Settings › Connections › Sonarr / Radarr** connected (Test passes) | Omnisub finds titles, episodes and video paths through them. Without Sonarr, series requests answer `503 sonarr_not_configured`; same for Radarr and movies. |
+| **Settings › Connections › path mappings** | When Sonarr/Radarr report paths Omnisub sees differently (another machine, a share), the mapping lets Omnisub reach the files. Otherwise episodes come back `unavailable` / `media_unreachable`. |
+| **Settings › Connections › Plex** (optional, recommended) | Omnisub asks Plex to rescan the folder after writing a subtitle. Without it Plex finds the file at its next scheduled scan. |
 | **Settings › Subtitles › embedded extraction** on, and ffmpeg found | Needed for videos whose English subtitle is only inside the container. With extraction off, the translation step extracts inline (slower, but still works). `status.ffmpeg` / `status.extraction_enabled` report this. |
 | **Settings › Security** login set | Turns on the API key check. The **API key** shown there is what MorpiceHub sends (section 3). |
 | **Settings › General › Most episodes in one request** (default 30) | Cap per request; larger requests are refused with `400 too_many_episodes`. Read it from `status.max_episodes`. |
 | **Settings › General › Translate into** (default Greek) | The language used when a request does not name one. |
 
-The translation itself is done by OmbiSub's agy runner (Antigravity CLI), or by the Gemini worker when
-OmbiSub's engine is set to the Gemini API. MorpiceHub does not need to know which; `status` reports it.
+The translation itself is done by Omnisub's agy runner (Antigravity CLI), or by the Gemini worker when
+Omnisub's engine is set to the Gemini API. MorpiceHub does not need to know which; `status` reports it.
 
 ---
 
@@ -70,25 +70,25 @@ OmbiSub's engine is set to the Gemini API. MorpiceHub does not need to know whic
 
 ### Base URL
 
-- Same network: `http://<ombisub-host>:2945` (2945 is the port OmbiSub was installed with on the server).
-- Behind Caddy: `https://<domain>` or `https://<domain>/<url_base>` when OmbiSub is served under a path
-  (Settings › General › URL base, e.g. `/ombisub`). OmbiSub accepts requests with or without that prefix.
+- Same network: `http://<omnisub-host>:2945` (2945 is the port Omnisub was installed with on the server).
+- Behind Caddy: `https://<domain>` or `https://<domain>/<url_base>` when Omnisub is served under a path
+  (Settings › General › URL base, e.g. `/omnisub`). Omnisub accepts requests with or without that prefix.
 
 All endpoints below are relative to that base, e.g. `GET {BASE}/api/on-demand/status`.
 
 ### Authentication
 
 ```
-X-Api-Key: <the API key from OmbiSub › Settings › Security>
+X-Api-Key: <the API key from Omnisub › Settings › Security>
 ```
 
-- When OmbiSub has a login set (it should), every `/api/...` call without the right key answers
+- When Omnisub has a login set (it should), every `/api/...` call without the right key answers
   `401 {"detail": "Unauthorized"}`. Without a login, calls work without a key; send it anyway so nothing
   breaks the day a login is set.
-- **Call OmbiSub from MorpiceHub's server, never from the browser.** The key grants full control of OmbiSub.
+- **Call Omnisub from MorpiceHub's server, never from the browser.** The key grants full control of Omnisub.
   Keep it in MorpiceHub's server configuration (environment variable or secrets store), not in client code.
   This also avoids CORS entirely.
-- If the key is regenerated in OmbiSub (Settings › Security › "Generate a new API key"), MorpiceHub must be
+- If the key is regenerated in Omnisub (Settings › Security › "Generate a new API key"), MorpiceHub must be
   given the new one; until then every call is a 401.
 
 ### Timeouts
@@ -115,7 +115,7 @@ carry only `detail` (401, 422 validation, 404 unknown request id).
 
 ---
 
-## 4. Telling OmbiSub which title you mean
+## 4. Telling Omnisub which title you mean
 
 Every lookup and request body identifies one title:
 
@@ -145,7 +145,7 @@ The item carries `Guid: [{"id": "imdb://tt11280740"}, {"id": "tmdb://95396"}, {"
   `tvdb_id`; the episode is `season` = the episode's `parentIndex`, `episodes` = `[index]`.
 - **Season:** the season item's `index` is the season number; the show's guids as above.
 
-OmbiSub uses Sonarr's season/episode numbering. Plex and Sonarr agree for almost every show; for shows where
+Omnisub uses Sonarr's season/episode numbering. Plex and Sonarr agree for almost every show; for shows where
 the Plex library uses a different episode order (absolute anime numbering, a TMDB order), map the episode by
 its file instead, or ask the user to confirm.
 
@@ -155,7 +155,7 @@ its file instead, or ask the user to confirm.
 |---|---|---|
 | `season` | integer | Series only. Omit for the whole show. |
 | `episodes` | integer[] | Series only, needs `season`. Omit for the whole season. |
-| `language` | string | ISO 639-1 code (`"el"`) or name (`"Greek"`). Omit for OmbiSub's default (`status.default_language`). |
+| `language` | string | ISO 639-1 code (`"el"`) or name (`"Greek"`). Omit for Omnisub's default (`status.default_language`). |
 
 | Body | Covers |
 |---|---|
@@ -172,7 +172,7 @@ A request that covers more episodes than `status.max_episodes` is refused before
 
 | Field | Type | Meaning |
 |---|---|---|
-| `requested_by` | string | The MorpiceHub user's display name. Stored with the request, shown in OmbiSub's logs. |
+| `requested_by` | string | The MorpiceHub user's display name. Stored with the request, shown in Omnisub's logs. |
 | `client` | string | Always `"morpicehub"`. |
 | `client_ref` | string | MorpiceHub's own id for this request (row id in its table). Returned on every read, so a response can always be tied back. |
 
@@ -180,7 +180,7 @@ A request that covers more episodes than `status.max_episodes` is refused before
 
 ## 5. Endpoints
 
-### 5.1 `GET /api/on-demand/status`: what OmbiSub can do right now
+### 5.1 `GET /api/on-demand/status`: what Omnisub can do right now
 
 Use it as the connection test in MorpiceHub's settings (a 401 means a wrong key), and to explain waits.
 
@@ -201,12 +201,12 @@ Use it as the connection test in MorpiceHub's settings (a 401 means a wrong key)
 
 | Field | Meaning |
 |---|---|
-| `sonarr`, `radarr` | Connected in OmbiSub. Hide "request" for series/movies when `false`. |
+| `sonarr`, `radarr` | Connected in Omnisub. Hide "request" for series/movies when `false`. |
 | `extraction_enabled`, `ffmpeg` | Subtitles inside videos can be extracted. |
 | `default_language`, `default_language_name` | What a request without `language` translates into. |
 | `max_episodes` | Cap per request. |
 | `engine` | `"agent"` (agy runner) or `"model"` (Gemini API worker). |
-| `paused` | An OmbiSub admin paused translations: requests are accepted and wait. Tell the user. |
+| `paused` | An Omnisub admin paused translations: requests are accepted and wait. Tell the user. |
 | `runner` | With the agent engine: `running`, `idle` (nothing to do), `waiting` (quota pause, or paused), `stopping`, `stopped`, `done`, `error`. `null` with the model engine. `stopped`/`error` means requests will wait until an admin starts it. |
 
 ### 5.2 `POST /api/on-demand/subtitles/lookup`: what exists, what a request would do
@@ -243,7 +243,7 @@ Read-only: no project is created, nothing is queued. Body: the identity fields p
 ```
 
 A movie answers the same shape with one entry whose `season`/`episode` are `null` and whose
-`episode_name` is OmbiSub's project name for the movie (e.g. `"Dune (2021)"`).
+`episode_name` is Omnisub's project name for the movie (e.g. `"Dune (2021)"`).
 
 **The whole show** (no `season`, no `episodes`): only counts per season, read from the folders (no video
 is opened). Use it to let the user pick a season.
@@ -319,7 +319,7 @@ Answer `200`, the request with each episode's state:
 
 Store `id` with your own request row: it is the handle for every later call.
 
-What OmbiSub does on this call, per episode: imports just that episode from Sonarr/Radarr (never the whole
+What Omnisub does on this call, per episode: imports just that episode from Sonarr/Radarr (never the whole
 show), then looks at its video:
 
 1. A Greek subtitle already there → `available`.
@@ -327,18 +327,18 @@ show), then looks at its video:
 3. An English text track inside the video → queued for extraction, chained into translation (`extracting`).
 4. Nothing usable → `unavailable` with the reason.
 
-The first translation of a show OmbiSub has never translated also builds the show's context guide and
+The first translation of a show Omnisub has never translated also builds the show's context guide and
 glossary first (names, genders, tone), which adds a few minutes to that first episode only.
 
 Translations are queued with **Manual** priority: ahead of scheduled sync and backlog work, behind "Run now",
-titles set to **High** priority and freshly downloaded episodes. A title an OmbiSub admin set to **Low**
+titles set to **High** priority and freshly downloaded episodes. A title an Omnisub admin set to **Low**
 waits behind everything; a title set to **Ignored** is still translated for an explicit request like this
 one, but nothing else of it is.
 
 ### 5.4 `GET /api/on-demand/subtitles/{id}`: follow a request
 
 Same shape as the create answer, with every episode's state computed now. `404 {"detail": "Unknown request
-id."}` for an id OmbiSub does not know.
+id."}` for an id Omnisub does not know.
 
 While translating, `progress` is the percentage of lines done:
 
@@ -385,8 +385,8 @@ records; normal operation reads single requests by id.
 | `available` | yes | Already existed when the request was made. | `detail`: file name, or `embedded_text` / `embedded_image` | "Greek subtitles available" |
 | `not_downloaded` | yes | No video file yet. | | "Not downloaded yet" |
 | `unavailable` | yes | Nothing to translate from. | `detail`: reason (6.2) | see 6.2 |
-| `failed` | yes | Gave up. An OmbiSub admin can retry it; a new request also retries it. | `detail`: first line of the error | "Could not translate this one" |
-| `cancelled` | yes | Cancelled (by this client, or an OmbiSub admin). | | "Cancelled" |
+| `failed` | yes | Gave up. An Omnisub admin can retry it; a new request also retries it. | `detail`: first line of the error | "Could not translate this one" |
+| `cancelled` | yes | Cancelled (by this client, or an Omnisub admin). | | "Cancelled" |
 
 Treat any state you do not know as "not final".
 
@@ -397,9 +397,9 @@ Treat any state you do not know as "not final".
 | `no_subtitles` | The video has no subtitle tracks and there is no English subtitle file. | "No English subtitles to translate from" |
 | `image_subtitles_only` | Only image subtitles (PGS/VobSub); they would need OCR. | "Only picture subtitles, which can't be translated" |
 | `no_source_language` | Subtitle tracks exist, none in English. | "No English subtitles to translate from" |
-| `media_unreachable` | OmbiSub cannot reach the video file (share offline, wrong path mapping). | "The video can't be reached right now" |
+| `media_unreachable` | Omnisub cannot reach the video file (share offline, wrong path mapping). | "The video can't be reached right now" |
 | `probe_failed` | Reading the video's tracks failed. | "The video couldn't be read" |
-| `ffmpeg_unavailable` | ffmpeg is not installed/configured in OmbiSub. | "OmbiSub can't read video files (ffmpeg missing)" |
+| `ffmpeg_unavailable` | ffmpeg is not installed/configured in Omnisub. | "Omnisub can't read video files (ffmpeg missing)" |
 
 ### 6.3 Request status (`status`)
 
@@ -418,17 +418,17 @@ Treat any state you do not know as "not final".
 
 | HTTP | `code` | When | What MorpiceHub should do |
 |---|---|---|---|
-| 401 | (none) | Missing or wrong `X-Api-Key`. | Mark the integration as misconfigured; show admins "OmbiSub rejected the API key". |
+| 401 | (none) | Missing or wrong `X-Api-Key`. | Mark the integration as misconfigured; show admins "Omnisub rejected the API key". |
 | 422 | (none) | Bad body: unknown `media_type`, no identity field, wrong types. | A bug in MorpiceHub; log it. |
 | 400 | `season_required` | `episodes` without `season`. | Bug; always send the season. |
 | 400 | `too_many_episodes` | More than `limit` episodes. Extra: `limit`, `requested`. | Split by season, or tell the user the limit. |
 | 404 | `not_in_library` | Sonarr/Radarr do not have this title. | "This title isn't managed by Sonarr/Radarr, so subtitles can't be requested." |
 | 404 | `no_episodes` | No downloaded episode matches the season/episodes asked. | "None of these episodes are downloaded yet." |
 | 409 | `ambiguous` | A `title` matched several library titles. Extra: `candidates: [{title, year}]`. | Retry with `year` or an id. |
-| 502 | `arr_error` | Sonarr/Radarr answered with an error. | Retry later; "OmbiSub couldn't reach Sonarr/Radarr". |
-| 503 | `sonarr_not_configured` / `radarr_not_configured` | Not connected in OmbiSub. | Hide requests for that media type (see `status`). |
-| 404 | (none) | Unknown request id on read/cancel. | The request is gone (OmbiSub data reset); mark it lost. |
-| 5xx / network | | OmbiSub down or restarting (updates restart it). | Retry with backoff; keep the request as pending on MorpiceHub's side. |
+| 502 | `arr_error` | Sonarr/Radarr answered with an error. | Retry later; "Omnisub couldn't reach Sonarr/Radarr". |
+| 503 | `sonarr_not_configured` / `radarr_not_configured` | Not connected in Omnisub. | Hide requests for that media type (see `status`). |
+| 404 | (none) | Unknown request id on read/cancel. | The request is gone (Omnisub data reset); mark it lost. |
+| 5xx / network | | Omnisub down or restarting (updates restart it). | Retry with backoff; keep the request as pending on MorpiceHub's side. |
 
 ---
 
@@ -436,7 +436,7 @@ Treat any state you do not know as "not final".
 
 ### 7.1 Server-side client
 
-One small module on MorpiceHub's server, configured with `OMBISUB_URL` and `OMBISUB_API_KEY`:
+One small module on MorpiceHub's server, configured with `OMNISUB_URL` and `OMNISUB_API_KEY`:
 
 ```ts
 // Illustration only: adapt to MorpiceHub's language and HTTP library.
@@ -470,7 +470,7 @@ interface SubtitleRequest {
   summary: Record<string, number>; episodes: RequestEpisode[];
 }
 
-class OmbiSub {
+class Omnisub {
   constructor(private base: string, private key: string) {}
   private async call<T>(method: string, path: string, body?: unknown, timeoutMs = 15000): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
@@ -498,16 +498,16 @@ A `subtitle_requests` table (or equivalent):
 | Column | Notes |
 |---|---|
 | `id` | MorpiceHub's own id; send it as `client_ref`. |
-| `ombisub_id` | `id` from the create answer. |
+| `omnisub_id` | `id` from the create answer. |
 | `user_id` | Who asked (for "my requests" and per-user limits). |
 | `plex_rating_key` | The movie, show, season or episode it was asked from, to show progress there. |
 | `media_type`, `title`, `season`, `episodes`, `language` | What was asked. |
-| `status`, `summary`, `episodes_json` | Last answer from OmbiSub, for rendering without a call. |
+| `status`, `summary`, `episodes_json` | Last answer from Omnisub, for rendering without a call. |
 | `created_at`, `last_polled_at`, `finished_at` | Polling bookkeeping. |
 
 ### 7.3 Polling
 
-- Poll `GET /api/on-demand/subtitles/{ombisub_id}` from MorpiceHub's server, not from each browser: one
+- Poll `GET /api/on-demand/subtitles/{omnisub_id}` from MorpiceHub's server, not from each browser: one
   poller for all open requests, results written to the table, browsers read MorpiceHub.
 - Interval: every 10 s for the first 2 minutes, then every 30 s, then every 60 s after 15 minutes. Stop
   when `status` is final (6.3). A "refresh" action may poll once on demand.
@@ -515,11 +515,11 @@ A `subtitle_requests` table (or equivalent):
 - Expect minutes, not seconds: an episode usually takes a few minutes once it starts; a show's first
   episode adds a few minutes for the context guide; extraction adds the time to read the video file;
   everything waits for the work queued before it (`ahead`). If `status.paused` is true or `status.runner`
-  is `stopped`/`error`, say that OmbiSub is not translating right now.
+  is `stopped`/`error`, say that Omnisub is not translating right now.
 
 ### 7.4 Retries and duplicates
 
-- Create is safe to retry after a timeout or network error: OmbiSub keeps one piece of work per (title,
+- Create is safe to retry after a timeout or network error: Omnisub keeps one piece of work per (title,
   episode, language). A retry may create a second request record; keep the newest `id` (match on
   `client_ref` via the list endpoint if the first answer was lost).
 - Before offering "Request" on a title, a **lookup** tells you whether it is already `available` or
@@ -543,53 +543,53 @@ only when a season or an episode is opened.
   `max_episodes`).
 - **My requests:** the user's requests with status, per-episode progress, Cancel while `in_progress`.
 - **After completion:** "Ready: pick *Greek* in Plex's subtitle menu". If Plex does not show it yet,
-  MorpiceHub can ask Plex to refresh the item (`PUT {PLEX}/library/metadata/{ratingKey}/refresh`); OmbiSub
-  already asks Plex to rescan the folder when Plex is connected in OmbiSub.
-- **Admin settings:** OmbiSub URL, API key, a "Test connection" button that calls `status` and shows Sonarr,
+  MorpiceHub can ask Plex to refresh the item (`PUT {PLEX}/library/metadata/{ratingKey}/refresh`); Omnisub
+  already asks Plex to rescan the folder when Plex is connected in Omnisub.
+- **Admin settings:** Omnisub URL, API key, a "Test connection" button that calls `status` and shows Sonarr,
   Radarr, ffmpeg, engine and runner state.
 
 ### 7.7 Limits worth adding on MorpiceHub's side
 
 Every episode is a full translation. A per-user cap (for example 3 open requests, or N episodes a day) and
-an admin-only "whole show" request keep one enthusiastic user from filling OmbiSub's queue.
+an admin-only "whole show" request keep one enthusiastic user from filling Omnisub's queue.
 
 ---
 
 ## 8. Try it with curl
 
 ```bash
-export OMBISUB_URL="http://ombisub-host:2945"
-export OMBISUB_KEY="paste the key from OmbiSub › Settings › Security"
+export OMNISUB_URL="http://omnisub-host:2945"
+export OMNISUB_KEY="paste the key from Omnisub › Settings › Security"
 ```
 
 ```bash
-curl -s -H "X-Api-Key: $OMBISUB_KEY" "$OMBISUB_URL/api/on-demand/status"
+curl -s -H "X-Api-Key: $OMNISUB_KEY" "$OMNISUB_URL/api/on-demand/status"
 ```
 
 ```bash
-curl -s -H "X-Api-Key: $OMBISUB_KEY" -H "Content-Type: application/json" \
+curl -s -H "X-Api-Key: $OMNISUB_KEY" -H "Content-Type: application/json" \
   -d '{"media_type": "series", "tvdb_id": 371980, "season": 1}' \
-  "$OMBISUB_URL/api/on-demand/subtitles/lookup"
+  "$OMNISUB_URL/api/on-demand/subtitles/lookup"
 ```
 
 ```bash
-curl -s -H "X-Api-Key: $OMBISUB_KEY" -H "Content-Type: application/json" \
+curl -s -H "X-Api-Key: $OMNISUB_KEY" -H "Content-Type: application/json" \
   -d '{"media_type": "series", "tvdb_id": 371980, "season": 1, "episodes": [2], "requested_by": "test", "client": "morpicehub", "client_ref": "t1"}' \
-  "$OMBISUB_URL/api/on-demand/subtitles"
+  "$OMNISUB_URL/api/on-demand/subtitles"
 ```
 
 ```bash
-curl -s -H "X-Api-Key: $OMBISUB_KEY" "$OMBISUB_URL/api/on-demand/subtitles/<id from the answer above>"
+curl -s -H "X-Api-Key: $OMNISUB_KEY" "$OMNISUB_URL/api/on-demand/subtitles/<id from the answer above>"
 ```
 
 ```bash
-curl -s -X POST -H "X-Api-Key: $OMBISUB_KEY" "$OMBISUB_URL/api/on-demand/subtitles/<id>/cancel"
+curl -s -X POST -H "X-Api-Key: $OMNISUB_KEY" "$OMNISUB_URL/api/on-demand/subtitles/<id>/cancel"
 ```
 
 ```bash
-curl -s -H "X-Api-Key: $OMBISUB_KEY" -H "Content-Type: application/json" \
+curl -s -H "X-Api-Key: $OMNISUB_KEY" -H "Content-Type: application/json" \
   -d '{"media_type": "movie", "tmdb_id": 438631}' \
-  "$OMBISUB_URL/api/on-demand/subtitles/lookup"
+  "$OMNISUB_URL/api/on-demand/subtitles/lookup"
 ```
 
 ### Acceptance checklist for the MorpiceHub work
@@ -603,13 +603,13 @@ curl -s -H "X-Api-Key: $OMBISUB_KEY" -H "Content-Type: application/json" \
 - [ ] An episode with only picture subtitles shows the reason and no request button.
 - [ ] A season request covers only downloaded episodes; more than `max_episodes` is handled (split or
       explained).
-- [ ] Cancel during *Waiting* and during *Translating* both end as *Cancelled*; OmbiSub's Activity page shows
+- [ ] Cancel during *Waiting* and during *Translating* both end as *Cancelled*; Omnisub's Activity page shows
       the item cancelled.
 - [ ] Two users requesting the same episode both see it complete; one cancelling does not stop the other's
       (the later request keeps it).
-- [ ] OmbiSub restarting during a request (updates restart it): MorpiceHub keeps polling and the request
+- [ ] Omnisub restarting during a request (updates restart it): MorpiceHub keeps polling and the request
       finishes.
-- [ ] OmbiSub with translations paused: the request is accepted and the user is told it waits.
+- [ ] Omnisub with translations paused: the request is accepted and the user is told it waits.
 - [ ] The API key never reaches the browser (check the network tab).
 
 ---
@@ -621,5 +621,5 @@ curl -s -H "X-Api-Key: $OMBISUB_KEY" -H "Content-Type: application/json" \
   generically.
 - Endpoint paths and the fields listed here are kept stable; changes to them are announced in this file.
 
-Questions about OmbiSub's behaviour are answered by its code: `backend/services/on_demand.py` (routing,
+Questions about Omnisub's behaviour are answered by its code: `backend/services/on_demand.py` (routing,
 states), `backend/routers/on_demand.py` (HTTP), `backend/tests/test_on_demand.py` (the cases above).

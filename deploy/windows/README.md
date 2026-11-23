@@ -1,6 +1,6 @@
-# OmbiSub on a Windows server
+# Omnisub on a Windows server
 
-OmbiSub runs like Sonarr or Radarr: it starts at boot, nobody has to be logged in, it comes back after a
+Omnisub runs like Sonarr or Radarr: it starts at boot, nobody has to be logged in, it comes back after a
 crash, and it updates itself (or with one click). Everything below is run from the repo folder.
 
 ## Install (one click)
@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Mode Servic
 powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -WhatIf     # dry run
 ```
 
-Options: `-Port`, `-DataDir D:\OmbiSubData`, `-TaskName OmbiSub`, `-User DOMAIN\name`, `-SkipBuild`,
+Options: `-Port`, `-DataDir D:\OmnisubData`, `-TaskName Omnisub`, `-User DOMAIN\name`, `-SkipBuild`,
 `-OpenFirewall`, `-KeepAwake`, `-Mode Service|Tray|Headless`.
 
 ### Service or Tray?
@@ -66,37 +66,37 @@ powershell -ExecutionPolicy Bypass -File deploy\windows\status.ps1     # task st
 
 In the app (and through the API, behind the login when it is on): `GET /api/system/status` (version and commit,
 uptime, port, URL base, data folder, supervisor, Python, ffmpeg, agent CLIs, runner state, free disk space)
-and `GET /api/system/logs?name=ombisub&lines=500` (names: `ombisub`, `agent_runner`, `tray_app`,
+and `GET /api/system/logs?name=omnisub&lines=500` (names: `omnisub`, `agent_runner`, `tray_app`,
 `service_console`; `/api/system/logs/list` shows which exist).
 
 Log files live in `<data folder>\logs` (`backend\logs` unless you used `-DataDir`):
 
 | File | Written by |
 | --- | --- |
-| `ombisub.log` | the server (rotating, 10 MB x 5) |
+| `omnisub.log` | the server (rotating, 10 MB x 5) |
 | `agent_runner.log` | the agent runner |
 | `tray_app.log` | the supervisor: starts, exits, respawns |
 | `service_console.log` | console output of the boot task (tracebacks before logging starts) |
 
 ## Behind Caddy (reverse proxy)
 
-OmbiSub speaks plain HTTP on its port; let Caddy add HTTPS. **Turn on OmbiSub's own login (Settings >
+Omnisub speaks plain HTTP on its port; let Caddy add HTTPS. **Turn on Omnisub's own login (Settings >
 Security) before you expose it to the internet.**
 
-**Own (sub)domain** - nothing to configure in OmbiSub:
+**Own (sub)domain** - nothing to configure in Omnisub:
 
 ```caddyfile
-ombisub.example.com {
+omnisub.example.com {
     reverse_proxy localhost:2945
 }
 ```
 
-**Under a path** - set *Settings > Updates & System > Reverse proxy > URL base* to `/ombisub` (setting
-`url_base`) and restart OmbiSub. Both forms work, with the prefix stripped or kept:
+**Under a path** - set *Settings > Updates & System > Reverse proxy > URL base* to `/omnisub` (setting
+`url_base`) and restart Omnisub. Both forms work, with the prefix stripped or kept:
 
 ```caddyfile
 example.com {
-    handle_path /ombisub/* {      # strips /ombisub before proxying
+    handle_path /omnisub/* {      # strips /omnisub before proxying
         reverse_proxy localhost:2945
     }
 }
@@ -104,18 +104,18 @@ example.com {
 
 ```caddyfile
 example.com {
-    handle /ombisub/* {           # keeps /ombisub; OmbiSub strips it itself
+    handle /omnisub/* {           # keeps /omnisub; Omnisub strips it itself
         reverse_proxy localhost:2945
     }
 }
 ```
 
-OmbiSub serves `index.html` with `<base href="/ombisub/">`, so the UI, the API and the live-update WebSocket
+Omnisub serves `index.html` with `<base href="/omnisub/">`, so the UI, the API and the live-update WebSocket
 all live under the path; requests without the prefix keep working (direct access by `IP:2945`).
 
 `X-Forwarded-For` / `X-Forwarded-Proto` from Caddy are trusted when Caddy runs on the same machine
 (setting `trusted_proxies`, default `127.0.0.1`; use the proxy's address when it is on another host).
-Sonarr/Radarr webhooks then use `https://example.com/ombisub/api/webhook/...`.
+Sonarr/Radarr webhooks then use `https://example.com/omnisub/api/webhook/...`.
 
 ## Files in this folder
 

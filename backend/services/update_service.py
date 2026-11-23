@@ -1,5 +1,5 @@
 """
-OmbiSub Auto-Update & Official GitHub Releases Service
+Omnisub Auto-Update & Official GitHub Releases Service
 =====================================================
 Manages official GitHub release tracking, dependency synchronization,
 frontend static rebuilding, and graceful server restarts.
@@ -24,6 +24,7 @@ import io
 import shutil
 import logging
 import asyncio
+from utils.env_names import env
 import subprocess
 import threading
 from datetime import datetime, timezone
@@ -46,7 +47,7 @@ PYTHON_EXE = ROOT_DIR / ".venv" / "Scripts" / "python.exe"
 if not PYTHON_EXE.is_file():
     PYTHON_EXE = Path(sys.executable)
 
-GITHUB_REPO = "thanos2940/OmbiSub---Google-Seminar-Capstone-Project"
+GITHUB_REPO = "thanos2940/Omnisub---Google-Seminar-Capstone-Project"
 DEFAULT_BRANCH = "main"
 CHANNEL_MAIN = "main"
 CHANNEL_RELEASES = "releases"
@@ -207,7 +208,7 @@ class UpdateService:
             api_url,
             headers={
                 "Accept": "application/vnd.github+json",
-                "User-Agent": "OmbiSub-Updater",
+                "User-Agent": "Omnisub-Updater",
             }
         )
 
@@ -400,7 +401,7 @@ class UpdateService:
         if not git_success:
             try:
                 api_url = f"https://api.github.com/repos/{self.github_repo}/commits/{remote}"
-                req = Request(api_url, headers={"User-Agent": "OmbiSub-UpdateService"})
+                req = Request(api_url, headers={"User-Agent": "Omnisub-UpdateService"})
 
                 def _fetch_api():
                     with urlopen(req, timeout=10.0) as resp:
@@ -572,7 +573,7 @@ class UpdateService:
             return {
                 "success": False,
                 "status": "not_git",
-                "message": "OmbiSub directory is not a Git repository. Automatic updates require a Git clone.",
+                "message": "Omnisub directory is not a Git repository. Automatic updates require a Git clone.",
             }
 
         # Guard: Working tree changes check. Only tracked files count: a reset --hard leaves untracked
@@ -720,7 +721,7 @@ class UpdateService:
                     if static_asset and static_asset.get("browser_download_url"):
                         try:
                             import zipfile
-                            req = Request(static_asset["browser_download_url"], headers={"User-Agent": "OmbiSub-Updater"})
+                            req = Request(static_asset["browser_download_url"], headers={"User-Agent": "Omnisub-Updater"})
                             def _extract_zip():
                                 with urlopen(req, timeout=30.0) as resp:
                                     zf = zipfile.ZipFile(io.BytesIO(resp.read()))
@@ -761,7 +762,7 @@ class UpdateService:
             return {
                 "success": True,
                 "status": "restarting",
-                "message": f"Update installed successfully ({tag_name or target_ref}). OmbiSub is now restarting...",
+                "message": f"Update installed successfully ({tag_name or target_ref}). Omnisub is now restarting...",
             }
         except Exception as e:
             self._updating = False
@@ -842,8 +843,8 @@ class UpdateService:
 
     def trigger_restart(self, delay_seconds: float = 1.0):
         """Spawn detached restart helper script or exit with code 42 under tray supervisor."""
-        if os.environ.get("OMBISUB_SUPERVISOR") == "tray":
-            logger.info("Running under OMBISUB_SUPERVISOR=tray; exiting with code 42 for automatic tray respawn.")
+        if env("SUPERVISOR") == "tray":
+            logger.info("Running under the tray supervisor; exiting with code 42 for automatic respawn.")
             threading.Timer(0.5, lambda: os._exit(42)).start()
             return
 
@@ -859,8 +860,8 @@ class UpdateService:
             "--pid", str(parent_pid),
             "--backend-dir", str(BACKEND_DIR),
             "--python-exe", str(PYTHON_EXE),
-            "--port", os.environ.get("OMBISUB_PORT") or "8000",
-            "--service-name", "OmbiSub",
+            "--port", env("PORT") or "8000",
+            "--service-name", "Omnisub",
         ]
 
         flags = CREATE_NO_WINDOW

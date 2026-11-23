@@ -54,7 +54,7 @@ export default function AutopilotSettings({ settings, onChange }) {
                         <Field label="Check Sonarr and Radarr every" htmlFor="ap-poll" hint="How often the import history is read.">
                             <div className="flex items-center gap-2"><NumberInput id="ap-poll" min={10} max={3600} value={get('autopilot_poll_seconds', 60)} onChange={(v) => onChange('autopilot_poll_seconds', v)} /><span className="text-sm text-gray-500 dark:text-gray-400">seconds</span></div>
                         </Field>
-                        <Field label="Reconcile the library every" htmlFor="ap-reconcile" hint="Catches files missed while OmbiSub was down.">
+                        <Field label="Reconcile the library every" htmlFor="ap-reconcile" hint="Catches files missed while Omnisub was down.">
                             <div className="flex items-center gap-2"><NumberInput id="ap-reconcile" min={1} max={168} value={get('autopilot_reconcile_hours', 6)} onChange={(v) => onChange('autopilot_reconcile_hours', v)} /><span className="text-sm text-gray-500 dark:text-gray-400">hours</span></div>
                         </Field>
                     </div>
@@ -78,10 +78,10 @@ export default function AutopilotSettings({ settings, onChange }) {
                     <Toggle label="An embedded Greek track counts as Greek" description="Text and image tracks inside the video both count." checked={!!get('autopilot_count_embedded_greek', true)} onChange={(v) => onChange('autopilot_count_embedded_greek', v)} />
                     <Toggle label="Skip media whose original language is Greek" checked={!!get('autopilot_skip_original_greek', true)} onChange={(v) => onChange('autopilot_skip_original_greek', v)} />
                     <Toggle label="Only monitored series, episodes and movies" checked={!!get('autopilot_monitored_only', true)} onChange={(v) => onChange('autopilot_monitored_only', v)} />
-                    <Toggle label="Never overwrite a Greek file OmbiSub did not write" description="Protects subtitles from other tools or a person. Recommended." checked={!!get('autopilot_protect_foreign_subs', true)} onChange={(v) => onChange('autopilot_protect_foreign_subs', v)} />
+                    <Toggle label="Never overwrite a Greek file Omnisub did not write" description="Protects subtitles from other tools or a person. Recommended." checked={!!get('autopilot_protect_foreign_subs', true)} onChange={(v) => onChange('autopilot_protect_foreign_subs', v)} />
                     <Toggle label="Repair garbled encoding in other tools’ Greek files" description="Fixes the file in place after saving a backup copy." checked={!!get('autopilot_repair_foreign_encoding', true)} onChange={(v) => onChange('autopilot_repair_foreign_encoding', v)} />
                     <Field label="Skip tags" htmlFor="ap-tags" hint="Comma separated Sonarr or Radarr tags. A series or movie with one of them is left alone.">
-                        <input id="ap-tags" className={INPUT} value={get('autopilot_skip_tags', 'ombisub-skip,no-greek')} onChange={(e) => onChange('autopilot_skip_tags', e.target.value)} placeholder="ombisub-skip,no-greek" />
+                        <input id="ap-tags" className={INPUT} value={get('autopilot_skip_tags', 'omnisub-skip,no-greek')} onChange={(e) => onChange('autopilot_skip_tags', e.target.value)} placeholder="omnisub-skip,no-greek" />
                     </Field>
                 </div>
             </Card>

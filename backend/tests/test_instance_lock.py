@@ -1,5 +1,5 @@
 """
-One OmbiSub process per data folder
+One Omnisub process per data folder
 ===================================
 The instance lock is an OS lock held for the life of the process: taking it again in the same process
 is fine, another process is refused while it is held and gets it once it is released, and the app's

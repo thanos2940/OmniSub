@@ -6,7 +6,7 @@ import { Button, Card, EmptyState, Field, INPUT, Spinner, Toggle } from '../ui';
 import { formatBytes } from './systemFormat';
 
 const LOG_TITLES = {
-    ombisub: 'OmbiSub (server)',
+    ombisub: 'Omnisub (server)',
     agent_runner: 'Translation runner',
     tray_app: 'Supervisor',
     service_console: 'Service console',
@@ -116,7 +116,7 @@ export default function LogsPanel() {
 
     if (!files) return <Spinner label="Looking for log files..." />;
     if (files.length === 0) {
-        return <Card padded={false}><EmptyState icon={ScrollText} title="No log files yet" description="OmbiSub writes its logs to the logs folder inside the data folder. They appear after the first start." /></Card>;
+        return <Card padded={false}><EmptyState icon={ScrollText} title="No log files yet" description="Omnisub writes its logs to the logs folder inside the data folder. They appear after the first start." /></Card>;
     }
 
     const current = files.find(f => f.name === name);

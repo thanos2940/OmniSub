@@ -1,8 +1,8 @@
-"""URL base: serving OmbiSub under a path of a reverse proxy (Caddy ``example.com/ombisub``).
+"""URL base: serving Omnisub under a path of a reverse proxy (Caddy ``example.com/omnisub``).
 
 ``url_base`` is "" (the root) or "/segment[/segment]" without a trailing slash. The backend accepts
 requests with the prefix (Caddy ``handle``, prefix kept) and without it (``handle_path``, prefix stripped),
-and tells the web app where it lives through ``<base href>`` and ``window.__OMBISUB_BASE__``.
+and tells the web app where it lives through ``<base href>`` and ``window.__OMNISUB_BASE__``.
 """
 import re
 from typing import Optional
@@ -17,7 +17,7 @@ def normalize_url_base(value: Optional[str]) -> str:
     for seg in segments:
         if seg in (".", "..") or not _SEGMENT.match(seg):
             raise ValueError(
-                "url_base must look like /ombisub: letters, digits, '.', '_', '~' and '-' in each path segment."
+                "url_base must look like /omnisub: letters, digits, '.', '_', '~' and '-' in each path segment."
             )
     return "".join("/" + seg for seg in segments)
 
@@ -34,8 +34,8 @@ class UrlBaseMiddleware:
     """Pure ASGI middleware: strips the configured prefix from the request path.
 
     ``root_path`` is deliberately NOT set: Starlette strips it from the path a second time when routing,
-    so "/ombisub/ombisub/api/settings" would reach "/api/settings" while the API-key gate (which looks at
-    the once-stripped path "/ombisub/api/settings") considered it public.
+    so "/omnisub/omnisub/api/settings" would reach "/api/settings" while the API-key gate (which looks at
+    the once-stripped path "/omnisub/api/settings") considered it public.
 
     Requests that do not start with the prefix pass through unchanged, so the app also answers at the
     root (a proxy that already stripped the prefix, direct access by IP:port).

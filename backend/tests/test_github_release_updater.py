@@ -1,7 +1,7 @@
 """
 TDD Tests for Phase 3: Official GitHub Releases Auto-Updater & Updates UI
 ========================================================================
-Validates that OmbiSub tracks Official GitHub Releases ONLY (not untagged/arbitrary
+Validates that Omnisub tracks Official GitHub Releases ONLY (not untagged/arbitrary
 commits on main), fetches release metadata, installs tags, rebuilds static bundles,
 handles tray supervisor exit code 42, and exposes clean system router endpoints.
 """
@@ -97,7 +97,7 @@ def test_fetch_latest_github_release_success(monkeypatch):
         "name": "Release v3.0.0 - Major Overhaul",
         "body": "### Changes\n- Add Bazarr priority support\n- Tray helper",
         "published_at": "2026-10-18T12:00:00Z",
-        "html_url": "https://github.com/thanos2940/OmbiSub---Google-Seminar-Capstone-Project/releases/tag/v3.0.0",
+        "html_url": "https://github.com/thanos2940/Omnisub---Google-Seminar-Capstone-Project/releases/tag/v3.0.0",
         "prerelease": False,
         "draft": False,
         "assets": [{"name": "static.zip", "browser_download_url": "https://example.com/static.zip"}],

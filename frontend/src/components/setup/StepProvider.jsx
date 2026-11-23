@@ -127,8 +127,8 @@ const StepProvider = ({ onNext, onBack, onSkip }) => {
                         <p className="font-medium">{anyFound ? 'Sign in once' : 'No agent CLI was found on this machine'}</p>
                         <p>
                             {anyFound
-                                ? <>Open a terminal as the account OmbiSub runs as, run <code className="font-mono">agy</code> (or <code className="font-mono">claude</code>) once and sign in. OmbiSub cannot do this step for you.</>
-                                : <>Install Antigravity, then run <code className="font-mono">agy</code> once in a terminal as the account OmbiSub runs as and sign in. Until then nothing is translated — or choose the Gemini API above.</>}
+                                ? <>Open a terminal as the account Omnisub runs as, run <code className="font-mono">agy</code> (or <code className="font-mono">claude</code>) once and sign in. Omnisub cannot do this step for you.</>
+                                : <>Install Antigravity, then run <code className="font-mono">agy</code> once in a terminal as the account Omnisub runs as and sign in. Until then nothing is translated — or choose the Gemini API above.</>}
                         </p>
                     </Notice>
                     <div className="space-y-2 rounded-xl border border-gray-200 p-4 dark:border-gray-700">

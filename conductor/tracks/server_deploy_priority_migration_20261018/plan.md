@@ -49,7 +49,7 @@
   - [x] Implement enhancements in `backend/integrations/path_resolver.py`, `backend/services/agent_runner.py`, `backend/main.py`, `backend/routers/schemas.py`, `backend/integrations/embedded_subs.py`, `backend/utils/subtitle_fixer.py`, and `backend/services/agent_cli.py`.
 - [x] Task 4.2: Windows System Tray App (`backend/tray_app.py`) & Installer (`deploy/windows/install.ps1`)
   - [x] Write unit tests in `backend/tests/test_autonomous_boot_and_tray.py` verifying `tray_app.py` server lifecycle management, menu actions (Open Web UI, Pause/Resume Queue, Start/Stop Agent Runner, View Logs, Restart, Exit), and single-instance lock handling.
-  - [x] Implement `backend/tray_app.py`, `deploy/windows/start_tray.vbs` / `deploy/windows/OmbiSub.bat` (`pythonw.exe` launcher), and update `deploy/windows/install.ps1` to configure automatic logon/startup tray execution, firewall rules, and power settings on `Morpiceserver`.
+  - [x] Implement `backend/tray_app.py`, `deploy/windows/start_tray.vbs` / `deploy/windows/Omnisub.bat` (`pythonw.exe` launcher), and update `deploy/windows/install.ps1` to configure automatic logon/startup tray execution, firewall rules, and power settings on `Morpiceserver`.
 - [x] Task 4.3: Final Build, Static Sync & Full End-to-End Verification
   - [x] Run `npm run lint`, `npm run build`, sync `frontend/dist` to `backend/static/`, and run full `pytest` suite (`100%` pass).
 
@@ -73,6 +73,6 @@
 - [x] Task 5.8: Regression tests for each fix (each fails on the pre-fix code); full suite, eslint and vite build green.
 
 ## Remaining (operational, needs the owner)
-- [ ] Move to `Morpiceserver`: export a **full** bundle, install with `install.ps1 -Mode Tray -OpenFirewall -KeepAwake`, stop OmbiSub, import with `--remap-unc-to-local`, start it.
+- [ ] Move to `Morpiceserver`: export a **full** bundle, install with `install.ps1 -Mode Tray -OpenFirewall -KeepAwake`, stop Omnisub, import with `--remap-unc-to-local`, start it.
 - [ ] Publish the first GitHub Release tag so the updater has something to track.
 

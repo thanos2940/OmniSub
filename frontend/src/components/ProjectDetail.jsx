@@ -284,7 +284,7 @@ const ProjectDetail = () => {
                 checkbox={{ label: 'Also delete the translated subtitle file next to the video' }}
                 onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete}
             >
-                <p>The translation stored in OmbiSub is removed. The source subtitle stays, so the episode can be translated again.</p>
+                <p>The translation stored in Omnisub is removed. The source subtitle stays, so the episode can be translated again.</p>
             </ConfirmDialog>
         </Page>
     );

@@ -276,14 +276,14 @@ def create_migration_bundle(
 
     if output_path is None:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        output_path = Path(tempfile.gettempdir()) / f"ombisub-migration-{mode}-{timestamp}.zip"
+        output_path = Path(tempfile.gettempdir()) / f"omnisub-migration-{mode}-{timestamp}.zip"
     else:
         output_path = Path(output_path)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Temporary directory to stage WAL-consistent database snapshots
-    temp_dir = Path(tempfile.mkdtemp(prefix="ombisub_migration_"))
+    temp_dir = Path(tempfile.mkdtemp(prefix="omnisub_migration_"))
     try:
         # Map of zip_rel_path -> local disk Path
         files_to_pack: Dict[str, Path] = {}
@@ -515,7 +515,7 @@ def _install_staged(staging: Path, target_dir: Path, db_rels: List[str]) -> None
             os.replace(live_tm, old_tm)
         except OSError as e:
             raise RuntimeError(
-                f"The translation memory is in use ({e}); stop OmbiSub and import again."
+                f"The translation memory is in use ({e}); stop Omnisub and import again."
             ) from e
 
     cfg = target_dir / "config.json"

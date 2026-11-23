@@ -1,7 +1,7 @@
 """
-OmbiSub Detached Restart Helper
+Omnisub Detached Restart Helper
 ===============================
-This script is launched detached from the main OmbiSub server process to perform
+This script is launched detached from the main Omnisub server process to perform
 a safe, graceful restart after an update has been applied.
 
 It handles two deployment modes:
@@ -108,8 +108,8 @@ def restart_windows_service(service_name: str) -> bool:
 
 
 def restart_standalone(python_exe: str, backend_dir: str, port: int, host: str = "0.0.0.0"):
-    """Relaunch OmbiSub in a standalone console window."""
-    logger.info(f"Relaunching OmbiSub standalone using Python: {python_exe} in {backend_dir}...")
+    """Relaunch Omnisub in a standalone console window."""
+    logger.info(f"Relaunching Omnisub standalone using Python: {python_exe} in {backend_dir}...")
 
     cmd = [python_exe, "-m", "uvicorn", "main:app", "--host", host, "--port", str(port)]
     
@@ -125,18 +125,18 @@ def restart_standalone(python_exe: str, backend_dir: str, port: int, host: str =
             creationflags=flags,
             close_fds=True,
         )
-        logger.info("Successfully spawned new OmbiSub server process.")
+        logger.info("Successfully spawned new Omnisub server process.")
     except Exception as e:
         logger.error(f"Failed to spawn new server process: {e}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="OmbiSub Detached Restarter")
+    parser = argparse.ArgumentParser(description="Omnisub Detached Restarter")
     parser.add_argument("--pid", type=int, default=0, help="Parent PID to wait for exit")
     parser.add_argument("--port", type=int, default=8000, help="Server port to wait for release")
     parser.add_argument("--backend-dir", type=str, default="", help="Backend working directory")
     parser.add_argument("--python-exe", type=str, default="", help="Python interpreter executable")
-    parser.add_argument("--service-name", type=str, default="OmbiSub", help="Windows service name")
+    parser.add_argument("--service-name", type=str, default="Omnisub", help="Windows service name")
     args = parser.parse_args()
 
     backend_dir = args.backend_dir or str(ROOT_DIR / "backend")

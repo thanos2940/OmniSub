@@ -1,4 +1,4 @@
-"""Tell Plex about every subtitle OmbiSub writes, without ever slowing an export down.
+"""Tell Plex about every subtitle Omnisub writes, without ever slowing an export down.
 
 ``request_refresh(path)`` is called wherever a subtitle lands next to a video (the export
 formatter, the export-retry lane, the Autopilot). Paths are collected for a short window and

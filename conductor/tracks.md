@@ -24,5 +24,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [~] **Track: Dependable, agy-first OmbiSub (`dependable_agy_first_20261019`)**
+- [~] **Track: Dependable, agy-first Omnisub (`dependable_agy_first_20261019`)**
   *Link: [./tracks/dependable_agy_first_20261019/index.md](./tracks/dependable_agy_first_20261019/index.md)*

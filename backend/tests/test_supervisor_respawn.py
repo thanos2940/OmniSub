@@ -116,7 +116,7 @@ def test_exit_42_respawns_without_waiting(rig):
 
 def test_crash_respawns_after_backoff_and_logs_the_exit_code(rig, caplog):
     rig.sup.start_server()
-    with caplog.at_level("WARNING", logger="ombisub.tray"):
+    with caplog.at_level("WARNING", logger="omnisub.tray"):
         for expected in (5.0, 15.0, 60.0):
             rig.exit_server(3, after=2)
             rig.sup.supervise_once()

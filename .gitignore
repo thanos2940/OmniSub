@@ -144,5 +144,7 @@ backend/*.lock
 
 # updater check cache (DATA_DIR)
 backend/update_check.json
+backend/omnisub_instance.lock
+backend/omnisub_instance.lock.json
 backend/ombisub_instance.lock
 backend/ombisub_instance.lock.json

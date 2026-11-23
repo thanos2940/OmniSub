@@ -5,7 +5,7 @@ folder. `CLAUDE.md` at the repo root is **git-ignored** (all `*.md` are ignored 
 so a fresh clone does not have it — the architecture notes that matter for this track are summarised below.
 
 ## The owner's goal (verbatim intent)
-OmbiSub must run like Sonarr/Radarr/Bazarr: dependable, easily installed, updated, managed, reachable
+Omnisub must run like Sonarr/Radarr/Bazarr: dependable, easily installed, updated, managed, reachable
 through **Caddy**; connected to Sonarr/Radarr/Plex like Bazarr; translations efficient and clean.
 Translation **always tries agy (Antigravity CLI) first**, the Gemini API only for lines agy's safety filter
 refuses; every "Translate" button respects that. No subtitle file → probe the container, extract the
@@ -14,8 +14,8 @@ progresses. UI and processes simplified, intentional, organised. The owner asked
 **Claude Sonnet 5.5 subagents (medium/high effort)** and reviewed by the orchestrator.
 
 ## Environment facts
-- Owner: Windows 11. Repo on the PC: `P:\Tools\OmbiSub - Google Seminar Capstone Project`. GitHub:
-  `thanos2940/OmniSub` (old name `OmbiSub---Google-Seminar-Capstone-Project` redirects).
+- Owner: Windows 11. Repo on the PC: `P:\Tools\Omnisub - Google Seminar Capstone Project`. GitHub:
+  `thanos2940/OmniSub` (old name `Omnisub---Google-Seminar-Capstone-Project` redirects).
 - Live install: the **server** `Morpiceserver`, `C:\ServerTools\OmniSub`, port **2945**, Service mode
   (boot task running `tray_app.py --headless` after the next reinstall; before that it runs
   `run_server.py` directly). Media on the server's local drives `D: E: F: M: S:`.
@@ -92,7 +92,7 @@ letters, root ignoring read-only files, no sentence-transformers) and are enviro
   agent | model); the page shows only the chosen engine's settings. Saving a change runs
   `services/engine_switch.py`: to the API, the runner finishes its episodes in hand and stops (and stays
   off at boot) and episodes queued for it go to the worker (`TranslationQueue.release_agent_items`,
-  `mode: full` → `force`); to agy, the runner autostarts (when "Start with OmbiSub" is on).
+  `mode: full` → `force`); to agy, the runner autostarts (when "Start with Omnisub" is on).
 - `utils/gemini_models.py` decides the thinking setting per model for all three Gemini paths
   (`cached_translator`, ADK agents, Batch API). `-latest` aliases now get the thinking budget (they did not,
   so every API translation thought at full length); a 400 about the thinking setting is retried once
@@ -206,7 +206,7 @@ Shared kit: `frontend/src/components/ui/index.jsx` (Page, PageHeader, Card, Butt
 ConfirmDialog, OverflowMenu, StatusChip, ProgressBar, …). Translate actions: `hooks/useTranslate.js`.
 
 ## Server update steps for the owner (after push)
-1. On the PC: **exit the old OmbiSub instance** — tray app (`pythonw tray_app.py`, stuck in a respawn
+1. On the PC: **exit the old Omnisub instance** — tray app (`pythonw tray_app.py`, stuck in a respawn
    loop) and the `uvicorn --reload --port 8000` dev server. Both run from the repo with the real
    library; on 2026-10-19 the startup migrations ran there (engine→agent, Autopilot on) — reverted by
    hand to engine `model`, Autopilot off, translations paused, runner stopped. Nothing was translated or
@@ -266,7 +266,11 @@ fake agy). Every change has tests (`tests/test_greek_text_quality.py`, `tests/te
   Gemini API setting. README rewritten (two engines, install paths, security, English-only sources).
 
 ### Open after this review
-- Product name: the UI says both "OmbiSub" and "Omnisub", the repo is "OmniSub". Pick one before sharing.
+- ~~Product name~~: **Omnisub** everywhere since 2026-11-23 (owner's decision). What installs of the OmbiSub days
+  left behind still works: the scheduled task 'OmbiSub' (update/uninstall/status use it, install replaces it),
+  the `ombisub_*.lock` files (an old and a new server never share a data folder), `OMBISUB_*` environment
+  variables, the `ombisub-skip` tag and `window.__OMBISUB_BASE__` (`tests/test_rename_compat.py`). The old
+  `logs/ombisub.log` stays readable in System › Logs.
 - Auth stays opt-in (wizard can be closed). Sonarr v4 made auth mandatory with "disabled for local addresses";
   worth copying for a public release.
 - Source language is English only (prompts, glossary matcher, untranslated detection); the "Source language

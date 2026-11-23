@@ -251,7 +251,7 @@ def test_settings_defaults_match_the_plan():
     s = AutopilotSettings.from_config({})
     assert (s.enabled, s.grace_minutes, s.poll_seconds, s.reconcile_hours) == (False, 5, 60, 6)
     assert s.backlog_mode == "off" and s.backlog_daily_limit == 20 and s.digest_hour == 9
-    assert s.skip_tags == ["ombisub-skip", "no-greek"] and s.plex_url == "http://localhost:32400"
+    assert s.skip_tags == ["omnisub-skip", "no-greek", "ombisub-skip"] and s.plex_url == "http://localhost:32400"
     assert s.count_embedded_greek and s.skip_original_greek and s.monitored_only
     assert s.protect_foreign_subs and s.repair_foreign_encoding and not s.notify_success
     assert s.grace_seconds == 300

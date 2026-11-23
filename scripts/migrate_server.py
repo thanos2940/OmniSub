@@ -34,7 +34,7 @@ try:
         inspect_migration_bundle,
     )
 except ImportError as e:
-    print(f"Error importing OmbiSub backend services: {e}", file=sys.stderr)
+    print(f"Error importing Omnisub backend services: {e}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -87,7 +87,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
 
 def _running_server(data_dir: Path) -> int:
-    """PID of a live OmbiSub server that owns data_dir, else 0."""
+    """PID of a live Omnisub server that owns data_dir, else 0."""
     import run_server
     try:
         pid = int(run_server._read_lock(data_dir / run_server.LOCK_NAME).get("pid") or 0)
@@ -103,8 +103,8 @@ def cmd_import(args: argparse.Namespace) -> int:
     from utils import paths
     pid = _running_server(target_dir or paths.DATA_DIR)
     if pid and not args.allow_running:
-        print(f"[-] OmbiSub is running (PID {pid}) for this data folder. Stop it first (tray icon > Exit, "
-              "or stop the OmbiSub task), then import again; it would otherwise keep writing its old "
+        print(f"[-] Omnisub is running (PID {pid}) for this data folder. Stop it first (tray icon > Exit, "
+              "or stop the Omnisub task), then import again; it would otherwise keep writing its old "
               "state over the imported one. (--allow-running skips this check.)", file=sys.stderr)
         return 1
 
@@ -196,7 +196,7 @@ def main() -> int:
     p_import.add_argument(
         "--allow-running",
         action="store_true",
-        help="Import even while an OmbiSub server is running for the target folder",
+        help="Import even while an Omnisub server is running for the target folder",
     )
     p_import.set_defaults(func=cmd_import)
 

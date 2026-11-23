@@ -96,7 +96,7 @@ def test_main_channel_is_kept(agy_installed):
 
 
 def test_sampling_follows_google_defaults(agy_installed):
-    """The old defaults OmbiSub wrote (0.3 / 64 / 0.95) go, from the settings and the projects; values
+    """The old defaults Omnisub wrote (0.3 / 64 / 0.95) go, from the settings and the projects; values
     someone chose stay."""
     from utils import storage
     from utils.storage_modules import project_store

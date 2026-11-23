@@ -72,7 +72,7 @@ const TopBar = () => {
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 shadow-sm">
                         <LayoutGrid className="text-white" size={18} />
                     </span>
-                    <span className="hidden text-lg font-bold tracking-tight sm:block">OmbiSub</span>
+                    <span className="hidden text-lg font-bold tracking-tight sm:block">Omnisub</span>
                 </Link>
 
                 <nav aria-label="Main" className="hidden items-center gap-1 md:flex">{links}</nav>

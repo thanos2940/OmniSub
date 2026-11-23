@@ -138,7 +138,7 @@ class TestExportGuard:
         meta = {"arr_media_path": str(media)}
         assert _export(media, meta) is None
         assert foreign.read_text(encoding="utf-8") == "from bazarr"
-        assert "not written by OmbiSub" in meta["translation_warning"]
+        assert "not written by Omnisub" in meta["translation_warning"]
         assert "arr_target_path" not in meta
         assert not ownership.is_ours(foreign)
 

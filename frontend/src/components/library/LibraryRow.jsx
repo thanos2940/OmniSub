@@ -77,7 +77,7 @@ function LibraryRow({
                     value={priority}
                     onChange={e => onPriorityChange(item.name, e.target.value)}
                     className="h-8 rounded-lg border border-gray-250 bg-white px-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
-                    title="Which titles OmbiSub translates first"
+                    title="Which titles Omnisub translates first"
                 >
                     {PRIORITY_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </select>

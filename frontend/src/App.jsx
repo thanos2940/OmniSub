@@ -99,7 +99,7 @@ function App() {
     };
 
     if (!authChecked || (!needsLogin && !setupChecked)) {
-        return <LoadingFallback fullScreen message="Connecting to OmbiSub..." />;
+        return <LoadingFallback fullScreen message="Connecting to Omnisub..." />;
     }
 
     if (needsLogin) {
@@ -112,7 +112,7 @@ function App() {
 
     return (
         <ErrorBoundary title="Application Error">
-            <Router basename={window.__OMBISUB_BASE__ || undefined}>
+            <Router basename={window.__OMNISUB_BASE__ || undefined}>
                 <JobProvider>
                     <ToastProvider>
                         {needsSetup && (

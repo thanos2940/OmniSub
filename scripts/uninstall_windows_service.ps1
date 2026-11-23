@@ -1,11 +1,11 @@
 # ==============================================================================
-# OmbiSub Windows Service Uninstaller
+# Omnisub Windows Service Uninstaller
 # ==============================================================================
 # Run in an elevated PowerShell session (Run as Administrator)
 # ==============================================================================
 
 param (
-    [string]$ServiceName = "OmbiSub"
+    [string]$ServiceName = "Omnisub"
 )
 
 $ErrorActionPreference = "Stop"

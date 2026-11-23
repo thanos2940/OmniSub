@@ -1,6 +1,6 @@
-# Spec: Dependable, agy-first OmbiSub (`dependable_agy_first_20261019`)
+# Spec: Dependable, agy-first Omnisub (`dependable_agy_first_20261019`)
 
-Owner goal (2026-10-19): OmbiSub must run like Sonarr / Radarr / Bazarr — something you can count on and
+Owner goal (2026-10-19): Omnisub must run like Sonarr / Radarr / Bazarr — something you can count on and
 reach: easy to install, update and manage, reachable through Caddy, connected to Sonarr / Radarr / Plex
 the way Bazarr is, translating efficiently and cleanly. Translation **always tries agy (Antigravity CLI)
 first**; the Gemini API is used only for lines agy's safety filter refuses. Every "Translate" anywhere
@@ -17,10 +17,10 @@ processes are simplified so they feel intentional, organised and functional.
 |---|---------|--------|
 | R1 | `install.ps1 -Mode Service` runs `run_server.py` directly. Nothing respawns it after a crash or after an update restart (exit 42 is only handled by the tray supervisor). Task Scheduler's "restart on failure" does not reliably cover a process that exits on its own. | Server can stay down until someone notices. |
 | R2 | Updates: `update_service` tracks GitHub Releases only; no release exists, so the in-app updater never offers anything. The real workflow is "push to `main`, `git pull` on the server". Two duplicate endpoint pairs exist (`/api/system/update` vs `/api/system/updates/apply`, `/api/system/check-update` vs `/api/system/updates/check`). | Updating needs a remote shell. |
-| R3 | No log viewer in the app (Sonarr/Bazarr: System > Logs). Logs live in `backend/logs/` (`ombisub.log`, `agent_runner.log`, `tray_app.log`, `service_console.log`). | Diagnosing needs RDP/PowerShell. |
-| R4 | No URL-base support: Vite builds absolute `/assets/...`, the router has no basename, the WebSocket URL is `${host}/api/ws`. Works behind Caddy only on its own (sub)domain, not under a path like `/ombisub`. uvicorn does not trust `X-Forwarded-*`. | Caddy sub-path setups break. |
+| R3 | No log viewer in the app (Sonarr/Bazarr: System > Logs). Logs live in `backend/logs/` (`omnisub.log`, `agent_runner.log`, `tray_app.log`, `service_console.log`). | Diagnosing needs RDP/PowerShell. |
+| R4 | No URL-base support: Vite builds absolute `/assets/...`, the router has no basename, the WebSocket URL is `${host}/api/ws`. Works behind Caddy only on its own (sub)domain, not under a path like `/omnisub`. uvicorn does not trust `X-Forwarded-*`. | Caddy sub-path setups break. |
 | R5 | Install is a multi-step PowerShell session (elevation, parameters, password prompt). No one-click installer/updater script. | Hard to (re)install. |
-| R6 | `backend/ombisub_tray.lock` (and the server lock) are not git-ignored. | Dirty tree blocks the in-app updater (it refuses dirty trees). |
+| R6 | `backend/omnisub_tray.lock` (and the server lock) are not git-ignored. | Dirty tree blocks the in-app updater (it refuses dirty trees). |
 
 ### 1.2 Translation engine ("agy first")
 | # | Finding | Impact |
@@ -72,9 +72,9 @@ processes are simplified so they feel intentional, organised and functional.
 - **System management**: `GET /api/system/status` (version/commit, uptime, port, url_base, data dir,
   supervisor mode, Python, ffmpeg, agy/claude CLI presence, runner state, disk free), `GET
   /api/system/logs?name=&lines=` (whitelisted log files, tail), restart, backup (exists), updates.
-- **Reverse proxy (Caddy)**: config `url_base` (e.g. `/ombisub`, empty = root). Backend accepts requests
+- **Reverse proxy (Caddy)**: config `url_base` (e.g. `/omnisub`, empty = root). Backend accepts requests
   with or without the prefix (so `handle_path` and `handle` both work), injects `<base href>` and
-  `window.__OMBISUB_BASE__` into `index.html`; Vite `base: './'`; router `basename`; API and WebSocket URLs
+  `window.__OMNISUB_BASE__` into `index.html`; Vite `base: './'`; router `basename`; API and WebSocket URLs
   under the base. uvicorn honours `X-Forwarded-*`. Docs give Caddyfile examples for a subdomain and a path.
 
 ### 2.2 Translation engine — agy first
@@ -106,7 +106,7 @@ processes are simplified so they feel intentional, organised and functional.
   migration: legacy mode on → Autopilot on, backlog off).
 - The scheduled arr sync keeps the library fresh and never mass-enqueues; missing-episode translation is
   Autopilot backlog (opt-in) or an explicit "Translate missing".
-- Plex: refresh after **every** export OmbiSub writes (debounced per library section), "Test Plex" button.
+- Plex: refresh after **every** export Omnisub writes (debounced per library section), "Test Plex" button.
 - Connections test for Sonarr, Radarr, Plex in one place.
 
 ### 2.5 UI information architecture

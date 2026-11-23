@@ -74,12 +74,12 @@ def engine_status() -> Dict[str, Optional[str]]:
 
 def call_dir() -> Path:
     """The folder every CLI request runs in: one empty folder, the same for every request, outside
-    OmbiSub's own tree. Claude Code and the Gemini CLI describe their working folder in the context they send
+    Omnisub's own tree. Claude Code and the Gemini CLI describe their working folder in the context they send
     (the Gemini CLI with its listing) and read CLAUDE.md / GEMINI.md from it and its parents; one folder keeps
     that part identical from request to request, so the provider's prompt cache can reuse it together with a
-    show's shared block, and outside the checkout none of OmbiSub's own files reach a translation request. A
+    show's shared block, and outside the checkout none of Omnisub's own files reach a translation request. A
     model that reaches for tools finds no files either."""
-    folder = Path(tempfile.gettempdir()) / "ombisub-agent-cli"
+    folder = Path(tempfile.gettempdir()) / "omnisub-agent-cli"
     try:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError:   # no usable temp folder for this account: the data folder still keeps it stable

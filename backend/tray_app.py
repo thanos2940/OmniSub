@@ -1,7 +1,7 @@
 """
-OmbiSub System Tray Application & Server Supervisor
+Omnisub System Tray Application & Server Supervisor
 ===================================================
-Runs OmbiSub windowlessly with tray notifications, status polling, and automatic
+Runs Omnisub windowlessly with tray notifications, status polling, and automatic
 restart on updates (exit code 42, at once) or crashes (back-off 5 s, 15 s, 60 s).
 
 Can be run via:
@@ -40,10 +40,11 @@ except ImportError:
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BACKEND_DIR.parent
 DEFAULT_PORT = 8000
-LOCK_NAME = "ombisub_tray.lock"
+LOCK_NAME = "omnisub_tray.lock"
+LEGACY_LOCK_NAME = "ombisub_tray.lock"     # a supervisor from before the rename
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
-logger = logging.getLogger("ombisub.tray")
+logger = logging.getLogger("omnisub.tray")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -74,6 +75,15 @@ def _pid_alive(pid: int) -> bool:
 
 def acquire_tray_lock(lock_file: Path, port: int) -> bool:
     """Acquire single-instance tray lock, replacing stale locks if owner died."""
+    legacy = lock_file.with_name(LEGACY_LOCK_NAME)
+    if legacy.exists():   # a supervisor of a version from before the rename
+        try:
+            legacy_pid = int(json.loads(legacy.read_text(encoding="utf-8")).get("pid") or 0)
+        except Exception:
+            legacy_pid = 0
+        if legacy_pid and legacy_pid != os.getpid() and _pid_alive(legacy_pid):
+            logger.warning(f"An older Omnisub Tray instance (PID {legacy_pid}) is already running.")
+            return False
     payload = json.dumps({
         "pid": os.getpid(),
         "port": port,
@@ -94,7 +104,7 @@ def acquire_tray_lock(lock_file: Path, port: int) -> bool:
             if pid == os.getpid():
                 return True
             if pid and _pid_alive(pid):
-                logger.warning(f"Another OmbiSub Tray instance (PID {pid}) is already running.")
+                logger.warning(f"Another Omnisub Tray instance (PID {pid}) is already running.")
                 return False
             # Stale lock: unlink and retry
             try:
@@ -180,7 +190,7 @@ class ServerSupervisor:
         return (self._popen_fn or subprocess.Popen)(*args, **kwargs)
 
     def start_server(self) -> None:
-        """Launch backend/run_server.py windowlessly with OMBISUB_SUPERVISOR=tray."""
+        """Launch backend/run_server.py windowlessly with OMNISUB_SUPERVISOR=tray."""
         with self.lock:
             if self.proc is not None and self.proc.poll() is None:
                 logger.info(f"Server is already running with PID {self.proc.pid}")
@@ -194,7 +204,7 @@ class ServerSupervisor:
                 "--data-dir", str(self.data_dir),
             ]
             env = dict(os.environ)
-            env["OMBISUB_SUPERVISOR"] = "tray"
+            env["OMNISUB_SUPERVISOR"] = env["OMBISUB_SUPERVISOR"] = "tray"   # (old name for an older server)
             env["OMNISUB_DATA_DIR"] = str(self.data_dir)
 
             logger.info(f"Starting server: {' '.join(cmd)}")
@@ -301,7 +311,7 @@ class ServerSupervisor:
         """Poll /api/health to inspect queue and agent runner state."""
         url = f"http://127.0.0.1:{self.port}/api/health"
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OmbiSub-Tray/1.0"})
+            req = urllib.request.Request(url, headers={"User-Agent": "Omnisub-Tray/1.0"})
             with urllib.request.urlopen(req, timeout=2.0) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
@@ -333,7 +343,7 @@ class ServerSupervisor:
 
 
 def create_tray_image(width: int = 64, height: int = 64):
-    """Draw a vibrant high-resolution OmbiSub system tray icon."""
+    """Draw a vibrant high-resolution Omnisub system tray icon."""
     if not HAS_PYSTRAY or Image is None:
         return None
     image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -354,7 +364,7 @@ class TrayApp:
         self.data_dir = data_dir
         self.log_dir = data_dir / "logs"
         self.icon: Optional[Any] = None
-        self.status_title = f"OmbiSub — Initializing (:{supervisor.port})"
+        self.status_title = f"Omnisub — Initializing (:{supervisor.port})"
 
     def _update_status_tooltip(self) -> None:
         """Periodic background status poller updating tray tooltip text."""
@@ -363,9 +373,9 @@ class TrayApp:
             if self.supervisor.is_healthy:
                 runner_stat = (health.get("agent_runner") or {}).get("status", "ready")
                 q_len = (health.get("queue") or {}).get("pending", 0)
-                self.status_title = f"OmbiSub — Running (:{self.supervisor.port}) | Runner: {runner_stat} | Queue: {q_len}"
+                self.status_title = f"Omnisub — Running (:{self.supervisor.port}) | Runner: {runner_stat} | Queue: {q_len}"
             else:
-                self.status_title = f"OmbiSub — Starting / Offline (:{self.supervisor.port})"
+                self.status_title = f"Omnisub — Starting / Offline (:{self.supervisor.port})"
 
             if self.icon:
                 self.icon.title = self.status_title
@@ -421,24 +431,24 @@ class TrayApp:
         menu = pystray.Menu(
             pystray.MenuItem(lambda text: self.status_title, None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Open OmbiSub Web UI", lambda: self.open_web_ui(), default=True),
+            pystray.MenuItem("Open Omnisub Web UI", lambda: self.open_web_ui(), default=True),
             pystray.MenuItem("Pause / Resume Agent Runner", lambda: self.toggle_runner_action()),
             pystray.MenuItem("Check for Updates", lambda: self.check_updates()),
             pystray.MenuItem("Open Logs Folder", lambda: self.open_logs_folder()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Restart Server", lambda: self.restart_server_action()),
-            pystray.MenuItem("Exit OmbiSub", lambda: self.exit_action()),
+            pystray.MenuItem("Exit Omnisub", lambda: self.exit_action()),
         )
 
         icon_image = create_tray_image()
-        self.icon = pystray.Icon("OmbiSub", icon_image, "OmbiSub", menu=menu)
+        self.icon = pystray.Icon("Omnisub", icon_image, "Omnisub", menu=menu)
         self.icon.run()
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="OmbiSub System Tray App & Supervisor.")
+    parser = argparse.ArgumentParser(description="Omnisub System Tray App & Supervisor.")
     parser.add_argument("--port", type=int, default=int(os.environ.get("PORT") or DEFAULT_PORT))
-    parser.add_argument("--data-dir", default=None, help="OmbiSub data directory.")
+    parser.add_argument("--data-dir", default=None, help="Omnisub data directory.")
     parser.add_argument("--headless", action="store_true", help="Run windowless supervisor without GUI tray icon.")
     args = parser.parse_args(argv)
 
@@ -448,7 +458,7 @@ def main(argv=None) -> int:
 
     lock_file = data_dir / LOCK_NAME
     if not acquire_tray_lock(lock_file, args.port):
-        print(f"OmbiSub Tray is already running for {data_dir}.")
+        print(f"Omnisub Tray is already running for {data_dir}.")
         return 0
 
     (data_dir / "logs").mkdir(parents=True, exist_ok=True)

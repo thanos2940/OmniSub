@@ -36,6 +36,12 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+def _with_legacy_tags(tags: List[str]) -> List[str]:
+    """"omnisub-skip" also matches the tag of the versions before the rename ("ombisub-skip"), so series
+    tagged in Sonarr/Radarr back then stay skipped."""
+    return tags + ["ombisub-skip"] if "omnisub-skip" in tags and "ombisub-skip" not in tags else tags
+
+
 @dataclass
 class AutopilotSettings:
     enabled: bool = False
@@ -46,7 +52,7 @@ class AutopilotSettings:
     backlog_daily_limit: int = 20
     count_embedded_greek: bool = True
     skip_original_greek: bool = True
-    skip_tags: List[str] = field(default_factory=lambda: ["ombisub-skip", "no-greek"])
+    skip_tags: List[str] = field(default_factory=lambda: ["omnisub-skip", "no-greek"])
     monitored_only: bool = True
     protect_foreign_subs: bool = True
     repair_foreign_encoding: bool = True
@@ -87,7 +93,7 @@ class AutopilotSettings:
             backlog_daily_limit=max(0, _int(get("backlog_daily_limit", d.backlog_daily_limit), d.backlog_daily_limit)),
             count_embedded_greek=_bool(cfg.get("autopilot_count_embedded_greek"), d.count_embedded_greek),
             skip_original_greek=_bool(cfg.get("autopilot_skip_original_greek"), d.skip_original_greek),
-            skip_tags=[t.strip().lower() for t in str(raw_tags).split(",") if t.strip()],
+            skip_tags=_with_legacy_tags([t.strip().lower() for t in str(raw_tags).split(",") if t.strip()]),
             monitored_only=_bool(cfg.get("autopilot_monitored_only"), d.monitored_only),
             protect_foreign_subs=_bool(cfg.get("autopilot_protect_foreign_subs"), d.protect_foreign_subs),
             repair_foreign_encoding=_bool(cfg.get("autopilot_repair_foreign_encoding"), d.repair_foreign_encoding),

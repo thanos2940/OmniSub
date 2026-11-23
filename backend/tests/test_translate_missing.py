@@ -1,6 +1,6 @@
 """'Translate missing' for a Sonarr/Radarr title (services.on_demand.translate_missing).
 
-Episodes OmbiSub never imported (no sidecar was ever there) get an entry made from the media
+Episodes Omnisub never imported (no sidecar was ever there) get an entry made from the media
 file and are routed like an on-demand request. Network-free: Sonarr/Radarr calls are mocked,
 container probes come from a fake probe cache and the queue lives in the per-test DB.
 """

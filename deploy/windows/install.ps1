@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Installs or updates OmbiSub as a 24/7 Windows server (Task Scheduler task).
+  Installs or updates Omnisub as a 24/7 Windows server (Task Scheduler task).
 
 .DESCRIPTION
   Checks prerequisites, creates/updates .venv, installs backend requirements, builds the web UI into
@@ -9,7 +9,7 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1
-  powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Port 8080 -DataDir D:\OmbiSubData -WhatIf
+  powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Port 8080 -DataDir D:\OmnisubData -WhatIf
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -OpenFirewall -KeepAwake
 
   powershell -ExecutionPolicy Bypass -File deploy\windows\install.ps1 -Mode Service -Port 2945 -OpenFirewall -KeepAwake
@@ -29,7 +29,7 @@ param(
     [System.Management.Automation.PSCredential]$Credential,
     [string]$DataDir = '',
     [int]$Port = 8000,
-    [string]$TaskName = 'OmbiSub',
+    [string]$TaskName = 'Omnisub',
     [string]$User = "$env:USERDOMAIN\$env:USERNAME",
     [switch]$SkipBuild,
     [switch]$AlsoAtLogon,
@@ -188,7 +188,7 @@ if ($Mode -eq 'Service') {
     $triggers = @($boot)
     $restartCount = 999
     if (-not $Credential) {
-        $Credential = Get-Credential -UserName $User -Message "Windows password of $User (OmbiSub runs as this account at boot; it goes to Task Scheduler only)"
+        $Credential = Get-Credential -UserName $User -Message "Windows password of $User (Omnisub runs as this account at boot; it goes to Task Scheduler only)"
     }
     if (-not $Credential) { $Credential = New-Object System.Management.Automation.PSCredential($User, (New-Object System.Security.SecureString)) }
 } else {
@@ -207,9 +207,15 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
         Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     }
+    # Before the rename the task was called 'OmbiSub': replace it instead of starting both at boot.
+    if ($TaskName -ne 'OmbiSub' -and (Get-ScheduledTask -TaskName 'OmbiSub' -ErrorAction SilentlyContinue)) {
+        Warn "Replacing the old task 'OmbiSub' with '$TaskName'."
+        Stop-ScheduledTask -TaskName 'OmbiSub' -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName 'OmbiSub' -Confirm:$false
+    }
     if ($Mode -eq 'Service') {
         $plain = $Credential.GetNetworkCredential().Password
-        $desc = "OmbiSub 24/7 subtitle translator (starts at boot, like a service)"
+        $desc = "Omnisub 24/7 subtitle translator (starts at boot, like a service)"
         if ($plain) {
             Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
                 -User $Credential.UserName -Password $plain -RunLevel Highest -Description $desc | Out-Null
@@ -226,7 +232,7 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
     } else {
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $triggers -Settings $settings `
             -User $User -RunLevel Limited `
-            -Description "OmbiSub 24/7 subtitle translator ($Mode mode)" | Out-Null
+            -Description "Omnisub 24/7 subtitle translator ($Mode mode)" | Out-Null
         Ok "Task '$TaskName' registered ($Mode mode, Interactive logon)."
     }
     try {
@@ -240,6 +246,8 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
     try {
         $startupFolder = [Environment]::GetFolderPath('Startup')
         $oldLnk = Join-Path $startupFolder "$TaskName.lnk"
+        $legacyLnk = Join-Path $startupFolder 'OmbiSub.lnk'
+        if ($TaskName -ne 'OmbiSub' -and (Test-Path $legacyLnk)) { Remove-Item $legacyLnk -Force }
         if ($Mode -eq 'Service' -and (Test-Path $oldLnk)) {
             Remove-Item $oldLnk -Force
             Ok "Removed the logon shortcut $oldLnk (Service mode starts at boot instead)."
@@ -257,7 +265,7 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
                 $shortcut.Arguments = "backend\run_server.py $serverArgs"
             }
             $shortcut.WorkingDirectory = $InstallDir
-            $shortcut.Description = "OmbiSub 24/7 Subtitle Translator ($Mode)"
+            $shortcut.Description = "Omnisub 24/7 Subtitle Translator ($Mode)"
             $shortcut.Save()
             Ok "Logon shortcut created in Startup folder: $lnkPath"
         }
@@ -269,10 +277,11 @@ if ($PSCmdlet.ShouldProcess($TaskName, "Register task as $User (Mode: $Mode, AtL
 # ---------------------------------------------------------------- host settings (opt-in)
 if ($OpenFirewall) {
     Step "Windows Firewall: inbound TCP $Port on Private networks"
-    $ruleName = "OmbiSub (TCP $Port)"
+    $ruleName = "Omnisub (TCP $Port)"
     if ($PSCmdlet.ShouldProcess($ruleName, 'Create or replace the inbound firewall rule')) {
         try {
             Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+            Get-NetFirewallRule -DisplayName "OmbiSub (TCP $Port)" -ErrorAction SilentlyContinue | Remove-NetFirewallRule
             New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $Port `
                 -Action Allow -Profile Private | Out-Null
             Ok "Rule '$ruleName' allows inbound TCP $Port on Private networks."
@@ -305,6 +314,6 @@ Next steps
   5. Keep the machine awake while plugged in: re-run with -KeepAwake, or
      powercfg /change standby-timeout-ac 0  (and hibernate-timeout-ac 0).
   6. Windows Firewall: only if other devices (MorpiceHub) must reach the UI, re-run with -OpenFirewall.
-Logs: $logDir\ombisub.log   (rotating, 10 MB x 5)
+Logs: $logDir\omnisub.log   (rotating, 10 MB x 5)
 Update later: deploy\windows\update.cmd (or Settings > System > Updates in the app)
 "@

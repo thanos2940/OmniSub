@@ -1,5 +1,5 @@
 """
-Comprehensive 4-Tier Offline E2E Test Suite for OmbiSub Subtitle Engine.
+Comprehensive 4-Tier Offline E2E Test Suite for Omnisub Subtitle Engine.
 
 Tiers:
   - Tier 1: Feature & Capability Testing (Spoken Demotic Greek Idioms, 1:1 Line Sync, Proper Nouns, Voice)

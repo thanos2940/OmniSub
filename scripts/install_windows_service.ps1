@@ -1,11 +1,11 @@
 # ==============================================================================
-# OmbiSub Windows Service Installer (using NSSM)
+# Omnisub Windows Service Installer (using NSSM)
 # ==============================================================================
 # Run this script in an elevated PowerShell session (Run as Administrator)
 # ==============================================================================
 
 param (
-    [string]$ServiceName = "OmbiSub",
+    [string]$ServiceName = "Omnisub",
     [int]$Port = 8000,
     [string]$ServiceUser = "",
     [string]$ServicePassword = ""
@@ -92,7 +92,7 @@ $arguments = "-m uvicorn main:app --host 0.0.0.0 --port $Port"
 
 & $nssmPath install $ServiceName "$PythonExe" $arguments
 & $nssmPath set $ServiceName AppDirectory "$BackendDir"
-& $nssmPath set $ServiceName DisplayName "OmbiSub AI Subtitle Translation Service"
+& $nssmPath set $ServiceName DisplayName "Omnisub AI Subtitle Translation Service"
 & $nssmPath set $ServiceName Description "Autonomous AI-powered subtitle localization and translation engine for Plex, Sonarr, and Radarr."
 & $nssmPath set $ServiceName Start SERVICE_AUTO_START
 & $nssmPath set $ServiceName AppStdout "$StdoutLog"
@@ -138,7 +138,7 @@ Write-Host "[*] Starting service '$ServiceName'..." -ForegroundColor Cyan
 Start-Sleep -Seconds 3
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq "Running") {
-    Write-Host "[✓] OmbiSub is now running as a background Windows Service!" -ForegroundColor Green
+    Write-Host "[✓] Omnisub is now running as a background Windows Service!" -ForegroundColor Green
     Write-Host "    Web Dashboard URL: http://localhost:$Port" -ForegroundColor Cyan
     Write-Host "    Log location:      $StdoutLog" -ForegroundColor Gray
 } else {

@@ -87,7 +87,7 @@ function RunnerCard({ settings, onChange, runner }) {
                         <Notice tone="warning" className="mt-3">
                             <p>This CLI was not found on the server, so translation cannot start with it.</p>
                             {form.engine === 'antigravity' && (
-                                <p>Install Antigravity, then run <code className="font-mono">agy</code> once in a terminal as the account OmbiSub runs as and sign in.</p>
+                                <p>Install Antigravity, then run <code className="font-mono">agy</code> once in a terminal as the account Omnisub runs as and sign in.</p>
                             )}
                         </Notice>
                     )}
@@ -147,7 +147,7 @@ function RunnerCard({ settings, onChange, runner }) {
                     onChange={(v) => onChange('tm_enabled', v)}
                 />
                 <Toggle
-                    label="Start with OmbiSub"
+                    label="Start with Omnisub"
                     description="The runner starts when the server starts and keeps watching the queue. Pause and resume it on the Activity page."
                     checked={settings.agent_runner_autostart ?? true}
                     onChange={(v) => onChange('agent_runner_autostart', v)}
@@ -336,7 +336,7 @@ function EngineChoice({ settings, onChange, savedEngine, runner }) {
                             ? 'When you save, the agy runner finishes the episodes in hand and stops, and the waiting episodes go to the Gemini API.'
                             : (settings.agent_runner_autostart ?? true)
                                 ? 'When you save, the Gemini worker takes no new episodes and the agy runner starts on the queue.'
-                                : 'When you save, the Gemini worker takes no new episodes. “Start with OmbiSub” is off, so start the runner on the Activity page.'}
+                                : 'When you save, the Gemini worker takes no new episodes. “Start with Omnisub” is off, so start the runner on the Activity page.'}
                     </Notice>
                 )}
             </div>

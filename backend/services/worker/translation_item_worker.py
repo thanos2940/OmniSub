@@ -621,7 +621,7 @@ async def process_translation_item(*args, **kwargs) -> None:
             queue.update_status(item_id, status="pending", started_at=None, attempts=max(0, attempts - 1),
                                 logs=jobs[job_id].logs if job_id in jobs else None)
             if job_id in jobs:
-                update_job(job_id, status="pending", message="Interrupted by a restart; continues when OmbiSub starts again.")
+                update_job(job_id, status="pending", message="Interrupted by a restart; continues when Omnisub starts again.")
             return
         logger.info(f"Task {item_id} aborted via CancelledError.")
         if job_id in jobs:

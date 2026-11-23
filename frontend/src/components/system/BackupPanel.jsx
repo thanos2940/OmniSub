@@ -78,7 +78,7 @@ export default function BackupPanel() {
             const res = await api.inspectBackupBundle(form);
             setInspect(res.data);
         } catch (err) {
-            toast.error(err.response?.data?.detail || 'The file is not a valid OmbiSub bundle.');
+            toast.error(err.response?.data?.detail || 'The file is not a valid Omnisub bundle.');
             setFile(null);
         } finally {
             setInspecting(false);
@@ -140,7 +140,7 @@ export default function BackupPanel() {
                     <label htmlFor="backup-file-input" className="block cursor-pointer rounded-lg border-2 border-dashed border-gray-300 p-6 text-center transition-colors hover:border-indigo-400 dark:border-gray-700 dark:hover:border-indigo-500">
                         <input id="backup-file-input" type="file" accept=".zip" onChange={pickFile} className="sr-only" />
                         <Archive size={28} className="mx-auto text-gray-400" />
-                        <span className="mt-2 block text-sm font-medium text-gray-700 dark:text-gray-300">{file ? file.name : 'Choose an OmbiSub bundle (.zip)'}</span>
+                        <span className="mt-2 block text-sm font-medium text-gray-700 dark:text-gray-300">{file ? file.name : 'Choose an Omnisub bundle (.zip)'}</span>
                         <span className="block text-xs text-gray-500 dark:text-gray-400">Full and compact bundles both work.</span>
                     </label>
 

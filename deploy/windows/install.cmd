@@ -1,5 +1,5 @@
 @echo off
-rem One-click OmbiSub install: runs as a boot-time task (like Sonarr), firewall opened, machine kept awake.
+rem One-click Omnisub install: runs as a boot-time task (like Sonarr), firewall opened, machine kept awake.
 rem Double-click it. It asks for administrator rights, the port (once) and, in the PowerShell step, your
 rem Windows password (Task Scheduler needs it to run the task when nobody is logged on; leave it empty if
 rem your account has none).
@@ -13,7 +13,7 @@ if errorlevel 1 (
 )
 
 set "PORT="
-set /p "PORT=Port OmbiSub should listen on [2945]: "
+set /p "PORT=Port Omnisub should listen on [2945]: "
 if not defined PORT set "PORT=2945"
 echo %PORT%| findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 (

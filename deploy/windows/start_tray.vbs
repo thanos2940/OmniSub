@@ -1,4 +1,4 @@
-' OmbiSub System Tray App Windowless Launcher
+' Omnisub System Tray App Windowless Launcher
 ' Launches pythonw.exe backend\tray_app.py with window style 0 (no console window)
 
 Option Explicit

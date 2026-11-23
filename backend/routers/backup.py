@@ -91,7 +91,7 @@ async def _bundle_response(mode: str) -> FileResponse:
         raise HTTPException(status_code=400, detail="mode must be 'compact' or 'full'")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"ombisub-migration-{mode}-{timestamp}.zip"
+    filename = f"omnisub-migration-{mode}-{timestamp}.zip"
 
     bundle_path = await asyncio.to_thread(create_migration_bundle, mode=mode)
 

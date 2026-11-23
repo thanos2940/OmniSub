@@ -145,7 +145,7 @@ function PlexCard({ settings, onChange }) {
     };
 
     return (
-        <Card title="Plex" subtitle="Asked to rescan a library after every subtitle OmbiSub writes, so it shows up without a manual refresh.">
+        <Card title="Plex" subtitle="Asked to rescan a library after every subtitle Omnisub writes, so it shows up without a manual refresh.">
             <div className="space-y-4">
                 <Toggle label="Refresh Plex after a subtitle is written" checked={!!settings.plex_refresh_enabled} onChange={(v) => onChange('plex_refresh_enabled', v)} />
                 <FieldGrid>
@@ -204,7 +204,7 @@ function PathMappingsCard({ settings, onChange }) {
     return (
         <Card
             title="Path mappings"
-            subtitle="For when Sonarr or Radarr see the media under another path than OmbiSub does (Docker, a network share)."
+            subtitle="For when Sonarr or Radarr see the media under another path than Omnisub does (Docker, a network share)."
             actions={<Button size="sm" icon={Plus} onClick={() => set([...mappings, { remote: '', local: '' }])}>Add mapping</Button>}
         >
             <div className="space-y-4">
@@ -258,7 +258,7 @@ const randomToken = () => {
 // browser sees it (in `npm run dev` the API is on :8000, not the dev server).
 const webhookOrigin = () => {
     const origin = import.meta.env.DEV ? window.location.origin.replace(/:\d+$/, ':8000') : window.location.origin;
-    return origin + (window.__OMBISUB_BASE__ || '');
+    return origin + (window.__OMNISUB_BASE__ || '');
 };
 
 function WebhooksCard({ settings, onChange }) {
@@ -286,7 +286,7 @@ function WebhooksCard({ settings, onChange }) {
     }));
     const placeholder = !known && !fromServer;
     return (
-        <Card title="Webhooks" subtitle="Lets Sonarr and Radarr tell OmbiSub about an import at once, instead of waiting for the next check.">
+        <Card title="Webhooks" subtitle="Lets Sonarr and Radarr tell Omnisub about an import at once, instead of waiting for the next check.">
             <div className="space-y-4">
                 <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-600 dark:text-gray-300">
                     <li>In Sonarr or Radarr open Settings &gt; Connect &gt; Add &gt; Webhook.</li>

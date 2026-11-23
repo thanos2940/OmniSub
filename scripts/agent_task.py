@@ -1,5 +1,5 @@
 """
-OmbiSub Agent Task CLI
+Omnisub Agent Task CLI
 ======================
 For AI agents (Claude Code, Antigravity, ...) that translate in place of the model.
 Omnisub does all preparation and post-processing; the agent only edits text files.
@@ -52,11 +52,13 @@ CMD = f"{PY} scripts/agent_task.py"
 
 
 def _server_port() -> str:
-    """The port the running server uses: OMBISUB_PORT, else the server's lock file, else 8000."""
-    port = os.environ.get("OMBISUB_PORT")
-    if not port:
+    """The port the running server uses: OMNISUB_PORT, else the server's lock file, else 8000."""
+    port = os.environ.get("OMNISUB_PORT") or os.environ.get("OMBISUB_PORT")   # (the second: before the rename)
+    for name in ("omnisub_server.lock", "ombisub_server.lock"):
+        if port:
+            break
         try:
-            lock = Path(os.environ["OMNISUB_DATA_DIR"]) / "ombisub_server.lock"
+            lock = Path(os.environ["OMNISUB_DATA_DIR"]) / name
             port = str(json.loads(lock.read_text(encoding="utf-8")).get("port") or "")
         except Exception:
             port = ""
@@ -480,7 +482,7 @@ def run_command(c: "Client", args):
 def main():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="machine-readable output")
-    parser = argparse.ArgumentParser(description="OmbiSub agent translation CLI", parents=[common])
+    parser = argparse.ArgumentParser(description="Omnisub agent translation CLI", parents=[common])
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", parents=[common], help="pending translation items")

@@ -142,7 +142,7 @@ export default function StatusPanel() {
             toast.success('The server is back.');
             runChecks();
         } else {
-            toast.error('The server did not come back within two minutes. Check the service or start OmbiSub again.');
+            toast.error('The server did not come back within two minutes. Check the service or start Omnisub again.');
         }
     };
 
@@ -174,7 +174,7 @@ export default function StatusPanel() {
                         {status.url_base_active ? <span className="font-mono"> · path {status.url_base_active}</span> : <span className="text-gray-500 dark:text-gray-400"> · served at the root</span>}
                         {status.url_base !== status.url_base_active && <StatusChip tone="warning" className="ml-2">restart to use {status.url_base || 'the root'}</StatusChip>}
                     </Row>
-                    <Row label="Supervisor" hint={unsupervised ? 'OmbiSub is not under a supervisor, so a restart stops it until someone starts it again.' : 'Restarts the server after a crash or an update.'}>
+                    <Row label="Supervisor" hint={unsupervised ? 'Omnisub is not under a supervisor, so a restart stops it until someone starts it again.' : 'Restarts the server after a crash or an update.'}>
                         {unsupervised ? 'none' : status.supervisor}
                     </Row>
                     <Row label="Data folder">
@@ -231,9 +231,9 @@ export default function StatusPanel() {
 
             <ConfirmDialog
                 open={confirmRestart}
-                title="Restart OmbiSub?"
+                title="Restart Omnisub?"
                 message={unsupervised
-                    ? 'OmbiSub is not running under a supervisor. It will stop, and you need to start it again yourself.'
+                    ? 'Omnisub is not running under a supervisor. It will stop, and you need to start it again yourself.'
                     : 'Translations in progress stop and resume after the restart. This takes about a minute.'}
                 confirmLabel="Restart"
                 danger

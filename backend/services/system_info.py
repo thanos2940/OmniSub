@@ -1,4 +1,4 @@
-"""What the System page shows: runtime status and the tail of OmbiSub's log files."""
+"""What the System page shows: runtime status and the tail of Omnisub's log files."""
 import os
 import platform
 import shutil
@@ -11,10 +11,12 @@ from typing import Any, Dict, List, Optional
 from utils import storage
 from utils.paths import DATA_DIR
 from utils.url_base import safe_url_base
+from utils.env_names import env
 
 # The only files the log viewer reads: a name from this table, under <data dir>/logs. Never a path from the client.
 LOG_FILES = {
-    "ombisub": "ombisub.log",
+    "omnisub": "omnisub.log",
+    "ombisub": "ombisub.log",          # the server log before the rename (listed only while the file exists)
     "agent_runner": "agent_runner.log",
     "tray_app": "tray_app.log",
     "service_console": "service_console.log",
@@ -125,11 +127,11 @@ def collect_status(app_version: str = "", active_url_base: Optional[str] = None)
         "commit_message": version.get("message", ""),
         "started_at": _iso(started),
         "uptime_seconds": int(max(0, time.time() - started)),
-        "port": os.environ.get("OMBISUB_PORT") or None,
+        "port": env("PORT") or None,
         "url_base": url_base,
         "url_base_active": active_url_base if active_url_base is not None else url_base,
         "data_dir": str(DATA_DIR),
-        "supervisor": os.environ.get("OMBISUB_SUPERVISOR") or "none",
+        "supervisor": env("SUPERVISOR") or "none",
         "python": {"version": platform.python_version(), "executable": sys.executable},
         "platform": platform.platform(),
         "ffmpeg": tools.ffmpeg if tools else None,

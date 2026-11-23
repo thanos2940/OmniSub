@@ -750,7 +750,7 @@ async def translate_missing(project_name: str, priority: int = PRIORITY_BACKLOG,
     """Queue every episode of a library title that has no translation yet.
 
     Episodes whose source subtitle is already imported go straight to the queue
-    (``enqueue_missing_for_project``). For a Sonarr/Radarr title, the episodes OmbiSub has
+    (``enqueue_missing_for_project``). For a Sonarr/Radarr title, the episodes Omnisub has
     never imported (no sidecar was ever there) get an entry created from the media file and
     are routed exactly like an on-demand request: a muxed text track goes to the extraction
     lane chained into translation, or to the translation queue when the lane is off (the
@@ -872,7 +872,7 @@ def start_library_job() -> str:
 
 async def translate_missing_library(job_id: str, priority: int = PRIORITY_BACKLOG) -> Dict:
     """The part of "Translate all missing" that is slow: every Sonarr/Radarr title is asked for the
-    episodes OmbiSub has never imported (their subtitle only exists inside the video), one title at a
+    episodes Omnisub has never imported (their subtitle only exists inside the video), one title at a
     time, and those are routed to extraction and translation like ``translate_missing`` does. The
     episodes with an imported source were queued already by the caller."""
     from utils.jobs_manager import update_job

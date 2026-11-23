@@ -245,7 +245,7 @@ def test_autostart_noops_when_not_enabled_and_not_agent(monkeypatch):
 
 def test_tray_lock_acquisition_and_release(tmp_path):
     """Test tray app single-instance lock file acquisition and clean release."""
-    lock_file = tmp_path / "ombisub_tray.lock"
+    lock_file = tmp_path / "omnisub_tray.lock"
 
     # Acquire lock
     assert tray_app.acquire_tray_lock(lock_file, port=8000) is True
@@ -287,7 +287,7 @@ def test_server_supervisor_start_and_stop(tmp_path, monkeypatch):
     assert len(popen_calls) == 1
     call = popen_calls[0]
     assert "run_server.py" in " ".join(call.cmd)
-    assert call.kwargs["env"]["OMBISUB_SUPERVISOR"] == "tray"
+    assert call.kwargs["env"]["OMNISUB_SUPERVISOR"] == "tray" == call.kwargs["env"]["OMBISUB_SUPERVISOR"]
     assert call.kwargs["creationflags"] == tray_app._SUBPROCESS_FLAGS
 
     supervisor.stop_server(timeout=1.0)

@@ -1,5 +1,5 @@
 @echo off
-title OmniSub (Dual Terminal)
+title Omnisub (Dual Terminal)
 cd /d "%~dp0"
 
 echo Starting Backend in new window...

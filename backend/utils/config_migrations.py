@@ -18,7 +18,7 @@ APPLIED_KEY = "config_migrations"
 
 
 def _agent_engine(cfg: Dict) -> Optional[str]:
-    """OmbiSub translates through an agent CLI (agy) first. An install still on the Gemini worker is
+    """Omnisub translates through an agent CLI (agy) first. An install still on the Gemini worker is
     switched to the agent engine when an agent CLI is installed; the worker pause it kept to stop
     Gemini from translating is lifted, since with the agent engine it would stop the runner too."""
     if cfg.get("translation_engine", "model") == "agent":
@@ -55,13 +55,13 @@ def _update_channel(cfg: Dict) -> str:
     return ""
 
 
-# The sampling values OmbiSub used to write by default (into the settings and into every new project).
+# The sampling values Omnisub used to write by default (into the settings and into every new project).
 _OLD_SAMPLING_DEFAULTS = {"temperature": 0.3, "top_k": 64, "top_p": 0.95}
 
 
 def _google_sampling_defaults(cfg: Dict) -> str:
     """Temperature, top-k and top-p now follow Google's defaults for each model unless set by hand. The
-    values OmbiSub stored only because they were its old defaults are removed, from the settings and from
+    values Omnisub stored only because they were its old defaults are removed, from the settings and from
     every project; any other value was chosen by someone and stays."""
     removed = [k for k, v in _OLD_SAMPLING_DEFAULTS.items() if k in cfg and cfg[k] == v]
     for k in removed:

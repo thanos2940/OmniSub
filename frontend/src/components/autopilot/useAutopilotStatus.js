@@ -3,7 +3,7 @@ import { api } from '../../api';
 import { isMissingEndpoint, errorText } from './autopilotMeta';
 
 // Polls GET /api/autopilot/status while the tab is visible and stops on unmount.
-// `unsupported` = the backend has no autopilot routes (404): older OmbiSub.
+// `unsupported` = the backend has no autopilot routes (404): older Omnisub.
 export default function useAutopilotStatus(intervalMs = 5000) {
     const [status, setStatus] = useState(null);
     const [unsupported, setUnsupported] = useState(false);

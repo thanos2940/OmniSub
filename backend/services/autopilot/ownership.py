@@ -1,8 +1,8 @@
-"""Registry of subtitle files OmbiSub wrote (``DATA_DIR/subtitle_ownership.db``).
+"""Registry of subtitle files Omnisub wrote (``DATA_DIR/subtitle_ownership.db``).
 
 A subtitle file is *ours* when the registry holds it with a matching content hash, or --
 for exports made before the registry existed -- when it is the episode's recorded
-``arr_target_path`` (or its ``.srt`` companion) and OmbiSub translated the episode.
+``arr_target_path`` (or its ``.srt`` companion) and Omnisub translated the episode.
 
 Nothing here raises to callers: reads fall back to "not ours", writes become no-ops.
 """
@@ -65,7 +65,7 @@ def _connect() -> sqlite3.Connection:
 
 
 def register_file(path, project_name: Optional[str] = None, episode_name: Optional[str] = None) -> None:
-    """Record a file OmbiSub just wrote (hash of its current content)."""
+    """Record a file Omnisub just wrote (hash of its current content)."""
     try:
         info = _file_info(path)
         if info is None:
@@ -107,7 +107,7 @@ def _legacy_owned(path, ep_meta: Optional[Dict]) -> bool:
 
 
 def is_ours(path, ep_meta: Optional[Dict] = None) -> bool:
-    """True when OmbiSub wrote this file (and it is unchanged), or the legacy rule matches."""
+    """True when Omnisub wrote this file (and it is unchanged), or the legacy rule matches."""
     try:
         if not os.path.isfile(path):
             return False

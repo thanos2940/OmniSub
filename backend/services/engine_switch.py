@@ -4,7 +4,7 @@ for lines the CLI refuses) or "model" (the Gemini API through the background wor
 The two never translate the queue together. To the model API: the runner takes no new episode, finishes
 the ones it has, and stops (and does not start with Omnisub again); episodes queued for it go to the worker.
 To the agent runner: the worker takes no new episode (it reads the setting on every claim) and the runner
-starts watching the queue, when "Start with OmbiSub" is on.
+starts watching the queue, when "Start with Omnisub" is on.
 """
 
 import logging

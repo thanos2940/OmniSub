@@ -6,7 +6,7 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-echo [*] Starting OmbiSub Service...
-net start OmbiSub
+echo [*] Starting Omnisub Service...
+net start Omnisub
 echo.
 pause

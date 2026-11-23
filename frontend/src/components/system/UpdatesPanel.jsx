@@ -47,7 +47,7 @@ export default function UpdatesPanel() {
                 } else if (data.release_status === 'no_releases_published') {
                     toast.info('No GitHub releases have been published yet.');
                 } else {
-                    toast.success('OmbiSub is up to date.');
+                    toast.success('Omnisub is up to date.');
                 }
             }
         } catch (err) {
@@ -108,7 +108,7 @@ export default function UpdatesPanel() {
             toast.success('The server is back on the new version.');
             load(false);
         } else {
-            toast.error('The server did not come back within two minutes. Check the service or start OmbiSub again.');
+            toast.error('The server did not come back within two minutes. Check the service or start Omnisub again.');
         }
     };
 
@@ -137,7 +137,7 @@ export default function UpdatesPanel() {
         <div className="space-y-5">
             <Card
                 title={isMain ? 'Following the main branch' : 'Following GitHub releases'}
-                subtitle="thanos2940/OmbiSub---Google-Seminar-Capstone-Project"
+                subtitle="thanos2940/Omnisub---Google-Seminar-Capstone-Project"
                 actions={(
                     <>
                         {chip}
@@ -191,7 +191,7 @@ export default function UpdatesPanel() {
                 </Card>
             )}
 
-            <Card title="Automatic updates" subtitle="OmbiSub checks GitHub in the background. With this on, it installs an update and restarts as soon as the translation queue is idle.">
+            <Card title="Automatic updates" subtitle="Omnisub checks GitHub in the background. With this on, it installs an update and restarts as soon as the translation queue is idle.">
                 <div className="space-y-4">
                     <Toggle
                         checked={!!update.auto_update_enabled}
@@ -217,7 +217,7 @@ export default function UpdatesPanel() {
             <ConfirmDialog
                 open={confirmApply}
                 title="Install the update?"
-                message={`OmbiSub downloads ${isMain ? 'the newest commits of main' : `release ${latestRelease?.tag_name || ''}`}, updates changed dependencies, rebuilds the web interface and restarts. Projects, glossaries and settings in the data folder are not touched.`}
+                message={`Omnisub downloads ${isMain ? 'the newest commits of main' : `release ${latestRelease?.tag_name || ''}`}, updates changed dependencies, rebuilds the web interface and restarts. Projects, glossaries and settings in the data folder are not touched.`}
                 confirmLabel="Install and restart"
                 busy={applying}
                 onConfirm={apply}

@@ -41,7 +41,7 @@ const ItemsTable = ({ state, onStateChange, toast, onChanged, refreshKey }) => {
             setError('');
         } catch (e) {
             if (!alive.current) return;
-            setError(isMissingEndpoint(e) ? 'This server does not have Autopilot yet. Update OmbiSub.' : errorText(e));
+            setError(isMissingEndpoint(e) ? 'This server does not have Autopilot yet. Update Omnisub.' : errorText(e));
         } finally {
             if (alive.current) setLoading(false);
         }

@@ -71,7 +71,7 @@ export default function SecuritySettings() {
                     <p>
                         {secured
                             ? 'Every page and API call needs the login or the API key.'
-                            : 'Anyone who can reach this address can use OmbiSub. Set a login below, especially before exposing it through a reverse proxy.'}
+                            : 'Anyone who can reach this address can use Omnisub. Set a login below, especially before exposing it through a reverse proxy.'}
                     </p>
                 </Notice>
             )}
@@ -98,7 +98,7 @@ export default function SecuritySettings() {
             </Card>
 
             {apiKey && (
-                <Card title="API key" subtitle="Send it as the X-Api-Key header. MorpiceHub and scripts use it to call OmbiSub.">
+                <Card title="API key" subtitle="Send it as the X-Api-Key header. MorpiceHub and scripts use it to call Omnisub.">
                     <div className="space-y-2">
                         <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-750 dark:bg-gray-900">
                             <code className="min-w-0 flex-1 truncate font-mono text-xs text-gray-800 dark:text-gray-200">{shown ? apiKey : '•'.repeat(32)}</code>

@@ -1,5 +1,5 @@
 """
-A web page on another site must not drive OmbiSub through the user's browser (CSRF), and CORS is not a
+A web page on another site must not drive Omnisub through the user's browser (CSRF), and CORS is not a
 wildcard by default: the built UI is same-origin, the Vite dev server is the only other origin let in.
 Server-to-server callers (Sonarr/Radarr webhooks, MorpiceHub, curl) send no Fetch Metadata and pass.
 """

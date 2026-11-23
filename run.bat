@@ -1,9 +1,9 @@
 @echo off
-title OmniSub Launcher
+title Omnisub Launcher
 cd /d "%~dp0"
 
 echo ===================================================
-echo             Starting OmniSub Services
+echo             Starting Omnisub Services
 echo ===================================================
 
 :: Check if virtual environment python exists

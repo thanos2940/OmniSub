@@ -269,7 +269,7 @@ export default function CommandPalette() {
                                 <span><kbd className="font-mono bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600">↵</kbd> to select</span>
                                 <span><kbd className="font-mono bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600">esc</kbd> to close</span>
                             </div>
-                            <span className="font-medium text-indigo-500 dark:text-indigo-400">OmbiSub</span>
+                            <span className="font-medium text-indigo-500 dark:text-indigo-400">Omnisub</span>
                         </div>
                     </motion.div>
                 </div>

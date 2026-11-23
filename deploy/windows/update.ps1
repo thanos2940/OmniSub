@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Updates OmbiSub in place (what update.cmd runs): stop the task, git pull --ff-only, install the locked
+  Updates Omnisub in place (what update.cmd runs): stop the task, git pull --ff-only, install the locked
   Python packages, rebuild the web UI when it changed, start the task again.
 
 .DESCRIPTION
@@ -10,7 +10,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$TaskName = 'OmbiSub',
+    [string]$TaskName = 'Omnisub',
     [switch]$SkipBuild
 )
 
@@ -19,6 +19,9 @@ function Step($m) { Write-Host "`n== $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "  [ok]   $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "  [warn] $m" -ForegroundColor Yellow }
 function Fail($m) { Write-Host "  [FAIL] $m" -ForegroundColor Red; throw $m }
+
+# Installs from before the rename have a task called 'OmbiSub': use it when no other name was given.
+if (-not $PSBoundParameters.ContainsKey('TaskName') -and -not (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) -and (Get-ScheduledTask -TaskName 'OmbiSub' -ErrorAction SilentlyContinue)) { $TaskName = 'OmbiSub' }
 
 $Root     = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $Backend  = Join-Path $Root 'backend'
@@ -38,7 +41,7 @@ if ($task) {
 
 function Stop-Leftovers {
     # Stopping the task ends the supervisor; make sure no server it started is left holding the files.
-    foreach ($name in 'ombisub_tray.lock', 'ombisub_server.lock') {
+    foreach ($name in 'omnisub_tray.lock', 'omnisub_server.lock', 'ombisub_tray.lock', 'ombisub_server.lock') {
         $lock = Join-Path $DataDir $name
         if (-not (Test-Path $lock)) { continue }
         try {

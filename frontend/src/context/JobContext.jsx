@@ -498,8 +498,8 @@ export const JobProvider = ({ children }) => {
                 const base = apiBase || window.location.origin;
                 const proto = base.startsWith('https') ? 'wss:' : 'ws:';
                 const host = base.replace(/^https?:\/\//, '');
-                // Behind a reverse-proxy path the socket lives under it too (window.__OMBISUB_BASE__).
-                const wsUrl = `${proto}//${host}${apiBase ? '' : (window.__OMBISUB_BASE__ || '')}/api/ws`;
+                // Behind a reverse-proxy path the socket lives under it too (window.__OMNISUB_BASE__).
+                const wsUrl = `${proto}//${host}${apiBase ? '' : (window.__OMNISUB_BASE__ || '')}/api/ws`;
 
                 ws = new WebSocket(wsUrl);
 

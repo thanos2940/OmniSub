@@ -120,17 +120,17 @@ class AutopilotNotifier:
         why = reasons.get(item.get("reason") or "", item.get("detail") or "no usable English subtitle was found")
         return self._send("no_source", f"{_series_key(item)}|{day}", "No subtitle source",
                           f"{item_label(item)} was left without Greek subtitles: {why}. Add an English "
-                          f"subtitle (for example through Bazarr) and OmbiSub will pick it up.", ORANGE)
+                          f"subtitle (for example through Bazarr) and Omnisub will pick it up.", ORANGE)
 
     def foreign_repaired(self, item: Dict, path) -> bool:
         return self._send("foreign_repaired", f"{item.get('id')}|{path}", "Greek subtitle repaired",
-                          f"The Greek subtitle of {item_label(item)} had broken characters; OmbiSub fixed "
+                          f"The Greek subtitle of {item_label(item)} had broken characters; Omnisub fixed "
                           f"it in place and kept a backup.", BLUE, {"File": path})
 
     def arr_unreachable(self, source: str, error, since) -> bool:
         name = str(source).title()
         return self._send("arr_unreachable", str(source), f"{name} unreachable",
-                          f"OmbiSub cannot reach {name} (since {since}): {error}. New downloads are not "
+                          f"Omnisub cannot reach {name} (since {since}): {error}. New downloads are not "
                           f"noticed until it is back. Check that {name} is running and that the URL and "
                           f"API key in Settings are right.", RED)
 
@@ -143,7 +143,7 @@ class AutopilotNotifier:
         if not had_alert:
             return False
         return self._send("arr_recovered", str(source), f"{name} is back",
-                          f"OmbiSub can reach {name} again and is catching up.", GREEN)
+                          f"Omnisub can reach {name} again and is catching up.", GREEN)
 
     def engine_missing(self, waiting: int) -> bool:
         return self._send("engine_missing", "engine", "No translation engine running",
@@ -179,4 +179,4 @@ class AutopilotNotifier:
             lines.append("Nothing needs your attention.")
         color = RED if failed else (ORANGE if no_source or attention else BLUE)
         day = self._clock().astimezone(timezone.utc).strftime("%Y-%m-%d")
-        return self._send("daily_digest", day, "OmbiSub daily summary", "\n".join(lines), color)
+        return self._send("daily_digest", day, "Omnisub daily summary", "\n".join(lines), color)

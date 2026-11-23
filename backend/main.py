@@ -67,7 +67,7 @@ logging.basicConfig(level=logging.INFO, format=log_format)
 try:
     logs_dir = DATA_DIR / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    app_log_file = logs_dir / "ombisub.log"
+    app_log_file = logs_dir / "omnisub.log"
     root_logger = logging.getLogger()
     if not any(isinstance(h, RotatingFileHandler) for h in root_logger.handlers):
         file_handler = RotatingFileHandler(
@@ -253,7 +253,8 @@ def _listen_port() -> Optional[int]:
             except (IndexError, ValueError):
                 return None
     try:
-        return int(os.environ.get("OMBISUB_PORT") or 0) or None
+        from utils.env_names import env
+        return int(env("PORT") or 0) or None
     except ValueError:
         return None
 
@@ -262,12 +263,12 @@ def _listen_port() -> Optional[int]:
 async def lifespan(app: FastAPI):
     asyncio.get_running_loop().set_exception_handler(_quiet_client_disconnects)
 
-    # One OmbiSub process per data folder, however it was started: a second one would run a second
+    # One Omnisub process per data folder, however it was started: a second one would run a second
     # translation runner, worker and autopilot on the same queue (utils/instance_lock.py).
     from utils import instance_lock
     from utils.paths import DATA_DIR as _DATA_DIR
     if not instance_lock.acquire(_DATA_DIR, port=_listen_port()):
-        logger.error(f"Another OmbiSub process ({instance_lock.describe_holder(_DATA_DIR)}) already runs for the data "
+        logger.error(f"Another Omnisub process ({instance_lock.describe_holder(_DATA_DIR)}) already runs for the data "
                      f"folder {_DATA_DIR}. This one does not start; stop the other first.")
         raise SystemExit(3)
 
@@ -624,7 +625,7 @@ async def sync_all_disk(re_queue_removed: bool = True):
 # (e.g. /settings, /health, /project/X) resolve correctly on a hard refresh or direct link. In dev, this
 # directory doesn't exist and Vite serves the frontend separately on :5173 — nothing here runs.
 _STATIC_DIR = Path(__file__).parent / "static"
-# url_base: the path a reverse proxy serves OmbiSub under ("/ombisub"; "" = root). Read once at startup.
+# url_base: the path a reverse proxy serves Omnisub under ("/omnisub"; "" = root). Read once at startup.
 URL_BASE = safe_url_base(storage.load_global_config().get("url_base"))
 app.state.url_base = URL_BASE
 if _STATIC_DIR.is_dir():

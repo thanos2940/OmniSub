@@ -230,7 +230,7 @@ def _atomic_write_text(path: Path, content: str, encoding: str = "utf-8-sig") ->
 
 
 def _foreign_blocked(path: Path, metadata: Dict, protect: bool, force: bool) -> bool:
-    """True when ``path`` exists, is not OmbiSub's own file and must not be overwritten."""
+    """True when ``path`` exists, is not Omnisub's own file and must not be overwritten."""
     if force or not protect:
         return False
     try:
@@ -243,7 +243,7 @@ def _foreign_blocked(path: Path, metadata: Dict, protect: bool, force: bool) -> 
 
 
 def _register_written(path: Path, project_name: Optional[str], episode_name: Optional[str]) -> None:
-    """Record ``path`` as OmbiSub's own and let Plex know it is there (debounced, off-thread)."""
+    """Record ``path`` as Omnisub's own and let Plex know it is there (debounced, off-thread)."""
     from services.autopilot import ownership
     ownership.register_file(path, project_name, episode_name)
     from services.plex_refresh import request_refresh
@@ -266,7 +266,7 @@ def _remove_superseded_target(previous: Optional[str], current: Path, metadata: 
         if old.parent == current.parent and old.is_file():
             from services.autopilot import ownership
             if not ownership.is_ours(old, metadata):
-                logger.info(f"Kept '{old.name}': it is not a file OmbiSub wrote.")
+                logger.info(f"Kept '{old.name}': it is not a file Omnisub wrote.")
                 return
             old.unlink()
             ownership.forget(old)
@@ -320,7 +320,7 @@ def _write_plain_srt_companion(rows: List[Dict], media_file: Path, tgt_lang: str
         if not content.strip():
             return None
         if _foreign_blocked(path, metadata or {}, protect, force):
-            logger.warning(f"Not writing SRT companion '{path}': a subtitle OmbiSub did not write is already there.")
+            logger.warning(f"Not writing SRT companion '{path}': a subtitle Omnisub did not write is already there.")
             return None
         _atomic_write_text(path, content, "utf-8-sig")
         _register_written(path, project_name, episode_name)
@@ -359,8 +359,8 @@ def auto_export_translated_subtitle(project_name: str, episode_name: str, parsed
     SplitLongLines) are applied HERE, on a copy / on the written file — never to the
     editor's ``parsed_srt`` / data.json, which must stay 1:1 with the source.
 
-    Files are written atomically and registered as OmbiSub's own. With the setting
-    ``autopilot_protect_foreign_subs`` (default on) an existing subtitle OmbiSub did not
+    Files are written atomically and registered as Omnisub's own. With the setting
+    ``autopilot_protect_foreign_subs`` (default on) an existing subtitle Omnisub did not
     write is never overwritten unless ``force`` is true (explicit user exports); the
     episode then gets a ``translation_warning`` and None is returned.
     """
@@ -404,7 +404,7 @@ def auto_export_translated_subtitle(project_name: str, episode_name: str, parsed
                 if not target_srt_path.parent.exists():
                     raise FileNotFoundError(f"Output directory does not exist or is unreachable: '{target_srt_path.parent}'.")
                 if _foreign_blocked(target_srt_path, metadata, protect, force):
-                    msg = (f"Not exported: '{target_srt_path.name}' already exists and was not written by OmbiSub "
+                    msg = (f"Not exported: '{target_srt_path.name}' already exists and was not written by Omnisub "
                            f"(protected). Export manually to replace it.")
                     logger.warning(f"{msg} [{project_name}/{episode_name}]")
                     metadata["translation_warning"] = msg

@@ -135,7 +135,7 @@ async def set_auto_update_config(payload: AutoUpdateConfigRequest):
 
 @router.post("/api/system/restart")
 async def restart_server(background_tasks: BackgroundTasks):
-    """Manually restart the OmbiSub server (exit code 42 under the supervisor, which starts it again)."""
+    """Manually restart the Omnisub server (exit code 42 under the supervisor, which starts it again)."""
     background_tasks.add_task(update_service.trigger_restart, 1.0)
     return {"status": "restarting", "message": "Server restart initiated."}
 
@@ -159,7 +159,7 @@ async def list_log_files():
 
 
 @router.get("/api/system/logs")
-async def get_log(name: str = "ombisub", lines: int = system_info.DEFAULT_LINES):
+async def get_log(name: str = "omnisub", lines: int = system_info.DEFAULT_LINES):
     """The last ``lines`` (1..5000) of a whitelisted log file."""
     if name not in system_info.LOG_FILES:
         raise HTTPException(status_code=404, detail=f"Unknown log '{name}'. Available: {', '.join(system_info.LOG_FILES)}")

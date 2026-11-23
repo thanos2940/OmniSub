@@ -325,7 +325,7 @@ async def arr_enable_entry(project_name: str):
 async def enqueue_project_missing(project_name: str):
     """Queue everything a show/movie still lacks, at backlog priority.
 
-    Episodes OmbiSub has never imported are created from their media file and sent to
+    Episodes Omnisub has never imported are created from their media file and sent to
     extraction and translation (``services.on_demand.translate_missing``); the counts say
     what went where and which episodes have no usable source.
     """

@@ -1,7 +1,7 @@
 # Specification: Bazarr-Style Server Deployment, Autonomous Boot, 4-Tier Project Priorities, Migration Bundle & GitHub Release Auto-Updater (`server_deploy_priority_migration_20261018`)
 
 ## 1. Overview
-Transform **OmbiSub** from a console-launched LAN workstation tool into a self-contained, Bazarr-style 24/7 server application running directly on the Plex Server PC (`Morpiceserver`). This track delivers four cohesive pillars:
+Transform **Omnisub** from a console-launched LAN workstation tool into a self-contained, Bazarr-style 24/7 server application running directly on the Plex Server PC (`Morpiceserver`). This track delivers four cohesive pillars:
 1. **Bazarr-Style Windows System Tray & Logon Server App + Full Autonomous Boot**:
    - A windowless background tray application (`backend/tray_app.py` launched via `pythonw.exe` and registered at Windows logon/startup via `deploy/windows/install.ps1`) so Agent CLIs (`agy`, `claude`, `gemini`) share the interactive desktop session and auth tokens with zero console windows.
    - Full autonomous startup on boot: FastAPI server, Autopilot watcher, Background Worker, and Agent Runner (in `'Keep Watching'` daemon mode when `translation_engine == 'agent'`) start automatically on boot.
@@ -34,13 +34,13 @@ Transform **OmbiSub** from a console-launched LAN workstation tool into a self-c
 - **FR-1.1 (`backend/tray_app.py` & `deploy/windows/install.ps1`):**
   - Provide a lightweight Windows System Tray controller (`backend/tray_app.py`, using `pystray` + `Pillow` or native Win32/Tk fallback if headless) that launches `run_server.py` in-process or as a managed child without a console window (`pythonw.exe`).
   - System Tray right-click menu actions:
-    - *Open OmbiSub Web UI* (`http://localhost:8000`)
+    - *Open Omnisub Web UI* (`http://localhost:8000`)
     - *Server Status* (live status indicator: Running / Queue count / Agent Runner status)
     - *Toggle Pause Queue Worker*
     - *Toggle Agent Runner (Keep Watching)*
-    - *Open Log File* (`logs/ombisub.log`)
+    - *Open Log File* (`logs/omnisub.log`)
     - *Restart Server*
-    - *Exit OmbiSub* (graceful shutdown)
+    - *Exit Omnisub* (graceful shutdown)
   - Update `deploy/windows/install.ps1` to support `-TrayMode` (default on interactive Windows server setups, registering a logon/startup Scheduled Task running `pythonw.exe backend\tray_app.py` with `RunLevel Highest` / `AtLogOn` + `AtStartup` fallback, plus optional Windows Startup folder shortcut).
 - **FR-1.2 (Full Autonomous Boot in `backend/main.py` & `services/agent_runner.py`):**
   - Add config setting `agent_runner_autostart: bool = True` (default `True`).
@@ -90,7 +90,7 @@ Transform **OmbiSub** from a console-launched LAN workstation tool into a self-c
     - Optionally rewrites media/subtitle paths across `config.json`, `projects/*/episodes/*/metadata.json`, `omnisub.db`, `autopilot.db`, and `subtitle_ownership.db` (e.g. `\\Morpiceserver\e\` → `E:\`, `\\Morpiceserver\m\` → `M:\`),
     - Reloads `GLOBAL_CONFIG`, rebuilds `metadata_index`, and resumes workers.
 - **FR-3.2 (CLI Migration Tool `scripts/migrate_server.py` & Web UI):**
-  - Provide `scripts/migrate_server.py` (`export --output ombisub_backup.zip [--compact]` and `import --input ombisub_backup.zip [--remap-unc-drives]`) for fast command-line or LAN transfer.
+  - Provide `scripts/migrate_server.py` (`export --output omnisub_backup.zip [--compact]` and `import --input omnisub_backup.zip [--remap-unc-drives]`) for fast command-line or LAN transfer.
   - Add **Backup & Migration** section in `SystemUpdatesSettings.jsx` (or dedicated tab in `SettingsPage.jsx`) with 1-click **Export Migration Bundle** (Compact vs Full toggle) and **Import Migration Bundle** (with file picker / local server path input and UNC → Local Drive path auto-remap toggle).
 
 ### 2.4 Pillar 4: Official GitHub Releases Auto-Updater
@@ -107,7 +107,7 @@ Transform **OmbiSub** from a console-launched LAN workstation tool into a self-c
     - Checkout/reset to the release tag (`git reset --hard <release_tag>`),
     - Run `pip install -r requirements.txt` if `backend/requirements.txt` changed,
     - If a prebuilt `static.zip` asset is attached to the GitHub Release, download and extract it into `backend/static/`; otherwise if `frontend/` changed and `npm` is available, run `npm run build` in `frontend/` and atomically swap `frontend/dist` into `backend/static/`,
-    - Persist installed release metadata to `DATA_DIR / "release_version.json"` and trigger graceful restart (`scripts/restart_helper.py` updated to support Tray app, Scheduled Task `OmbiSub`, NSSM service, and standalone `run_server.py`).
+    - Persist installed release metadata to `DATA_DIR / "release_version.json"` and trigger graceful restart (`scripts/restart_helper.py` updated to support Tray app, Scheduled Task `Omnisub`, NSSM service, and standalone `run_server.py`).
 
 ---
 

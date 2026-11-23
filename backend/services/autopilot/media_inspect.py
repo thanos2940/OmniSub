@@ -103,7 +103,7 @@ def inspect(media_path: str, target_code: str = "el", source_code: str = "en", p
     ``source_choice`` (``{"kind": embedded_ass|embedded_srt|external_ass|external_srt,
     "track"|"path"}`` or None) and ``reason`` (why there is nothing to translate from).
     ``force_probe`` probes the container even when the scanner already sees a target sidecar
-    (the autopilot does so when that sidecar is OmbiSub's own and a new source is needed).
+    (the autopilot does so when that sidecar is Omnisub's own and a new source is needed).
     """
     from integrations import embedded_subs
 

@@ -1,5 +1,5 @@
 """
-One OmbiSub process per data folder
+One Omnisub process per data folder
 ===================================
 Two servers on one data folder each start a translation runner, a worker and the autopilot, and they
 claim and submit the same episodes twice (2026-10-27: the boot service on port 2945 and a second
@@ -21,9 +21,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Optional
 
-LOCK_NAME = "ombisub_instance.lock"
+LOCK_NAME = "omnisub_instance.lock"
+# The lock of the versions before the rename: held as well, so an old and a new server never share a data folder.
+LEGACY_LOCK_NAMES = ("ombisub_instance.lock",)
 
 _held: Dict[str, int] = {}   # resolved lock path -> file descriptor (kept open: closing it would unlock)
+_held_legacy: Dict[str, list] = {}   # ... -> the descriptors of the legacy locks taken with it
 
 
 def _info_path(path: Path) -> Path:
@@ -56,7 +59,21 @@ def acquire(data_dir: Path, port: Optional[int] = None) -> bool:
     if not _try_lock(fd):
         os.close(fd)
         return False
+    legacy_fds = []
+    for name in LEGACY_LOCK_NAMES:   # only where an older version ran: a new install never gets the old file
+        legacy = (Path(data_dir) / name).resolve()
+        if not legacy.exists():
+            continue
+        lfd = os.open(str(legacy), os.O_RDWR | os.O_CREAT, 0o644)
+        if not _try_lock(lfd):
+            os.close(lfd)
+            for other in legacy_fds:
+                os.close(other)
+            os.close(fd)
+            return False
+        legacy_fds.append(lfd)
     _held[key] = fd
+    _held_legacy[key] = legacy_fds
     try:
         _info_path(path).write_text(json.dumps({
             "pid": os.getpid(), "port": port,
@@ -90,11 +107,12 @@ def release(data_dir: Path) -> None:
     fd = _held.pop(key, None)
     if fd is None:
         return
-    try:
-        if os.name == "nt":
-            import msvcrt
-            os.lseek(fd, 0, os.SEEK_SET)
-            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-    except OSError:
-        pass
-    os.close(fd)
+    for one in [fd, *_held_legacy.pop(key, [])]:
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(one, 0, os.SEEK_SET)
+                msvcrt.locking(one, msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        os.close(one)
