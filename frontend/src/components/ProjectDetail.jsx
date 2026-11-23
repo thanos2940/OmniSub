@@ -15,6 +15,9 @@ import CheckMissingModal from './project/modals/CheckMissingModal';
 import ScriptFixModal from './project/modals/ScriptFixModal';
 import EmbeddedTracksModal from './project/modals/EmbeddedTracksModal';
 import SyncOptionsModal from './project/modals/SyncOptionsModal';
+import TranslateDialog from './project/dialogs/TranslateDialog';
+import ExtractDialog from './project/dialogs/ExtractDialog';
+import TermHarvestModal from './TermHarvestModal';
 import PriorityControl from './project/PriorityControl';
 
 import EpisodesTab from './project/tabs/EpisodesTab';
@@ -47,6 +50,10 @@ const ProjectDetail = () => {
     const [scriptFixModal, setScriptFixModal] = useState({ open: false, episodeName: null });
     const [tracksModal, setTracksModal] = useState({ open: false, episodeName: null });
     const [deleteTarget, setDeleteTarget] = useState(null); // episode names
+    const [translateDialog, setTranslateDialog] = useState(null); // { names, mode, bulk }
+    const [extractDialog, setExtractDialog] = useState(null);     // { names, bulk }
+    const [termsFor, setTermsFor] = useState(null);               // episode names to find glossary terms in
+    const [batchFixes, setBatchFixes] = useState(null);           // episode names for SubtitleEdit fixes
     const [deleting, setDeleting] = useState(false);
     const [changingPriority, setChangingPriority] = useState(false);
     const [runner, setRunner] = useState(null);
@@ -54,6 +61,7 @@ const ProjectDetail = () => {
     const {
         project, episodes, subprojects, tokenSummary, loading, error, loadData,
         handleSaveSettings, handleUpload, handleDeleteEpisode, handleBatchExtractEmbedded, handleBatchDelete, handleAiAction,
+        handleBatchDownload, handleBatchExportToPath,
     } = useProjectDetail({ projectName: effectiveProjectName, addJob, activeJobs, toast });
 
     const engine = useTranslationEngine();
@@ -121,8 +129,11 @@ const ProjectDetail = () => {
     const handleTranslateMissing = async () => afterQueue(await translateMissing());
 
     const handleAction = (kind, ep) => {
-        if (kind === 'extract') handleBatchExtractEmbedded([ep.name]);
+        if (kind === 'retranslate') setTranslateDialog({ names: [ep.name], mode: 'full', bulk: false });
         else if (kind === 'tracks') setTracksModal({ open: true, episodeName: ep.name });
+        else if (kind === 'export') handleBatchExportToPath([ep.name]);
+        else if (kind === 'download') api.downloadEpisode(effectiveProjectName, ep.name).catch(err => toast.error(errorText(err, 'Could not download the subtitle.')));
+        else if (kind === 'terms') setTermsFor([ep.name]);
         else if (kind === 'fixes') setFixesModal({ open: true, episodeName: ep.name });
         else if (kind === 'missing') setCheckMissingModal({ open: true, episodeName: ep.name });
         else if (kind === 'script') setScriptFixModal({ open: true, episodeName: ep.name });
@@ -132,14 +143,28 @@ const ProjectDetail = () => {
     const handleBulk = async (kind) => {
         const names = [...selection.selectedEpisodes];
         if (!names.length) return;
-        if (kind === 'translate') {
-            await handleTranslate(names);
-            selection.clearSelection();
-        } else if (kind === 'extract') {
-            await handleBatchExtractEmbedded(names);
-        } else if (kind === 'delete') {
-            setDeleteTarget(names);
-        }
+        if (kind === 'translate') setTranslateDialog({ names, mode: 'gaps', bulk: true });
+        else if (kind === 'extract') setExtractDialog({ names, bulk: true });
+        else if (kind === 'terms') setTermsFor(names);
+        else if (kind === 'export') await handleBatchExportToPath(names);
+        else if (kind === 'download') await handleBatchDownload(names);
+        else if (kind === 'fixes') setBatchFixes(names);
+        else if (kind === 'delete') setDeleteTarget(names);
+    };
+
+    const confirmTranslate = async ({ full, overwrite }) => {
+        const { names, bulk } = translateDialog;
+        setTranslateDialog(null);
+        await handleTranslate(names, { retranslate: full, overwrite });
+        if (bulk) selection.clearSelection();
+    };
+
+    const confirmExtract = async ({ prefer, force, translateAfter }) => {
+        const { names, bulk } = extractDialog;
+        setExtractDialog(null);
+        // With "translate after", the server queues each episode as its subtitle comes in and starts a stopped runner.
+        const started = await handleBatchExtractEmbedded(names, force, { prefer, translateAfter });
+        if (started && bulk) selection.clearSelection();
     };
 
     const confirmDelete = async (alsoDisk) => {
@@ -272,6 +297,20 @@ const ProjectDetail = () => {
             <ScriptFixModal
                 isOpen={scriptFixModal.open} onClose={() => setScriptFixModal({ open: false, episodeName: null })}
                 projectName={effectiveProjectName} episodeName={scriptFixModal.episodeName} onSuccess={loadData} toast={toast}
+            />
+            <TranslateDialog
+                open={!!translateDialog} names={translateDialog?.names} defaultMode={translateDialog?.mode}
+                onCancel={() => setTranslateDialog(null)} onConfirm={confirmTranslate}
+            />
+            <ExtractDialog open={!!extractDialog} names={extractDialog?.names} onCancel={() => setExtractDialog(null)} onConfirm={confirmExtract} />
+            <TermHarvestModal
+                isOpen={!!termsFor} onClose={() => setTermsFor(null)} projectName={effectiveProjectName}
+                parentProjectName={project.parent_project} episodeNames={termsFor} onSaved={reload}
+            />
+            <ApplyFixesModal
+                isOpen={!!batchFixes} onClose={() => setBatchFixes(null)}
+                projectName={effectiveProjectName} episodeName={null} isBatch
+                selectedEpisodes={batchFixes || []} onSuccess={loadData} toast={toast}
             />
             <EmbeddedTracksModal
                 isOpen={tracksModal.open} onClose={() => setTracksModal({ open: false, episodeName: null })}

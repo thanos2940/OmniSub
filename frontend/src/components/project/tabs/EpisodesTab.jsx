@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Film, FileText, Languages, Layers, Loader2, RotateCcw, Search, ShieldAlert, Trash2, Upload, Wrench, Clock, ListChecks } from 'lucide-react';
-import { Button, ConfirmDialog, Card, EmptyState, INPUT, OverflowMenu, ProgressBar, StatusChip } from '../../ui';
+import { AlertTriangle, BookPlus, ChevronDown, ChevronRight, Download, ExternalLink, Film, FileText, FolderOutput, Languages, Layers, Loader2, MoreHorizontal, RotateCcw, Search, ShieldAlert, Trash2, Upload, Wrench, Clock, ListChecks } from 'lucide-react';
+import { Button, Card, EmptyState, INPUT, OverflowMenu, ProgressBar, StatusChip } from '../../ui';
 import { canTranslate, episodeCode, episodeTitle, formatDate, gapInfo, hasSourceSubtitle, lastTranslated, lineProgress, matchesFilter, seasonLabel, seasonNumber } from '../episodeUtils';
 
 const FILTERS = [
@@ -77,10 +77,10 @@ function ActionCell({ ep, entry, busy, onTranslate, onRetranslate }) {
     const complete = ep.translated && gaps.missing === 0;
     const allowed = canTranslate(ep);
     if (complete) {
-        return <Button size="sm" icon={RotateCcw} onClick={onRetranslate} disabled={busy}>Retranslate</Button>;
+        return <Button size="sm" icon={RotateCcw} onClick={onRetranslate} disabled={busy} aria-label={`Retranslate ${ep.name}`}>Retranslate</Button>;
     }
     return (
-        <Button size="sm" variant="primary" icon={Languages} onClick={onTranslate} disabled={busy || !allowed}
+        <Button size="sm" variant="primary" icon={Languages} onClick={onTranslate} disabled={busy || !allowed} aria-label={`Translate ${ep.name}`}
             title={allowed ? (ep.translated ? 'Translate the lines that are still missing' : undefined) : 'No subtitle and no video file linked to this episode'}>
             Translate
         </Button>
@@ -116,9 +116,11 @@ function Row({ ep, projectName, selected, entry, busy, onToggle, onTranslate, on
                         <FileText size={16} />
                     </Link>
                 )}
-                <OverflowMenu items={[
-                    { label: 'Extract subtitle from video', icon: Film, hidden: !hasMedia, onClick: () => onAction('extract', ep) },
-                    { label: 'Inspect embedded tracks', icon: Layers, hidden: !hasMedia, onClick: () => onAction('tracks', ep) },
+                <OverflowMenu label={`More actions for ${ep.name}`} items={[
+                    { label: 'Extract subtitle from video…', icon: Layers, hidden: !hasMedia, onClick: () => onAction('tracks', ep) },
+                    { label: 'Write subtitle file next to the video', icon: FolderOutput, hidden: !ep.translated || !hasMedia, onClick: () => onAction('export', ep) },
+                    { label: 'Download subtitle', icon: Download, hidden: !ep.translated, onClick: () => onAction('download', ep) },
+                    { label: 'Find glossary terms', icon: BookPlus, hidden: !ep.translated, onClick: () => onAction('terms', ep) },
                     { label: 'Apply SubtitleEdit fixes', icon: Wrench, hidden: !hasSource, onClick: () => onAction('fixes', ep) },
                     { label: 'Check missing lines', icon: Search, hidden: !hasSource || !ep.translated, onClick: () => onAction('missing', ep) },
                     { label: 'ScriptGuard check', icon: ShieldAlert, hidden: !ep.translated, onClick: () => onAction('script', ep) },
@@ -129,14 +131,14 @@ function Row({ ep, projectName, selected, entry, busy, onToggle, onTranslate, on
     );
 }
 
-function SeasonCheckbox({ names, selected, onToggle }) {
+function SeasonCheckbox({ names, selected, onToggle, label = 'Select the whole season' }) {
     const ref = useRef(null);
     const count = names.filter(n => selected.has(n)).length;
     useEffect(() => {
         if (ref.current) ref.current.indeterminate = count > 0 && count < names.length;
     }, [count, names.length]);
     return <input ref={ref} type="checkbox" checked={names.length > 0 && count === names.length} onChange={onToggle}
-        aria-label="Select the whole season" className="h-4 w-4 rounded border-gray-300 text-indigo-600" />;
+        aria-label={label} title={label} className="h-4 w-4 rounded border-gray-300 text-indigo-600" />;
 }
 
 const EpisodesTab = ({
@@ -146,7 +148,6 @@ const EpisodesTab = ({
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     const [collapsed, setCollapsed] = useState({});
-    const [confirmRetranslate, setConfirmRetranslate] = useState(null);
     const { selected, toggleEpisode, toggleMultiple, clearSelection } = selection;
 
     const counts = useMemo(() => {
@@ -243,7 +244,8 @@ const EpisodesTab = ({
                 ) : (
                     <div role="table" aria-label="Episodes">
                         <div role="row" className={`${GRID} hidden border-b border-gray-100 px-4 py-2 text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-gray-750 dark:text-gray-400 md:grid`}>
-                            <span className="w-4" /><span>Episode</span><span>Status</span><span>Lines</span><span>Last translated</span><span className="text-right">Actions</span>
+                            <SeasonCheckbox names={visible.map(e => e.name)} selected={selected} onToggle={() => toggleMultiple(visible.map(e => e.name))} label="Select every episode shown" />
+                            <span>Episode</span><span>Status</span><span>Lines</span><span>Last translated</span><span className="text-right">Actions</span>
                         </div>
                         {seasons.map(([n, eps]) => {
                             const names = eps.map(e => e.name);
@@ -269,7 +271,7 @@ const EpisodesTab = ({
                                                     selected={selected.has(ep.name)} entry={queue.get(ep.name)}
                                                     onToggle={(name, shift) => toggleEpisode(name, shift, visible)}
                                                     onTranslate={() => onTranslate([ep.name])}
-                                                    onRetranslate={() => setConfirmRetranslate(ep)}
+                                                    onRetranslate={() => onAction('retranslate', ep)}
                                                     onAction={onAction} />
                                             ))}
                                         </div>
@@ -289,18 +291,19 @@ const EpisodesTab = ({
                         <button type="button" onClick={clearSelection} className="text-xs text-gray-500 underline hover:text-gray-900 dark:hover:text-white">Clear</button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" variant="primary" icon={Languages} disabled={busy} onClick={() => onBulk('translate')}>Translate</Button>
-                        <Button size="sm" icon={Film} onClick={() => onBulk('extract')}>Extract</Button>
-                        <Button size="sm" variant="danger" icon={Trash2} onClick={() => onBulk('delete')}>Delete translation</Button>
+                        <Button size="sm" variant="primary" icon={Languages} disabled={busy} onClick={() => onBulk('translate')}>Translate…</Button>
+                        <Button size="sm" icon={Film} onClick={() => onBulk('extract')}>Extract…</Button>
+                        <OverflowMenu label="More actions for the selected episodes" icon={MoreHorizontal} align="right" items={[
+                            { label: 'Find glossary terms', icon: BookPlus, onClick: () => onBulk('terms') },
+                            { label: 'Write subtitle files next to the videos', icon: FolderOutput, onClick: () => onBulk('export') },
+                            { label: 'Download as ZIP', icon: Download, onClick: () => onBulk('download') },
+                            { label: 'Apply SubtitleEdit fixes', icon: Wrench, onClick: () => onBulk('fixes') },
+                            { label: 'Delete translation', icon: Trash2, danger: true, onClick: () => onBulk('delete') },
+                        ]} />
                     </div>
                 </div>
             )}
 
-            <ConfirmDialog open={!!confirmRetranslate} title={`Retranslate ${confirmRetranslate?.name || ''}?`} confirmLabel="Retranslate"
-                onCancel={() => setConfirmRetranslate(null)}
-                onConfirm={() => { const name = confirmRetranslate.name; setConfirmRetranslate(null); onTranslate([name], { retranslate: true }); }}>
-                <p>The existing translation is replaced by a new one. Lines you edited by hand are translated again too.</p>
-            </ConfirmDialog>
         </div>
     );
 };

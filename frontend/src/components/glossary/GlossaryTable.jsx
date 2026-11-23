@@ -243,6 +243,7 @@ const GlossaryTable = ({
                                                         onClick={() => handleRemoveTerm(index)}
                                                         className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors"
                                                         title={term.inherited ? "Suppress from this show" : "Delete term"}
+                                                        aria-label={term.inherited ? `Suppress ${term.term} from this show` : `Delete ${term.term}`}
                                                     >
                                                         {term.inherited ? <EyeOff className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                                                     </button>

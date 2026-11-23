@@ -88,13 +88,15 @@ export function useTranslate({ projectName, engine, toast, addJob }) {
         setNotice({ tone: 'success', text, count, activity: engine !== 'model' });
     }, [engine, toast]);
 
-    const translate = useCallback((names, { retranslate = false } = {}) => run(async () => {
+    // `retranslate`: everything again (otherwise only what is missing); `overwrite`: the export may replace a subtitle
+    // next to the video that Omnisub did not write.
+    const translate = useCallback((names, { retranslate = false, overwrite = false } = {}) => run(async () => {
         const list = [...new Set((names || []).map(n => String(n || '').trim()).filter(Boolean))];
         if (!list.length) return null;
         try {
             if (engine === 'model') {
                 const link = `/project/${encodeURIComponent(projectName)}`;
-                const options = { force: retranslate, translation_type: retranslate ? 'original' : 'saved' };
+                const options = { force: retranslate, translation_type: retranslate ? 'original' : 'saved', overwrite };
                 const res = list.length === 1
                     ? await api.translateEpisode(projectName, list[0], options)
                     : await api.batchTranslate(projectName, { episode_names: list, ...options });
@@ -109,7 +111,10 @@ export function useTranslate({ projectName, engine, toast, addJob }) {
                 setNotice({ tone: 'success', text, count: list.length, activity: false });
                 return { queued: list.length };
             }
-            const res = await api.enqueueForAgent(projectName, list, 1, retranslate ? { full: true, include_translated: true } : {});
+            const res = await api.enqueueForAgent(projectName, list, 1, {
+                ...(retranslate ? { full: true, include_translated: true } : {}),
+                ...(overwrite ? { overwrite: true } : {}),
+            });
             const queued = res.data?.enqueued_count ?? 0;
             if (!queued) {
                 const text = list.length === 1 ? `${list[0]} is already waiting in the queue.` : 'These episodes are already waiting in the queue.';

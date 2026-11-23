@@ -357,7 +357,7 @@ const EmbeddedTracksModal = ({
                                         className="w-4 h-4 rounded text-indigo-600 border-gray-300 focus:ring-indigo-500"
                                     />
                                     <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">
-                                        Force overwrite existing <span className="font-mono">.ass</span> sidecar if already present on disk
+                                        Extract again even if the subtitle file is already next to the video
                                     </span>
                                 </label>
                             </div>
@@ -387,24 +387,14 @@ const EmbeddedTracksModal = ({
                     </button>
 
                     <div className="flex items-center gap-2.5">
-                        {recommendedIndex !== null && recommendedIndex !== undefined && (
-                            <button
-                                onClick={() => handleExtract(recommendedIndex)}
-                                disabled={loading || extracting}
-                                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-xl shadow-md shadow-purple-500/20 disabled:opacity-50 transition-all"
-                            >
-                                <Sparkles size={14} className={extracting ? 'animate-spin' : ''} />
-                                {extracting ? 'Extracting...' : `Auto-Extract Recommended (#${recommendedIndex})`}
-                            </button>
-                        )}
-
+                        {/* One button: the recommended track is selected from the start, another can be picked above. */}
                         <button
                             onClick={() => handleExtract(selectedStreamIndex)}
                             disabled={loading || extracting || selectedStreamIndex === null}
                             className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm disabled:opacity-50 transition-all"
                         >
                             <Download size={14} />
-                            {extracting ? 'Extracting...' : `Extract Stream #${selectedStreamIndex ?? '...'}`}
+                            {extracting ? 'Extracting...' : `Extract track #${selectedStreamIndex ?? '...'}${selectedStreamIndex !== null && selectedStreamIndex === recommendedIndex ? ' (recommended)' : ''}`}
                         </button>
                     </div>
                 </div>

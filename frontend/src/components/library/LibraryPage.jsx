@@ -319,8 +319,7 @@ export default function LibraryPage() {
                 <EmptyState
                     icon={Folder}
                     title="No projects of your own"
-                    description="Projects that do not come from Sonarr or Radarr appear here, for subtitle files you add yourself."
-                    action={<Button variant="primary" icon={FolderPlus} onClick={() => setNewProjectOpen(true)}>New project</Button>}
+                    description="Projects that do not come from Sonarr or Radarr appear here, for subtitle files you add yourself. Start one with New project."
                 />
             );
         }
@@ -341,8 +340,7 @@ export default function LibraryPage() {
             <EmptyState
                 icon={tab === 'movies' ? Film : Tv}
                 title={library?.last_sync ? `No ${tab === 'movies' ? 'movies' : 'series'} found` : 'The library is empty'}
-                description={library?.last_sync ? 'Run a sync if you added titles recently.' : 'Run a sync to import your titles from Sonarr and Radarr.'}
-                action={<Button variant="primary" icon={RefreshCw} loading={syncing} onClick={() => startSync(getSavedSyncOptions())}>Sync now</Button>}
+                description={library?.last_sync ? 'If you added titles recently, run Sync now again.' : 'Sync now imports your titles from Sonarr and Radarr.'}
             />
         );
     };

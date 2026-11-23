@@ -179,8 +179,14 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         isBatchExportingRef.current = true;
 
         try {
-            await api.batchExportToPath(projectName, selectedList);
-            if (toast?.success) toast.success("Subtitles exported to media disk paths!");
+            const res = await api.batchExportToPath(projectName, selectedList);
+            const exported = res.data?.exported?.length || 0;
+            const failed = res.data?.failed || [];
+            if (exported && toast?.success) toast.success(`Wrote ${exported} subtitle file${exported === 1 ? '' : 's'} next to the videos.`);
+            if (failed.length && toast?.error) {
+                const first = failed.slice(0, 2).map(f => `${f.name}: ${f.reason}`).join(' · ');
+                toast.error(`${failed.length} not written — ${first}${failed.length > 2 ? ' …' : ''}`);
+            }
         } catch (e) {
             console.error("Batch export to path failed", e);
             if (toast?.error) toast.error("Failed to export subtitles to disk.");
@@ -189,7 +195,8 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
         }
     }, [projectName, toast]);
 
-    const handleBatchExtractEmbedded = useCallback(async (episodeNames = null, force = false) => {
+    // `prefer`: 'ass' | 'srt' (null: the project's choice); `translateAfter`: queue each extracted episode.
+    const handleBatchExtractEmbedded = useCallback(async (episodeNames = null, force = false, { prefer = null, translateAfter = false } = {}) => {
         if (isBatchExtractingRef.current) {
             if (toast?.warning) toast.warning("Batch subtitle extraction is already in progress.");
             return null;
@@ -201,6 +208,8 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
                 episode_names: episodeNames || undefined,
                 force: force,
                 migrate_srt: true,
+                prefer: prefer || undefined,
+                translate_after: translateAfter,
             });
             const jid = res.data?.job_id;
             if (jid && addJob) {
@@ -209,7 +218,8 @@ export const useProjectDetail = ({ projectName, addJob, activeJobs, toast }) => 
                     link: `/project/${encodeURIComponent(projectName)}`
                 });
             }
-            if (toast?.success) toast.success(episodeNames?.length === 1 ? `Extracting the subtitle of ${episodeNames[0]}…` : "Extraction started.");
+            const what = episodeNames?.length === 1 ? `Extracting the subtitle of ${episodeNames[0]}` : 'Extraction started';
+            if (toast?.success) toast.success(translateAfter ? `${what}; each episode is translated once its subtitle is in.` : `${what}.`);
             return res.data;
         } catch (err) {
             console.error("Failed to start batch extraction", err);

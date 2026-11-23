@@ -1,6 +1,6 @@
 // Shared building blocks for every page, so the app reads as one thing: page header, cards, tabs,
 // buttons, status chips, empty states, overflow menus and form fields. Light and dark (system setting).
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Loader2, MoreHorizontal } from 'lucide-react';
@@ -211,11 +211,24 @@ export function EmptyState({ icon: Icon, title, description, action, className }
 // ------------------------------------------------------------------ menus
 
 // A "…" button with a short list of secondary actions. Items: {label, icon, onClick, danger, disabled, hidden}.
+// Opens below its button, or above it when there is no room below (a bar docked at the bottom of the screen,
+// the last rows of a list).
 export function OverflowMenu({ items, label = 'More actions', align = 'right', icon = MoreHorizontal }) {
     const [open, setOpen] = useState(false);
+    const [up, setUp] = useState(false);
     const ref = useRef(null);
+    const menuRef = useRef(null);
     const menuId = useId();
     const visible = items.filter(i => i && !i.hidden);
+
+    useLayoutEffect(() => {
+        if (!open) { setUp(false); return; }
+        const menu = menuRef.current?.getBoundingClientRect();
+        const button = ref.current?.getBoundingClientRect();
+        if (!menu || !button) return;
+        const roomBelow = window.innerHeight - button.bottom;
+        setUp(menu.height + 8 > roomBelow && button.top > roomBelow);
+    }, [open]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -236,9 +249,11 @@ export function OverflowMenu({ items, label = 'More actions', align = 'right', i
             {open && (
                 <div
                     id={menuId}
+                    ref={menuRef}
                     role="menu"
                     className={cx(
-                        'absolute z-30 mt-1 min-w-[12rem] overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-850',
+                        'absolute z-30 max-h-[70vh] min-w-[12rem] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-850',
+                        up ? 'bottom-full mb-1' : 'mt-1',
                         align === 'right' ? 'right-0' : 'left-0',
                     )}
                 >

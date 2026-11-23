@@ -180,11 +180,11 @@ const CharacterProfilesPanel = ({ projectName, projectSettings }) => {
                                             )}
                                         </div>
                                         <div className="flex items-center gap-1">
-                                            <button onClick={() => openEditModal(name)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors" title="Edit">
+                                            <button type="button" onClick={() => openEditModal(name)} className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors" title="Edit" aria-label={`Edit ${name}`}>
                                                 <Edit2 size={14} />
                                             </button>
                                             {!char.inherited && (
-                                                <button onClick={() => handleDelete(name)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Delete">
+                                                <button type="button" onClick={() => handleDelete(name)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Delete" aria-label={`Delete ${name}`}>
                                                     <Trash2 size={14} />
                                                 </button>
                                             )}

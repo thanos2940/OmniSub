@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { Download, FileJson, FileSpreadsheet } from 'lucide-react';
+import { saveBlob } from '../../api';
 import { ensureUids, stripUids } from './useGlossaryState';
 
 const GlossaryImportExport = ({
@@ -21,15 +22,7 @@ const GlossaryImportExport = ({
             terms: stripUids(terms),
             suppressed_terms: suppressedTerms
         }, null, 2);
-        const blob = new Blob([dataStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `glossary_${projectName || glossary?.show_name || 'export'}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveBlob(new Blob([dataStr], { type: "application/json" }), `glossary_${projectName || glossary?.show_name || 'export'}.json`);
     };
 
     const handleExportCSV = () => {
@@ -45,15 +38,7 @@ const GlossaryImportExport = ({
         ]);
 
         const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `glossary_${projectName || 'export'}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        saveBlob(new Blob([csvContent], { type: "text/csv;charset=utf-8;" }), `glossary_${projectName || 'export'}.csv`);
     };
 
     const handleImportJSON = (e) => {

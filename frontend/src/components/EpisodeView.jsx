@@ -28,7 +28,6 @@ const EpisodeView = () => {
     const [glossary, setGlossary] = useState({ terms: [] });
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
-    const [originalFilename, setOriginalFilename] = useState(null);
     const [episodeMetadata, setEpisodeMetadata] = useState(null);
     const [dirty, setDirty] = useState(false);
     const [harvestModalOpen, setHarvestModalOpen] = useState(false);
@@ -207,7 +206,6 @@ const EpisodeView = () => {
                     ? epRes.data.data
                     : (Array.isArray(epRes.data) ? epRes.data : []);
                 setData(epData);
-                setOriginalFilename(epRes.data?.metadata?.original_filename || null);
                 setEpisodeMetadata(epRes.data?.metadata || null);
                 setDirty(false);
             }
@@ -515,7 +513,6 @@ const EpisodeView = () => {
                     projectName={projectName}
                     episodeName={episodeName}
                     activeLanguage={selectedLang || primaryLang}
-                    originalFilename={originalFilename}
                     onDataUpdate={handleEditorDataUpdate}
                     onSave={handleSave}
                     onUpdateGlossary={handleUpdateGlossary}
@@ -552,14 +549,7 @@ const EpisodeView = () => {
                 projectName={projectName}
                 parentProjectName={project?.parent_project}
                 episodeName={episodeName}
-                onTermsAdded={async (newTerms, directToUniverse) => {
-                    if (!directToUniverse) {
-                        const current = glossary?.terms || [];
-                        const merged = [...newTerms, ...current];
-                        await api.updateProject(projectName, { glossary: { terms: merged } });
-                        loadData();
-                    }
-                }}
+                onSaved={() => loadData()}
             />
         </div>
     );

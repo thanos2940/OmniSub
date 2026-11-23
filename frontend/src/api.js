@@ -16,6 +16,19 @@ const API_URL =
 // sites below stay untouched.
 export const AUTH_STORAGE_KEY = 'omnisub_api_key';
 
+// Hand a file to the browser's downloads. The object URL is released a minute later: releasing it at once can
+// cancel the download in some browsers.
+export function saveBlob(data, filename) {
+    const url = window.URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+}
+
 // Every request is bounded (docs/REVIEW_activity_runner_polling_2026-10-26.md, Step 3): a slow server
 // fails a poll instead of parking it on one of the browser's six connections. Calls that start a job or
 // do real work inside the request override the default below.
@@ -89,6 +102,8 @@ export const api = {
     suppressTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/suppress-terms-batch`, { terms }),
     revertTermsBatch: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/revert-terms-batch`, { terms }),
     harvestEpisodeTerms: (projectName, episodeName, model = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/harvest-terms`, { model }, LONG_CALL),
+    // Terms a person picked (e.g. found in chosen episodes) join the glossary with judgment: existing renderings stay.
+    mergeGlossaryTerms: (projectName, terms) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/glossary/merge-terms`, { terms }, LONG_CALL),
     harvestProjectTerms: (projectName, episodeNames = null, model = null) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/harvest-terms`, { episode_names: episodeNames, model }, LONG_CALL),
     checkProjectMissing: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/check-missing`),
     translateProjectMissing: (name) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/translate-missing`, JOB_START),
@@ -166,6 +181,7 @@ export const api = {
                 translation_type: modelOrOptions.translation_type ?? modelOrOptions.translationType ?? 'saved',
                 target_language_name: modelOrOptions.target_language_name,
                 lang: modelOrOptions.lang,
+                overwrite: !!modelOrOptions.overwrite,
             };
         } else {
             payload = {
@@ -191,6 +207,7 @@ export const api = {
                 enhance_glossary: episodeNamesOrOptions.enhance_glossary ?? episodeNamesOrOptions.enhanceGlossary ?? enhanceGlossary,
                 force: episodeNamesOrOptions.force ?? force,
                 translation_type: episodeNamesOrOptions.translation_type ?? episodeNamesOrOptions.translationType ?? translationType,
+                overwrite: !!episodeNamesOrOptions.overwrite,
             };
         } else {
             payload = {
@@ -209,15 +226,7 @@ export const api = {
             { episodes: episodeNames },
             { responseType: 'blob', ...VERY_LONG_CALL }
         );
-
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${projectName}_export.zip`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
+        saveBlob(response.data, `${projectName}_export.zip`);
     },
 
     exportToPath: (projectName, episodeName) =>
@@ -244,8 +253,9 @@ export const api = {
     continuePipeline: (projectName, jobId) => axios.post(`${API_URL}/projects/${encodeURIComponent(projectName)}/pipeline/${jobId}/continue`),
 
     // Downloads
-    downloadEpisode: async (projectName, episodeName) => {
-        const response = await axios.get(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/download`, { responseType: 'blob', ...LONG_CALL });
+    // `lang`: one of the project's other target languages (default: the primary one).
+    downloadEpisode: async (projectName, episodeName, lang = null) => {
+        const response = await axios.get(`${API_URL}/projects/${encodeURIComponent(projectName)}/episodes/${encodeURIComponent(episodeName)}/download`, { responseType: 'blob', params: lang ? { lang } : undefined, ...LONG_CALL });
         // Prefer the server-provided filename (correct language tag AND extension, e.g.
         // .el.ass for ASS sources); a blob URL drops Content-Disposition so we parse it.
         let filename = `${episodeName}.srt`;
@@ -256,14 +266,7 @@ export const api = {
                 try { filename = decodeURIComponent(m[1]); } catch { filename = m[1]; }
             }
         }
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', filename);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(url);
+        saveBlob(response.data, filename);
     },
 
     // Global Settings

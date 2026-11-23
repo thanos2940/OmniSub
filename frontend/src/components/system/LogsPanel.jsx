@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Download, RefreshCw, ScrollText, Search } from 'lucide-react';
-import { api } from '../../api';
+import { api, saveBlob } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { Button, Card, EmptyState, Field, INPUT, Spinner, Toggle } from '../ui';
 import { formatBytes } from './systemFormat';
@@ -103,15 +103,7 @@ export default function LogsPanel() {
     };
 
     const download = () => {
-        const blob = new Blob([(data?.lines || []).join('\n') + '\n'], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${name}.txt`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        URL.revokeObjectURL(url);
+        saveBlob(new Blob([(data?.lines || []).join('\n') + '\n'], { type: 'text/plain' }), `${name}.txt`);
     };
 
     if (!files) return <Spinner label="Looking for log files..." />;

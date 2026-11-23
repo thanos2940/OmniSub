@@ -4,6 +4,7 @@ import { Download, Book, X, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDo
 import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';
+import { useToast } from '../context/ToastContext';
 
 function getDurationSeconds(timecode) {
     if (!timecode || !timecode.includes('-->')) return 0;
@@ -257,7 +258,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
     );
 });
 
-const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDataUpdate, onSave, isLoading, project, projectName, episodeName, activeLanguage, originalFilename, onDeleteLines, onExportToPath, hasMediaPath, dirty, onUpdateTermsInScenes }) => {
+const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDataUpdate, onSave, isLoading, project, projectName, episodeName, activeLanguage, onDeleteLines, onExportToPath, hasMediaPath, dirty, onUpdateTermsInScenes }) => {
     const [showGlossary, setShowGlossary] = useState(false);
     const [selected, setSelected] = useState(new Set());
     const [filterStatus, setFilterStatus] = useState('all'); // all, untranslated, review, edited
@@ -467,72 +468,22 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
         });
     };
 
-    const handleDownload = () => {
-        // ASS/SSA can't be rebuilt correctly in the browser (styles, karaoke and
-        // vector events live in the original document). Fetch the format-correct file
-        // from the server, which reconstructs via the original .ass and names it right.
-        const isAss = Array.isArray(data) && data.some(it => it && it._ass);
-        if (isAss) {
-            api.downloadEpisode(projectName, episodeName);
-            return;
+    // The file the export writes (ASS stays ASS, long lines balanced, untranslated lines left out), in the language
+    // being edited; unsaved changes are saved first so the download is what the editor shows.
+    const toast = useToast();
+    const [downloading, setDownloading] = useState(false);
+    const handleDownload = async () => {
+        setDownloading(true);
+        try {
+            if (dirty && onSave) await onSave();
+            const lang = activeLanguage && activeLanguage !== project?.target_language ? activeLanguage : null;
+            await api.downloadEpisode(projectName, episodeName, lang);
+        } catch (err) {
+            console.error('Download failed', err);
+            toast.error('The subtitle could not be downloaded.');
+        } finally {
+            setDownloading(false);
         }
-        let srtContent = "";
-        data.forEach((item, index) => {
-            const indexNum = index + 1;
-            const timecode = item.timecode;
-            // Use translated text if available, otherwise fallback to original or empty string
-            const text = item.translated || item.original || "";
-
-            srtContent += `${indexNum}\n${timecode}\n${text}\n\n`;
-        });
-
-        // Language code mapping
-        const LANGUAGE_CODES = {
-            "Greek": "el",
-            "English": "en",
-            "Spanish": "es",
-            "French": "fr",
-            "German": "de",
-            "Italian": "it",
-            "Portuguese": "pt",
-            "Russian": "ru",
-            "Japanese": "ja",
-            "Korean": "ko",
-            "Chinese": "zh"
-        };
-
-        // Label the file with the language actually being edited/downloaded (the
-        // EpisodeView language selector), not the project's primary language — the
-        // editor's `translated` field holds the active language's text.
-        const targetLang = activeLanguage || project?.target_language || "English";
-        const langCode = LANGUAGE_CODES[targetLang] || "en";
-
-        // Generate filename with language code
-        let filename = originalFilename || episodeName || "subtitle";
-        const extensions = [".srt", ".ass", ".ssa"];
-        let ext = ".srt";
-        let base = filename;
-
-        for (const e of extensions) {
-            if (filename.toLowerCase().endsWith(e)) {
-                ext = filename.slice(-e.length);
-                base = filename.slice(0, -e.length);
-                break;
-            }
-        }
-
-        // Strip existing language tag (e.g. .en, .el)
-        base = base.replace(/\.[a-zA-Z]{2,3}$/, "");
-
-        filename = `${base}.${langCode}${ext}`;
-
-        const element = document.createElement("a");
-        const file = new Blob([srtContent], { type: 'text/plain' });
-        element.href = URL.createObjectURL(file);
-        element.download = filename;
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
     };
 
     return (
@@ -582,10 +533,11 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
                     )}
                     <button
                         onClick={handleDownload}
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors text-sm font-medium shadow-lg shadow-gray-900/20"
-                        title="Download the subtitle file in your browser"
+                        disabled={downloading}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-600 transition-colors text-sm font-medium shadow-lg shadow-gray-900/20 disabled:opacity-60"
+                        title={dirty ? 'Save the changes and download the subtitle file' : 'Download the subtitle file'}
                     >
-                        <Download className="w-4 h-4" />
+                        {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                         Download
                     </button>
                 </div>

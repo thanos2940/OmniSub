@@ -26,7 +26,9 @@ goes into one priority queue. One of two engines works through it (Settings › 
 Before the first episode of a new show Omnisub builds its **context guide** and **glossary** from what
 Sonarr/Radarr know of it (overview, genres, original language) and a sample of its dialogue, and grows both as
 the show goes on. Each episode is then sent in scene-aware parts with that context; lines that come back
-missing, still in English or on the wrong number get a fix round; the result is checked (alphabet mix-ups,
+missing, still in English or on the wrong number get a fix round. With an agent CLI, a second pass then reads
+each part against the English and corrects what was mistranslated, or flags the lines it is unsure of for the
+Review page (Settings › Translation: correct, only flag, or off). The result is checked (alphabet mix-ups,
 glossary use, alignment) and exported next to the video, and Plex is asked to rescan.
 
 ## Features
@@ -37,6 +39,12 @@ glossary use, alignment) and exported next to the video, and Plex is asked to re
   through untouched; signs and on-screen text are translated; long lines are re-balanced and split on export;
   reading-speed and line-length checks; font scaling for ASS.
 - **Embedded subtitles**: a video with no subtitle file has its English track probed and extracted (ffmpeg).
+  You can also extract the track of any episodes you choose, as ASS or SRT, and have each one translated as
+  soon as its subtitle is in.
+- **Working on a show**: select some episodes (or all of them) to translate only what is missing or everything
+  again, optionally replacing a subtitle file beside the video that Omnisub did not write; extract their
+  subtitles; find glossary terms in them; apply SubtitleEdit fixes; write the subtitles next to the videos or
+  download them as a ZIP.
 - **Automation**: Sonarr/Radarr sync and webhooks, an Autopilot for new imports (and an optional backlog),
   priorities per show, an off-peak window, Plex refresh after every export, on-demand requests over an API
   ([MorpiceHub guide](deploy/morpicehub/README.md)).

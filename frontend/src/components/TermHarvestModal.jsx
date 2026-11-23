@@ -20,7 +20,9 @@ const TermHarvestModal = ({
     projectName,
     parentProjectName = null,
     episodeName = null,
-    onTermsAdded,
+    episodeNames = null,   // several episodes (the project page's selection)
+    onTermsAdded,          // the glossary editor adds them to its own unsaved state; without it they are saved here
+    onSaved,               // after terms were saved here
 }) => {
     const toast = useToast();
     const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ const TermHarvestModal = ({
         if (isOpen) {
             handleScan();
         }
-    }, [isOpen, projectName, episodeName]);
+    }, [isOpen, projectName, episodeName, episodeNames]);
 
     const handleScan = async () => {
         setLoading(true);
@@ -43,7 +45,7 @@ const TermHarvestModal = ({
             if (episodeName) {
                 res = await api.harvestEpisodeTerms(projectName, episodeName);
             } else {
-                res = await api.harvestProjectTerms(projectName);
+                res = await api.harvestProjectTerms(projectName, episodeNames?.length ? episodeNames : null);
             }
             const discovered = res.data?.terms || [];
             setTerms(discovered);
@@ -72,11 +74,29 @@ const TermHarvestModal = ({
     };
 
     const toggleSelectAll = () => {
-        if (selectedIndices.size === filteredTerms.length) {
+        // indices into `terms` of the rows the filter shows
+        const shown = terms.map((t, i) => (filteredTerms.includes(t) ? i : -1)).filter(i => i >= 0);
+        if (shown.every(i => selectedIndices.has(i))) {
             setSelectedIndices(new Set());
         } else {
-            setSelectedIndices(new Set(filteredTerms.map((_, i) => i)));
+            setSelectedIndices(new Set(shown));
         }
+    };
+
+    // Into the glossary: through the editor that opened this, or saved here with judgment (a term already in the
+    // glossary keeps its rendering).
+    const addToProject = async (list) => {
+        if (onTermsAdded) {
+            await onTermsAdded(list, false);
+            return `Added ${list.length} term(s) to the glossary.`;
+        }
+        const res = await api.mergeGlossaryTerms(projectName, list);
+        const { added = 0, conflicts = [], skipped = 0 } = res.data || {};
+        onSaved?.();
+        const notes = [];
+        if (conflicts.length) notes.push(`${conflicts.length} already there with another rendering (kept)`);
+        if (skipped) notes.push(`${skipped} everyday word(s) left out`);
+        return `Added ${added} term(s) to the glossary${notes.length ? `; ${notes.join(', ')}` : ''}.`;
     };
 
     const handleAddSelectedToProject = async () => {
@@ -84,8 +104,7 @@ const TermHarvestModal = ({
         if (selected.length === 0) return;
 
         try {
-            await onTermsAdded(selected, false);
-            toast.success(`Added ${selected.length} term(s) to project glossary!`);
+            toast.success(await addToProject(selected));
             onClose();
         } catch (e) {
             toast.error("Failed to add terms.");
@@ -100,7 +119,8 @@ const TermHarvestModal = ({
         try {
             await api.promoteTermsBatch(projectName, selected);
             toast.success(`Elevated ${selected.length} term(s) directly to ${parentProjectName} Universe!`);
-            onTermsAdded(selected, true);
+            onTermsAdded?.(selected, true);
+            onSaved?.();
             onClose();
         } catch (e) {
             toast.error("Failed to elevate terms to parent universe.");
@@ -113,8 +133,7 @@ const TermHarvestModal = ({
                 await api.promoteTermsBatch(projectName, [term]);
                 toast.success(`Added "${term.term}" to ${parentProjectName} Universe!`);
             } else {
-                await onTermsAdded([term], false);
-                toast.success(`Added "${term.term}" to project glossary!`);
+                toast.success(await addToProject([term]));
             }
             setTerms(prev => prev.filter(t => t.term !== term.term));
         } catch (e) {
@@ -152,12 +171,14 @@ const TermHarvestModal = ({
                             </div>
                             <div>
                                 <h3 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                    Dialogue Term Harvester
+                                    Find glossary terms
                                 </h3>
                                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                     {episodeName
-                                        ? `Scanning dialogue for "${episodeName}"`
-                                        : `Scanning dialogue across "${projectName}"`}
+                                        ? `Names and terms in the translation of ${episodeName}`
+                                        : episodeNames?.length
+                                            ? `Names and terms in the translation of ${episodeNames.length === 1 ? episodeNames[0] : `${episodeNames.length} episodes`}`
+                                            : `Names and terms in the first translated episodes of ${projectName}`}
                                 </p>
                             </div>
                         </div>
