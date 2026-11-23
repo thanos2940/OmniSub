@@ -162,6 +162,16 @@ export default function LibraryPage() {
     ];
 
     const changeTab = (id) => { setTab(id); setSelected(new Set()); setShown(PAGE); };
+    // The first time the library arrives, open on a tab that has something in it (a library of your own
+    // projects only, or only movies, should not greet you with an empty Series tab).
+    const tabChosen = useRef(false);
+    useEffect(() => {
+        if (tabChosen.current || !library) return;
+        tabChosen.current = true;
+        if (groups[tab]?.length) return;
+        const first = ['series', 'movies', 'other'].find(id => groups[id].length);
+        if (first && first !== tab) setTab(first);
+    }, [library, groups, tab]);
     // Another tab, search or filter starts again with the first rows.
     const viewKey = `${tab}|${search}|${filterStatus}|${filterPriority}|${sortBy}`;
     const [lastViewKey, setLastViewKey] = useState(viewKey);
