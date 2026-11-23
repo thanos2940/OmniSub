@@ -31,13 +31,16 @@ def test_fresh_install_setup_not_completed(client, mock_config, monkeypatch):
     assert body["arr_configured"] is False
 
 
+@pytest.mark.real_auth
 def test_setup_status_reflects_configured_state(client, mock_config, monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "fake-key-for-test")
     from utils.auth import generate_api_key
     api_key = generate_api_key()
+    from utils.auth import hash_password
     storage.save_global_config({
         "setup_completed": True,
-        "auth_enabled": True,
+        "auth_username": "admin",
+        "auth_password_hash": hash_password("a-decent-password"),
         "sonarr_enabled": True,
         "api_key": api_key,
     })
@@ -51,11 +54,12 @@ def test_setup_status_reflects_configured_state(client, mock_config, monkeypatch
     assert body["arr_configured"] is True
 
 
-def test_setup_status_reachable_without_auth_header(client, mock_config):
-    """The wizard's first call happens before any credentials exist."""
+@pytest.mark.real_auth
+def test_setup_status_needs_the_login(client, mock_config):
+    """Login is always required: the web app creates the first login before the wizard runs, and the wizard
+    then calls with the key it got."""
     storage.save_global_config({"auth_enabled": False})
-    resp = client.get("/api/setup/status")
-    assert resp.status_code == 200
+    assert client.get("/api/setup/status").status_code == 401
 
 
 def test_migration_marks_existing_install_complete(mock_config, monkeypatch):

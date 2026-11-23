@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { api } from '../api';
+import { api, AUTH_STORAGE_KEY } from '../api';
 import { usePoll } from '../hooks/usePoll';
 
 // Live work on the server, as one snapshot (docs/REVIEW_activity_runner_polling_2026-10-26.md, Step 2).
@@ -500,8 +500,12 @@ export const JobProvider = ({ children }) => {
                 const host = base.replace(/^https?:\/\//, '');
                 // Behind a reverse-proxy path the socket lives under it too (window.__OMNISUB_BASE__).
                 const wsUrl = `${proto}//${host}${apiBase ? '' : (window.__OMNISUB_BASE__ || '')}/api/ws`;
+                // A browser cannot add the X-Api-Key header to a WebSocket: the key goes in the query string.
+                let key = '';
+                try { key = localStorage.getItem(AUTH_STORAGE_KEY) || ''; } catch { /* private mode */ }
+                const wsUrlWithKey = key ? `${wsUrl}?apikey=${encodeURIComponent(key)}` : wsUrl;
 
-                ws = new WebSocket(wsUrl);
+                ws = new WebSocket(wsUrlWithKey);
 
                 ws.onopen = () => {
                     wsConnectedRef.current = true;

@@ -207,6 +207,7 @@ def test_poll_and_reconcile(api):
     assert r.status_code == 200 and r.json()["success"] is False and "sonarr down" in r.json()["summary"]["error"]
 
 
+@pytest.mark.real_auth
 def test_the_api_is_behind_the_api_key_gate(api):
     storage.save_global_config({"auth_enabled": True, "api_key": "k-123"})
     assert api.client.get("/api/autopilot/status").status_code == 401

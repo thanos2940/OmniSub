@@ -65,18 +65,18 @@ def _request_api_key(request: Request) -> Optional[str]:
 
 @router.get("/status")
 async def auth_status(request: Request):
-    """Public. Tells the frontend whether to show the login screen, and whether the
-    caller (if it already sent a key) is currently authenticated."""
+    """Public. What the web app shows first: "create your login" (no credentials yet), the login form, or the
+    app. Login is always required; ``local_bypass`` says whether local addresses are let in without it."""
+    from utils.auth import credentials_set, request_authorized
     config = storage.load_global_config()
-    auth_enabled = bool(config.get("auth_enabled"))
-    authenticated = False
-    if auth_enabled:
-        supplied = _request_api_key(request)
-        stored = config.get("api_key") or ""
-        authenticated = bool(supplied) and bool(stored) and supplied == stored
-    else:
-        authenticated = True  # nothing to authenticate against
-    return {"auth_enabled": auth_enabled, "authenticated": authenticated}
+    client_host = request.client.host if request.client else ""
+    return {
+        "auth_enabled": True,
+        "credentials_set": credentials_set(config),
+        "authenticated": credentials_set(config) and request_authorized(config, request.headers, client_host),
+        "username": config.get("auth_username") or "" if credentials_set(config) else "",
+        "local_bypass": bool(config.get("auth_local_bypass")),
+    }
 
 
 @router.post("/login")
@@ -87,8 +87,8 @@ async def login(body: LoginRequest, request: Request):
     _check_lockout(ip)
 
     config = storage.load_global_config()
-    if not config.get("auth_enabled") or not config.get("auth_username"):
-        raise HTTPException(status_code=400, detail="Authentication is not configured on this server.")
+    if not config.get("auth_username") or not config.get("auth_password_hash"):
+        raise HTTPException(status_code=400, detail="No login exists yet: create it first.")
 
     stored_hash = config.get("auth_password_hash") or ""
     username_ok = body.username == config.get("auth_username")
@@ -109,9 +109,8 @@ async def login(body: LoginRequest, request: Request):
 
 @router.post("/credentials")
 async def set_credentials(body: CredentialsRequest, request: Request):
-    """Set or change the username/password. Reachable without a key only while
-    auth is not yet enabled (first-run bootstrap) — once auth_enabled is true,
-    the standard X-Api-Key middleware gates this endpoint like any other."""
+    """Set or change the username/password. Reachable without a key only while no credentials exist (the first
+    login, created from the web app); after that the API-key gate covers it like any other endpoint."""
     if len(body.password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
     if not body.username.strip():
@@ -133,8 +132,19 @@ async def set_credentials(body: CredentialsRequest, request: Request):
 
 @router.post("/disable")
 async def disable_auth():
-    """Turn authentication off. Gated by the middleware like any other endpoint
-    once auth is enabled, so this requires already being authenticated."""
-    storage.save_global_config({"auth_enabled": False})
-    logger.warning("Authentication disabled via /api/auth/disable")
-    return {"status": "success"}
+    """Login can no longer be switched off. Kept so an older web app gets a clear answer."""
+    raise HTTPException(status_code=400, detail="Login is always required. Settings › Security can let devices on "
+                                                "your own network in without it.")
+
+
+class LocalBypassRequest(BaseModel):
+    enabled: bool
+
+
+@router.post("/local-bypass")
+async def set_local_bypass(body: LocalBypassRequest):
+    """Let devices that connect directly from this machine or the local network in without a login (requests
+    through a reverse proxy still need it). Gated by the API key like any other endpoint."""
+    storage.save_global_config({"auth_local_bypass": bool(body.enabled)})
+    logger.warning("Login for local addresses %s", "no longer required" if body.enabled else "required again")
+    return {"status": "success", "local_bypass": bool(body.enabled)}

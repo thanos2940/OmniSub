@@ -31,6 +31,7 @@ ALLOWLIST = {
     "auth_username",
     "auth_password_hash",
     "api_key",
+    "auth_local_bypass",     # "not for local addresses": only POST /api/auth/local-bypass writes it
     "macro_chunking",
     # Agent runner keys read from the runner's own config (self.config), saved through
     # PUT /api/agent/runner/config, not the global settings.

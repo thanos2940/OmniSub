@@ -6,6 +6,8 @@ from utils import storage
 from utils.auth import hash_password, generate_api_key
 import routers.auth as auth_router
 
+pytestmark = pytest.mark.real_auth   # these tests are about the login gate itself
+
 
 @pytest.fixture
 def mock_config(monkeypatch, tmp_path):
@@ -56,10 +58,16 @@ def test_wrong_key_rejected(client, auth_configured):
     assert resp.status_code == 401
 
 
-def test_auth_disabled_by_default_leaves_api_open(client, mock_config):
-    # No credentials configured at all — auth_enabled defaults to falsy.
+def test_login_is_required_even_before_credentials_exist(client, mock_config):
+    # A fresh install: nothing is open until the first login is created (only creating it is).
     resp = client.get("/projects")
-    assert resp.status_code == 200
+    assert resp.status_code == 401 and resp.json()["credentials_set"] is False
+
+
+def test_an_old_auth_disabled_flag_no_longer_opens_the_api(client, auth_configured):
+    storage.save_global_config({"auth_enabled": False})   # what "disable" used to store
+    assert client.get("/projects").status_code == 401
+    assert client.post("/api/auth/disable").status_code in (400, 401)
 
 
 def test_health_is_always_exempt(client, auth_configured):
@@ -310,3 +318,50 @@ def test_settings_cannot_set_auth_fields_directly(client, mock_config, auth_conf
     assert config["auth_enabled"] is True
     assert config["auth_username"] == "admin"
     assert config["api_key"] == original_key
+
+
+# --- Login is always required; "not for local addresses" -------------------
+
+def test_first_login_can_be_created_only_once(client, mock_config):
+    assert client.get("/api/auth/status").json()["credentials_set"] is False
+    resp = client.post("/api/auth/credentials", json={"username": "me", "password": "a-decent-password"})
+    assert resp.status_code == 200
+    key = resp.json()["api_key"]
+    status = client.get("/api/auth/status").json()
+    assert status["credentials_set"] is True and status["authenticated"] is False
+    assert client.get("/api/auth/status", headers={"X-Api-Key": key}).json()["authenticated"] is True
+    # the second visitor cannot replace it
+    again = client.post("/api/auth/credentials", json={"username": "other", "password": "another-password"})
+    assert again.status_code == 401
+
+
+def test_local_addresses_need_no_login_only_when_asked(auth_configured):
+    from utils.auth import is_local_request, request_authorized
+    config = storage.load_global_config()
+    assert not request_authorized(config, {}, "192.168.1.20")
+    config["auth_local_bypass"] = True
+    assert request_authorized(config, {}, "192.168.1.20") and request_authorized(config, {}, "127.0.0.1")
+    assert request_authorized(config, {}, "::ffff:10.0.0.5")
+    assert not request_authorized(config, {}, "8.8.8.8")
+    # through a reverse proxy nobody is "local", even when the proxy runs on this machine
+    assert not request_authorized(config, {"x-forwarded-for": "203.0.113.9"}, "127.0.0.1")
+    assert not is_local_request("testclient", {})
+
+
+def test_the_local_bypass_switch_needs_the_key(client, auth_configured):
+    assert client.post("/api/auth/local-bypass", json={"enabled": True}).status_code == 401
+    resp = client.post("/api/auth/local-bypass", json={"enabled": True}, headers={"X-Api-Key": auth_configured})
+    assert resp.status_code == 200 and storage.load_global_config()["auth_local_bypass"] is True
+
+
+def test_the_event_feed_needs_the_key(client, auth_configured):
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect("/api/ws") as ws:
+            ws.send_text("ping")
+            ws.receive_text()
+    with client.websocket_connect(f"/api/ws?apikey={auth_configured}") as ws:
+        ws.send_text("ping")
+        assert ws.receive_text() == "pong"
+    assert client.get("/api/events").status_code == 401
+    assert client.get("/api/events", headers={"X-Api-Key": auth_configured}).status_code == 200

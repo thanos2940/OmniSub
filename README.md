@@ -82,18 +82,21 @@ For a single process, build the UI (`npm run build`) and copy `frontend/dist` to
 
 ## First run
 
-A setup wizard asks for the target language, who translates (agent CLI or Gemini API key), a username and
-password, and Sonarr/Radarr. Everything can be changed later in Settings. For an agent CLI, run it once in a
-terminal **as the account Omnisub runs as** and sign in; Omnisub cannot do that step for you.
+Open the web app and create your login (username and password): Omnisub always asks for one, and until it
+exists nothing else answers. A setup wizard then asks for the target language, who translates (agent CLI or
+Gemini API key) and Sonarr/Radarr. Everything can be changed later in Settings. For an agent CLI, run it once
+in a terminal **as the account Omnisub runs as** and sign in; Omnisub cannot do that step for you.
 
 Source subtitles must be **English**: the prompts, the checks and the glossary matching are written for an
 English source.
 
 ## Security
 
-- Set a username and password (the wizard asks; Settings › Security later) before the server is reachable from
-  anywhere but your own machine. Sonarr/Radarr webhooks then need the webhook token shown in Settings ›
-  Connections.
+- A login is always required (like Sonarr v4). The first person to open a new install creates it, so open the
+  web app right after installing. Settings › Security changes it, and can let devices on your own network in
+  without it ("Not for local addresses"); visitors through a reverse proxy or from the internet always need it.
+- Scripts and other tools (MorpiceHub) send the API key from Settings › Security as the `X-Api-Key` header.
+  Sonarr/Radarr webhooks carry their own token (Settings › Connections).
 - Browsers may only call the API from the app itself (and the Vite dev server); requests that another website
   makes through your browser are refused. If you serve the UI from a different origin, list it in
   `cors_allow_origins` in `config.json`.

@@ -36,8 +36,15 @@ if (Test-Path $lock) {
     } catch { Show 'Server process' 'lock file unreadable' }
 } else { Show 'Server process' "no lock file in $DataDir (not running, or a different -DataDir)" }
 
+# Login is always required: the API key in the data folder's config.json opens the API for this script.
+$apiHeaders = @{}
+$configFile = Join-Path $DataDir 'config.json'
+if (Test-Path $configFile) {
+    try { $cfg = Get-Content $configFile -Raw | ConvertFrom-Json; if ($cfg.api_key) { $apiHeaders['X-Api-Key'] = $cfg.api_key } } catch { }
+}
+
 function Get-Json($url) {
-    try { return @{ Ok = $true; Data = (Invoke-RestMethod -Uri $url -TimeoutSec 5) } }
+    try { return @{ Ok = $true; Data = (Invoke-RestMethod -Uri $url -Headers $apiHeaders -TimeoutSec 5) } }
     catch {
         $code = $null; if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
         return @{ Ok = $false; Code = $code; Error = $_.Exception.Message }

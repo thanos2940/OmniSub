@@ -116,6 +116,7 @@ def test_list_shows_only_existing_whitelisted_logs(client, logs):
     assert sizes == {"omnisub": 1, "service_console": 2}
 
 
+@pytest.mark.real_auth
 def test_logs_and_status_sit_behind_the_api_key_gate(client, logs, tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "CONFIG_FILE", tmp_path / "config.json")
     key = generate_api_key()

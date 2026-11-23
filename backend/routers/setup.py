@@ -8,6 +8,7 @@ can decide what to show.
 from fastapi import APIRouter
 
 from utils import storage
+from utils.auth import credentials_set
 from routers.settings import has_api_key
 
 router = APIRouter()
@@ -18,7 +19,7 @@ async def setup_status():
     config = storage.load_global_config()
     return {
         "setup_completed": bool(config.get("setup_completed")),
-        "auth_configured": bool(config.get("auth_enabled")),
+        "auth_configured": credentials_set(config),
         "has_gemini_key": has_api_key(),
         "arr_configured": bool(config.get("sonarr_enabled") or config.get("radarr_enabled")),
     }

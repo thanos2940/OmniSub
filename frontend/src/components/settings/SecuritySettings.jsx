@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api, AUTH_STORAGE_KEY } from '../../api';
 import { useToast } from '../../context/ToastContext';
-import { Button, Card, Field, INPUT, StatusChip, Toggle } from '../ui';
+import { Button, Card, Field, INPUT, Toggle } from '../ui';
 import { CopyButton, errorText, FieldGrid, Notice } from './parts';
 
 function readStoredKey() {
@@ -26,9 +25,10 @@ export default function SecuritySettings() {
     const load = useCallback(async () => {
         try {
             const res = await api.getAuthStatus();
-            setStatus(res.data || { auth_enabled: false });
+            setStatus(res.data || {});
+            if (res.data?.username) setUsername(prev => prev || res.data.username);
         } catch {
-            setStatus({ auth_enabled: false });
+            setStatus({});
         }
         setApiKey(readStoredKey());
     }, []);
@@ -59,24 +59,43 @@ export default function SecuritySettings() {
         }
     };
 
-    const secured = !!status?.auth_enabled;
+    const localBypass = !!status?.local_bypass;
+    const [bypassBusy, setBypassBusy] = useState(false);
+    const setLocalBypass = async (enabled) => {
+        setBypassBusy(true);
+        try {
+            await api.setLocalBypass(enabled);
+            toast.success(enabled ? 'Devices on your network no longer need the login' : 'Every device needs the login again');
+            await load();
+        } catch (err) {
+            toast.error(errorText(err, 'Could not change it'));
+        } finally {
+            setBypassBusy(false);
+        }
+    };
+    const logOut = () => {
+        try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* private mode */ }
+        window.location.reload();
+    };
     return (
         <div className="space-y-5">
-            {status && (
-                <Notice tone={secured ? 'success' : 'warning'}>
-                    <p className="flex items-center gap-1.5 font-medium">
-                        {secured ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
-                        {secured ? 'A login is required' : 'No login is set'}
-                    </p>
-                    <p>
-                        {secured
-                            ? 'Every page and API call needs the login or the API key.'
-                            : 'Anyone who can reach this address can use Omnisub. Set a login below, especially before exposing it through a reverse proxy.'}
-                    </p>
-                </Notice>
-            )}
+            <Notice tone="success">
+                <p className="font-medium">A login is always required</p>
+                <p>Every page and API call needs the login or the API key{localBypass ? ', except from devices on your own network' : ''}. Sonarr/Radarr webhooks use their own token.</p>
+            </Notice>
 
-            <Card title="Login" subtitle="One administrator account." actions={status && <StatusChip tone={secured ? 'success' : 'warning'}>{secured ? 'Secured' : 'Open'}</StatusChip>}>
+            <Card title="Who needs the login">
+                <Toggle
+                    label="Not for local addresses"
+                    description="This computer and devices on your home network that connect directly need no login. Visitors through a reverse proxy (Caddy) or from the internet always do."
+                    checked={localBypass}
+                    disabled={bypassBusy || !status}
+                    onChange={setLocalBypass}
+                />
+            </Card>
+
+            <Card title="Login" subtitle={status?.username ? `One administrator account: ${status.username}.` : 'One administrator account.'}
+                actions={<Button size="sm" variant="ghost" onClick={logOut}>Log out</Button>}>
                 <form onSubmit={submit} className="space-y-4" noValidate>
                     <Field label="Username" htmlFor="sec-user">
                         <input id="sec-user" className={INPUT} autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" />
@@ -92,7 +111,7 @@ export default function SecuritySettings() {
                     <Toggle label="Generate a new API key" description="Tools using the old key, such as MorpiceHub, stop working until you give them the new one." checked={regenerate} onChange={setRegenerate} />
                     {error && <Notice tone="danger">{error}</Notice>}
                     <div className="flex justify-end">
-                        <Button type="submit" variant="primary" loading={saving} disabled={!username.trim() || !password}>{secured ? 'Update login' : 'Set login'}</Button>
+                        <Button type="submit" variant="primary" loading={saving} disabled={!username.trim() || !password}>Update login</Button>
                     </div>
                 </form>
             </Card>

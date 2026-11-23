@@ -60,7 +60,7 @@ export const api = {
     login: (username, password) => axios.post(`${API_URL}/api/auth/login`, { username, password }),
     setCredentials: (username, password, regenerateApiKey = false) =>
         axios.post(`${API_URL}/api/auth/credentials`, { username, password, regenerate_api_key: regenerateApiKey }),
-    disableAuth: () => axios.post(`${API_URL}/api/auth/disable`),
+    setLocalBypass: (enabled) => axios.post(`${API_URL}/api/auth/local-bypass`, { enabled }),
 
     // Setup wizard (docs/PLAN_onboarding_wizard.md)
     getSetupStatus: () => axios.get(`${API_URL}/api/setup/status`),

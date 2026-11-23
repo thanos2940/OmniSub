@@ -93,3 +93,13 @@ def no_review_pass(monkeypatch):
     prompts were written before it. Tests of the review turn it on for their run (``review="fix"``)."""
     from services import agent_runner
     monkeypatch.setitem(agent_runner.DEFAULT_CONFIG, "review", "off")
+
+
+@pytest.fixture(autouse=True)
+def login_not_required(request, monkeypatch):
+    """Login is always required (utils/auth.py). Tests of the API itself call it without a key; tests of the
+    login gate carry the ``real_auth`` marker and see the real check."""
+    if request.node.get_closest_marker("real_auth"):
+        return
+    from utils import auth
+    monkeypatch.setattr(auth, "request_authorized", lambda *a, **k: True)

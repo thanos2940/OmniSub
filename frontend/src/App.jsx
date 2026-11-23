@@ -45,6 +45,7 @@ function App() {
     // therefore never 401-storm the console — while a login is pending.
     const [authChecked, setAuthChecked] = useState(false);
     const [needsLogin, setNeedsLogin] = useState(false);
+    const [noLoginYet, setNoLoginYet] = useState(false);   // a fresh install: the first login is created first
 
     // First-run setup wizard (docs/PLAN_onboarding_wizard.md) — checked once
     // auth is resolved (it's a protected /api/ endpoint once auth is enabled).
@@ -55,7 +56,7 @@ function App() {
         checkAuthStatus();
         const handleUnauthorized = () => {
             localStorage.removeItem(AUTH_STORAGE_KEY);
-            setNeedsLogin(true);
+            checkAuthStatus();
         };
         window.addEventListener('omnisub:unauthorized', handleUnauthorized);
         return () => {
@@ -66,11 +67,13 @@ function App() {
     const checkAuthStatus = async () => {
         try {
             const res = await api.getAuthStatus();
-            setNeedsLogin(!!res.data.auth_enabled && !res.data.authenticated);
+            // Login is always required (older servers answer without credentials_set: treat them as before).
+            const created = res.data.credentials_set ?? true;
+            setNoLoginYet(!created);
+            setNeedsLogin(!created || (!!res.data.auth_enabled && !res.data.authenticated));
         } catch (error) {
             console.error('Failed to check auth status:', error);
-            // Fail open on a broken status check rather than locking the user
-            // out of a server that may not even have auth configured.
+            // The protected calls that follow get a 401 and bring the login form back if one is needed.
             setNeedsLogin(false);
         } finally {
             setAuthChecked(true);
@@ -105,7 +108,7 @@ function App() {
     if (needsLogin) {
         return (
             <ErrorBoundary title="Authentication Error">
-                <LoginPage onLoggedIn={() => setNeedsLogin(false)} />
+                <LoginPage create={noLoginYet} onLoggedIn={() => { setNoLoginYet(false); setNeedsLogin(false); }} />
             </ErrorBoundary>
         );
     }

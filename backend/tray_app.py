@@ -323,6 +323,13 @@ class ServerSupervisor:
         self.is_healthy = False
         return {}
 
+    def _api_key(self) -> str:
+        """The server's API key, from config.json in the data folder ("" when unreadable)."""
+        try:
+            return json.loads((self.data_dir / "config.json").read_text(encoding="utf-8")).get("api_key") or ""
+        except Exception:
+            return ""
+
     def toggle_agent_runner(self) -> bool:
         """Toggle Agent Runner state (start or stop)."""
         health = self.check_health()
@@ -331,10 +338,12 @@ class ServerSupervisor:
 
         action = "stop" if is_running else "start"
         url = f"http://127.0.0.1:{self.port}/api/agent/runner/{action}"
+        headers = {"Content-Type": "application/json"}
+        key = self._api_key()
+        if key:   # login is always required; the API key in the data folder's config is the tray's way in
+            headers["X-Api-Key"] = key
         try:
-            req = urllib.request.Request(
-                url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST"
-            )
+            req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=5.0) as resp:
                 return resp.status in (200, 204)
         except Exception as e:

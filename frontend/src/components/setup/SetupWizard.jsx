@@ -4,42 +4,29 @@ import { X } from 'lucide-react';
 import { api } from '../../api';
 import StepWelcome from './StepWelcome';
 import StepProvider from './StepProvider';
-import StepSecurity from './StepSecurity';
 import StepArr from './StepArr';
 import StepPathCheck from './StepPathCheck';
 import StepFinish from './StepFinish';
 
-// First-run setup wizard (docs/PLAN_onboarding_wizard.md). Every step writes
-// through the same endpoints Settings itself uses — this is an orchestration
-// layer, not a parallel persistence path. Fresh installs are forced through
-// it once (App.jsx gates on GET /api/setup/status); existing installs never
-// see it unless the user re-opens it from Settings.
-//
-// The wizard as a whole is always closeable (X / "skip setup") — closing it
-// just leaves auth unconfigured, which surfaces as a persistent warning
-// elsewhere (TopBar, Settings) rather than a hard lockout. The one place that
-// can't be skipped is the Security step's own inline skip button while no
-// credentials exist yet — see the onSkip computation below.
+// First-run setup wizard (docs/PLAN_onboarding_wizard.md). Every step writes through the same endpoints
+// Settings itself uses — an orchestration layer, not a parallel persistence path. Fresh installs go through it
+// once (App.jsx gates on GET /api/setup/status) after creating their login (always required, App.jsx asks for
+// it first); existing installs never see it unless the user re-opens it from Settings. It can be closed at
+// any time: everything it sets is in Settings too.
 const SetupWizard = ({ onFinished }) => {
     const [stepIndex, setStepIndex] = useState(0);
-    const [authRequired, setAuthRequired] = useState(false);
     const [arrConfiguredThisRun, setArrConfiguredThisRun] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Whether step 3 (Security) can be skipped depends on whether auth was
-        // already configured before the wizard opened (re-run case) — a truly
-        // fresh install can't skip it.
         api.getSetupStatus()
-            .then(res => setAuthRequired(!res.data.auth_configured))
-            .catch(() => setAuthRequired(false))
+            .catch(() => null)
             .finally(() => setLoading(false));
     }, []);
 
     const steps = [
         { key: 'welcome', Component: StepWelcome },
         { key: 'provider', Component: StepProvider },
-        { key: 'security', Component: StepSecurity },
         { key: 'arr', Component: StepArr },
         { key: 'path', Component: StepPathCheck },
         { key: 'finish', Component: StepFinish },
@@ -69,7 +56,6 @@ const SetupWizard = ({ onFinished }) => {
     if (loading) return null;
 
     const { Component } = steps[stepIndex];
-    const isSecurityStep = steps[stepIndex].key === 'security';
     const isLast = stepIndex === steps.length - 1;
 
     return (
@@ -105,7 +91,7 @@ const SetupWizard = ({ onFinished }) => {
                             <Component
                                 onNext={goNext}
                                 onBack={stepIndex > 0 ? goBack : null}
-                                onSkip={!(isSecurityStep && authRequired) ? goNext : null}
+                                onSkip={goNext}
                                 onFinish={finish}
                                 isLast={isLast}
                                 setArrConfiguredThisRun={setArrConfiguredThisRun}

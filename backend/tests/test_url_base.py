@@ -175,6 +175,7 @@ def real_client(tmp_path, monkeypatch):
 @pytest.mark.parametrize("path", [
     "/api/settings", "/omnisub/api/settings", "/omnisub/omnisub/api/settings", "/omnisub/projects", "/omnisub/api/system/logs",
 ])
+@pytest.mark.real_auth
 def test_the_prefix_does_not_bypass_the_api_key_gate(real_client, path):
     client, key = real_client
     resp = client.get(path, headers=AXIOS)
@@ -183,6 +184,7 @@ def test_the_prefix_does_not_bypass_the_api_key_gate(real_client, path):
     assert key not in resp.text and "auth_enabled" not in resp.text
 
 
+@pytest.mark.real_auth
 def test_the_api_works_under_the_prefix_with_the_key(real_client):
     client, key = real_client
     resp = client.get("/omnisub/api/system/logs/list", headers={"X-Api-Key": key})
@@ -190,8 +192,9 @@ def test_the_api_works_under_the_prefix_with_the_key(real_client):
     assert client.get("/omnisub/api/health").status_code == 200
 
 
+@pytest.mark.real_auth
 def test_websocket_path_is_stripped_too(real_client):
-    client, _ = real_client
-    with client.websocket_connect("/omnisub/api/ws") as ws:
+    client, key = real_client
+    with client.websocket_connect(f"/omnisub/api/ws?apikey={key}") as ws:
         ws.send_text("ping")
         assert ws.receive_text() == "pong"

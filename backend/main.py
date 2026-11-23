@@ -8,7 +8,6 @@ and AI-powered subtitle translation using ADK agents.
 import os
 import asyncio
 import logging
-import secrets as _secrets
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 from pathlib import Path
@@ -292,9 +291,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to load GOOGLE_API_KEY from config.json: {e}")
 
-    # Generate the auth API key and webhook secret on first boot (idempotent).
-    # These exist unconditionally — even with auth_enabled=false — so enabling
-    # auth later, or configuring a webhook, never needs a restart.
+    # Generate the API key and webhook secret on first boot (idempotent): the web app gets the key at login,
+    # scripts and MorpiceHub send it, Sonarr/Radarr webhooks carry the token.
     try:
         _cfg = storage.load_global_config()
         _updates = {}
@@ -305,11 +303,11 @@ async def lifespan(app: FastAPI):
         if _updates:
             storage.save_global_config(_updates)
             logger.info(f"Generated missing secret(s) on first boot: {sorted(_updates.keys())}")
-        if not _cfg.get("auth_enabled"):
+        from utils.auth import credentials_set
+        if not credentials_set(_cfg):
             logger.warning(
-                "Authentication is DISABLED. Anyone who can reach this server can "
-                "read your settings and control translations. Set credentials in "
-                "Settings -> Security (or the setup wizard) to secure it."
+                "No login exists yet: the first person to open the web app creates it, and until then nothing "
+                "else is reachable. Open it now to set your username and password."
             )
     except Exception as e:
         logger.warning(f"Auth secret bootstrap skipped (non-critical): {e}")
@@ -491,8 +489,8 @@ async def refuse_cross_site_writes(request: Request, call_next):
         return JSONResponse({"detail": "Cross-site request refused."}, status_code=403)
     return await call_next(request)
 
-# Auth gate: when auth_enabled, every request under a PROTECTED prefix needs a
-# matching X-Api-Key header, except the small allowlist below. Everything else
+# Auth gate: every request under a PROTECTED prefix needs the API key (or comes from a local address while
+# "not for local addresses" is on), except the small allowlist below. Everything else
 # (the built SPA's index.html/JS/CSS, and — in dev — any path Vite would have
 # served) stays public: the frontend shell has to be reachable before a user
 # has logged in, the same way any self-hosted app's own login page is public.
@@ -507,25 +505,30 @@ async def refuse_cross_site_writes(request: Request, call_next):
 # bug, not an RCE — the executable-path/settings/webhook endpoints themselves
 # are still individually hardened regardless of this gate).
 _PROTECTED_PREFIXES = ("/api/", "/projects", "/jobs", "/integrations", "/rate-limit", "/settings")
-_AUTH_EXEMPT_PATHS = {"/api/health", "/docs", "/openapi.json", "/redoc", "/api/events", "/api/events/poll", "/api/ws", "/ws"}
+_AUTH_EXEMPT_PATHS = {"/api/health", "/docs", "/openapi.json", "/redoc"}
 # /api/backup/download/<token>: a one-time link minted by the authenticated /api/backup/export-link.
 _AUTH_EXEMPT_PREFIXES = ("/api/auth/login", "/api/auth/status", "/api/webhook/", "/api/backup/download/")
+_FIRST_LOGIN_PATH = "/api/auth/credentials"   # open only while no username/password exists yet
 
 
 @app.middleware("http")
 async def require_api_key(request: Request, call_next):
+    """Login is always required (utils/auth.py): every protected path needs the API key (the web app has it
+    after login), except the few that must work without one. On a fresh install, before any credentials
+    exist, the only thing open is creating them."""
     if request.method == "OPTIONS":
         return await call_next(request)
-
-    config = storage.load_global_config()
-    if config.get("auth_enabled"):
-        path = request.url.path
-        is_protected = path.startswith(_PROTECTED_PREFIXES)
-        if is_protected and path not in _AUTH_EXEMPT_PATHS and not path.startswith(_AUTH_EXEMPT_PREFIXES):
-            stored = config.get("api_key") or ""
-            supplied = request.headers.get("X-Api-Key", "")
-            if not stored or not _secrets.compare_digest(supplied, stored):
-                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    path = request.url.path
+    if path.startswith(_PROTECTED_PREFIXES) and path not in _AUTH_EXEMPT_PATHS \
+            and not path.startswith(_AUTH_EXEMPT_PREFIXES):
+        from utils import auth as auth_utils
+        config = storage.load_global_config()
+        client_host = request.client.host if request.client else ""
+        if not auth_utils.request_authorized(config, request.headers, client_host):
+            first_login = not auth_utils.credentials_set(config)
+            if not (first_login and path == _FIRST_LOGIN_PATH and request.method == "POST"):
+                return JSONResponse({"detail": "Unauthorized", "credentials_set": not first_login},
+                                    status_code=401)
 
     return await call_next(request)
 
@@ -586,8 +589,14 @@ async def health_check():
 async def websocket_endpoint(websocket: WebSocket):
     """Real-time event feed for browser UI (agent submissions, queue updates, disk sync)."""
     from utils.event_broadcaster import broadcaster
+    from utils import auth as auth_utils
     if _cross_site(websocket.headers):   # another site's page must not read the event feed
         await websocket.close(code=1008)
+        return
+    client_host = websocket.client.host if websocket.client else ""
+    if not auth_utils.request_authorized(storage.load_global_config(), websocket.headers, client_host,
+                                         websocket.query_params.get("apikey", "")):
+        await websocket.close(code=1008)   # the feed names projects and episodes: login required like the API
         return
     await broadcaster.connect(websocket)
     try:

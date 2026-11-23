@@ -74,6 +74,7 @@ def test_webhook_urls_without_a_token(client):
     assert body == {"configured": False, "sonarr": "/api/webhook/sonarr", "radarr": "/api/webhook/radarr"}
 
 
+@pytest.mark.real_auth
 def test_webhook_urls_need_the_api_key_when_login_is_on(client):
     cfg = storage.load_global_config()
     cfg.update({"auth_enabled": True, "api_key": "k-123", "webhook_secret": "abc"})
