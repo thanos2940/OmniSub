@@ -75,3 +75,13 @@ def no_real_runner_autostart(request, monkeypatch):
         return
     from services import agent_runner
     monkeypatch.setattr(agent_runner, "autostart", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def no_real_agent_cli(monkeypatch):
+    """No test may find the agent CLIs installed on the machine (agy, claude, gemini): with the agent engine as
+    the default, any code path that asks the CLI (term harvest, retranslate-line, the guide buttons) would
+    spend a real request and quota on the developer's account. A test that wants a CLI points
+    ``OMNISUB_<ENGINE>_CMD`` at tests/fake_agent_cli.py or patches ``agent_cli.engine_command``."""
+    from services import agent_cli
+    monkeypatch.setattr(agent_cli, "_locate", lambda engine: None)

@@ -161,12 +161,16 @@ class TestGlossaryEnhancementAcrossEpisodes:
         with patch("utils.storage.PROJECTS_DIR", tmp_path / "projects"):
             storage.save_project_metadata(project_name, initial_meta)
 
-            with patch("adk_agents.llm_factory.generate", AsyncMock(return_value=mock_harvest_response)):
+            # The Gemini path is the one mocked here: without forcing it, the default agent engine would ask
+            # the agent CLI (and, where one is installed, spend a real request).
+            with patch("adk_agents.llm_factory.generate", AsyncMock(return_value=mock_harvest_response)), \
+                    patch("services.agy_llm.agent_mode", return_value=False):
                 new_terms = await harvest_terms_from_lines(
                     source_lines=["Hello Nezuko!"],
                     target_lines=["Γεια σου Νέζουκο!"],
                     target_language="Greek",
                     existing_glossary=initial_meta["glossary"],
+                    japanese_work=True,
                 )
 
                 assert len(new_terms) == 1

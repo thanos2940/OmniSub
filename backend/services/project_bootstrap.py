@@ -184,9 +184,12 @@ def project_brief(meta: Dict) -> Dict:
     """What the metadata knows of the work besides its name (Sonarr/Radarr fields, when sync stored them)."""
     def first(*keys):
         return next((meta[k] for k in keys if meta.get(k)), None)
+    from utils.work_origin import original_language
     genres = first("genres", "arr_genres") or []
     return {"year": first("year", "arr_year"), "overview": first("overview", "arr_overview"),
             "genres": genres if isinstance(genres, list) else [genres],
+            "original_language": original_language(meta),
+            "anime": str(meta.get("series_type") or "").lower() == "anime" or meta.get("is_anime") is True,
             "movie": meta.get("arr_media_type") == "movie" or str(meta.get("type", "")).lower() == "movie"}
 
 

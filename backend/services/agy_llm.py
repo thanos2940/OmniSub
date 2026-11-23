@@ -221,7 +221,9 @@ def line_context(project: str, cues: List[Dict], index: int, lang_code: str, is_
     guide = (meta.get("context_guide") or "").strip()
     if len(guide) > GUIDE_EXCERPT:
         guide = guide[:GUIDE_EXCERPT].rsplit("\n", 1)[0] + "\n…"
+    from utils.work_origin import is_japanese_work
     return {"target_name": target_name, "before": before, "after": after, "guide": guide,
+            "japanese_work": is_japanese_work(meta),
             "glossary_lines": brief_lines(shared["matcher"].find_all([text])),
             "characters": runner._characters(project, shared["glossary"], [text] + [s for s, _ in before + after])}
 
@@ -235,7 +237,8 @@ def retranslate_line(project: str, episode: str, cues: List[Dict], index: int, l
     cue = cues[index]
     source = cue.get("original", "")
     ctx = line_context(project, cues, index, lang_code, is_primary)
-    static = ap.static_part(ctx["target_name"], ctx["guide"], build_style_guide(ctx["target_name"]))
+    static = ap.static_part(ctx["target_name"], ctx["guide"],
+                            build_style_guide(ctx["target_name"], japanese_work=ctx["japanese_work"]))
     prompt = ap.line_prompt(static, title=f"{project} — {episode}", text=source, before=ctx["before"],
                             after=ctx["after"], characters=ctx["characters"], glossary_lines=ctx["glossary_lines"],
                             glossary_note=GLOSSARY_INSTRUCTION, current=aw.cue_translation(cue, lang_code, is_primary))

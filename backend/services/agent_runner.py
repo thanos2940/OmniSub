@@ -1387,6 +1387,7 @@ class AgentRunner:
         prompt. Reused for a few minutes; a changed glossary or context guide builds a new one."""
         from utils.translation_rules import build_style_guide
         from utils.glossary_judgment import Matcher, project_vocabulary
+        from utils.work_origin import is_japanese_work
         proj_meta = storage.load_resolved_project_metadata(project) or {}
         glossary = proj_meta.get("glossary") or {"terms": []}
         guide = (proj_meta.get("context_guide") or "").strip()
@@ -1400,7 +1401,8 @@ class AgentRunner:
                 return hit["value"]
         value = {"glossary": glossary, "has_guide": bool(guide),
                  "matcher": Matcher(terms, project_vocabulary(project)),
-                 "static": ap.static_part(target_name, guide, build_style_guide(target_name))}
+                 "static": ap.static_part(target_name, guide, build_style_guide(
+                     target_name, japanese_work=is_japanese_work(proj_meta)))}
         with self.lock:
             self._shared = {k: v for k, v in self._shared.items() if now - v["at"] < CONTEXT_CACHE_SECONDS}
             self._shared[key] = {"at": now, "stamp": stamp, "value": value}

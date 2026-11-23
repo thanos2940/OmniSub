@@ -13,8 +13,9 @@ from typing import List, Dict, Optional, Tuple
 
 from utils import storage
 from utils.llm_utils import loads_tolerant, strip_reasoning_blocks
-from utils.text_normalize import fix_japanese_name_greek_tonos
+from utils.text_normalize import normalize_japanese_term
 from utils.language_codes import to_code
+from utils.work_origin import is_japanese_work
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,10 @@ async def harvest_terms_from_lines(
     target_language: str = "Greek",
     existing_glossary: Optional[Dict] = None,
     model_name: Optional[str] = None,
+    japanese_work: bool = False,
 ) -> List[Dict]:
-    """Extract key terms from paired source and translated dialogue lines."""
+    """Extract key terms from paired source and translated dialogue lines. ``japanese_work``: the project
+    is an anime or Japanese work, so romaji names get the Greek accent on their first syllable."""
     if not source_lines or not target_lines:
         return []
 
@@ -147,7 +150,7 @@ Analyze the dialogue above and extract all new named entities and key terms. Ret
                 continue
 
             if is_greek:
-                translation = fix_japanese_name_greek_tonos(translation)
+                translation = normalize_japanese_term(term_name, translation, japanese_work)
 
             valid_terms.append({
                 "term": term_name,
@@ -211,4 +214,5 @@ async def harvest_terms_for_episode(
         target_language=target_lang,
         existing_glossary=existing_glossary,
         model_name=model_name,
+        japanese_work=is_japanese_work(meta),
     )

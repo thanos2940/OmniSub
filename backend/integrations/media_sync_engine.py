@@ -117,6 +117,11 @@ def work_facts(item: Dict) -> Dict:
     overview = " ".join(str(item.get("overview") or "").split())
     if overview:
         facts["arr_overview"] = overview[:1500]
+    language = item.get("originalLanguage")   # Sonarr v4 / Radarr: {"id": 8, "name": "Japanese"}
+    if isinstance(language, dict):
+        language = language.get("name")
+    if isinstance(language, str) and language.strip() and language.strip().lower() not in ("unknown", "any"):
+        facts["arr_original_language"] = language.strip()[:40]
     return facts
 
 

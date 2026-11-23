@@ -507,7 +507,7 @@ Set in Taisho-era Japan, this series follows Tanjiro Kamado as he battles deadly
                 {"term": "Inosuke Hashibira", "translation": "Ινοσούκε Χασιμπίρα", "type": "character"}
             ]
         }
-        res_1 = service._normalize_harvested_terms(wrapper_1, target_code="el")
+        res_1 = service._normalize_harvested_terms(wrapper_1, target_code="el", japanese_work=True)
         assert len(res_1) == 1
         assert res_1[0]["term"] == "Inosuke Hashibira"
 
@@ -517,7 +517,7 @@ Set in Taisho-era Japan, this series follows Tanjiro Kamado as he battles deadly
                 {"term": "Giyu Tomioka", "translation": "Γκιγιού Τομιόκα", "type": "character"}
             ]
         }
-        res_2 = service._normalize_harvested_terms(wrapper_2, target_code="el")
+        res_2 = service._normalize_harvested_terms(wrapper_2, target_code="el", japanese_work=True)
         assert len(res_2) == 1
         assert res_2[0]["term"] == "Giyu Tomioka"
 
@@ -526,7 +526,7 @@ Set in Taisho-era Japan, this series follows Tanjiro Kamado as he battles deadly
             "Total Concentration Breathing": "Αναπνοή Απόλυτης Συγκέντρωσης",
             "Nichirin Blade": "Σπαθί Νιτσιρίν"
         }
-        res_3 = service._normalize_harvested_terms(wrapper_3, target_code="el")
+        res_3 = service._normalize_harvested_terms(wrapper_3, target_code="el", japanese_work=True)
         assert len(res_3) == 2
         terms_dict = {t["term"]: t["translation"] for t in res_3}
         assert terms_dict["Total Concentration Breathing"] == "Αναπνοή Απόλυτης Συγκέντρωσης"
@@ -537,7 +537,7 @@ Set in Taisho-era Japan, this series follows Tanjiro Kamado as he battles deadly
         json_str = json.dumps([
             {"term": "Wisteria Flower", "translation": "Λουλούδι Γλυκίνιας", "type": "plant"}
         ])
-        res_4 = service._normalize_harvested_terms(json_str, target_code="el")
+        res_4 = service._normalize_harvested_terms(json_str, target_code="el", japanese_work=True)
         assert len(res_4) == 1
         assert res_4[0]["term"] == "Wisteria Flower"
 

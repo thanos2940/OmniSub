@@ -1133,9 +1133,11 @@ async def _translate_episode_atomic(
     else:
         qc_stages["script_guard"] = "skipped"
 
-    # Stage 1a3 — Japanese names Greek tonos enforcement
+    # Stage 1a3 — Japanese names Greek tonos enforcement (known names only, and only in a Japanese work:
+    # elsewhere the same words are ordinary Greek, utils/work_origin.py)
+    from utils.work_origin import is_japanese_work
     is_greek = (target_lang or "").strip().lower() in ("greek", "el", "ελληνικά") or target_lang_code in ("el", "ell", "gre", "grk")
-    if is_greek:
+    if is_greek and is_japanese_work(project_meta):
         try:
             from utils.text_normalize import fix_japanese_name_greek_tonos
             _n_tonos = 0

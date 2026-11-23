@@ -131,12 +131,12 @@ def test_build_profile_context_with_fallback_header():
     ]
 
     normal_ctx = mgr.build_profile_context(profs, is_fallback=False)
-    assert "Characters in this scene:" in normal_ctx
+    assert "Characters named in these lines:" in normal_ctx
     assert "Frieren (f, informal)" in normal_ctx
     assert "Himmel (m, informal)" in normal_ctx
 
     fallback_ctx = mgr.build_profile_context(profs, is_fallback=True)
-    assert "Main cast reference for speaker voice/gender alignment:" in fallback_ctx
+    assert "Main characters (none of them is named in these lines" in fallback_ctx
     assert "Frieren (f, informal)" in fallback_ctx
 
 

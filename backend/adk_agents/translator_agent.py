@@ -24,6 +24,8 @@ from utils.translation_rules import (  # noqa: F401 — re-exported for callers/
     _morphological_guidance_rule,
     _script_integrity_rule,
     _japanese_names_greek_rule,
+    _gender_agreement_rule,
+    _greek_punctuation_rule,
 )
 
 
@@ -113,6 +115,10 @@ def _build_instruction(
     jp_line = f"\n{jp_names_rule}" if jp_names_rule else ""
     script_rule = _script_integrity_rule(target_language)
     script_line = f"\n{script_rule}" if script_rule else ""
+    gender_rule = _gender_agreement_rule(target_language)
+    script_line = (f"\n{gender_rule}" if gender_rule else "") + script_line
+    punct_rule = _greek_punctuation_rule(target_language)
+    script_line += f"\n{punct_rule}" if punct_rule else ""
 
     if structured:
         return f"""Translate subtitles to {target_language}. You MUST output valid JSON conforming to the requested schema.
@@ -124,8 +130,8 @@ Rules:
 - STRICT 1:1 MAPPING: Each input line index must appear EXACTLY ONCE in the output. Never split a translation across two JSON entries. The output array length MUST equal the input line count.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks. Never break a cue into multiple lines or entries; subtitle wrapping is applied automatically afterwards.
 {GLOSSARY_JUDGMENT_RULE}
-- {morphology_rule}
-- {idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
+{morphology_rule}
+{idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
 {second_person}{script_line}{jp_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.
@@ -145,8 +151,8 @@ Rules:
 - The total number of output lines MUST equal the total number of input lines. No extra lines, no missing lines.
 - ONE LINE PER CUE: each input line is one complete subtitle cue — return its translation as a SINGLE line of plain text with NO line breaks; subtitle wrapping is applied automatically afterwards.
 {GLOSSARY_JUDGMENT_RULE}
-- {morphology_rule}
-- {idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
+{morphology_rule}
+{idioms_rule}{pro_drop_line}{active_voice_line}{contractions_line}{register_slang_line}{profanity_line}{cadence_line}
 {second_person}{script_line}{jp_line}
 - Flags: cs=match case exactly, ci=adapt casing naturally, ko=KEEP ORIGINAL (do not translate!).
 - Translate only what appears in source: "Rin" ≠ "Rin Tohsaka" unless the full name is present.

@@ -177,7 +177,9 @@ async def _translate_missing_line_with_context(
             )
             if (target_lang_name or "").strip().lower() in ("greek", "el", "ελληνικά") or target_lang_code in ("el", "ell", "gre", "grk"):
                 from utils.text_normalize import fix_japanese_name_greek_tonos
-                res_stripped = fix_japanese_name_greek_tonos(res_stripped)
+                from utils.work_origin import is_japanese_work
+                if is_japanese_work(storage.load_project_metadata(project_name) or {}):
+                    res_stripped = fix_japanese_name_greek_tonos(res_stripped)
             return res_stripped
     except Exception as e:
         logger.warning(f"Failed to translate missing line {line_idx} with context: {e}")

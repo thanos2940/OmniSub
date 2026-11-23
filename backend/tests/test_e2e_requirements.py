@@ -218,7 +218,7 @@ class TestTier1SpokenGreekAndNuance:
         assert scene_profs[0].name == "Frieren"
 
         block = mgr.build_profile_context(scene_profs)
-        assert "Characters in this scene:" in block
+        assert "Characters named in these lines:" in block
         assert "Frieren (f, informal)" in block
         assert "That takes me back" in block
 

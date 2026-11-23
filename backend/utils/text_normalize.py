@@ -133,7 +133,8 @@ _CANONICAL_JAPANESE_NAMES_GREEK = {
     "μαδάρα": "μάδαρα", "μαντάρα": "μάνταρα", "μαδαρα": "μάδαρα", "μανταρα": "μάνταρα",
     "χινάτα": "χίνατα", "χινατα": "χίνατα",
     "μπορούτο": "μπόρουτο", "μπορουτο": "μπόρουτο",
-    "σαράντα": "σάραντα", "σαράδα": "σάραδα", "σαραδα": "σάραδα",
+    # (not "σαράντα": that is the Greek word for "forty")
+    "σαράδα": "σάραδα", "σαραδα": "σάραδα",
     "μιτσούκι": "μίτσουκι", "μιτσουκι": "μίτσουκι",
     "κανκουρό": "κάνκουρο", "κανκουρο": "κάνκουρο",
     "γκααρά": "γκάαρα", "γκααρα": "γκάαρα",
@@ -201,6 +202,25 @@ def shift_greek_accent_to_first_syllable(word: str) -> str:
     if vowel_idx == -1:
         return word
 
+    # A word of one syllable never takes the tonos ("ζει", "μου"): leave it as it is.
+    nuclei, prev = 0, ""
+    for ch in clean_word.lower():
+        if ch in "αεηιουω":
+            if not (prev + ch in ("ου", "αι", "ει", "οι", "αυ", "ευ", "υι")):
+                nuclei += 1
+            prev = ch
+        else:
+            prev = ""
+    if nuclei <= 1:
+        return word
+
+    # A consonant + ι + vowel is one syllable (synizesis): "Kyo" is written "Κιο", and the accent goes on the
+    # vowel after the ι ("Κιότο", "Κιότζουρο", "Ριούκ").
+    lower_clean = clean_word.lower()
+    if (vowel_idx > 0 and lower_clean[vowel_idx] == "ι" and vowel_idx + 1 < len(lower_clean)
+            and lower_clean[vowel_idx + 1] in "αεοω" and lower_clean[vowel_idx - 1] not in "αεηιουω"):
+        vowel_idx += 1
+
     # Check for digraphs: ou, ai, ei, oi, au, eu
     # In Greek monotonic, digraphs take the accent on the second vowel:
     # e.g. ου -> ού, αι -> αί, ει -> εί, οι -> οί, αυ -> αύ, ευ -> εύ
@@ -248,9 +268,9 @@ _COMMON_GREEK_WORDS = {
 }
 
 
-def fix_japanese_name_greek_tonos(name: str) -> str:
+def fix_japanese_name_greek_tonos(name: str, guess: bool = False) -> str:
     """Ensure Japanese names in Greek place the accent (τόνος) on the first syllable.
-    
+
     Translates misaccented and unaccented forms like:
         Tanjiro: Ταντζίρο / Ταντζιρο -> Τάντζιρο
         Nezuko:  Νεζούκο / Νεζουκο   -> Νέζουκο
@@ -258,9 +278,12 @@ def fix_japanese_name_greek_tonos(name: str) -> str:
         Inosuke: Ινοσούκε / Ινόσουκε -> Ίνοσουκε
         Naruto:  Ναρούτο / Ναρουτο   -> Νάρουτο
         Sasuke:  Σασούκε / Σασκέ     -> Σάσουκε / Σάσκε
-    
-    Can handle single words or multi-word phrases and sentences without corrupting
-    native Greek vocabulary.
+
+    By default only the known names (``_CANONICAL_JAPANESE_NAMES_GREEK``) change, so a whole subtitle
+    line is safe. ``guess=True`` also moves the accent of other words that look like a transliterated
+    Japanese name; it rewrites ordinary Greek words and Western names just as readily ("Περίμενε",
+    "Μαρία", "Λονδίνο"), so it is only for the Greek rendering of a single glossary term whose English
+    source is romaji, in a Japanese work (``normalize_japanese_term``).
     """
     if not name or not isinstance(name, str):
         return name
@@ -286,7 +309,7 @@ def fix_japanese_name_greek_tonos(name: str) -> str:
         elif clean_lower in _COMMON_GREEK_WORDS:
             # Never mutate regular Greek words (e.g. "και", "νερό", "καλά", "πρέπει")
             corrected_lower = None
-        elif (token[0].isupper() or is_standalone_term) and len(clean_lower) >= 3 and any(clean_lower.endswith(sfx) for sfx in ("ο", "ου", "ε", "ι", "α", "ν", "ρ")):
+        elif guess and (token[0].isupper() or is_standalone_term) and len(clean_lower) >= 3 and any(clean_lower.endswith(sfx) for sfx in ("ο", "ου", "ε", "ι", "α", "ν", "ρ")):
             # Heuristic for Japanese proper nouns (capitalized in sentences, or standalone term)
             has_jp_clusters = any(cl in clean_lower for cl in (
                 "τζ", "τσ", "κα", "κι", "κου", "κε", "κο",
@@ -310,6 +333,86 @@ def fix_japanese_name_greek_tonos(name: str) -> str:
             out_tokens.append(token)
 
     return "".join(out_tokens)
+
+
+# A romanised Japanese word (Hepburn or Kunrei) is a run of these syllables: an optional consonant
+# (cluster) and a vowel, a syllabic n, or the first half of a doubled consonant ("Hattori", "Ippo").
+_ROMAJI_WORD = re.compile(
+    r"^(?:(?:ky|gy|sh|ch|ny|hy|by|py|my|ry|ts|dz|ty|zy|dy|sy|jy|[kgsztdnhbpmrwyfvj])?[aeiou]"
+    r"|n(?![aeiouy])|([kgsztdbpmhjfr])(?=\1)|t(?=ch))+$")
+_LONG_VOWELS = str.maketrans("āīūēōâîûêôàáèéìíòóùú", "aiueoaiueoaaeeiioouu")
+
+
+def looks_like_romaji(text: str) -> bool:
+    """True when every word of ``text`` reads as romanised Japanese ("Tanjiro", "Kamado Nezuko",
+    "Ken'ichi", "Kyōjurō"); "London", "Daniel", "Demon Slayer" do not."""
+    words = re.findall(r"[^\W\d_]+(?:['’-][^\W\d_]+)*", (text or "").lower())
+    if not words:
+        return False
+    for word in words:
+        plain = re.sub(r"['’-]", "", word).translate(_LONG_VOWELS)
+        if len(plain) < 2 or not plain.isascii() or not _ROMAJI_WORD.match(plain):
+            return False
+    return True
+
+
+# Greek spelling -> a rough Latin one, to tell whether a Greek word transliterates a romaji word.
+_GREEK_TO_LATIN = (("ντ", "d"), ("μπ", "b"), ("γκ", "g"), ("γγ", "g"), ("τσ", "ts"), ("τζ", "j"), ("ου", "u"),
+                   ("αι", "e"), ("ει", "i"), ("οι", "i"), ("θ", "th"), ("χ", "h"), ("ψ", "ps"), ("ξ", "x"),
+                   ("φ", "f"), ("β", "v"), ("γ", "g"), ("δ", "d"), ("ζ", "z"), ("κ", "k"), ("λ", "l"), ("μ", "m"),
+                   ("ν", "n"), ("π", "p"), ("ρ", "r"), ("σ", "s"), ("ς", "s"), ("τ", "t"), ("α", "a"), ("ε", "e"),
+                   ("η", "i"), ("ι", "i"), ("ο", "o"), ("υ", "i"), ("ω", "o"), ("ϊ", "i"), ("ΐ", "i"), ("ϋ", "i"))
+
+
+def _rough_latin(word: str) -> str:
+    out = "".join(_ACCENT_TO_PLAIN.get(c, c) for c in word.lower())
+    for greek, latin in _GREEK_TO_LATIN:
+        out = out.replace(greek, latin)
+    return out
+
+
+def _rough_romaji(word: str) -> str:
+    w = re.sub(r"['’-]", "", word.lower()).translate(_LONG_VOWELS)
+    return w.replace("ch", "ts").replace("sh", "s").replace("y", "i").replace("ou", "o").replace("uu", "u")
+
+
+def _transliterates(greek_word: str, romaji: List[str]) -> bool:
+    """Whether a Greek word spells one of the romaji words. A word with a Greek inflection (-ς, -ων) is a Greek
+    word, even when it shares its root with the English one ("Demon" = "Δαίμονας", "Titan" = "Τιτάνας")."""
+    from difflib import SequenceMatcher
+    plain = "".join(_ACCENT_TO_PLAIN.get(c, c) for c in greek_word.lower())
+    if plain.endswith(("ς", "ων")):
+        return False
+    latin = _rough_latin(plain).replace("ou", "o")
+    return len(latin) >= 3 and any(SequenceMatcher(None, latin, r).ratio() >= 0.75 for r in romaji)
+
+
+def normalize_japanese_term(source: str, translation: str, japanese_work: bool) -> str:
+    """The Greek rendering of a glossary term, with the accent on the first syllable for Japanese names: the
+    known names always; in a Japanese work (utils/work_origin.py) also every word of the rendering that
+    transliterates a romaji word of the English source ("Nichirin Blade" = "Σπαθί Νίτσιριν": "Σπαθί" stays).
+    Everything else is returned as it was."""
+    if not translation:
+        return translation
+    fixed = fix_japanese_name_greek_tonos(translation) or translation
+    if not japanese_work:
+        return fixed
+    romaji = [_rough_romaji(w) for w in re.findall(r"[^\W\d_]+(?:['’-][^\W\d_]+)*", source or "")
+              if len(w) >= 3 and looks_like_romaji(w)]
+    if not romaji:
+        return fixed
+    out = []
+    for token in re.split(r"(\s+|[.,;!?\"'-])", fixed):
+        if token and any(c.isalpha() for c in token) and _GREEK_LETTER.search(token) and _transliterates(token, romaji):
+            shifted = shift_greek_accent_to_first_syllable("".join(_ACCENT_TO_PLAIN.get(c, c) for c in token.lower()))
+            if token.isupper():
+                token = "".join(_ACCENT_TO_PLAIN.get(c, c) for c in token)
+            elif token[0].isupper():
+                token = shifted.capitalize()
+            else:
+                token = shifted
+        out.append(token)
+    return "".join(out)
 
 
 def contains_term(
@@ -517,6 +620,26 @@ def sanitize_translation_text(
         for i, l in enumerate(lines):
             sl = src_lines[i] if i < len(src_lines) else None
             cleaned_lines.append(_sanitize_line(l, s_line=sl))
-        return "\n".join(cleaned_lines)
+        out = "\n".join(cleaned_lines)
     else:
-        return _sanitize_line(val, s_line=source_text)
+        out = _sanitize_line(val, s_line=source_text)
+    if leak_code == "el":
+        out = greek_question_marks(out)
+    return out
+
+
+_GREEK_LETTER = re.compile(r"[\u0370-\u03FF\u1F00-\u1FFF]")
+_TAG_OR_OVERRIDE = re.compile(r"(\{[^}]*\}|<[^>]+>)")
+
+
+def greek_question_marks(text: str) -> str:
+    """Greek writes the question mark as ';'. A Latin '?' in a line that is mostly Greek becomes ';' (ASS
+    override blocks and HTML tags are left alone); a line that is mostly Latin letters is not touched."""
+    if not text or "?" not in text:
+        return text
+    parts = _TAG_OR_OVERRIDE.split(text)
+    plain = "".join(p for p in parts if p[:1] not in ("{", "<"))
+    greek = len(_GREEK_LETTER.findall(plain))
+    if not greek or greek <= len(re.findall(r"[A-Za-z]", plain)):
+        return text
+    return "".join(part if part[:1] in ("{", "<") else part.replace("?", ";") for part in parts)

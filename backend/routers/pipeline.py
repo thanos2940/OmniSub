@@ -987,10 +987,11 @@ async def _process_auto_translate(
             # Sanitize Japanese names for Greek if applicable
             target_lang = metadata.get("target_language", "English")
             if (target_lang or "").strip().lower() in ("greek", "el", "ελληνικά") and result.get("terms"):
-                from utils.text_normalize import fix_japanese_name_greek_tonos
+                from utils.text_normalize import normalize_japanese_term
+                from utils.work_origin import is_japanese_work
                 for term_obj in result["terms"]:
                     if isinstance(term_obj, dict) and "translation" in term_obj:
-                        term_obj["translation"] = fix_japanese_name_greek_tonos(term_obj["translation"])
+                        term_obj["translation"] = normalize_japanese_term(term_obj.get("term", ""), term_obj["translation"], is_japanese_work(metadata))
 
             metadata["glossary"] = result
             _invalidate_translation_cache(metadata)
@@ -1149,10 +1150,11 @@ async def _process_simple_pipeline(
         )
 
         if (target_lang or "").strip().lower() in ("greek", "el", "ελληνικά") and glossary_dict.get("terms"):
-            from utils.text_normalize import fix_japanese_name_greek_tonos
+            from utils.text_normalize import normalize_japanese_term
+            from utils.work_origin import is_japanese_work
             for term_obj in glossary_dict["terms"]:
                 if isinstance(term_obj, dict) and "translation" in term_obj:
-                    term_obj["translation"] = fix_japanese_name_greek_tonos(term_obj["translation"])
+                    term_obj["translation"] = normalize_japanese_term(term_obj.get("term", ""), term_obj["translation"], is_japanese_work(metadata))
         
         update_job(job_id, progress=50.0, result={"glossary": glossary_dict}, message="Awaiting glossary review...")
         await _pipeline_pause(job_id, "glossary", "Please review and confirm the generated glossary terms.")
@@ -1284,10 +1286,11 @@ async def _process_pipeline(job_id: str, project_name: str, request: PipelineReq
             # Sanitize Japanese names for Greek if applicable
             target_lang = metadata.get("target_language", "English")
             if (target_lang or "").strip().lower() in ("greek", "el", "ελληνικά") and result.get("terms"):
-                from utils.text_normalize import fix_japanese_name_greek_tonos
+                from utils.text_normalize import normalize_japanese_term
+                from utils.work_origin import is_japanese_work
                 for term_obj in result["terms"]:
                     if isinstance(term_obj, dict) and "translation" in term_obj:
-                        term_obj["translation"] = fix_japanese_name_greek_tonos(term_obj["translation"])
+                        term_obj["translation"] = normalize_japanese_term(term_obj.get("term", ""), term_obj["translation"], is_japanese_work(metadata))
 
             metadata["glossary"] = result
             _invalidate_translation_cache(metadata)

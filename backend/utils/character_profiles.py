@@ -19,6 +19,7 @@ Storage:
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field, asdict, replace
 from typing import Dict, List, Optional
 
@@ -78,6 +79,11 @@ class CharacterProfile:
             inherited_from=data.get("inherited_from", None),
             overridden_fields=data.get("overridden_fields", []),
         )
+
+
+class MainCast(list):
+    """The main characters ``get_profiles_for_chunk`` falls back to when no name occurs in the lines: the
+    prompt must not present them as the speakers of the scene."""
 
 
 class CharacterProfileManager:
@@ -314,11 +320,12 @@ class CharacterProfileManager:
         # Also include all profile names (they might not all be in the glossary)
         person_names.update(profiles.keys())
 
-        # Check which names appear in source text
+        # Check which names appear in source text, as whole words ("Ren" is not in "current")
         source_text = " ".join(source_lines)
         matching = []
-        for name in person_names:
-            if name and name in source_text and name in profiles:
+        for name in sorted(n for n in person_names if n):
+            if name in profiles and name in source_text and re.search(
+                    rf"(?<!\w){re.escape(name)}(?!\w)", source_text):
                 matching.append(profiles[name])
 
         if matching:
@@ -342,15 +349,15 @@ class CharacterProfileManager:
                 return score
 
             ranked = sorted(candidates, key=_rank, reverse=True)
-            return ranked[:max_fallback]
+            return MainCast(ranked[:max_fallback])
 
         return []
 
-    def build_profile_context(self, profiles: List[CharacterProfile], is_fallback: bool = False) -> str:
+    def build_profile_context(self, profiles: List[CharacterProfile], is_fallback: Optional[bool] = None) -> str:
         """Format relevant profiles as a compact prompt section.
 
         Output format:
-            Characters in this scene:
+            Characters named in these lines:
             - Frieren (f, informal): calm, understated. "That takes me back" -> "..."
             - Fern (f, mixed): formal with elders, direct.
 
@@ -360,7 +367,10 @@ class CharacterProfileManager:
         if not profiles:
             return ""
 
-        header = "Main cast reference for speaker voice/gender alignment:" if is_fallback else "Characters in this scene:"
+        if is_fallback is None:   # get_profiles_for_chunk returns its main-cast fallback as a MainCast
+            is_fallback = isinstance(profiles, MainCast)
+        header = ("Main characters (none of them is named in these lines; they may or may not speak here — use "
+                  "them only for gender and forms of address):" if is_fallback else "Characters named in these lines:")
         lines = [header]
         for p in profiles:
             gender_tag = {"masculine": "m", "feminine": "f", "neuter": "n"}.get(

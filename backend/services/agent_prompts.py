@@ -150,7 +150,7 @@ def translate_prompt(static: str, *, title: str, story: str, characters: str, gl
     if episode_so_far.strip():
         parts.append("## This episode so far\n" + episode_so_far.strip())
     if characters.strip():
-        parts.append("## Characters in these lines\n" + characters.strip())
+        parts.append("## Characters\n" + characters.strip())
     if glossary_lines:
         parts.append("## Glossary terms in these lines\n" + glossary_note + "\n" + "\n".join(glossary_lines))
     if earlier:
@@ -205,7 +205,7 @@ def line_prompt(static: str, *, title: str, text: str, before: List[Tuple[str, s
     translations they have, so the answer fits the scene, plus the show's glossary hits and characters."""
     parts = [static, f"## Now translating\n{title}"]
     if characters.strip():
-        parts.append("## Characters in this line\n" + characters.strip())
+        parts.append("## Characters\n" + characters.strip())
     if glossary_lines:
         parts.append("## Glossary terms in this line\n" + glossary_note + "\n" + "\n".join(glossary_lines))
 
@@ -231,14 +231,17 @@ def context_prompt(*, show: str, target_name: str, brief: Dict, lines: List[str]
     """The brief a translator reads before a show: a context guide (``G|`` lines) and/or glossary entries
     (``+ term | …`` lines), built from what Sonarr/Radarr know of the show, a spread of its dialogue and the
     model's own knowledge of it. ``guide``: the current guide, to be improved rather than started again."""
-    kind = "film" if brief.get("movie") else "TV series"
+    kind = ("anime film" if brief.get("anime") else "film") if brief.get("movie") else \
+        ("anime series" if brief.get("anime") else "TV series")
     facts = [f"Title: {show}" + (f" ({brief['year']})" if brief.get("year") else ""), f"Kind: {kind}"]
+    if brief.get("original_language"):
+        facts.append(f"Original language: {brief['original_language']}")
     if brief.get("genres"):
         facts.append("Genres: " + ", ".join(str(g) for g in brief["genres"]))
     if brief.get("overview"):
         facts.append("Overview: " + str(brief["overview"]).strip())
     parts = [
-        f"You are preparing the translation brief for a {kind} whose English subtitles will be translated into "
+        f"You are preparing the translation brief for {'an' if kind[0] in 'aeiou' else 'a'} {kind} whose English subtitles will be translated into "
         f"{target_name}. A translator reads this brief before every episode, so it must be accurate, short and "
         f"practical.",
         JOB_CONTEXT,

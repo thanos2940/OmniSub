@@ -36,7 +36,7 @@ from typing import Any, Callable, Dict, List, Optional
 from utils import storage, text_repair
 from utils.paths import DATA_DIR
 from utils.translation_queue import TranslationQueue, KIND_TRANSLATION, PRIORITY_MANUAL
-from utils.text_normalize import sanitize_translation_text, fix_japanese_name_greek_tonos
+from utils.text_normalize import sanitize_translation_text, normalize_japanese_term
 from utils.language_codes import to_code
 from utils.episode_summaries import EpisodeSummaryManager
 from services import agent_workspace as aw
@@ -585,6 +585,7 @@ class AgentTaskService:
     def _render_brief(self, *, task_id, project_name, episode_name, target_name, mode, stats, units,
                       proj_meta, glossary, guide) -> str:
         from utils.translation_rules import build_style_guide
+        from utils.work_origin import is_japanese_work
         texts = [u.text for u in units]
 
         story = ""
@@ -662,7 +663,7 @@ everything you need is in this folder, and everything you produce goes into the 
 ## Style rules
 These are the same rules the API translator follows.
 
-{build_style_guide(target_name)}
+{build_style_guide(target_name, japanese_work=is_japanese_work(proj_meta))}
 """
 
     # ------------------------------------------------------------------ targeting
@@ -1326,8 +1327,10 @@ These are the same rules the API translator follows.
         cleaned = cleaned.strip()
         return cleaned if len(cleaned) > 15 else None
 
-    def _normalize_harvested_terms(self, terms_raw: Any, target_code: str = "el") -> List[Dict[str, Any]]:
-        """Normalize harvested terms from lists, dicts or wrappers; Greek tonos fixes for names."""
+    def _normalize_harvested_terms(self, terms_raw: Any, target_code: str = "el",
+                                   japanese_work: bool = False) -> List[Dict[str, Any]]:
+        """Normalize harvested terms from lists, dicts or wrappers; Greek tonos fixes for Japanese names
+        (known ones always; others only in a Japanese work with a romaji source term)."""
         if isinstance(terms_raw, str):
             try:
                 terms_raw = json.loads(terms_raw)
@@ -1357,9 +1360,7 @@ These are the same rules the API translator follows.
             if target_code == "el":
                 translation = sanitize_translation_text(translation, source_text=term, target_lang_code="el")
                 if term_type in ("character", "person", "name") or len(term.split()) <= 2:
-                    fixed = fix_japanese_name_greek_tonos(translation)
-                    if fixed:
-                        translation = fixed
+                    translation = normalize_japanese_term(term, translation, japanese_work)
             entry: Dict[str, Any] = {"term": term, "translation": translation, "type": term_type}
             for key in ("gender", "notes", "sense"):
                 if item.get(key):
@@ -1373,7 +1374,10 @@ These are the same rules the API translator follows.
 
     def _merge_terms(self, project_name: str, terms_raw: Any, target_code: str) -> Dict[str, Any]:
         """Add new glossary terms; existing terms change only when flagged ``update``."""
-        normalized = self._normalize_harvested_terms(terms_raw, target_code=target_code)
+        from utils.work_origin import is_japanese_work
+        proj_meta = storage.load_project_metadata(project_name) or {}
+        normalized = self._normalize_harvested_terms(terms_raw, target_code=target_code,
+                                                     japanese_work=is_japanese_work(proj_meta))
         if not normalized:
             return {"added": 0, "updated": 0, "conflicts": [], "skipped": 0}
         from utils.glossary_judgment import accept_new_term
