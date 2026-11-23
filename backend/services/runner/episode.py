@@ -345,7 +345,7 @@ class EpisodeMixin:
             notes.append(f"{len(left)} left for later")
         if res.get("harvested_terms_count"):
             notes.append(f"+{res['harvested_terms_count']} glossary term(s)")
-        notes.append("exported" if res.get("exported_path") else "not exported (media folder unreachable)")
+        notes.append("exported" if res.get("exported_path") else (res.get("export_note") or "not exported"))
         self.log(f"Lane {lane + 1}: submitted {title} — {done}/{len(units)} lines in {_human(time.time() - started)} "
                  f"({tokens[0]:,} tokens in / {tokens[1]:,} out); {', '.join(notes)}.", "ok")
         self._event("agent_runner_submitted", {"task_id": task_id, "project_name": task["project_name"],

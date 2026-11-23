@@ -36,6 +36,7 @@ class TranslateRequest(BaseModel):
     translation_type: Optional[str] = "saved"  # "original" or "saved"
     lang: Optional[str] = None
     target_language_name: Optional[str] = None
+    overwrite: bool = False  # the export may replace a subtitle next to the video that Omnisub did not write
 
 
 class BatchTranslateRequest(BaseModel):
@@ -44,6 +45,7 @@ class BatchTranslateRequest(BaseModel):
     enhance_glossary: bool = False
     force: bool = False  # If True, clears existing translation before retranslating
     translation_type: Optional[str] = "saved"  # "original" or "saved"
+    overwrite: bool = False  # the export may replace a subtitle next to the video that Omnisub did not write
 
 
 class EnhanceGlossaryRequest(BaseModel):

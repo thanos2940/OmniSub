@@ -1076,3 +1076,51 @@ class TestReview:
     def test_the_setting_is_validated(self):
         assert clean_config({"review": "FLAG"})["review"] == "flag"
         assert clean_config({"review": "sometimes"})["review"] == agent_runner.DEFAULT_CONFIG["review"]
+
+
+class TestWaitingForExtractions:
+    """A runner that does not watch the queue still waits for episodes whose subtitle is being extracted for a
+    translation someone asked for, instead of stopping on a queue that is empty only for now."""
+
+    def test_it_waits_while_work_is_coming_and_stops_after_it(self, tmp_path, monkeypatch):
+        coming = {"n": 1}
+        monkeypatch.setattr(agent_runner, "work_coming", lambda: coming["n"])
+        runner = _runner(tmp_path)
+        runner.start({"lanes": 1})
+        assert _wait(lambda: runner.status == "idle"), runner.message
+        assert runner.message.startswith("Waiting for 1 subtitle extraction(s) to finish")
+        _show()                 # the extraction is done and its episode is queued
+        coming["n"] = 0
+        runner.nudge()
+        _join(runner, 120)
+        assert runner.status == "done" and runner.session["episodes"] == 1
+
+    def test_queued_extractions_count_when_they_chain_into_a_translation_and_can_run_now(self, monkeypatch):
+        chained = {"translate_after": {"options": {}}}
+        q = TranslationQueue()
+        q.enqueue("Show", "S01E01", PRIORITY_MANUAL, chained, "", KIND_EXTRACTION)
+        q.enqueue("Show", "S01E02", PRIORITY_MANUAL, {}, "", KIND_EXTRACTION)       # extraction only
+        q.enqueue("Show", "S01E03", 3, chained, "", KIND_EXTRACTION)                 # "Translate missing": backlog
+        later = q.enqueue("Show", "S01E04", PRIORITY_MANUAL, chained, "", KIND_EXTRACTION)
+        q.update_status(later, status="pending", next_retry_at="2999-01-01T00:00:00+00:00")   # failed; retries later
+        assert q.chained_extractions() == 2
+        assert q.chained_extractions(max_priority=1) == 1      # outside the off-peak window: backlog waits
+        monkeypatch.setattr(storage, "load_global_config", lambda: {"embedded_extraction_enabled": False})
+        assert agent_runner.work_coming() == 0          # the lane is off: those rows never run
+        with agent_runner.expecting_translations():
+            assert agent_runner.work_coming() == 1      # a batch extraction that queues as it goes
+        assert agent_runner.work_coming() == 0
+        monkeypatch.setattr(storage, "load_global_config", lambda: {"embedded_extraction_enabled": True})
+        assert agent_runner.work_coming() == 2
+
+    def test_ensure_running_starts_a_stopped_runner_only_for_the_agent_engine(self, tmp_path, monkeypatch):
+        runner = _runner(tmp_path)
+        monkeypatch.setattr(agent_runner, "_runner", runner)
+        monkeypatch.setattr(storage, "load_global_config", lambda: {"translation_engine": "model"})
+        assert agent_runner.ensure_running("for a test") == "the translation engine is the Gemini API"
+        assert not runner.running()
+        monkeypatch.setattr(storage, "load_global_config", lambda: {"translation_engine": "agent"})
+        assert agent_runner.ensure_running("Started for a test.") is None
+        assert runner.running() or runner.status == "done"
+        _join(runner, 60)
+        assert any("Started for a test." in (e.get("text") or e.get("message") or "") for e in runner.info()["log"])

@@ -227,11 +227,32 @@ async def get_project_embedded_status(project_name: str):
     }
 
 
+def _keeps_source(is_ass: bool, prefer: Optional[str], prefer_ass: bool) -> bool:
+    """Whether an episode's existing source stays (without "extract again"): one in the chosen format; for the
+    usual pick (``prefer`` None), any source, except an SRT in a project that wants ASS (anime), which gives way
+    to the video's ASS track."""
+    if prefer == "srt":
+        return not is_ass
+    if prefer == "ass":
+        return is_ass
+    return is_ass or not prefer_ass
+
+
 async def _run_batch_extract(job_id: str, project_name: str, episode_names: Optional[List[str]], force: bool,
                              migrate_srt: bool, prefer: Optional[str] = None, translate_after: bool = False):
     """Background task: extract the source-language subtitle track of each episode's video into a file next to
     it (``.ass`` or ``.srt``) and import it. ``prefer`` picks the format when the video has both; ``translate_after``
-    queues every extracted episode for translation."""
+    queues every extracted episode for translation as soon as its subtitle is in, starts a stopped runner for it,
+    and keeps a runner that does not watch the queue waiting until the last episode is extracted."""
+    if not translate_after:
+        return await _extract_batch(job_id, project_name, episode_names, force, migrate_srt, prefer, False)
+    from services import agent_runner
+    with agent_runner.expecting_translations():
+        return await _extract_batch(job_id, project_name, episode_names, force, migrate_srt, prefer, True)
+
+
+async def _extract_batch(job_id: str, project_name: str, episode_names: Optional[List[str]], force: bool,
+                         migrate_srt: bool, prefer: Optional[str], translate_after: bool):
     try:
         if job_id in jobs and getattr(jobs[job_id], "cancelled", False):
             update_job(
@@ -258,9 +279,15 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
 
         source_lang, keywords, prefer_ass = _get_project_embedded_settings(proj_meta, global_config)
         prefer = (prefer or "").strip().lower()
-        if prefer in ("ass", "srt"):
-            prefer_ass = prefer == "ass"
+        if prefer not in ("ass", "srt"):
+            prefer = None   # the usual pick: ASS when the video has both
         queued_for_translation = 0
+        runner_problem = None
+        engine_is_agent = global_config.get("translation_engine", "agent") == "agent"
+        if translate_after:
+            from services import agent_runner
+            from services.queue_service import PRIORITY_MANUAL, enqueue_translation, translation_options_for
+            translate_options = {k: v for k, v in translation_options_for(project_name).items() if v is not None}
 
         all_episodes = storage.list_episodes_with_metadata(project_name)
         if episode_names is not None:
@@ -270,7 +297,7 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
         total = len(target_list)
 
         update_job(job_id, log=f"Scanning {total} episode(s) for embedded subtitle tracks "
-                              f"({'ASS first' if prefer_ass else 'SRT first'})...")
+                              f"({'SRT first' if prefer == 'srt' else 'ASS first'})...")
 
         extracted = 0
         skipped = 0
@@ -321,9 +348,7 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
             has_actual_sub = (ep_meta.get("has_source_sub", True) and ep_meta.get("line_count", 0) > 0) or storage.original_subtitle_exists(project_name, ep_name)
             orig_fmt = (ep_meta.get("original_format") or ep_meta.get("original_extension") or "srt").lstrip(".").lower()
             is_ass = orig_fmt in ("ass", "ssa")
-            # An episode that already has a source in the wanted format keeps it unless asked to extract again
-            # (an ASS source is never replaced by the "best" pick either: it is the richer format).
-            if has_actual_sub and not force and (is_ass if prefer != "srt" else not is_ass):
+            if has_actual_sub and not force and _keeps_source(is_ass, prefer, prefer_ass):
                 update_job(job_id, log=f"[{ep_name}] Skipped: already has a .{orig_fmt} source (extract again to replace it).")
                 skipped += 1
                 continue
@@ -339,7 +364,8 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
                     tracks = await loop.run_in_executor(None, embedded_subs.probe_subtitle_tracks, media_path, tools)
                     media_probe_cache.put(media_path, fingerprint, embedded_subs.describe_candidates(tracks))
 
-                chosen_track = embedded_subs.select_track(tracks, source_lang, keywords, prefer_ass=prefer_ass)
+                chosen_track = embedded_subs.select_track(tracks, source_lang, keywords, prefer_ass=prefer_ass,
+                                                          prefer_format=prefer)
                 if not chosen_track:
                     update_job(job_id, log=f"[{ep_name}] No usable subtitle track found in {Path(media_path).name}.")
                     skipped += 1
@@ -408,10 +434,14 @@ async def _run_batch_extract(job_id: str, project_name: str, episode_names: Opti
                                 "cues": res.get("line_count", 0)})
                 update_job(job_id, log=f"[{ep_name}] ✓ Extracted {chosen_track.output_format.upper()} to {sidecar.name} "
                                        f"and imported {res.get('line_count', 0)} cues.")
-                if translate_after:
-                    from services.queue_service import enqueue_translation, PRIORITY_MANUAL
-                    if enqueue_translation(project_name, ep_name, PRIORITY_MANUAL):
-                        queued_for_translation += 1
+                if translate_after and enqueue_translation(project_name, ep_name, PRIORITY_MANUAL, translate_options):
+                    queued_for_translation += 1
+                    if engine_is_agent:
+                        problem = await asyncio.to_thread(
+                            agent_runner.ensure_running, f"Started for the episodes the extraction of {project_name} queues.")
+                        if problem and not runner_problem:
+                            runner_problem = problem
+                            update_job(job_id, log=f"The runner could not be started ({problem}); start it in Activity.")
             except Exception as e:
                 failed += 1
                 logger.error(f"Failed to extract embedded ASS for {project_name}/{ep_name}: {e}", exc_info=True)

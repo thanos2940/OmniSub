@@ -341,8 +341,11 @@ def select_track(
     source_lang_code: str = "en",
     keywords: Optional[Sequence[str]] = None,
     prefer_ass: bool = False,
+    prefer_format: Optional[str] = None,
 ) -> Optional[SubtitleTrack]:
     """Pick the best subtitle track (ASS/SSA or SRT/SubRip), or None when there is no usable candidate.
+    ``prefer_format`` ("ass" or "srt"): a person's choice of format when the video has both; without it ASS wins
+    (``prefer_ass`` is kept for callers and does not change the order).
 
     Signs/songs and forced tracks are **ranked last, never excluded** (plan decision
     D-C): some releases ship a single track that carries signs, songs *and* dialogue
@@ -369,7 +372,7 @@ def select_track(
         reasons = _penalties(track, keywords)
         track.penalized = bool(reasons)
         track.penalty_reasons = reasons
-        format_rank = 0 if track.is_ass else 1
+        format_rank = (1 if track.is_ass else 0) if prefer_format == "srt" else (0 if track.is_ass else 1)
         key = (
             lang_rank,
             format_rank,

@@ -291,7 +291,8 @@ async def process_translation_item(*args, **kwargs) -> None:
                 update_job(job_id, log="Found saved translation. Re-exporting to disk...")
                 from services.translation.export_formatter import auto_export_translated_subtitle
                 ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
-                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, ep_data["data"], ep_meta)
+                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, ep_data["data"], ep_meta,
+                                                        force=bool(options.get("overwrite")))
                 target_srt_path = Path(exported_path) if exported_path else (Path(ep_meta.get("arr_target_path")) if ep_meta.get("arr_target_path") else None)
                 write_success = bool(target_srt_path and target_srt_path.exists())
                 write_error_msg = ep_meta.get("translation_warning", "")
@@ -509,7 +510,9 @@ async def process_translation_item(*args, **kwargs) -> None:
             if translated_data and translated_data.get("data"):
                 from services.translation.export_formatter import auto_export_translated_subtitle
                 ep_meta = storage.load_episode_metadata(project_name, episode_name) or ep_meta
-                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, translated_data["data"], ep_meta)
+                # ``overwrite``: the person asked to replace a subtitle there that Omnisub did not write.
+                exported_path = await asyncio.to_thread(auto_export_translated_subtitle, project_name, episode_name, translated_data["data"], ep_meta,
+                                                        force=bool(options.get("overwrite")))
                 target_srt_path = Path(exported_path) if exported_path else (Path(ep_meta.get("arr_target_path")) if ep_meta.get("arr_target_path") else None)
                 write_success = bool(target_srt_path and target_srt_path.exists())
                 write_error_msg = ep_meta.get("translation_warning", "")

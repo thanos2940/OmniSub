@@ -428,6 +428,8 @@ async def translate_episode(
         "top_k": storage.get_project_setting(metadata, "top_k") or global_config.get("top_k"),
         "top_p": storage.get_project_setting(metadata, "top_p") or global_config.get("top_p")
     }
+    if request.overwrite:
+        options["overwrite"] = True
     
     # Deduplicate against translation_queue for identical project/episode/lang in pending or running state
     from utils.translation_queue import TranslationQueue, KIND_TRANSLATION
@@ -481,6 +483,8 @@ async def batch_translate(
         "top_k": storage.get_project_setting(metadata, "top_k") or global_config.get("top_k"),
         "top_p": storage.get_project_setting(metadata, "top_p") or global_config.get("top_p")
     }
+    if request.overwrite:
+        options["overwrite"] = True
     
     req_episodes = sorted(list({str(e).strip() for e in (request.episode_names or []) if e and str(e).strip()}))
     req_episodes_folded = {e.casefold() for e in req_episodes}

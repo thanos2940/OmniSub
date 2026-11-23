@@ -66,7 +66,7 @@ class TestSingleExportSeam:
 
         mock_auto_export = MagicMock(return_value=str(target_sub))
 
-        def fake_auto_export(proj, ep, data, meta):
+        def fake_auto_export(proj, ep, data, meta, force=False):
             target_sub.write_text("1\n00:00:01,000 --> 00:00:02,000\nΓεια\n", encoding="utf-8")
             return str(target_sub)
 

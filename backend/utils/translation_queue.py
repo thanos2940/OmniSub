@@ -1,3 +1,4 @@
+import json
 import sqlite3
 import threading
 import uuid
@@ -963,6 +964,29 @@ class TranslationQueue:
                 conn.commit()
         self._changed("unpause_daily_limit_items")
 
+
+    def chained_extractions(self, max_priority: Optional[int] = None) -> int:
+        """Extractions that queue a translation when they finish (``translate_after``) and are running, or wait
+        with nothing holding them back (no retry delay; within ``max_priority`` when the off-peak window sets
+        one, as the extraction lane claims them): translations that will reach the queue soon."""
+        params: List[Any] = [KIND_EXTRACTION, datetime.now(timezone.utc).isoformat()]
+        prio_clause = ""
+        if max_priority is not None:
+            prio_clause = "AND priority <= ?"
+            params.append(int(max_priority))
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT options FROM translation_queue WHERE kind = ? AND (status = 'running' OR "
+                "(status IN ('queued', 'pending') AND (next_retry_at IS NULL OR next_retry_at <= ?) "
+                f"{prio_clause}))", params).fetchall()
+        n = 0
+        for row in rows:
+            try:
+                if (json.loads(row[0] or "{}") or {}).get("translate_after"):
+                    n += 1
+            except (TypeError, ValueError, AttributeError):
+                continue
+        return n
 
     def counts_by_priority(self) -> Dict[int, int]:
         """Active (pending/running/paused) item counts grouped by priority (Plan 08)."""

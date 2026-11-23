@@ -686,13 +686,17 @@ class AgentRunner(ModelsMixin, ClaimsMixin, EpisodeMixin, ReviewMixin, RequestsM
                     with self.claim_lock:
                         with self.lock:
                             others_busy = bool(self.held) or any(v.get("task") for i, v in self.lanes.items() if i != lane)
-                        if not others_busy and not self.config["watch"]:
+                        coming = 0 if others_busy or self.config["watch"] else work_coming()
+                        if not others_busy and not self.config["watch"] and not coming:
                             self._finish("done", self._empty_message())
                             break
-                    if not others_busy:
+                    if coming:
+                        self._set_status("idle", f"Waiting for {coming} subtitle extraction(s) to finish; "
+                                                 f"those episodes are translated next.")
+                    elif not others_busy:
                         self._set_status("idle", "The queue is empty — watching for new episodes.")
                     self._lane_set(lane, state="idle", **NO_WORK)
-                    self._idle_sleep(WATCH_SECONDS if not others_busy else 15)
+                    self._idle_sleep(15 if coming or others_busy else WATCH_SECONDS)
                     continue
                 self._set_status("running", "")
                 self._work_begin()
@@ -846,6 +850,63 @@ def get_runner() -> AgentRunner:
 def current_runner() -> Optional[AgentRunner]:
     """The process's runner if one was built (never builds one: for callers that only need to notify it)."""
     return _runner
+
+
+_expected = 0
+_expected_lock = threading.Lock()
+
+
+class expecting_translations:
+    """While a job is still producing translations (a batch extraction that queues each episode once its
+    subtitle is in), a runner that does not watch the queue waits for them instead of stopping on an empty
+    queue."""
+
+    def __enter__(self):
+        global _expected
+        with _expected_lock:
+            _expected += 1
+        return self
+
+    def __exit__(self, *exc):
+        global _expected
+        with _expected_lock:
+            _expected = max(0, _expected - 1)
+        nudge()
+        return False
+
+
+def work_coming() -> int:
+    """How many producers of translations are still at work: jobs inside ``expecting_translations`` plus
+    extractions that chain into a translation and that the extraction lane is working on or can take now."""
+    with _expected_lock:
+        n = _expected
+    try:
+        cfg = storage.load_global_config() or {}
+        if cfg.get("embedded_extraction_enabled", False):
+            from services.worker.scheduler import get_schedule_ceiling
+            n += TranslationQueue().chained_extractions(get_schedule_ceiling(cfg))
+    except Exception as exc:
+        logger.debug(f"Could not count the chained extractions: {exc}")
+    return n
+
+
+def ensure_running(why: str) -> Optional[str]:
+    """Start a stopped runner for work someone asked for (the agent engine only; a running one is nudged).
+    Returns None when the runner is on, else why it is not."""
+    r = get_runner()
+    if r.running():
+        r.nudge()
+        return None
+    cfg = storage.load_global_config() or {}
+    if cfg.get("translation_engine", "agent") != "agent":
+        return "the translation engine is the Gemini API"
+    try:
+        r.start({})
+        r.log(why)
+        return None
+    except Exception as exc:
+        r.log(f"Could not start: {exc}", "error")
+        return str(exc)
 
 
 def nudge() -> None:

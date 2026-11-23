@@ -250,17 +250,24 @@ def _register_written(path: Path, project_name: Optional[str], episode_name: Opt
     request_refresh(path)
 
 
-def _remove_superseded_target(previous: Optional[str], current: Path, metadata: Optional[Dict] = None) -> None:
-    """Delete our previous export when it was written under an outdated video name."""
+def _remove_superseded_target(previous: Optional[str], current: Path, metadata: Optional[Dict] = None,
+                              source_is_srt: bool = False) -> None:
+    """Delete our previous export when it was written under an outdated video name, or as ASS for an episode
+    whose source is now an SRT (``source_is_srt``: it was extracted again in that format): left there, it would
+    keep an older translation that nothing updates. Only a file Omnisub wrote and nobody changed since goes."""
     if not previous:
         return
     from utils.subtitle_naming import split_subtitle_name
     old = Path(previous)
     old_stem, old_suffix = split_subtitle_name(old.name)
     new_stem, new_suffix = split_subtitle_name(current.name)
-    # Same kind of file (e.g. ".el.ass") under an outdated stem — a different format
-    # beside it (".el.srt") is someone else's file and stays.
-    if old_suffix.lower() != new_suffix.lower() or old_stem.lower() == new_stem.lower():
+    old_tag = old_suffix[: len(old_suffix) - len(old.suffix)].lower()
+    new_tag = new_suffix[: len(new_suffix) - len(current.suffix)].lower()
+    now_srt = (source_is_srt and old_tag == new_tag and old.suffix.lower() in (".ass", ".ssa")
+               and current.suffix.lower() == ".srt")
+    # Otherwise: the same kind of file (e.g. ".el.ass") under an outdated stem; a different kind beside it is
+    # not something this export replaces.
+    if not now_srt and (old_suffix.lower() != new_suffix.lower() or old_stem.lower() == new_stem.lower()):
         return
     try:
         if old.parent == current.parent and old.is_file():
@@ -414,7 +421,8 @@ def auto_export_translated_subtitle(project_name: str, episode_name: str, parsed
                     _atomic_write_text(target_srt_path, translated_srt_content, "utf-8-sig")
                     _register_written(target_srt_path, project_name, episode_name)
                     logger.info(f"Auto-exported translated subtitle next to media: {target_srt_path}")
-                    _remove_superseded_target(metadata.get("arr_target_path"), target_srt_path, metadata)
+                    _remove_superseded_target(metadata.get("arr_target_path"), target_srt_path, metadata,
+                                              source_is_srt=(original_ext or "").lstrip(".").lower() == "srt")
                     main_written = True
 
                 if ext in ("ass", "ssa") and not _has_translated_srt_sibling(project_name, episode_name, tgt_lang):

@@ -187,6 +187,30 @@ class TestExportGuard:
         assert not old.exists()
         assert (folder / "Show - S01E01 - Opus.el.srt").exists()
 
+    def test_our_ass_export_goes_when_the_episode_is_exported_as_srt_now(self, tmp_path):
+        # The source was re-extracted as SRT: the ASS translation beside the video would go stale.
+        folder = tmp_path / "S"
+        folder.mkdir()
+        media = folder / "Show - S01E01.mkv"
+        media.write_text("x")
+        old = folder / "Show - S01E01.el.ass"
+        old.write_text("[Script Info]", encoding="utf-8")
+        ownership.register_file(old)
+        _export(media, {"arr_media_path": str(media), "arr_target_path": str(old)})
+        assert not old.exists() and (folder / "Show - S01E01.el.srt").exists()
+
+    def test_an_ass_file_someone_changed_stays_when_the_export_turns_srt(self, tmp_path):
+        folder = tmp_path / "S"
+        folder.mkdir()
+        media = folder / "Show - S01E01.mkv"
+        media.write_text("x")
+        old = folder / "Show - S01E01.el.ass"
+        old.write_text("[Script Info]", encoding="utf-8")
+        ownership.register_file(old)
+        old.write_text("[Script Info]\n; fixed by hand", encoding="utf-8")
+        _export(media, {"arr_media_path": str(media), "arr_target_path": str(old)})
+        assert old.exists()
+
 
 def _export_again(media, meta):
     config = {"autopilot_protect_foreign_subs": True}

@@ -201,6 +201,17 @@ async def process_extraction_item(queue, item: dict, global_config: dict) -> Non
             logger.info(f"Extraction of {project_name}/{episode_name} was cancelled while it ran; not translating it.")
             return
 
+        translate_after = options.get("translate_after")
+        if isinstance(translate_after, dict):
+            # An on-demand request: someone is waiting for this episode, so it goes
+            # straight to translation with the options the request chose. Queued before this row
+            # is marked completed, so a waiting runner always sees one or the other.
+            from services.queue_service import enqueue_translation
+            enqueue_translation(
+                project_name, episode_name, item.get("priority", 1),
+                translate_after.get("options") or {}, lang=translate_after.get("lang") or "",
+            )
+
         update_job(job_id, status="completed", progress=100.0,
                    message=f"Extracted and imported {sidecar.name}.")
         queue.update_status(
@@ -209,16 +220,6 @@ async def process_extraction_item(queue, item: dict, global_config: dict) -> Non
             logs=jobs[job_id].logs if job_id in jobs else None,
         )
         logger.info(f"Extracted embedded subtitle for {project_name}/{episode_name} -> {sidecar}")
-
-        translate_after = options.get("translate_after")
-        if isinstance(translate_after, dict):
-            # An on-demand request: someone is waiting for this episode, so it goes
-            # straight to translation with the options the request chose.
-            from services.queue_service import enqueue_translation
-            enqueue_translation(
-                project_name, episode_name, item.get("priority", 1),
-                translate_after.get("options") or {}, lang=translate_after.get("lang") or "",
-            )
 
     except asyncio.CancelledError:
         queue.update_status(item_id, status="pending", started_at=None)

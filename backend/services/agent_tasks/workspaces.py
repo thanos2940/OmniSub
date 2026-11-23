@@ -289,7 +289,8 @@ class WorkspacesMixin:
         exported = None
         has_translation = any(aw.cue_translation(c, target_code, is_primary) for c in cues)
         if has_translation and is_primary:
-            exported = self._export(project_name, episode_name, cues)
+            # ``overwrite``: the person asked to replace a subtitle there that Omnisub did not write.
+            exported = self._export(project_name, episode_name, cues, overwrite=bool(_options(item).get("overwrite")))
         TranslationQueue().update_status(item["id"], status="completed", completed_at=_now(), logs=[
             "Agent claim: every translatable line already has a translation — nothing to do.",
             f"Re-exported to {exported}." if exported else "No export performed.",

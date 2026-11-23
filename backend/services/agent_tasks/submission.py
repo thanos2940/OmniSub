@@ -207,6 +207,22 @@ class SubmissionMixin:
             logger.warning(f"Export failed for {project_name}/{episode_name}: {e}")
             return None
 
+    @staticmethod
+    def _why_not_exported(project_name: str, episode_name: str, is_primary: bool) -> str:
+        """Why an ingested translation was not written next to the video, for the log and the result."""
+        if not is_primary:
+            return "not exported: only the main language is written next to the video"
+        meta = storage.load_episode_metadata(project_name, episode_name) or {}
+        warning = str(meta.get("translation_warning") or "")
+        if warning.startswith("Not exported:"):
+            return ("not exported: a subtitle Omnisub did not write is already next to the video "
+                    "(Translate with “Replace the subtitle file next to the video” to replace it)")
+        if warning.startswith("Export scheduled for retry"):
+            return "not exported yet: the media folder could not be written; it is tried again"
+        if not meta.get("arr_media_path"):
+            return "not exported: no video file is linked to this episode"
+        return "not exported (media folder unreachable)"
+
     def submit_task_result(
         self,
         task_id: str,
@@ -338,6 +354,7 @@ class SubmissionMixin:
         if is_primary:
             exported_path = (self._export(project_name, episode_name, cues, overwrite=True) if overwrite
                              else self._export(project_name, episode_name, cues))
+        export_note = None if exported_path else self._why_not_exported(project_name, episode_name, is_primary)
 
         ep_meta = storage.load_episode_metadata(project_name, episode_name) or {}
         ep_meta.update(translated=True, translation_status="completed", last_translated_at=_now(),
@@ -382,6 +399,7 @@ class SubmissionMixin:
             "cues_translated": written,
             "total_cues": len(cues),
             "exported_path": exported_path,
+            "export_note": export_note,
             "harvested_terms_count": terms["added"],
             "review_fixes": reviewed["fixes"],
             "review_flags": reviewed["flags"],
@@ -393,7 +411,7 @@ class SubmissionMixin:
             "tm_pairs_saved": tm_pairs,
             "next_command": cli_command("next"),
             "message": f"Ingested {report['total'] - len(report['missing'])}/{report['total']} lines ({written} cues)"
-                       + (f"; exported to {exported_path}." if exported_path else "; not exported (media folder unreachable)."),
+                       + (f"; exported to {exported_path}." if exported_path else f"; {export_note}."),
         }
         self._broadcast("agent_submission", {k: result[k] for k in (
             "task_id", "project_name", "episode_name", "queue_id", "status", "cues_translated", "total_cues", "exported_path")})
