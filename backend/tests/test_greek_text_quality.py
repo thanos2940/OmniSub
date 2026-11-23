@@ -207,3 +207,46 @@ class TestSpeakers:
         from services import agent_workspace as aw
         units, _ = aw.build_units([{"original": "Hello", "timecode": "00:00:01,000 --> 00:00:02,000"}], "el")
         assert ap.speakers_block(units) == ""
+
+
+class TestAccentRepair:
+    """utils/accent_repair.py: undoing what the old guess wrote, from the project's own evidence only."""
+
+    LINES = [
+        "Θα σε περιμένω, περίμενε λίγο ακόμα.", "Πες μου, περίμενε εδώ μαζί μου.",       # evidence: "περίμενε"
+        "Το λες σοβαρά τώρα;", "Μιλάω σοβαρά, πίστεψέ με.",                               # evidence: "σοβαρά"
+        "Είναι σαράντα χρονών.",
+    ]
+
+    def test_a_word_is_fixed_from_lower_case_evidence(self):
+        from utils.accent_repair import collect_evidence, repair_line
+        ev = collect_evidence(self.LINES)
+        assert repair_line("Πέριμενε!", ev)[0] == "Περίμενε!"
+        assert repair_line("Σόβαρα; Δεν το πιστεύω.", ev)[0] == "Σοβαρά; Δεν το πιστεύω."
+        assert repair_line("Είναι σάραντα χρονών.", ev)[0] == "Είναι σαράντα χρονών."
+
+    def test_names_without_evidence_are_listed_not_changed(self):
+        from utils.accent_repair import collect_evidence, repair_line
+        new, changes, left = repair_line("Η Μάρια ήρθε στο Λόνδινο.", collect_evidence(self.LINES))
+        assert new == "Η Μάρια ήρθε στο Λόνδινο." and not changes
+        assert set(left) == {"Μάρια", "Λόνδινο"}
+
+    def test_correct_text_is_left_alone(self):
+        from utils.accent_repair import collect_evidence, repair_line
+        ev = collect_evidence(self.LINES + ["Πού είσαι; Τι κάνεις;"])
+        for line in ("Περίμενε λίγο.", "Σοβαρά;", "Πού είσαι;", "Τάντζιρο, έλα!", "ΠΕΡΙΜΕΝΕ!"):
+            assert repair_line(line, ev)[0] == line
+
+    def test_the_script_reports_without_writing(self, tmp_path):
+        from scripts.repair_greek_accents import repair_project
+        from utils import storage
+        storage.create_project("Show", {"show_name": "Show", "target_language": "Greek", "glossary": {"terms": []}})
+        cues = [{"id": str(i), "timecode": "00:00:01,000 --> 00:00:02,000", "original": "x",
+                 "translated": t, "translations": {"el": t}} for i, t in enumerate(self.LINES + ["Πέριμενε!"])]
+        storage.save_episode("Show", "S01E01", cues)
+        res = repair_project("Show", apply=False, export=False)
+        assert res["episodes"] == ["S01E01"] and res["examples"]["Πέριμενε → Περίμενε"] == 1
+        assert storage.load_episode_data("Show", "S01E01")[-1]["translated"] == "Πέριμενε!"   # dry run
+        repair_project("Show", apply=True, export=False)
+        fixed = storage.load_episode_data("Show", "S01E01")[-1]
+        assert fixed["translated"] == "Περίμενε!" and fixed["translations"]["el"] == "Περίμενε!"

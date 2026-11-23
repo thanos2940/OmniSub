@@ -225,3 +225,53 @@ ConfirmDialog, OverflowMenu, StatusChip, ProgressBar, …). Translate actions: `
   (one fake 14-line episode translated with real agy). Keep previews isolated as described above.
 - The startup migration enabling Autopilot affects whichever instance boots the new code first — make
   sure only the server runs it.
+
+## Review 2026-11-23: translation quality, first run, security (branch `claude/wizardly-lovelace-u9mke9`)
+Evaluation of the app end to end (code, prompts, UI walked at 1440/390 px on a scratch data folder with the
+fake agy). Every change has tests (`tests/test_greek_text_quality.py`, `tests/test_cross_site_guard.py`,
+`tests/test_language_codes.py`); full suite: same environment-only failures as the base commit minus one.
+- **Greek text was being rewritten.** `fix_japanese_name_greek_tonos` ran on every translated Greek line (Gemini
+  path) and every harvested glossary term (agy path), for every show; its guess moved the accent of ordinary
+  words and Western names ("Περίμενε" → "Πέριμενε", "Καλημέρα" → "Κάλημερα", "Λονδίνο" → "Λόνδινο", "Μαρία" →
+  "Μάρια"), and the canonical list held "σαράντα" (forty). Through the glossary the wrong forms reached every
+  later episode. Now: lines get only the known names, only in a Japanese work (`utils/work_origin.py`:
+  series_type anime / original language Japanese / Anime genre); terms get the first-syllable accent only for
+  words that transliterate a romaji word of the source (`normalize_japanese_term`; Greek cognates such as
+  "Τιτάνας" are left alone). **Text translated before the fix still holds such forms** (above all what the
+  Gemini engine translated, the server's engine until 2026-10-19): `cd backend && python -m
+  scripts.repair_greek_accents` reports per project (nothing is written), `--apply --export` fixes common words
+  from the project's own lower-case evidence (`utils/accent_repair.py`) and re-exports; names it cannot decide
+  are listed to check by hand, in the episodes and in the glossaries. Translation Memory may hold the old forms
+  too (exact reuse can bring them back): clear or review it for affected shows.
+- Style rules (`utils/translation_rules.py`): wrong idioms fixed ("κλάιν" is not Greek), speaker/listener gender
+  rule (Greek + gendered languages), Greek punctuation rule, the Japanese-names rule only for Japanese works,
+  no Greek-only text in other languages' prompts; a Latin "?" in a mostly Greek line becomes ";"
+  (`greek_question_marks`, in `sanitize_translation_text`).
+- Prompts: ASS "Name" (actor) fields reach the runner prompt as a "Who speaks" section (`Unit.speaker`,
+  `agent_prompts.speakers_block`), outside the numbered lines; character names match whole words; the main-cast
+  fallback is labelled as such (it was presented as "Characters in this scene"); the show brief names the
+  original language (sync stores `arr_original_language`) and anime.
+- Languages: `to_code` knows ~70 languages, native names, locale tags, 3-letter codes ("Ελληνικά" wrote
+  `x.ελ.srt`, "Estonian" Spanish's `es`). The wizard, Settings › General and New project use a picker; the wizard
+  no longer proposes English (the source language).
+- First run: the wizard's "How translation runs" offers the Gemini API next to the agent CLIs and preselects it
+  when no CLI is found (a Docker install had no way to a working engine). New project has an anime checkbox.
+- Security: CORS was `*` with auth off by default, so any web page could drive a local/LAN install through the
+  browser. CORS allows `cors_allow_origins` or the Vite dev server only; cross-site unsafe requests and
+  cross-site WebSockets are refused (Fetch Metadata), server-to-server callers are unaffected.
+- `requirements.lock.txt`: pywin32 and onnxruntime-directml carry `sys_platform == "win32"` (Linux installs failed).
+- Tests: `conftest.no_real_agent_cli` — no test can find an installed agy/claude/gemini (a term-harvest test
+  could spend a real agy request on the owner's PC).
+- UI: Library opens on a non-empty tab; editor timecodes on two short lines; missing-CLI warning links to the
+  Gemini API setting. README rewritten (two engines, install paths, security, English-only sources).
+
+### Open after this review
+- Product name: the UI says both "OmbiSub" and "Omnisub", the repo is "OmniSub". Pick one before sharing.
+- Auth stays opt-in (wizard can be closed). Sonarr v4 made auth mandatory with "disabled for local addresses";
+  worth copying for a public release.
+- Source language is English only (prompts, glossary matcher, untranslated detection); the "Source language
+  code" setting only picks which files/tracks are imported.
+- No semantic review pass in the agent path (the Gemini path has an optional reviewer): a second, cheap model
+  pass over flagged scenes (gender, consistency, meaning) would catch what format checks cannot.
+- `test_agent_runner.py::TestProgress::test_info_reports_queue_length_throughput_and_eta_after_a_run` is
+  timing-sensitive and can fail under load (passes alone).
