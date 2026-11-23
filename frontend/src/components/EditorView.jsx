@@ -23,6 +23,25 @@ function getDurationSeconds(timecode) {
     }
 }
 
+// "00:01:02,345 --> 00:01:04,000" as two short lines ("01:02.345", "01:04.000"): the full form wrapped
+// over three lines in its narrow column and made every row taller than its text.
+function shortTimes(timecode) {
+    if (!timecode || !timecode.includes('-->')) return [timecode || '', ''];
+    const short = (t) => t.trim().replace(',', '.').replace(/^00:/, '');
+    const [start, end] = timecode.split('-->');
+    return [short(start), short(end)];
+}
+
+function TimeCell({ timecode }) {
+    const [start, end] = shortTimes(timecode);
+    return (
+        <div className="hidden sm:flex flex-col justify-center gap-0.5 px-2 py-3 text-[11px] leading-tight font-mono tabular-nums text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700" title={timecode}>
+            <span>{start}</span>
+            {end && <span className="text-gray-300 dark:text-gray-600">{end}</span>}
+        </div>
+    );
+}
+
 // Memoized row: only re-renders when its own `item` (or isLoading/selected) changes. With
 // stable callbacks below, editing one line no longer re-renders the whole episode — big win
 // for long episodes where the old inline data.map() rebuilt every row on each keystroke.
@@ -93,9 +112,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
                 <div className="grid grid-cols-1 sm:grid-cols-[44px_100px_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
                     {mobileHeader}
                     {selectCell}
-                    <div className="hidden sm:flex p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 items-center">
-                        {item.timecode}
-                    </div>
+                    <TimeCell timecode={item.timecode} />
                     <div className="sm:col-span-2 p-4 bg-rose-50/10 dark:bg-rose-950/5 border-l-4 border-rose-500">
                         <div className="text-xs text-rose-500 font-bold mb-2 uppercase tracking-wide">
                             Needs Review — Cue {idx + 1}
@@ -113,9 +130,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
                 <div className="grid grid-cols-1 sm:grid-cols-[44px_100px_1fr_1fr] divide-y sm:divide-y-0 sm:divide-x divide-gray-100 dark:divide-gray-700">
                     {mobileHeader}
                     {selectCell}
-                    <div className="hidden sm:flex p-4 text-xs font-mono text-gray-400 dark:text-gray-500 border-r border-gray-100 dark:border-gray-700 items-center">
-                        {item.timecode}
-                    </div>
+                    <TimeCell timecode={item.timecode} />
                     <div className="p-3 sm:p-4 text-gray-700 dark:text-gray-300 border-r-0 sm:border-r border-gray-100 dark:border-gray-700 leading-relaxed text-sm">
                         {item.original}
                     </div>
@@ -138,7 +153,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
                             disabled={isLoading || isPassthrough || retranslating}
                             readOnly={isPassthrough}
                             title={isPassthrough ? "This ASS event (karaoke/vector effect) is passed through unchanged." : undefined}
-                            className={`w-full h-full min-h-[85px] p-4 pb-7 bg-transparent border-none outline-none resize-y text-gray-900 dark:text-gray-100 font-medium leading-relaxed focus:bg-white/50 dark:focus:bg-gray-800/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 focus:ring-indigo-500/20 ${isPassthrough ? 'text-gray-400 dark:text-gray-500 italic' : ''}`}
+                            className={`w-full h-full min-h-[72px] p-3 sm:p-4 pb-7 bg-transparent border-none outline-none resize-y text-gray-900 dark:text-gray-100 font-medium leading-relaxed focus:bg-white/50 dark:focus:bg-gray-800/50 focus:ring-2 transition-all placeholder:italic placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50 focus:ring-indigo-500/20 ${isPassthrough ? 'text-gray-400 dark:text-gray-500 italic' : ''}`}
                         />
                         {retranslating && (
                             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white/80 text-center dark:bg-gray-900/80" role="status">
