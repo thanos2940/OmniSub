@@ -273,5 +273,5 @@ fake agy). Every change has tests (`tests/test_greek_text_quality.py`, `tests/te
   code" setting only picks which files/tracks are imported.
 - No semantic review pass in the agent path (the Gemini path has an optional reviewer): a second, cheap model
   pass over flagged scenes (gender, consistency, meaning) would catch what format checks cannot.
-- `test_agent_runner.py::TestProgress::test_info_reports_queue_length_throughput_and_eta_after_a_run` is
-  timing-sensitive and can fail under load (passes alone).
+- Linux test run: 1981 pass, 19 fail — all environment-only (Windows paths/UNC/drive letters, read-only files
+  as root, no sentence-transformers), the same as the base commit minus the term-harvest test fixed here.

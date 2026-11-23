@@ -582,8 +582,11 @@ class TestProgress:
         assert info["session"]["episodes"] == 1 and info["session"]["lines"] == len(LINES)
         rates = info["throughput"]
         assert rates["active_minutes"] > 0 and rates["lines_per_min"] > 0 and rates["episodes_per_hour"] > 0
-        assert rates["lines_per_min"] == pytest.approx(len(LINES) / rates["active_minutes"], rel=0.25)
-        assert rates["episodes_per_hour"] == pytest.approx(60 / rates["active_minutes"], rel=0.25)
+        # active_minutes is rounded to 3 decimals: for a run of a fraction of a second that alone is off by more
+        # than 25%, so the tolerance grows with the rounding error.
+        rel = 0.25 + 0.0005 / rates["active_minutes"]
+        assert rates["lines_per_min"] == pytest.approx(len(LINES) / rates["active_minutes"], rel=rel)
+        assert rates["episodes_per_hour"] == pytest.approx(60 / rates["active_minutes"], rel=rel)
         assert info["eta_minutes"] == pytest.approx(2 * rates["active_minutes"], abs=0.1)
         for lane in info["lanes"]:  # nothing in hand any more
             assert (lane["progress"], lane["units_done"], lane["units_total"]) == (None, 0, 0)
