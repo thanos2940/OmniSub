@@ -14,10 +14,12 @@ def _build_instruction(target_language: str) -> str:
     jp_names_rule = ""
     if (target_language or "").strip().lower() in ("greek", "el", "ελληνικά"):
         jp_names_rule = (
-            "\n- JAPANESE NAMES TONOS ACCENTUATION IN GREEK: When transliterating Japanese names into Greek, "
-            "the accent (τόνος) is placed on the FIRST syllable (e.g. Tanjiro -> Τάντζιρο, NOT Ταντζίρο; "
-            "Zenitsu -> Ζένιτσου, NOT Ζενίτσου; Nezuko -> Νέζουκο, NOT Νεζούκο; Naruto -> Νάρουτο; Sasuke -> Σάσκε; "
-            "Sakura -> Σάκουρα; Inosuke -> Ίνοσουκε; Sanji -> Σάντζι; Kibutsuji -> Κίμπουτσουτζι). Never place the tonos on the middle or final syllable."
+            "\n- JAPANESE NAMES TONOS ACCENTUATION IN GREEK (anime and other Japanese works only): When transliterating "
+            "Japanese names into Greek, the accent (τόνος) is placed on the FIRST syllable (e.g. Tanjiro -> Τάντζιρο, NOT "
+            "Ταντζίρο; Zenitsu -> Ζένιτσου, NOT Ζενίτσου; Nezuko -> Νέζουκο, NOT Νεζούκο; Naruto -> Νάρουτο; Sasuke -> "
+            "Σάσκε; Sakura -> Σάκουρα; Sanji -> Σάντζι). Greek never accents a syllable before the third from the end, "
+            "so a name of four or more syllables takes the accent on the third syllable from the end (Inosuke -> "
+            "Ινόσουκε; Kibutsuji -> Κιμπούτσουτζι)."
         )
 
     return f"""You are a glossary builder for subtitle translation. Your job is to produce a COMPREHENSIVE glossary of terms for a show/movie, translated into {target_language}.

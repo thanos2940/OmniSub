@@ -29,12 +29,13 @@ class TestJapaneseNamesGreekTonos:
         # Nezuko -> Νέζουκο (not Νεζούκο)
         assert fix_japanese_name_greek_tonos("Νεζούκο") == "Νέζουκο"
         assert fix_japanese_name_greek_tonos("Νεζουκο") == "Νέζουκο"
-        # Inosuke -> Ίνοσουκε (first syllable accent)
-        assert fix_japanese_name_greek_tonos("Ινοσούκε") == "Ίνοσουκε"
-        assert fix_japanese_name_greek_tonos("Ινόσουκε") == "Ίνοσουκε"
-        # Kibutsuji -> Κίμπουτσουτζι (first syllable accent)
-        assert fix_japanese_name_greek_tonos("Κιμπουτσούτζι") == "Κίμπουτσουτζι"
-        assert fix_japanese_name_greek_tonos("Κιμπούτσουτζι") == "Κίμπουτσουτζι"
+        # Inosuke -> Ινόσουκε: four syllables, so the third from the end (Greek never accents further back)
+        assert fix_japanese_name_greek_tonos("Ινοσούκε") == "Ινόσουκε"
+        assert fix_japanese_name_greek_tonos("Ινόσουκε") == "Ινόσουκε"
+        assert fix_japanese_name_greek_tonos("Ίνοσουκε") == "Ινόσουκε"   # the form written before the rule
+        # Kibutsuji -> Κιμπούτσουτζι (four syllables)
+        assert fix_japanese_name_greek_tonos("Κιμπουτσούτζι") == "Κιμπούτσουτζι"
+        assert fix_japanese_name_greek_tonos("Κίμπουτσουτζι") == "Κιμπούτσουτζι"
 
     def test_canonical_naruto_names(self):
         # Naruto -> Νάρουτο

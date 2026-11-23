@@ -225,7 +225,9 @@ def _japanese_names_greek_rule(target_language: str) -> str:
             'usual accent): In Greek translations and transliterations of Japanese character names '
             'and proper nouns, the Greek accent (τόνος) is placed on the FIRST syllable (e.g. Tanjiro is written Τάντζιρο, NOT Ταντζίρο; '
             'Zenitsu is written Ζένιτσου, NOT Ζενίτσου; Nezuko is written Νέζουκο, NOT Νεζούκο; Naruto is written Νάρουτο; Sasuke is written Σάσκε; Sakura is written Σάκουρα; '
-            'Sanji is written Σάντζι; Inosuke is written Ίνοσουκε; Kibutsuji is written Κίμπουτσουτζι). NEVER accent the final or middle syllable of Japanese names in Greek subtitles.'
+            'Sanji is written Σάντζι). Greek never accents a syllable before the third from the end, so a name of FOUR OR MORE '
+            'syllables takes the accent on the third syllable from the end (Inosuke is written Ινόσουκε, NOT Ίνοσουκε; '
+            'Kibutsuji is written Κιμπούτσουτζι; Orochimaru is written Οροτσίμαρου).'
         )
     return ""
 

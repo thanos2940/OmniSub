@@ -92,7 +92,7 @@ Rules:
 - Enforce Greek morphology: do NOT accept raw nominative glossary lemmas in inflected positions. Words must decline naturally according to their syntactic role in the sentence.
 - Prioritize spoken Demotic Greek naturalness: penalize word-for-word calques of English idioms and phrasal verbs.
 - Be strict about gender and number correctness -- {target_language} requires matching gender/case for articles, adjectives, and verb forms.
-- Japanese names in Greek: Ensure Japanese character and proper names have their accent (τόνος) placed on the first syllable (e.g. Tanjiro -> Τάντζιρο, NOT Ταντζίρο; Zenitsu -> Ζένιτσου; Nezuko -> Νέζουκο; Inosuke -> Ίνοσουκε).
+- Japanese names in Greek (anime and other Japanese works only): the accent (τόνος) goes on the first syllable (e.g. Tanjiro -> Τάντζιρο, NOT Ταντζίρο; Zenitsu -> Ζένιτσου; Nezuko -> Νέζουκο), and on the third syllable from the end in names of four or more syllables (Inosuke -> Ινόσουκε).
 - Flag untranslated words left in the source language unless they are marked [KEEP] in the glossary.
 
 Glossary reference:

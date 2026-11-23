@@ -104,7 +104,7 @@ _ACCENT_TO_PLAIN = {
 }
 
 _PLAIN_TO_ACCENT = {
-    'α': 'ά', 'ε': 'έ', 'η': 'ή', 'ι': 'ί', 'ο': 'ό', 'υ': 'ύ', 'ω': 'ώ',
+    'α': 'ά', 'ε': 'έ', 'η': 'ή', 'ι': 'ί', 'ο': 'ό', 'υ': 'ύ', 'ω': 'ώ', 'ϊ': 'ΐ', 'ϋ': 'ΰ',
     'Α': 'Ά', 'Ε': 'Έ', 'Η': 'Ή', 'Ι': 'Ί', 'Ο': 'Ό', 'Υ': 'Ύ', 'Ω': 'Ώ',
 }
 
@@ -114,8 +114,8 @@ _CANONICAL_JAPANESE_NAMES_GREEK = {
     "ταντζίρο": "τάντζιρο", "ταντζίρου": "τάντζιρου", "ταντζιρό": "τάντζιρο", "ταντζιρο": "τάντζιρο", "ταντζιρου": "τάντζιρου",
     "νεζούκο": "νέζουκο", "νεζουκό": "νέζουκο", "νεζουκο": "νέζουκο",
     "ζενίτσου": "ζένιτσου", "ζενιτσού": "ζένιτσου", "ζενιτσου": "ζένιτσου",
-    "ινοσούκε": "ίνοσουκε", "ινοσουκέ": "ίνοσουκε", "ινόσουκε": "ίνοσουκε", "ινοσουκε": "ίνοσουκε",
-    "κιμπουτσούτζι": "κίμπουτσουτζι", "κιμπούτσουτζι": "κίμπουτσουτζι", "κιμπουτσουτζι": "κίμπουτσουτζι",
+    "ινοσούκε": "ινόσουκε", "ινοσουκέ": "ινόσουκε", "ινόσουκε": "ινόσουκε", "ινοσουκε": "ινόσουκε",
+    "κιμπουτσούτζι": "κιμπούτσουτζι", "κιμπούτσουτζι": "κιμπούτσουτζι", "κιμπουτσουτζι": "κιμπούτσουτζι",
     "σινομπού": "σίνομπου", "σινόμπου": "σίνομπου", "σινομπου": "σίνομπου",
     "καναό": "κάναο", "καναο": "κάναο",
     "γκιγιού": "γκίγιου", "γκιγιου": "γκίγιου",
@@ -140,7 +140,7 @@ _CANONICAL_JAPANESE_NAMES_GREEK = {
     "γκααρά": "γκάαρα", "γκααρα": "γκάαρα",
     "τσουναντέ": "τσούναντε", "τσουνάντε": "τσούναντε", "τσουναντε": "τσούναντε",
     "τζιραϊγιά": "τζίραγια", "τζιράγια": "τζίραγια", "τζιραγια": "τζίραγια",
-    "οροτσιμαρού": "όροτσιμαρου", "οροτσιμάρου": "όροτσιμαρου", "οροτσιμαρου": "όροτσιμαρου",
+    "οροτσιμαρού": "οροτσίμαρου", "οροτσιμάρου": "οροτσίμαρου", "οροτσιμαρου": "οροτσίμαρου",
     # One Piece
     "ζορό": "ζόρο", "ζορο": "ζόρο",
     "λουφί": "λούφι", "λουφι": "λούφι",
@@ -151,7 +151,7 @@ _CANONICAL_JAPANESE_NAMES_GREEK = {
     # My Hero Academia
     "ντεκού": "ντέκου", "ντεκου": "ντέκου",
     "μπακουγκό": "μπάκουγκο", "μπακουγκο": "μπάκουγκο",
-    "τοντοροκί": "τόντοροκι", "τοντόροκι": "τόντοροκι", "τοντοροκι": "τόντοροκι", "τομοντόκι": "τόντοροκι",
+    "τοντοροκί": "τοντόροκι", "τοντόροκι": "τοντόροκι", "τοντοροκι": "τοντόροκι", "τομοντόκι": "τοντόροκι",
     # Attack on Titan
     "μικασά": "μίκασα", "μικάσα": "μίκασα", "μικασα": "μίκασα",
     "αρμίν": "άρμιν", "αρμιν": "άρμιν",
@@ -165,70 +165,53 @@ _CANONICAL_JAPANESE_NAMES_GREEK = {
     "σουνγκούρου": "σούγκουρου", "σουγκούρου": "σούγκουρου", "σουγκουρου": "σούγκουρου",
 }
 
+# The values follow shift_greek_accent_to_first_syllable (first syllable; third from the end for four or more
+# syllables) and are recomputed with it below, so the table cannot drift from the rule. Older forms ("ίνοσουκε")
+# are found through their unaccented key.
+
+
+_DIGRAPH_PAIRS = ("ου", "αι", "ει", "οι", "αυ", "ευ", "υι")
+_GREEK_VOWELS = "αεηιουωϊϋ"
+
+
+def greek_syllable_nuclei(word: str) -> List[int]:
+    """Per syllable of a Greek word, the index of the letter that carries its accent: the second letter of a
+    digraph (ου, αι, ει, οι, αυ, ευ, υι), the vowel after a glide ι (consonant + ι + vowel is one syllable:
+    "Κιο-το", "Ριουκ"), otherwise the vowel. ϊ and ϋ always start a syllable of their own."""
+    w = "".join(_ACCENT_TO_PLAIN.get(c, c) for c in word).lower().replace("ΐ", "ϊ").replace("ΰ", "ϋ")
+    out: List[int] = []
+    i, n = 0, len(w)
+    while i < n:
+        if w[i] not in _GREEK_VOWELS:
+            i += 1
+            continue
+        if (w[i] == "ι" and i > 0 and w[i - 1] not in _GREEK_VOWELS and i + 1 < n and w[i + 1] in "αεοω"):
+            i += 1   # glide: the syllable's vowel is the next one
+        if i + 1 < n and w[i:i + 2] in _DIGRAPH_PAIRS:
+            out.append(i + 1)
+            i += 2
+        else:
+            out.append(i)
+            i += 1
+    return out
+
 
 def shift_greek_accent_to_first_syllable(word: str) -> str:
-    """Shift the Greek tonos (accent) to the first syllable/vowel of the word.
-    
-    Respects Greek diphthongs/digraphs (ου, αι, ει, οι, αυ, ευ).
-    For example:
-        Ταντζίρο -> Τάντζιρο
-        Νεζούκο -> Νέζουκο
-        Ζενίτσου -> Ζένιτσου
-        Ιτατσί -> Ίτατσι
-        Ινοσούκε -> Ίνοσουκε
+    """Put the accent of a transliterated Japanese name on its first syllable, the way Omnisub writes Japanese
+    names in Greek (Tanjiro = Τάντζιρο, Nezuko = Νέζουκο, Kyojuro = Κιότζουρο). Greek never accents a syllable
+    before the third from the end, so a name of four or more syllables takes it on the third from the end
+    (Inosuke = Ινόσουκε, Kibutsuji = Κιμπούτσουτζι). A word of one syllable is left as it is ("ζει", "μου").
+
+    Respects Greek digraphs (ου, αι, ει, οι, αυ, ευ) and the glide ι ("Κιό-", "Ριού-").
     """
     if not word or len(word) < 2:
         return word
 
-    # Unaccent all vowels first
-    unaccented = []
-    has_any_accent = False
-    for ch in word:
-        if ch in _ACCENT_TO_PLAIN:
-            unaccented.append(_ACCENT_TO_PLAIN[ch])
-            has_any_accent = True
-        else:
-            unaccented.append(ch)
-    clean_word = "".join(unaccented)
-
-    # Find the first vowel sound (syllabic nucleus)
-    vowels = set("αεηιουωΑΕΗΙΟΥΩ")
-    vowel_idx = -1
-    for idx, ch in enumerate(clean_word):
-        if ch in vowels:
-            vowel_idx = idx
-            break
-
-    if vowel_idx == -1:
+    clean_word = "".join(_ACCENT_TO_PLAIN.get(ch, ch) for ch in word)
+    nuclei = greek_syllable_nuclei(clean_word)
+    if len(nuclei) <= 1:
         return word
-
-    # A word of one syllable never takes the tonos ("ζει", "μου"): leave it as it is.
-    nuclei, prev = 0, ""
-    for ch in clean_word.lower():
-        if ch in "αεηιουω":
-            if not (prev + ch in ("ου", "αι", "ει", "οι", "αυ", "ευ", "υι")):
-                nuclei += 1
-            prev = ch
-        else:
-            prev = ""
-    if nuclei <= 1:
-        return word
-
-    # A consonant + ι + vowel is one syllable (synizesis): "Kyo" is written "Κιο", and the accent goes on the
-    # vowel after the ι ("Κιότο", "Κιότζουρο", "Ριούκ").
-    lower_clean = clean_word.lower()
-    if (vowel_idx > 0 and lower_clean[vowel_idx] == "ι" and vowel_idx + 1 < len(lower_clean)
-            and lower_clean[vowel_idx + 1] in "αεοω" and lower_clean[vowel_idx - 1] not in "αεηιουω"):
-        vowel_idx += 1
-
-    # Check for digraphs: ou, ai, ei, oi, au, eu
-    # In Greek monotonic, digraphs take the accent on the second vowel:
-    # e.g. ου -> ού, αι -> αί, ει -> εί, οι -> οί, αυ -> αύ, ευ -> εύ
-    target_idx = vowel_idx
-    if vowel_idx + 1 < len(clean_word):
-        pair = clean_word[vowel_idx:vowel_idx + 2].lower()
-        if pair in ("ου", "αι", "ει", "οι", "αυ", "ευ"):
-            target_idx = vowel_idx + 1
+    target_idx = nuclei[0] if len(nuclei) < 4 else nuclei[-3]
 
     ch_to_accent = clean_word[target_idx]
     accented_ch = _PLAIN_TO_ACCENT.get(ch_to_accent, ch_to_accent)
@@ -268,6 +251,10 @@ _COMMON_GREEK_WORDS = {
 }
 
 
+_CANONICAL_JAPANESE_NAMES_GREEK = {k: shift_greek_accent_to_first_syllable(v)
+                                  for k, v in _CANONICAL_JAPANESE_NAMES_GREEK.items()}
+
+
 def fix_japanese_name_greek_tonos(name: str, guess: bool = False) -> str:
     """Ensure Japanese names in Greek place the accent (τόνος) on the first syllable.
 
@@ -275,7 +262,7 @@ def fix_japanese_name_greek_tonos(name: str, guess: bool = False) -> str:
         Tanjiro: Ταντζίρο / Ταντζιρο -> Τάντζιρο
         Nezuko:  Νεζούκο / Νεζουκο   -> Νέζουκο
         Zenitsu: Ζενίτσου / Ζενιτσου -> Ζένιτσου
-        Inosuke: Ινοσούκε / Ινόσουκε -> Ίνοσουκε
+        Inosuke: Ινοσούκε / Ίνοσουκε -> Ινόσουκε (four syllables)
         Naruto:  Ναρούτο / Ναρουτο   -> Νάρουτο
         Sasuke:  Σασούκε / Σασκέ     -> Σάσουκε / Σάσκε
 

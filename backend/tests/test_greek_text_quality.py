@@ -250,3 +250,28 @@ class TestAccentRepair:
         repair_project("Show", apply=True, export=False)
         fixed = storage.load_episode_data("Show", "S01E01")[-1]
         assert fixed["translated"] == "Περίμενε!" and fixed["translations"]["el"] == "Περίμενε!"
+
+
+class TestThreeSyllableRule:
+    """Japanese names take the accent on the first syllable, but Greek never accents a syllable before the third
+    from the end: four or more syllables put it on the third from the end."""
+
+    def test_long_names(self):
+        from utils.text_normalize import shift_greek_accent_to_first_syllable as shift
+        assert shift("Ίνοσουκε") == "Ινόσουκε"            # i-no-su-ke
+        assert shift("Κιμπουτσουτζι") == "Κιμπούτσουτζι"   # ki-bu-tsu-ji
+        assert shift("Οροτσιμαρου") == "Οροτσίμαρου"       # o-ro-chi-ma-ru
+
+    def test_short_names_keep_the_first_syllable(self):
+        from utils.text_normalize import shift_greek_accent_to_first_syllable as shift
+        assert shift("Ταντζίρο") == "Τάντζιρο" and shift("Νεζούκο") == "Νέζουκο"
+        assert shift("Κιοτζούρο") == "Κιότζουρο"          # kyo-ju-ro: the ι is a glide, three syllables
+
+    def test_terms_and_known_names_follow_it(self):
+        from utils.text_normalize import normalize_japanese_term
+        assert normalize_japanese_term("Hashibira", "Χασιμπίρα", True) == "Χασίμπιρα"
+        assert normalize_japanese_term("Inosuke Hashibira", "Ίνοσουκε Χασιμπίρα", True) == "Ινόσουκε Χασίμπιρα"
+
+    def test_the_style_rule_says_so(self):
+        guide = build_style_guide("Greek", japanese_work=True)
+        assert "Ινόσουκε" in guide and "third syllable from the end" in guide and "Ίνοσουκε is" not in guide

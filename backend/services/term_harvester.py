@@ -28,7 +28,7 @@ Focus on:
 3. Organizations, factions, military units, and groups (e.g., "S.H.I.E.L.D.", "Hydra", "Avengers").
 4. Unique objects, artifacts, spells, weapons, and technology (e.g., "Mjolnir", "Infinity Stones", "Tesseract").
 5. Specialized lore jargon or recurring cultural terms.
-6. For Greek target language, Japanese character names and entities MUST place the Greek accent (τόνος) on the FIRST syllable (e.g., Tanjiro -> Τάντζιρο, Zenitsu -> Ζένιτσου, Nezuko -> Νέζουκο, Inosuke -> Ίνοσουκε, Naruto -> Νάρουτο).
+6. For Greek target language, Japanese names in anime and other Japanese works place the Greek accent (τόνος) on the FIRST syllable (e.g., Tanjiro -> Τάντζιρο, Zenitsu -> Ζένιτσου, Nezuko -> Νέζουκο, Naruto -> Νάρουτο), or on the third syllable from the end when the name has four or more syllables (Inosuke -> Ινόσουκε).
 
 Exclude:
 - Common, everyday conversational words (e.g., "car", "house", "friend", "morning", "police").
