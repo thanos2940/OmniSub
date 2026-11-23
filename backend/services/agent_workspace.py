@@ -74,6 +74,22 @@ class Unit:
     cues: List[int] = field(default_factory=list)
     start_ms: int = 0
     end_ms: int = 0
+    speaker: str = ""               # an ASS event's Name (actor) field, when it names a character
+
+
+# ASS "Name" values that label a kind of line rather than a speaker.
+_NOT_SPEAKERS = {"sign", "signs", "ts", "typeset", "typesetting", "title", "titles", "op", "ed", "insert", "song",
+                 "songs", "lyrics", "karaoke", "kfx", "tl", "tlc", "tl note", "tn", "note", "notes", "credit",
+                 "credits", "staff", "default", "main", "top", "italics", "flashback", "eyecatch", "next episode",
+                 "preview", "logo", "text", "caption", "captions", "sfx", "fx", "music", "bgm", "on screen"}
+
+
+def speaker_of(meta: Optional[Dict]) -> str:
+    """The character an ASS event's Name field names ("" for none, or for labels such as "Signs" or "OP")."""
+    name = " ".join(str((meta or {}).get("name") or "").split())
+    if not name or len(name) > 40 or name.lower() in _NOT_SPEAKERS or not any(c.isalpha() for c in name):
+        return ""
+    return name
 
 
 def _norm(text: str) -> str:
@@ -192,9 +208,12 @@ def build_units(
         else:
             key = ("cue", i)
         unit = groups.get(key)
+        speaker = speaker_of(meta) if kind == "dialogue" else ""
         if unit is None:
-            unit = groups[key] = Unit(id=0, kind=kind, text=text, start_ms=start, end_ms=end)
+            unit = groups[key] = Unit(id=0, kind=kind, text=text, start_ms=start, end_ms=end, speaker=speaker)
             order.append(key)
+        elif unit.speaker != speaker:
+            unit.speaker = ""   # the same line said by two people (stacked layers that disagree): name nobody
         unit.cues.append(i)
 
     all_units = [groups[k] for k in order]

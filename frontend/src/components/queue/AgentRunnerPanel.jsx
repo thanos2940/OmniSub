@@ -165,7 +165,11 @@ export default function AgentRunnerPanel({ runner, queuePaused, onTogglePause, t
                 {engineMissing && (
                     <p className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
                         <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                        {cli} was not found on this computer, so the runner cannot start. Check the runner settings.
+                        <span>
+                            {cli} was not found on this computer, so the runner cannot start and nothing is translated.
+                            Install it and sign in as the account OmbiSub runs as, or{' '}
+                            <Link to="/settings?section=translation" className="font-medium underline">translate with the Gemini API instead</Link>.
+                        </span>
                     </p>
                 )}
 

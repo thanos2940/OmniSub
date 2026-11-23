@@ -122,6 +122,22 @@ def _line_block(units: List[aw.Unit], current: Optional[Dict[int, str]] = None,
     return out
 
 
+def speakers_block(units: List[aw.Unit]) -> str:
+    """Who says which lines, from the subtitle file's own speaker names: "12–14 Tanjiro; 15 Nezuko". Kept out of
+    the numbered lines so an answer can never carry a name along."""
+    spans: List[List] = []   # [first id, last id, speaker]
+    for u in units:
+        if u.kind != "dialogue" or not u.speaker:
+            continue
+        if spans and spans[-1][2] == u.speaker and spans[-1][1] == u.id - 1:
+            spans[-1][1] = u.id
+        else:
+            spans.append([u.id, u.id, u.speaker])
+    if not spans:
+        return ""
+    return "; ".join(f"{a}{f'–{b}' if b != a else ''} {who}" for a, b, who in spans)
+
+
 Neighbours = Dict[int, Tuple[List[Tuple[str, str]], List[Tuple[str, str]]]]
 
 
@@ -160,6 +176,9 @@ def translate_prompt(static: str, *, title: str, story: str, characters: str, gl
     if context:
         parts.append("## The episode is already translated except these lines. Around each of them (for context "
                      "only — do not answer these; match their wording, names and address forms)\n" + "\n".join(context))
+    speakers = speakers_block(units)
+    if speakers:
+        parts.append("## Who speaks (the subtitle file's own names; lines not listed are not named)\n" + speakers)
     parts.append("\n".join([f"## Lines to translate ({len(units)})", *_line_block(units)]))
     extra = []
     if want_summary and part:
@@ -193,6 +212,9 @@ def fix_prompt(static: str, *, title: str, glossary_lines: List[str], glossary_n
     if context:
         parts.append("## Around these lines (already translated, for context only — do not answer these)\n"
                      + "\n".join(context))
+    speakers = speakers_block(units)
+    if speakers:
+        parts.append("## Who speaks (the subtitle file's own names)\n" + speakers)
     parts.append("\n".join(["## Lines to fix",
                             "Your previous answer left these lines missing or wrong. Answer with the corrected lines "
                             "only, in the same format.", *_line_block(units, current, problems)]))

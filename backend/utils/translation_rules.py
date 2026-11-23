@@ -173,9 +173,9 @@ def _gender_agreement_rule(target_language: str) -> str:
     return (
         "- SPEAKER AND LISTENER GENDER: English rarely shows whether the speaker or the person spoken to is male or "
         f"female, but {target_language} adjectives, participles and some verb forms must agree with them{example}. "
-        "Work out who speaks and to whom from the scene, the names around the line, the characters listed and the "
-        "show context, and keep the same choice for the same person. When nothing tells you, prefer a wording "
-        "that needs no gender over a guess."
+        "Work out who speaks and to whom from the speaker names when they are given, the scene, the names around "
+        "the line, the characters listed and the show context, and keep the same choice for the same person. When "
+        "nothing tells you, prefer a wording that needs no gender over a guess."
     )
 
 

@@ -176,3 +176,34 @@ class TestCharacters:
         assert "none of them is named in these lines" in block
         named = mgr.build_profile_context(mgr.get_profiles_for_chunk(["Mira, come here."]))
         assert named.startswith("Characters named in these lines:")
+
+
+class TestSpeakers:
+    def _cue(self, text, name, start):
+        return {"original": text, "timecode": "", "_ass": {"kind": "dialogue", "translatable": True, "name": name,
+                                                           "start_ms": start, "end_ms": start + 1500, "style": "Default"}}
+
+    def test_ass_names_reach_the_prompt_without_touching_the_lines(self):
+        from services import agent_prompts as ap
+        from services import agent_workspace as aw
+        cues = [self._cue("I'm ready.", "Tanjiro", 0), self._cue("Me too.", "Tanjiro", 2000),
+                self._cue("Are you sure?", "Nezuko", 4000), self._cue("Big sign text", "Signs", 6000),
+                self._cue("Who said that?", "", 8000)]
+        units, _ = aw.build_units(cues, "el")
+        assert [u.speaker for u in units] == ["Tanjiro", "Tanjiro", "Nezuko", "", ""]
+        assert ap.speakers_block(units) == "1–2 Tanjiro; 3 Nezuko"
+        prompt = ap.translate_prompt("STATIC", title="T", story="", characters="", glossary_lines=[], glossary_note="",
+                                     earlier=[], units=units, want_summary=False, want_guide=False)
+        assert "## Who speaks" in prompt and "1–2 Tanjiro; 3 Nezuko" in prompt
+        assert "1| I'm ready." in prompt                    # the numbered line itself carries no name
+
+    def test_old_plans_without_speakers_still_load(self):
+        from services import agent_workspace as aw
+        units = aw.units_from_plan({"units": [{"id": 1, "kind": "dialogue", "text": "Hi", "cues": [0]}]})
+        assert units[0].speaker == ""
+
+    def test_no_section_without_names(self):
+        from services import agent_prompts as ap
+        from services import agent_workspace as aw
+        units, _ = aw.build_units([{"original": "Hello", "timecode": "00:00:01,000 --> 00:00:02,000"}], "el")
+        assert ap.speakers_block(units) == ""
