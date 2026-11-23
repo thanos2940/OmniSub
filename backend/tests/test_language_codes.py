@@ -71,3 +71,21 @@ def test_matches_language():
     assert matches_language("Show.S01E01.greek.ssa", "Show.S01E01", "el") is True
     assert matches_language("Show.S01E01.ass", "Show.S01E01", "en") is True
     assert matches_language("Show.S01E01.ssa", "Show.S01E01", "el") is False
+
+
+@pytest.mark.parametrize("name,code", [
+    ("Ελληνικά", "el"), ("ελληνικα", "el"), ("el-GR", "el"), ("ell", "el"), ("Greek (Modern)", "el"),
+    ("Estonian", "et"), ("Filipino", "tl"), ("Armenian", "hy"), ("Bengali", "bn"), ("Slovak", "sk"),
+    ("Serbian", "sr"), ("Malayalam", "ml"), ("Portuguese (Brazil)", "pt"), ("pt-BR", "pt"), ("Español", "es"),
+    ("Deutsch", "de"), ("日本語", "ja"), ("Persian (Farsi)", "fa"),
+])
+def test_names_people_type_resolve_to_the_right_code(name, code):
+    # A free-text name used to fall back to its first two letters: "Ελληνικά" gave "ελ" (file "x.ελ.srt"),
+    # "Estonian" gave Spanish's "es", "Filipino" Finnish's "fi", "Armenian" Arabic's "ar".
+    assert to_code(name) == code
+
+
+def test_every_code_has_one_english_name():
+    from utils.language_codes import LANG_CODES
+    codes = list(LANG_CODES.values())
+    assert len(codes) == len(set(codes))

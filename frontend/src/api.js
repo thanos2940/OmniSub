@@ -67,7 +67,7 @@ export const api = {
 
     // Projects
     getProjects: () => axios.get(`${API_URL}/projects`),
-    createProject: (name, targetLanguage, parentProject = null, type = 'show') => axios.post(`${API_URL}/projects`, { name, target_language: targetLanguage, parent_project: parentProject, type }),
+    createProject: (name, targetLanguage, parentProject = null, type = 'show', isAnime = null) => axios.post(`${API_URL}/projects`, { name, target_language: targetLanguage, parent_project: parentProject, type, is_anime: isAnime }),
     getProject: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}`),
     getProjectTokenSummary: (name) => axios.get(`${API_URL}/projects/${encodeURIComponent(name)}/token-summary`),
     testTranslation: (name, data) => axios.post(`${API_URL}/projects/${encodeURIComponent(name)}/test-translation`, data),

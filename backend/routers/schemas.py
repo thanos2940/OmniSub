@@ -6,6 +6,7 @@ class CreateProjectRequest(BaseModel):
     target_language: str = "English"
     parent_project: Optional[str] = None
     type: str = "show"
+    is_anime: Optional[bool] = None   # an anime / Japanese work (Japanese-name rules, ASS preference)
 
 
 class ImportRequest(BaseModel):

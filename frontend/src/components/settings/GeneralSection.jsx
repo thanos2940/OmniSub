@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Card, Field, INPUT } from '../ui';
 import { cx, FieldGrid, Notice, NumberInput } from './parts';
+import LanguageSelect from '../common/LanguageSelect';
 
 const SEGMENT = /^[A-Za-z0-9._~-]+$/;
 
@@ -24,7 +25,7 @@ export default function GeneralSection({ settings, onChange, status }) {
             <Card title="Languages" subtitle="Defaults for new projects. Each project can override them.">
                 <FieldGrid>
                     <Field label="Translate into" htmlFor="target-lang" hint="Used when projects are created from Sonarr and Radarr.">
-                        <input id="target-lang" className={INPUT} value={settings.default_target_language || ''} onChange={(e) => onChange('default_target_language', e.target.value)} placeholder="Greek" />
+                        <LanguageSelect id="target-lang" value={settings.default_target_language || ''} onChange={(v) => onChange('default_target_language', v)} />
                     </Field>
                     <Field label="Source language code" htmlFor="source-lang" hint="Language of the subtitles to translate from, as a code: en, ja.">
                         <input id="source-lang" className={cx(INPUT, 'font-mono sm:w-32')} value={settings.arr_source_language || ''} onChange={(e) => onChange('arr_source_language', e.target.value)} placeholder="en" />

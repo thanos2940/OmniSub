@@ -20,7 +20,8 @@ and the episode was re-translated forever.
 import re
 from typing import Dict, Set
 
-# Human-readable name -> ISO-639-1 code.
+# Human-readable name -> ISO-639-1 code. One English name per code: reverse lookups (code -> name) use it,
+# and it is the name the settings store and the prompts say ("translating from English into Greek").
 LANG_CODES: Dict[str, str] = {
     "Greek": "el", "English": "en", "Spanish": "es", "French": "fr",
     "German": "de", "Italian": "it", "Portuguese": "pt", "Russian": "ru",
@@ -28,6 +29,33 @@ LANG_CODES: Dict[str, str] = {
     "Polish": "pl", "Swedish": "sv", "Danish": "da", "Finnish": "fi",
     "Norwegian": "no", "Czech": "cs", "Hungarian": "hu", "Romanian": "ro",
     "Turkish": "tr", "Arabic": "ar", "Hebrew": "he", "Ukrainian": "uk",
+    "Bulgarian": "bg", "Croatian": "hr", "Serbian": "sr", "Slovak": "sk", "Slovenian": "sl",
+    "Lithuanian": "lt", "Latvian": "lv", "Estonian": "et", "Icelandic": "is", "Albanian": "sq",
+    "Macedonian": "mk", "Bosnian": "bs", "Catalan": "ca", "Basque": "eu", "Galician": "gl", "Irish": "ga",
+    "Welsh": "cy", "Maltese": "mt", "Belarusian": "be", "Georgian": "ka", "Armenian": "hy",
+    "Azerbaijani": "az", "Kazakh": "kk", "Mongolian": "mn", "Hindi": "hi", "Bengali": "bn", "Tamil": "ta",
+    "Telugu": "te", "Malayalam": "ml", "Marathi": "mr", "Urdu": "ur", "Persian": "fa", "Thai": "th",
+    "Vietnamese": "vi", "Indonesian": "id", "Malay": "ms", "Filipino": "tl", "Khmer": "km", "Lao": "lo",
+    "Burmese": "my", "Nepali": "ne", "Sinhala": "si", "Swahili": "sw", "Afrikaans": "af", "Amharic": "am",
+}
+
+# Other ways people write a language (native names, variants) -> code. Matched case-insensitively.
+_ALIASES: Dict[str, str] = {
+    "ελληνικά": "el", "ελληνικα": "el", "modern greek": "el",
+    "español": "es", "espanol": "es", "castellano": "es", "latin american spanish": "es",
+    "français": "fr", "francais": "fr", "deutsch": "de", "italiano": "it",
+    "português": "pt", "portugues": "pt", "brazilian portuguese": "pt", "português do brasil": "pt",
+    "русский": "ru", "日本語": "ja", "한국어": "ko", "中文": "zh", "简体中文": "zh", "繁體中文": "zh",
+    "simplified chinese": "zh", "traditional chinese": "zh", "mandarin": "zh", "cantonese": "zh",
+    "nederlands": "nl", "flemish": "nl", "polski": "pl", "svenska": "sv", "dansk": "da", "suomi": "fi",
+    "norsk": "no", "bokmål": "no", "bokmal": "no", "norwegian bokmål": "no", "čeština": "cs", "cestina": "cs",
+    "magyar": "hu", "română": "ro", "romana": "ro", "türkçe": "tr", "turkce": "tr", "العربية": "ar",
+    "עברית": "he", "українська": "uk", "български": "bg", "hrvatski": "hr", "српски": "sr", "srpski": "sr",
+    "slovenčina": "sk", "slovenščina": "sl", "slovene": "sl", "lietuvių": "lt", "latviešu": "lv", "eesti": "et",
+    "íslenska": "is", "shqip": "sq", "македонски": "mk", "bosanski": "bs", "català": "ca", "euskara": "eu",
+    "galego": "gl", "gaeilge": "ga", "cymraeg": "cy", "беларуская": "be", "ქართული": "ka", "հայերեն": "hy",
+    "हिन्दी": "hi", "বাংলা": "bn", "தமிழ்": "ta", "اردو": "ur", "فارسی": "fa", "farsi": "fa", "ไทย": "th",
+    "tiếng việt": "vi", "bahasa indonesia": "id", "bahasa melayu": "ms", "tagalog": "tl", "kiswahili": "sw",
 }
 
 # ISO-639-1 code -> set of lowercase filename variants used for on-disk
@@ -75,17 +103,35 @@ def to_code(name_or_code: str) -> str:
     """
     if not name_or_code:
         return "xx"
-    lower = name_or_code.strip().lower()
+    lower = " ".join(name_or_code.strip().lower().split())
 
     for name, code in LANG_CODES.items():
         if name.lower() == lower:
             return code
 
+    if lower in _ALIASES:
+        return _ALIASES[lower]
+
     if lower in _KNOWN_CODES:
         return lower
 
-    for name, code in LANG_CODES.items():
-        if lower in name.lower() or name.lower() in lower:
+    # A locale tag ("el-GR", "pt_BR", "zh-Hant") or a three-letter code ("ell", "gre", "spa").
+    m = re.match(r"^([a-z]{2,3})(?:[-_][a-z0-9]{2,8})*$", lower)
+    if m:
+        base = m.group(1)
+        if base in _KNOWN_CODES:
+            return base
+        for code, variants in LANG_VARIANTS.items():
+            if base in variants:
+                return code
+
+    # "Greek (Modern)", "Portuguese (Brazil)", "Ελληνικά (Greek)": the longest known name inside it.
+    names = sorted([*((n.lower(), c) for n, c in LANG_CODES.items()), *_ALIASES.items()], key=lambda nc: -len(nc[0]))
+    for name, code in names:
+        if len(name) >= 4 and name in lower:
+            return code
+    for name, code in names:   # an abbreviation of a name ("Port", "Gree")
+        if len(lower) >= 3 and name.startswith(lower):
             return code
 
     return lower[:2]

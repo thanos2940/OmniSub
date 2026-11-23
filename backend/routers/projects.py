@@ -64,7 +64,8 @@ async def library():
 @router.post("/projects")
 @router.post("/api/projects")
 async def create_project(request: CreateProjectRequest):
-    is_anime = (request.type or "").lower() == "anime" or "anime" in request.name.lower()
+    is_anime = (bool(request.is_anime) or (request.type or "").lower() == "anime"
+                or (request.is_anime is None and "anime" in request.name.lower()))
     metadata = {
         "show_name": request.name,
         "target_language": request.target_language,

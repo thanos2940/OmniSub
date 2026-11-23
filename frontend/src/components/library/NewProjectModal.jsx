@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useToast } from '../../context/ToastContext';
 import { Button, Field, INPUT, Modal } from '../ui';
+import LanguageSelect from '../common/LanguageSelect';
 
 // Creates a project that is not synced from Sonarr/Radarr (for subtitle files you bring yourself).
 export default function NewProjectModal({ open, onClose, onCreated, parents = [], defaultLanguage = 'Greek' }) {
@@ -10,16 +11,17 @@ export default function NewProjectModal({ open, onClose, onCreated, parents = []
     const [language, setLanguage] = useState(defaultLanguage);
     const [type, setType] = useState('show');
     const [parent, setParent] = useState('');
+    const [anime, setAnime] = useState(false);
     const [saving, setSaving] = useState(false);
 
-    const reset = () => { setName(''); setType('show'); setParent(''); };
+    const reset = () => { setName(''); setType('show'); setParent(''); setAnime(false); };
 
     const submit = async (e) => {
         e.preventDefault();
         if (!name.trim()) return;
         setSaving(true);
         try {
-            await api.createProject(name.trim(), language.trim() || defaultLanguage, parent || null, type);
+            await api.createProject(name.trim(), language.trim() || defaultLanguage, parent || null, type, anime);
             toast.success(`Created "${name.trim()}".`);
             reset();
             onCreated?.();
@@ -49,7 +51,7 @@ export default function NewProjectModal({ open, onClose, onCreated, parents = []
                 </Field>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Field label="Translate into" htmlFor="np-lang">
-                        <input id="np-lang" className={INPUT} value={language} onChange={e => setLanguage(e.target.value)} placeholder="Greek" />
+                        <LanguageSelect id="np-lang" value={language} onChange={setLanguage} />
                     </Field>
                     <Field label="Kind" htmlFor="np-type">
                         <select id="np-type" className={INPUT} value={type} onChange={e => setType(e.target.value)}>
@@ -59,6 +61,14 @@ export default function NewProjectModal({ open, onClose, onCreated, parents = []
                         </select>
                     </Field>
                 </div>
+                <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    <input type="checkbox" className="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        checked={anime} onChange={e => setAnime(e.target.checked)} />
+                    <span>
+                        Anime or another Japanese work
+                        <span className="block text-xs text-gray-500 dark:text-gray-400">Japanese names follow their own spelling rules, and ASS subtitles are preferred.</span>
+                    </span>
+                </label>
                 {parents.length > 0 && (
                     <Field label="Belongs to" htmlFor="np-parent" hint="Optional. Shares context with the parent project.">
                         <select id="np-parent" className={INPUT} value={parent} onChange={e => setParent(e.target.value)}>
