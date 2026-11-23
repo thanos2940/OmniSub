@@ -80,6 +80,7 @@ class RunnerStartRequest(BaseModel):
     watch: Optional[bool] = None
     api_rescue: bool = True
     rescue_model: Optional[str] = None
+    review: Optional[str] = None
 
 
 class RunnerConfigRequest(BaseModel):
@@ -96,6 +97,7 @@ class RunnerConfigRequest(BaseModel):
     api_rescue: Optional[bool] = None
     rescue_model: Optional[str] = None
     bootstrap: Optional[bool] = None
+    review: Optional[str] = None   # "fix" | "flag" | "off": the second pass over every translated part
 
 
 def _result(result: Dict[str, Any], not_found_statuses=("not_found",)) -> Any:

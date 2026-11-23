@@ -56,7 +56,7 @@ def no_bootstrap(monkeypatch):
 @pytest.fixture(autouse=True)
 def fake_env(monkeypatch, tmp_path):
     for var in ("FAKE_AGY_SKIP_AT", "FAKE_AGY_QUOTA_MODELS", "FAKE_AGY_BLOCK_MODELS", "FAKE_AGY_BLOCK_WORD",
-                "FAKE_AGY_CUT", "FAKE_AGY_LINGER", "FAKE_AGY_STALL"):
+                "FAKE_AGY_CUT", "FAKE_AGY_LINGER", "FAKE_AGY_STALL", "FAKE_AGY_REVIEW"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("FAKE_AGY_LOG", str(tmp_path / "calls"))
     storage.save_global_config({"tm_enabled": False})  # no embedding model in these tests
@@ -1013,3 +1013,66 @@ class TestHungCli:
         assert time.time() - started < 20
         assert reply.failure == ""
         assert "2| Ελ: Bye." in reply.text and "answer it had streamed is used" in reply.message
+
+
+
+class TestReview:
+    """The second pass (services/runner/review.py): a reviewer request per part; sure corrections replace the
+    translation, unsure ones and every finding in "flag" mode go to the Review page; a failed review never
+    holds the episode up."""
+
+    def _review_prompts(self, tmp_path):
+        return [p for p in _prompts(tmp_path) if "## The translation to check" in p]
+
+    def test_off_sends_no_review(self, tmp_path):
+        _show()
+        _run(tmp_path, review="off")
+        assert self._review_prompts(tmp_path) == []
+
+    def test_a_clean_review_changes_nothing(self, tmp_path):
+        _show()
+        _run(tmp_path, review="fix")
+        (prompt,) = self._review_prompts(tmp_path)
+        assert "Where were you last night?" in prompt and "TR: Ελ: Where were you last night?" in prompt
+        assert all(t == f"Ελ: {s}" for s, t in _greek())
+
+    def test_sure_corrections_are_applied_and_noted(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FAKE_AGY_REVIEW", "fix:2,flag:5,english:7")
+        _show()
+        runner = _run(tmp_path, review="fix")
+        cues = storage.load_episode_data("Runner Show", "S01E01")
+        assert cues[1]["translations"]["el"] == "Διορθωμένη γραμμή 2"
+        assert "the speaker is a woman" in cues[1]["review_note"] and "Ελ: I was at the station" in cues[1]["review_note"]
+        assert cues[4]["translations"]["el"] == f"Ελ: {LINES[4]}" and cues[4]["needs_review"]       # unsure: flagged
+        assert "Ίσως γραμμή 5" in cues[4]["review_issues"]
+        assert cues[6]["translations"]["el"] == f"Ελ: {LINES[6]}" and not cues[6].get("needs_review")  # English: ignored
+        assert "1 line(s) corrected, 1 flagged" in _log(runner)
+
+    def test_flag_mode_changes_nothing_and_flags_everything(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("FAKE_AGY_REVIEW", "fix:2,flag:5")
+        _show()
+        _run(tmp_path, review="flag")
+        cues = storage.load_episode_data("Runner Show", "S01E01")
+        assert all(c["translations"]["el"] == f"Ελ: {c['original']}" for c in cues)
+        assert [i for i, c in enumerate(cues) if c.get("needs_review")] == [1, 4]
+
+    def test_a_failed_review_still_submits(self, tmp_path, monkeypatch):
+        calls = {"n": 0}
+        real = agent_cli.call_model
+
+        def fail_reviews(engine, exe, model, prompt, *a, **k):
+            if "## The translation to check" in prompt:
+                calls["n"] += 1
+                return agent_cli.Reply(failure="error", message="the reviewer is down")
+            return real(engine, exe, model, prompt, *a, **k)
+
+        monkeypatch.setattr(agent_cli, "call_model", fail_reviews)
+        _show()
+        runner = _run(tmp_path, review="fix")
+        assert calls["n"] == 1
+        assert all(t == f"Ελ: {s}" for s, t in _greek())
+        assert "did not run (the reviewer is down)" in _log(runner) and "submitted" in _log(runner)
+
+    def test_the_setting_is_validated(self):
+        assert clean_config({"review": "FLAG"})["review"] == "flag"
+        assert clean_config({"review": "sometimes"})["review"] == agent_runner.DEFAULT_CONFIG["review"]

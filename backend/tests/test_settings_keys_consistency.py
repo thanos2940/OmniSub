@@ -36,6 +36,7 @@ ALLOWLIST = {
     # PUT /api/agent/runner/config, not the global settings.
     "api_rescue",
     "rescue_model",
+    "review",                # the runner's second pass (services/runner/review.py)
 }
 
 KEY_RE = re.compile(r'(?:global_config|config|cfg)\.get\(\s*"([a-z][a-z0-9_]*)"')

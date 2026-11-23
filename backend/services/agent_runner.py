@@ -92,10 +92,11 @@ DEFAULT_CONFIG = {
     "api_rescue": True,          # lines the CLI model's safety filter refuses go to the Gemini API at the end
     "rescue_model": "",          # ... with this model ("": the project's translation model)
     "bootstrap": True,           # a show without a context guide or glossary gets both before its first episode
+    "review": "fix",             # second pass per part: "fix" corrects real errors (unsure ones flagged), "flag", "off"
     "api_url": DEFAULT_API_URL,
 }
 LIVE_KEYS = ("model", "fallback_models", "per_show", "chunk_lines", "fix_rounds", "max_episodes", "watch",
-             "api_rescue", "rescue_model", "bootstrap", "api_url")
+             "api_rescue", "rescue_model", "bootstrap", "review", "api_url")
 WATCH_SECONDS = 60
 PAUSE_CACHE_SECONDS = 3          # the "Pause translations" switch is read at most this often
 
@@ -111,6 +112,7 @@ from services.runner.context import ContextMixin
 from services.runner.episode import EpisodeMixin
 from services.runner.models import ModelsMixin
 from services.runner.requests import RequestsMixin
+from services.runner.review import ReviewMixin
 
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
@@ -150,6 +152,10 @@ def clean_config(cfg: Optional[Dict]) -> Dict:
     for key in ("model", "rescue_model"):
         if key in out:
             out[key] = str(out[key] or "").strip()
+    if "review" in out:
+        out["review"] = str(out["review"] or "").strip().lower()
+        if out["review"] not in ("fix", "flag", "off"):
+            out["review"] = DEFAULT_CONFIG["review"]
     if "api_url" in out:
         out["api_url"] = normalize_api_url(str(out["api_url"] or "").strip())
     for key in ("watch", "keep_watching", "api_rescue", "bootstrap"):
@@ -219,7 +225,7 @@ class RunnerConfig(dict):
         super().__setitem__(key, value)
 
 
-class AgentRunner(ModelsMixin, ClaimsMixin, EpisodeMixin, RequestsMixin, ContextMixin):
+class AgentRunner(ModelsMixin, ClaimsMixin, EpisodeMixin, ReviewMixin, RequestsMixin, ContextMixin):
     def __init__(self, service=None, exe_override: Optional[Dict[str, List[str]]] = None,
                  state_dir: Optional[Path] = None):
         if service is None:

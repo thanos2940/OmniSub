@@ -140,6 +140,14 @@ function RunnerCard({ settings, onChange, runner }) {
                     checked={form.bootstrap}
                     onChange={(v) => set('bootstrap', v)}
                 />
+                <Field label="Second pass (review)" htmlFor="runner-review"
+                    hint="After an episode is translated, a reviewer checks every line against the English: meaning, the gender of who speaks and to whom, forms of address, glossary names, lines on the wrong cue. It costs one more request per part.">
+                    <select id="runner-review" className={INPUT} value={form.review || 'fix'} onChange={(e) => set('review', e.target.value)}>
+                        <option value="fix">Correct real errors; send unsure ones to Review</option>
+                        <option value="flag">Only flag what it finds (nothing changes by itself)</option>
+                        <option value="off">Off</option>
+                    </select>
+                </Field>
                 <Toggle
                     label="Reuse earlier translations"
                     description="Lines that match something already translated in the same show are taken from translation memory."

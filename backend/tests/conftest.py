@@ -85,3 +85,11 @@ def no_real_agent_cli(monkeypatch):
     ``OMNISUB_<ENGINE>_CMD`` at tests/fake_agent_cli.py or patches ``agent_cli.engine_command``."""
     from services import agent_cli
     monkeypatch.setattr(agent_cli, "_locate", lambda engine: None)
+
+
+@pytest.fixture(autouse=True)
+def no_review_pass(monkeypatch):
+    """The runner's second pass (services/runner/review.py) adds a request to every part; the tests that count
+    prompts were written before it. Tests of the review turn it on for their run (``review="fix"``)."""
+    from services import agent_runner
+    monkeypatch.setitem(agent_runner.DEFAULT_CONFIG, "review", "off")

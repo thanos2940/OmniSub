@@ -526,3 +526,39 @@ def apply_translations(
                 cue["translated"] = clean
             written += 1
     return written
+
+
+
+REVIEW_FILE = "review.json"   # written by the runner's second pass (services/runner/review.py)
+
+
+def apply_review(cues: List[Dict], units: List[Unit], folder) -> Dict[str, int]:
+    """Write the second pass's findings (the workspace's ``review.json``) onto the cues each unit stands for: a
+    correction leaves a ``review_note`` (what was wrong, and the earlier text); a flag sets ``needs_review`` with
+    ``review_issues`` (the problem and the suggestion), so the line shows up on the Review page."""
+    import json
+    from pathlib import Path
+    path = Path(folder) / REVIEW_FILE
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"fixes": 0, "flags": 0}
+    by_id = {u.id: u for u in units}
+    counts = {"fixes": 0, "flags": 0}
+    for kind in ("fixes", "flags"):
+        for item in found.get(kind) or []:
+            unit = by_id.get(item.get("id")) if isinstance(item, dict) else None
+            if not unit:
+                continue
+            reason = str(item.get("reason") or "").strip() or "the review found a problem"
+            for ci in unit.cues:
+                if ci >= len(cues):
+                    continue
+                cue = cues[ci]
+                if kind == "fixes":
+                    cue["review_note"] = f"Corrected by the review: {reason}. Before: {item.get('before', '')}"
+                else:
+                    cue["needs_review"] = True
+                    cue["review_issues"] = f"{reason} — suggested: {item.get('suggestion', '')}"
+            counts[kind] += 1
+    return counts

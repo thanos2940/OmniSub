@@ -24,6 +24,7 @@ quota report. Behaviour switches (environment variables):
                           been seen to answer and then never exit)
   FAKE_AGY_STALL          seconds the process goes silent after streaming its answer, without ever
                           printing the final result
+  FAKE_AGY_REVIEW         what the review (second pass) reports: "fix:1,flag:3,english:2" (default: OK)
 
 Besides translation requests it answers the one-line prompt ("## Line to translate (1)") like a
 translation, the show-brief prompt ("You are preparing the translation brief") with `G|` lines and
@@ -107,6 +108,21 @@ def fail(message):
     sys.exit(1)
 
 
+def answer_review(prompt):
+    """The review: ``FAKE_AGY_REVIEW`` lists what to report, e.g. ``fix:1,flag:3`` (a correction of line 1, an unsure
+    suggestion for line 3); without it every line is fine (``OK``). ``english:2`` "corrects" line 2 back into English."""
+    found = []
+    for item in [i.strip() for i in os.environ.get("FAKE_AGY_REVIEW", "").split(",") if i.strip()]:
+        kind, n = item.split(":")
+        if kind == "fix":
+            found.append(f"{n}| Διορθωμένη γραμμή {n} ## the speaker is a woman")
+        elif kind == "flag":
+            found.append(f"{n}?| Ίσως γραμμή {n} ## the meaning is unclear")
+        elif kind == "english":
+            found.append(f"{n}| Still English line {n} ## wrong")
+    reply(prompt, "\n".join(found) or "OK")
+
+
 def main():
     sys.stdin.reconfigure(encoding="utf-8")   # the runner talks UTF-8, whatever the console code page
     sys.stdout.reconfigure(encoding="utf-8")
@@ -135,6 +151,9 @@ def main():
         return
     if "terminology analyst" in prompt:
         reply(prompt, "+ Johnny | Τζόνι | character | male | | Mira's brother\n+ Station Road | Οδός Σταθμού | location")
+        return
+    if "## The translation to check" in prompt:   # the second pass (services/runner/review.py)
+        answer_review(prompt)
         return
     if "Fix the following" in prompt:   # the wrong-alphabet repair: every numbered item comes back corrected
         reply(prompt, "\n".join(f"{m.group(1)}| Διορθωμένο {m.group(1)}"

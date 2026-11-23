@@ -273,6 +273,7 @@ class SubmissionMixin:
             if "timecode" not in cue:
                 cue["timecode"] = f"{cue.get('start', '00:00:00,000')} --> {cue.get('end', '00:00:00,000')}"
         written = aw.apply_translations(cues, units, translations, target_code, is_primary)
+        reviewed = aw.apply_review(cues, units, folder)
         storage.save_episode(project_name, episode_name, cues)
 
         # Translation Memory: one pair per unit that really is translated.
@@ -347,6 +348,8 @@ class SubmissionMixin:
             log.append("Context guide updated.")
         if summary_saved:
             log.append("Episode summary saved.")
+        if reviewed["fixes"] or reviewed["flags"]:
+            log.append(f"Review: {reviewed['fixes']} line(s) corrected, {reviewed['flags']} flagged for a person.")
         log.append(f"Exported to {exported_path}." if exported_path else "Not exported (no reachable media folder).")
         if queue_id:
             TranslationQueue().update_status(queue_id, status="completed", completed_at=_now(), logs=log)
@@ -373,6 +376,8 @@ class SubmissionMixin:
             "total_cues": len(cues),
             "exported_path": exported_path,
             "harvested_terms_count": terms["added"],
+            "review_fixes": reviewed["fixes"],
+            "review_flags": reviewed["flags"],
             "glossary_updated_terms": terms["updated"],
             "glossary_conflicts": terms["conflicts"],
             "glossary_warnings": report["glossary_warnings"],

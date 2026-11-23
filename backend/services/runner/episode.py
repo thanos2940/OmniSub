@@ -101,6 +101,9 @@ class EpisodeMixin:
             progress(current())
             if self.stop_event.is_set():
                 return
+        if not self._review(lane, model, folder, title, ctx, units, code, needs, current, tokens=tokens,
+                            project=project, episode=episode):
+            return  # stopped or cancelled during the review: the episode stays claimed and resumes later
         self._submit(lane, task, folder, units, current, needs, started, tokens, whole=whole)
 
     def _context_requested(self, task: Dict) -> bool:

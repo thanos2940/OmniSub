@@ -221,6 +221,75 @@ def fix_prompt(static: str, *, title: str, glossary_lines: List[str], glossary_n
     return "\n\n".join(parts) + "\n"
 
 
+
+REVIEW_MARK = "## The translation to check"
+_REVIEW_LINE = re.compile(r"^\s*(?:[-*]\s*)?(\d+)\s*(\?)?\s*[|｜][ \t]?(.*?)\s*$")
+
+
+def review_prompt(static: str, *, title: str, part: str = "", glossary_lines: List[str], glossary_note: str,
+                  characters: str, units: List[aw.Unit], current: Dict[int, str]) -> str:
+    """The second pass: the same shared part (so the CLI's cache serves it), then the English lines with their
+    translations, and what to correct. The answer lists only the lines that change (``N|``) or that a person
+    should look at (``N?|``), each with the problem after ``##``."""
+    parts = [static, f"## Now reviewing\n{title}{f' — {part}' if part else ''}"]
+    if characters.strip():
+        parts.append("## Characters\n" + characters.strip())
+    if glossary_lines:
+        parts.append("## Glossary terms in these lines\n" + glossary_note + "\n" + "\n".join(glossary_lines))
+    speakers = speakers_block(units)
+    if speakers:
+        parts.append("## Who speaks (the subtitle file's own names)\n" + speakers)
+    rows: List[str] = []
+    prev_end = None
+    for u in units:
+        if u.kind == "dialogue" and prev_end is not None and u.start_ms - prev_end > aw.SCENE_GAP_MS:
+            rows.append("")
+        rows += [f"{u.id}", f"   EN: {escape(u.text)}", f"   TR: {escape(current.get(u.id, ''))}"]
+        if u.kind == "dialogue":
+            prev_end = max(u.end_ms, prev_end or 0)
+    parts.append(f"{REVIEW_MARK} ({len(units)} lines: number, English, translation; on-screen text last)\n"
+                 + "\n".join(rows))
+    parts.append(
+        "## Your task now\n"
+        "You are the reviewer of this translation, not its translator. The answer format above does not apply to "
+        "this request: use the one below. Check every translation against its English line and the lines around it, "
+        "and correct only real errors:\n"
+        "- meaning: something wrong, missing or added; a wrong negation, number, tense or person; an idiom or joke "
+        "translated word for word;\n"
+        "- agreement: the gender and number of the speaker and of the person spoken to (adjectives, participles); "
+        "the same form of address (familiar or formal, singular or plural) between the same people;\n"
+        "- names and terms: the glossary renderings, declined as the sentence needs; a name left in English;\n"
+        "- placement: a translation that belongs to the line before or after, or answers the wrong line.\n"
+        "Do not touch a line for style, synonyms or punctuation when it is correct and natural; keep tags and "
+        "`\\n` line breaks as they are.\n\n"
+        "## Answer format\n"
+        "- A line you correct: `N| the corrected translation ## the problem in a few words`.\n"
+        "- A line that seems wrong but that you cannot correct with confidence: `N?| your best suggestion ## the "
+        "problem`.\n"
+        "- Leave out every line that is right. If all of them are right, answer only `OK`.")
+    return "\n\n".join(parts) + "\n"
+
+
+def parse_review(text: str, allowed: set) -> Dict[str, Dict[int, Tuple[str, str]]]:
+    """``{"fixes": {N: (translation, problem)}, "flags": {N: (suggestion, problem)}}`` from a review reply."""
+    fixes: Dict[int, Tuple[str, str]] = {}
+    flags: Dict[int, Tuple[str, str]] = {}
+    for raw in (text or "").splitlines():
+        m = _REVIEW_LINE.match(raw)
+        if not m or int(m.group(1)) not in allowed:
+            continue
+        body = m.group(3)
+        reason = ""
+        if " ## " in body:
+            body, reason = body.rsplit(" ## ", 1)
+        elif body.rstrip().endswith("##"):
+            body = body.rstrip()[:-2]
+        body = unescape(body).strip()
+        if not body:
+            continue
+        (flags if m.group(2) else fixes)[int(m.group(1))] = (body, reason.strip())
+    return {"fixes": fixes, "flags": flags}
+
 def line_prompt(static: str, *, title: str, text: str, before: List[Tuple[str, str]], after: List[Tuple[str, str]],
                 characters: str, glossary_lines: List[str], glossary_note: str, current: str = "") -> str:
     """One line translated again (the editor's "retranslate this line"): the lines around it with the

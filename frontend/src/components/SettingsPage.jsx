@@ -35,6 +35,7 @@ const runnerToForm = (cfg = {}) => ({
     chunk_lines: cfg.chunk_lines ?? 250,
     fix_rounds: cfg.fix_rounds ?? 2,
     bootstrap: cfg.bootstrap ?? true,
+    review: cfg.review || 'fix',
     api_rescue: cfg.api_rescue ?? true,
     rescue_model: cfg.rescue_model || '',
 });

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Download, Book, X, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw, Loader2, RefreshCw } from 'lucide-react';
+import { Download, Book, X, Save, Trash2, Search, FolderOutput, ArrowUp, ArrowDown, RotateCcw, Loader2, RefreshCw, Check } from 'lucide-react';
 import GlossaryEditor from './GlossaryEditor';
 import ReviewLineResolver from './ReviewLineResolver';
 import { api } from '../api';
@@ -133,6 +133,11 @@ const SubtitleRow = React.memo(function SubtitleRow({
                     <TimeCell timecode={item.timecode} />
                     <div className="p-3 sm:p-4 text-gray-700 dark:text-gray-300 border-r-0 sm:border-r border-gray-100 dark:border-gray-700 leading-relaxed text-sm">
                         {item.original}
+                        {item.review_note && (
+                            <span title={item.review_note} className="mt-1.5 flex w-fit items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <Check size={11} /> Corrected by review
+                            </span>
+                        )}
                     </div>
                     <div className={`p-0 transition-colors relative ${item.tm_user_edited ? 'bg-amber-50/30 group-hover:bg-amber-50/50' : 'bg-indigo-50/10 group-hover:bg-indigo-50/30'}`}>
                         <textarea
@@ -268,7 +273,7 @@ const EditorView = ({ data, glossary, onRetranslateLine, onUpdateGlossary, onDat
     const handleTranslationChange = useCallback((id, newText) => {
         if (onDataUpdate) {
             onDataUpdate(dataRef.current.map((item, idx) =>
-                (item.id === id || idx === id) ? { ...item, translated: newText, is_edited: true } : item
+                (item.id === id || idx === id) ? { ...item, translated: newText, is_edited: true, review_note: undefined } : item
             ));
         }
     }, [onDataUpdate]);
